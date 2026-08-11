@@ -1,0 +1,252 @@
+"""Reading and writing submissions in a form's own table.
+
+A submission is one row: the whole validated answer set goes into the `form_data`
+JSONB column, alongside the survey/form/version/author envelope.
+"""
+import csv
+import io
+import logging
+import re
+import uuid
+from typing import Any, Dict, Optional, Tuple
+
+from psycopg2 import sql
+from psycopg2.extras import Json
+
+from .config import settings
+from .database import transaction
+from .field_types import FieldValueError, coerce_value, get_type, json_safe
+from .form_service import FormNotFound
+from .table_service import table_exists
+
+logger = logging.getLogger(__name__)
+
+
+class ValidationFailed(ValueError):
+    def __init__(self, errors: Dict[str, str]):
+        self.errors = errors
+        super().__init__("; ".join(f"{k}: {v}" for k, v in errors.items()))
+
+
+# --------------------------------------------------------------------------- #
+# validation
+# --------------------------------------------------------------------------- #
+def _is_empty(value: Any) -> bool:
+    return value is None or value == "" or value == [] or value == {}
+
+
+def _measure(spec, raw: Any, value: Any) -> Tuple[Optional[str], str]:
+    """What the length rules count.
+
+    Digits for a number or phone, so spaces, dashes and brackets don't eat into
+    the limit: `98765 43210` counts as 10. A country code does count, so a form
+    that accepts `+91…` needs the limit set accordingly. Characters otherwise.
+    """
+    if spec.counts_digits:
+        return (re.sub(r"\D", "", str(value)) if value is not None else None), "digits"
+    if isinstance(raw, str):
+        return raw.strip(), "characters"
+    return None, ""
+
+
+def validate_payload(form_json: Dict[str, Any], payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Check the answers against the form definition.
+
+    Returns the normalized answer set destined for the `form_data` JSONB column:
+    numbers as numbers, booleans as booleans, dates as ISO strings, multi-selects
+    as arrays. Keys not defined by the form are dropped.
+    """
+    errors: Dict[str, str] = {}
+    clean: Dict[str, Any] = {}
+
+    for field in form_json.get("fields") or []:
+        name, label = field["name"], field.get("label") or field["name"]
+        spec = get_type(field["type"])
+        raw = payload.get(name)
+
+        if _is_empty(raw):
+            if field.get("required"):
+                errors[name] = f"{label} is required"
+            clean[name] = None
+            continue
+
+        # option membership
+        if spec.has_options:
+            allowed = {o["value"] for o in field.get("options") or []}
+            selected = raw if isinstance(raw, list) else [raw]
+            invalid = [str(v) for v in selected if str(v) not in allowed]
+            if invalid:
+                errors[name] = f"{label}: '{invalid[0]}' is not an available option"
+                continue
+            if not spec.multi and isinstance(raw, list):
+                raw = raw[0] if raw else None
+
+        try:
+            value = coerce_value(field["type"], raw)
+        except FieldValueError as exc:
+            errors[name] = f"{label}: {exc}"
+            continue
+
+        rules = field.get("validation") or {}
+        numeric = spec.json_type == "number"
+
+        if numeric and value is not None:
+            if rules.get("min") is not None and float(value) < float(rules["min"]):
+                errors[name] = f"{label} must be at least {rules['min']}"
+            if rules.get("max") is not None and float(value) > float(rules["max"]):
+                errors[name] = f"{label} must be at most {rules['max']}"
+
+        measured, unit = _measure(spec, raw, value)
+        if measured is not None:
+            if rules.get("min_length") and len(measured) < int(rules["min_length"]):
+                errors[name] = f"{label} must be at least {rules['min_length']} {unit}"
+            if rules.get("max_length") and len(measured) > int(rules["max_length"]):
+                errors[name] = f"{label} must be at most {rules['max_length']} {unit}"
+
+        if rules.get("pattern") and isinstance(raw, str):
+            try:
+                if not re.match(rules["pattern"], raw.strip()):
+                    errors[name] = f"{label} is not in the expected format"
+            except re.error:
+                pass  # a bad pattern from the model must not block a submission
+
+        clean[name] = json_safe(value)
+
+    if errors:
+        raise ValidationFailed(errors)
+    return clean
+
+
+# --------------------------------------------------------------------------- #
+# writes
+# --------------------------------------------------------------------------- #
+def _new_survey_id(form_id: str) -> str:
+    return f"{form_id}-{uuid.uuid4().hex[:16]}"[:50]
+
+
+def submit(
+    form: Dict[str, Any], payload: Dict[str, Any], created_by: Optional[str] = None
+) -> Dict[str, Any]:
+    form_json = form["form_json"] or {}
+    table_name = form_json.get("table_name")
+    if not table_name:
+        raise FormNotFound(f"Form {form['form_id']} has no data table")
+    if form.get("form_status") != "Active":
+        raise ValidationFailed({"_form": "This form is not accepting responses"})
+
+    clean = validate_payload(form_json, payload)
+    survey_id = _new_survey_id(form["form_id"])
+    version = form.get("version_no") or form_json.get("version") or 1
+
+    with transaction() as cur:
+        if not table_exists(cur, table_name):
+            raise FormNotFound(f"Data table '{table_name}' does not exist")
+
+        cur.execute(
+            sql.SQL(
+                """
+                INSERT INTO {}.{} (survey_id, form_id, form_data, form_version, created_by)
+                VALUES (%s, %s, %s, %s, %s)
+                RETURNING survey_id, created_on
+                """
+            ).format(sql.Identifier(settings.db_schema), sql.Identifier(table_name)),
+            (
+                survey_id,
+                form["form_id"],
+                Json(clean),
+                version,
+                created_by or settings.default_user,
+            ),
+        )
+        row = dict(cur.fetchone())
+
+    logger.info("Stored submission %s in %s", survey_id, table_name)
+    return {
+        "survey_id": row["survey_id"],
+        "created_on": row["created_on"],
+        "form_id": form["form_id"],
+        "form_version": version,
+        "table_name": table_name,
+    }
+
+
+# --------------------------------------------------------------------------- #
+# reads
+# --------------------------------------------------------------------------- #
+def list_submissions(
+    form: Dict[str, Any], limit: int = 50, offset: int = 0
+) -> Dict[str, Any]:
+    form_json = form["form_json"] or {}
+    table_name = form_json.get("table_name")
+    columns = [
+        {"name": f["name"], "label": f.get("label") or f["name"], "type": f["type"]}
+        for f in form_json.get("fields") or []
+    ]
+
+    with transaction() as cur:
+        if not table_name or not table_exists(cur, table_name):
+            return {"table_name": table_name, "columns": columns, "total": 0, "rows": []}
+
+        qualified = sql.SQL("{}.{}").format(
+            sql.Identifier(settings.db_schema), sql.Identifier(table_name)
+        )
+        cur.execute(
+            sql.SQL("SELECT COUNT(*) AS n FROM {} WHERE form_id = %s").format(qualified),
+            (form["form_id"],),
+        )
+        total = int(cur.fetchone()["n"])
+
+        cur.execute(
+            sql.SQL(
+                """
+                SELECT survey_id, form_data, created_on, form_version, created_by
+                FROM {} WHERE form_id = %s
+                ORDER BY created_on DESC, survey_id DESC
+                LIMIT %s OFFSET %s
+                """
+            ).format(qualified),
+            (form["form_id"], limit, offset),
+        )
+        rows = [dict(r) for r in cur.fetchall()]
+
+    return {
+        "table_name": table_name,
+        "columns": columns,
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "rows": rows,
+    }
+
+
+def _cell(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, list):
+        return ", ".join(str(v) for v in value)
+    if isinstance(value, dict):
+        return "; ".join(f"{k}={v}" for k, v in value.items())
+    return str(value)
+
+
+def export_csv(form: Dict[str, Any]) -> str:
+    data = list_submissions(form, limit=100000, offset=0)
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+
+    headers = ["survey_id", "created_on", "created_by", "form_version"]
+    headers += [c["label"] for c in data["columns"]]
+    writer.writerow(headers)
+
+    for row in data["rows"]:
+        form_data = row.get("form_data") or {}
+        line = [
+            row.get("survey_id"),
+            row.get("created_on"),
+            row.get("created_by"),
+            row.get("form_version"),
+        ]
+        line += [_cell(form_data.get(c["name"])) for c in data["columns"]]
+        writer.writerow(line)
+
+    return buffer.getvalue()

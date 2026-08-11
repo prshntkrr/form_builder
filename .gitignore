@@ -1,0 +1,41 @@
+# ── secrets ──────────────────────────────────────────────────────────────────
+# Real credentials live in .env; .env.example is the tracked template.
+.env
+.env.*
+!.env.example
+
+# ── python ───────────────────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# ── node / frontend ──────────────────────────────────────────────────────────
+node_modules/
+dist/
+.vite/
+npm-debug.log*
+yarn-error.log*
+.eslintcache
+
+# ── editors & os ─────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── tooling ──────────────────────────────────────────────────────────────────
+.claude/settings.local.json
+
+# ── local scratch ────────────────────────────────────────────────────────────
+*.log
+tmp/
