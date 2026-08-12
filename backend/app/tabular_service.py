@@ -25,7 +25,7 @@ from psycopg2.extras import execute_batch
 from .config import settings
 from .field_types import coerce_value, flatten, pg_type_for
 from .form_schema import MAX_IDENTIFIER
-from .table_service import existing_columns, table_exists
+from .table_service import ensure_foreign_key, existing_columns, fk_name, table_exists
 
 logger = logging.getLogger(__name__)
 
@@ -67,13 +67,27 @@ def _field_columns(form_json: Dict[str, Any]) -> List[Tuple[str, str]]:
 # structure
 # --------------------------------------------------------------------------- #
 def create(cur, form_json: Dict[str, Any]) -> str:
-    name = tabular_name(form_json["table_name"])
+    source = form_json["table_name"]
+    name = tabular_name(source)
     columns = [
         sql.SQL("{} {}").format(sql.Identifier(c), sql.SQL(t)) for c, t in ENVELOPE
     ] + [
         sql.SQL("{} {}").format(sql.Identifier(c), sql.SQL(t))
         for c, t in _field_columns(form_json)
     ]
+
+    # Two relationships, both declared so they show up in an ERD: every row
+    # belongs to a form, and mirrors exactly one row of the JSONB table.
+    columns.append(
+        sql.SQL("CONSTRAINT {} FOREIGN KEY (form_id) REFERENCES {} (form_id)").format(
+            sql.Identifier(fk_name(name, "form_id")), _q("forms")
+        )
+    )
+    columns.append(
+        sql.SQL(
+            "CONSTRAINT {} FOREIGN KEY (survey_id) REFERENCES {} (survey_id) ON DELETE CASCADE"
+        ).format(sql.Identifier(fk_name(name, "survey_id")), _q(source))
+    )
 
     cur.execute(
         sql.SQL("CREATE TABLE IF NOT EXISTS {} ({})").format(
@@ -118,6 +132,14 @@ def sync(
         report["created"] = True
         report["added"] = [c for c, _ in _field_columns(form_json)]
         return report
+
+    # A mirror built before the relationships were declared gets them now.
+    for column, ref, on_delete in (
+        ("form_id", "forms", None),
+        ("survey_id", form_json["table_name"], "CASCADE"),
+    ):
+        if ensure_foreign_key(cur, name, column, ref, column if column == "form_id" else "survey_id", on_delete):
+            report.setdefault("linked", []).append(column)
 
     # Renames first, so the column is recognised as existing below.
     for old, new in (renames or {}).items():

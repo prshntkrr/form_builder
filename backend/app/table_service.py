@@ -102,6 +102,81 @@ def _qualified(table_name: str) -> sql.Composed:
 
 
 # --------------------------------------------------------------------------- #
+# foreign keys
+# --------------------------------------------------------------------------- #
+def fk_name(table_name: str, column: str) -> str:
+    return f"fk_{table_name}_{column}"[:MAX_IDENTIFIER]
+
+
+def column_has_foreign_key(cur, table_name: str, column: str) -> bool:
+    """Any FK already covering this column, whatever it is called."""
+    cur.execute(
+        """
+        SELECT 1
+        FROM   pg_constraint c
+        JOIN   pg_class     t ON t.oid = c.conrelid
+        JOIN   pg_namespace n ON n.oid = t.relnamespace
+        WHERE  n.nspname = %s AND t.relname = %s AND c.contype = 'f'
+          AND  EXISTS (
+                 SELECT 1
+                 FROM   unnest(c.conkey) AS k
+                 JOIN   pg_attribute a ON a.attrelid = t.oid AND a.attnum = k
+                 WHERE  a.attname = %s)
+        """,
+        (settings.db_schema, table_name, column),
+    )
+    return cur.fetchone() is not None
+
+
+def ensure_foreign_key(
+    cur,
+    table_name: str,
+    column: str,
+    ref_table: str,
+    ref_column: str,
+    on_delete: Optional[str] = None,
+) -> Optional[str]:
+    """Declare the relationship if it isn't already there.
+
+    Without these an ERD tool has nothing to draw — the columns line up, but
+    nothing in the database says they are related. Returns the constraint name
+    if one was added, None if it already existed or could not be applied.
+
+    Wrapped in a savepoint: a table holding rows that violate the constraint
+    would otherwise abort the whole transaction the caller is in.
+    """
+    if column_has_foreign_key(cur, table_name, column):
+        return None
+
+    name = fk_name(table_name, column)
+    statement = sql.SQL(
+        "ALTER TABLE {} ADD CONSTRAINT {} FOREIGN KEY ({}) REFERENCES {} ({})"
+    ).format(
+        _qualified(table_name),
+        sql.Identifier(name),
+        sql.Identifier(column),
+        _qualified(ref_table),
+        sql.Identifier(ref_column),
+    )
+    if on_delete:
+        statement = statement + sql.SQL(f" ON DELETE {on_delete}")
+
+    cur.execute("SAVEPOINT add_fk")
+    try:
+        cur.execute(statement)
+        cur.execute("RELEASE SAVEPOINT add_fk")
+        logger.info("Linked %s.%s -> %s.%s", table_name, column, ref_table, ref_column)
+        return name
+    except Exception as exc:
+        cur.execute("ROLLBACK TO SAVEPOINT add_fk")
+        logger.warning(
+            "Could not link %s.%s -> %s.%s: %s",
+            table_name, column, ref_table, ref_column, str(exc).strip().splitlines()[0],
+        )
+        return None
+
+
+# --------------------------------------------------------------------------- #
 # survey numbering
 # --------------------------------------------------------------------------- #
 def sequence_name(table_name: str) -> str:
@@ -156,6 +231,12 @@ def _create_table(cur, table_name: str) -> None:
         sql.SQL("{} {}").format(sql.Identifier(name), sql.SQL(ddl))
         for name, ddl in _ENVELOPE_DDL
     ]
+    # Declared up front so the table joins the ERD from the moment it exists.
+    columns.append(
+        sql.SQL("CONSTRAINT {} FOREIGN KEY (form_id) REFERENCES {} (form_id)").format(
+            sql.Identifier(fk_name(table_name, "form_id")), _qualified("forms")
+        )
+    )
     cur.execute(
         sql.SQL("CREATE TABLE IF NOT EXISTS {} ({})").format(
             _qualified(table_name), sql.SQL(", ").join(columns)
@@ -211,6 +292,9 @@ def sync_table(cur, form_json: Dict[str, Any]) -> Dict[str, Any]:
             )
             report["added_columns"].append(name)
             logger.info("Added missing envelope column %s.%s", table_name, name)
+
+    if ensure_foreign_key(cur, table_name, "form_id", "forms", "form_id"):
+        report["linked"] = True
 
     report["columns"] = sorted(set(current) | set(report["added_columns"]))
     return report

@@ -91,6 +91,28 @@ nothing, and a retyped column is simply dropped and re-added rather than cast.
 Both tables are written in the same transaction on submission, so the mirror can never be missing
 a response the JSONB table has.
 
+### Declared relationships
+
+Both tables carry real foreign keys, so the relationships exist in the database rather than only
+by convention — which is what makes them appear in an ERD:
+
+```
+forms.form_id ──┬──▶ form_version.form_id
+                ├──▶ <form>.form_id
+                └──▶ <form>_tabular.form_id
+
+<form>.survey_id ──▶ <form>_tabular.survey_id      ON DELETE CASCADE
+```
+
+The cascade means deleting a response removes its mirror row too, so the two can't drift apart.
+The `form_id` keys are deliberately `NO ACTION` rather than `ON DELETE CASCADE`: forms are
+soft-deleted (`form_status = 'Deleted'`), and a hard `DELETE FROM forms` that silently took every
+collected response with it is not a footgun worth leaving armed.
+
+`ensure_relations()` runs at startup and declares any of these that a table is missing — tables
+created before the constraints existed pick them up on the next restart. It is idempotent, and
+skips with a warning if existing rows would violate a constraint.
+
 ### How a mirror column is derived
 
 | Field type | Column | Notes |
@@ -388,7 +410,24 @@ CORS_ORIGINS DEFAULT_USER
 
 ---
 
-## 11. Errors
+## 11. Form status
+
+`forms.form_status` is one of three values, enforced by a CHECK constraint:
+
+| Status | Meaning |
+| --- | --- |
+| `Active` | live; accepting responses |
+| `Inactive` | paused; `/render` returns 403, existing responses untouched |
+| `Deleted` | soft delete; leaves the list, keeps the row, the tables and every response |
+
+Nothing in this application ever hard-deletes a form. `DELETE /api/forms/{id}` sets `Deleted`.
+
+`ensure_status_values()` runs at startup and widens the constraint if it does not yet allow all
+three — the table as originally written permitted only `Active` and `Inactive`, which made
+soft-delete fail. Constraint violations are translated into a 409 with the rule that was broken
+rather than a raw traceback.
+
+## 12. Errors
 
 | Status | Means |
 | --- | --- |
@@ -400,7 +439,7 @@ CORS_ORIGINS DEFAULT_USER
 
 ---
 
-## 12. Extending it
+## 13. Extending it
 
 **A new field type** — add one `FieldType` to `_TYPES` in `field_types.py` with a coercion
 function, list its aliases, and name it in the LLM prompt's supported-types line. Add a `case` to

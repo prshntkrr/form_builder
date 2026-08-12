@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api.js'
 import { currentUser } from '../identity.js'
@@ -69,16 +69,7 @@ export default function Builder() {
   const [check, setCheck] = useState(null)
   const [trial, setTrial] = useState({})
 
-  // Set when publishing navigates us to the new form's own URL, so that hop
-  // keeps the state we already hold instead of reloading it.
-  const justPublished = useRef(null)
-
   useEffect(() => {
-    if (justPublished.current && justPublished.current === formId) {
-      justPublished.current = null
-      return
-    }
-
     // /builder and /forms/:id/edit share this component, so React keeps the
     // instance alive across the switch. Clear it out for whatever we moved to.
     setPrompt('')
@@ -143,13 +134,14 @@ export default function Builder() {
         ? await api.updateForm(formId, payload, who, renames)
         : await api.createForm(payload, who)
 
+      if (!editing) {
+        // A new form goes straight to the thing you just made, ready to fill in.
+        navigate(`/f/${result.form_id}`, { replace: true, state: { published: result } })
+        return
+      }
       setSaved(result)
       setCheck(null)
       setForm(prep(payload, true))
-      if (!editing) {
-        justPublished.current = result.form_id
-        navigate(`/forms/${result.form_id}/edit`, { replace: true })
-      }
     })
 
   const inspect = (fix) =>

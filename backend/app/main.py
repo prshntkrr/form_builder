@@ -5,7 +5,12 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .bootstrap import ensure_base_tables, missing_tables
+from .bootstrap import (
+    ensure_base_tables,
+    ensure_relations,
+    ensure_status_values,
+    missing_tables,
+)
 from .config import settings
 from .database import close_pool, init_pool, ping
 from .field_types import FIELD_TYPES, SUPPORTED_TYPES
@@ -23,6 +28,8 @@ async def lifespan(app: FastAPI):
     try:
         init_pool()
         ensure_base_tables()
+        ensure_status_values()
+        ensure_relations()
     except Exception as exc:  # keep the API up so /api/health can explain the problem
         logger.error("Startup could not reach Postgres: %s", exc)
     yield

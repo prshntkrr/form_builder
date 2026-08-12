@@ -3,6 +3,7 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
+from psycopg2 import IntegrityError
 
 from .. import form_service, llm
 from ..form_schema import FormSchemaError, normalize_form
@@ -19,6 +20,25 @@ from ..schemas import (
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/forms", tags=["forms"])
+
+
+def _constraint_message(exc: IntegrityError) -> str:
+    """Turn a database constraint into something a person can act on.
+
+    A raw CheckViolation traceback tells the user nothing; naming the rule that
+    was broken tells them what to change.
+    """
+    name = getattr(getattr(exc, "diag", None), "constraint_name", None) or ""
+    known = {
+        "forms_form_status_check": "That form status is not allowed by the database.",
+        "forms_form_type_check": "Form type must be 'parent' or 'child'.",
+        "forms_pkey": "A form with that id already exists.",
+    }
+    if name in known:
+        return known[name]
+    if name:
+        return f"The database rejected this change ({name})."
+    return "The database rejected this change."
 
 
 # --------------------------------------------------------------------------- #
@@ -73,6 +93,10 @@ def create(req: CreateFormRequest):
         )
     except FormSchemaError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
+    except form_service.FormServiceError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except IntegrityError as exc:
+        raise HTTPException(status_code=409, detail=_constraint_message(exc))
     except Exception as exc:
         logger.exception("Form creation failed")
         raise HTTPException(status_code=500, detail=f"Could not save form: {exc}")
@@ -139,6 +163,8 @@ def change_status(form_id: str, req: StatusRequest):
         raise HTTPException(status_code=404, detail=str(exc))
     except form_service.FormServiceError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    except IntegrityError as exc:
+        raise HTTPException(status_code=409, detail=_constraint_message(exc))
 
 
 @router.delete("/{form_id}")
@@ -148,6 +174,8 @@ def soft_delete(form_id: str):
         return form_service.set_status(form_id, "Deleted")
     except form_service.FormNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+    except IntegrityError as exc:
+        raise HTTPException(status_code=409, detail=_constraint_message(exc))
 
 
 @router.post("/{form_id}/rebuild-tabular")

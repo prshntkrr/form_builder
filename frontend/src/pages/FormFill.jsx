@@ -1,11 +1,43 @@
 import React, { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useLocation, useParams } from 'react-router-dom'
 import { api } from '../api.js'
 import { currentUser } from '../identity.js'
 import FormRenderer from '../components/FormRenderer.jsx'
 
+/** Shown once, on the hop straight from publishing. */
+function JustPublished({ result, onClose }) {
+  const [copied, setCopied] = useState(false)
+  const link = `${window.location.origin}/f/${result.form_id}`
+
+  return (
+    <div className="note note--good" style={{ marginBottom: 20 }}>
+      <strong>Your form is live.</strong>
+      <span className="row row--tight">
+        <code className="grow" style={{ overflowWrap: 'anywhere' }}>{link}</code>
+        <button
+          className="btn btn--sm"
+          onClick={() => {
+            navigator.clipboard?.writeText(link).then(() => setCopied(true))
+          }}
+        >
+          {copied ? 'Copied' : 'Copy link'}
+        </button>
+      </span>
+      <span className="row row--tight tiny">
+        <Link to={`/forms/${result.form_id}/edit`}>Edit it</Link>
+        <span className="sep">·</span>
+        <Link to={`/forms/${result.form_id}/data`}>See responses</Link>
+        <span className="spacer" />
+        <button className="btn btn--sm btn--quiet" onClick={onClose}>Dismiss</button>
+      </span>
+    </div>
+  )
+}
+
 export default function FormFill() {
   const { formId } = useParams()
+  const location = useLocation()
+  const [published, setPublished] = useState(location.state?.published || null)
   const [form, setForm] = useState(null)
   const [values, setValues] = useState({})
   const [errors, setErrors] = useState({})
@@ -50,6 +82,7 @@ export default function FormFill() {
   if (loading) {
     return (
       <main className="main main--narrow">
+        {published && <JustPublished result={published} onClose={() => setPublished(null)} />}
         <div className="skeleton" style={{ height: 400 }} />
       </main>
     )
@@ -87,6 +120,8 @@ export default function FormFill() {
 
   return (
     <main className="main main--narrow">
+      {published && <JustPublished result={published} onClose={() => setPublished(null)} />}
+
       {error && <div className="note note--bad" style={{ marginBottom: 18 }}>{error}</div>}
 
       <div className="card card--pad">

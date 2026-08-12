@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional
 from psycopg2 import sql
 from psycopg2.extras import Json
 
+from .bootstrap import FORM_STATUSES, FORM_TYPES
 from .config import settings
 from .diff_service import diff_versions as _diff_versions
 from .form_schema import derive_table_name, normalize_form
@@ -244,6 +245,11 @@ def create_form(
     status: str = "Active",
 ) -> Dict[str, Any]:
     """Persist a new form, open version 1, and provision its data table."""
+    if status not in FORM_STATUSES:
+        raise FormServiceError(f"Unknown status '{status}'")
+    if form_type not in FORM_TYPES:
+        raise FormServiceError(f"Unknown form type '{form_type}'")
+
     definition = normalize_form(form_json)
 
     # Precedence: what the request says, then an author the prompt named and the
@@ -389,8 +395,10 @@ def update_form(
 
 
 def set_status(form_id: str, status: str) -> Dict[str, Any]:
-    if status not in ("Active", "Inactive", "Draft", "Deleted"):
-        raise FormServiceError(f"Unknown status '{status}'")
+    if status not in FORM_STATUSES:
+        raise FormServiceError(
+            f"Unknown status '{status}' - expected one of {', '.join(FORM_STATUSES)}"
+        )
     with transaction() as cur:
         cur.execute(
             """

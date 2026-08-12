@@ -9,14 +9,18 @@
 --
 -- The application also runs this file at startup unless AUTO_CREATE_TABLES=false.
 
+-- form_status: 'Deleted' is a soft delete. The row and every response it
+-- collected are kept; the form just leaves the list.
 CREATE TABLE IF NOT EXISTS forms (
     form_id          VARCHAR(20)  NOT NULL PRIMARY KEY,
     form_title       VARCHAR(200) NOT NULL,
     form_description TEXT,
     form_json        JSONB        NOT NULL,
-    form_type        VARCHAR(10)  DEFAULT 'parent',
-    form_status      VARCHAR(10)  DEFAULT 'Active',
-    parent_id        VARCHAR(20),
+    form_type        VARCHAR(10)  DEFAULT 'parent'
+                     CHECK (form_type IN ('parent', 'child')),
+    form_status      VARCHAR(10)  DEFAULT 'Active'
+                     CHECK (form_status IN ('Active', 'Inactive', 'Deleted')),
+    parent_id        VARCHAR(20)  REFERENCES forms (form_id) ON DELETE SET NULL,
     created_on       TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
     updated_on       TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
     created_by       VARCHAR(50)
@@ -24,7 +28,7 @@ CREATE TABLE IF NOT EXISTS forms (
 
 CREATE TABLE IF NOT EXISTS form_version (
     version_id  SERIAL       PRIMARY KEY,
-    form_id     VARCHAR(20)  NOT NULL,
+    form_id     VARCHAR(20)  NOT NULL REFERENCES forms (form_id) ON DELETE CASCADE,
     version_no  INTEGER      NOT NULL,
     form_json   JSONB
 );

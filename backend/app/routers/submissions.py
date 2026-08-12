@@ -22,8 +22,13 @@ def _load(form_id: str):
 def render(form_id: str):
     """Everything a client needs to draw the live form."""
     form = _load(form_id)
-    if form["form_status"] not in ("Active", "Draft"):
-        raise HTTPException(status_code=403, detail="This form is not available")
+    if form["form_status"] != "Active":
+        raise HTTPException(
+            status_code=403,
+            detail="This form is paused and is not accepting responses."
+            if form["form_status"] == "Inactive"
+            else "This form is no longer available.",
+        )
     return {
         "form_id": form["form_id"],
         "form_status": form["form_status"],
