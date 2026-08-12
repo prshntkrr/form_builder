@@ -95,14 +95,19 @@ The dev server proxies `/api` to `http://localhost:8000`.
      created_by   VARCHAR(50)
      ```
 
-   A form titled *Survey Form Data* lands in `survey_form_data` (adopting the table you already
-   have); *Farmer Registration* lands in `farmer_registration`. Indexes are added on `form_id`,
-   `created_on`, and a GIN index on `form_data`.
-4. **Live.** The form is immediately fillable at `/f/<form_id>`. Each submission is one row, with
-   the whole validated response in `form_data` keyed by field name.
+   - and a second table, `<table_name>_tabular`, with the same envelope minus `form_data` **plus
+     one typed column per question** — a normal table for reporting.
+
+   A form titled *Survey Form Data* lands in `survey_form_data` + `survey_form_data_tabular`;
+   *Farmer Registration* in `farmer_registration` + `farmer_registration_tabular`.
+4. **Live.** The form is immediately fillable at `/f/<form_id>`. Each submission writes one row to
+   each table, in the same transaction — the whole response as JSONB, and the same answers spread
+   across typed columns.
 5. **Edit later.** Saving changes bumps `version_no` and appends a row to `form_version`. The
-   table is never altered — adding, removing or retyping a field needs no migration, and
-   submissions made under older versions stay readable (`form_version` records which one).
+   JSONB table is never altered, so nothing can be lost. The `_tabular` mirror follows the new
+   definition — columns added, dropped, renamed or retyped — and is rebuilt from `form_data`
+   where needed. Submissions made under older versions stay readable; `form_version` on each row
+   records which definition they match.
 
 ## 4. Field types → what lands in `form_data`
 
@@ -194,6 +199,7 @@ the versioned `form_json` instead, since the `forms` table has no such column.
 | `GET` | `/api/forms/{form_id}` | one form + version info |
 | `PUT` | `/api/forms/{form_id}` | update → new version, moving answers for renamed fields |
 | `POST` | `/api/forms/{form_id}/revalidate` | check stored responses against the current definition (`fix: true` re-coerces) |
+| `POST` | `/api/forms/{form_id}/rebuild-tabular` | repopulate the flat `<form>_tabular` mirror from the JSONB table |
 | `PATCH` | `/api/forms/{form_id}/status` | Active / Inactive |
 | `DELETE` | `/api/forms/{form_id}` | soft delete (status = Deleted) |
 | `GET` | `/api/forms/{form_id}/versions` | version history |

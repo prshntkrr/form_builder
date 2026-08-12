@@ -73,7 +73,7 @@ export default function FormFill() {
         <div className="card done">
           <div className="done__tick">✓</div>
           <h2>{form.form_json.success_message || 'Thanks — that’s recorded.'}</h2>
-          <p className="muted" style={{ marginBottom: 22 }}>Reference {done.survey_id.slice(-8)}</p>
+          <p className="muted" style={{ marginBottom: 22 }}>Reference <code>{done.survey_id}</code></p>
           <button
             className="btn btn--primary"
             onClick={() => { setDone(null); setValues({}); setErrors({}) }}

@@ -38,6 +38,21 @@ const untag = (json) => ({
   fields: (json.fields || []).map(({ _uid, _orig, ...f }) => f),
 })
 
+/** What the flat reporting mirror did in response to this save. */
+function TabularNote({ report }) {
+  const bits = [
+    report.created && 'created',
+    report.added?.length && `${report.added.length} column${report.added.length > 1 ? 's' : ''} added`,
+    report.dropped?.length && `${report.dropped.length} dropped`,
+    report.renamed?.length && `${report.renamed.length} renamed`,
+    report.retyped?.length && `${report.retyped.length} retyped`,
+    report.rebuilt && `${report.rebuilt} row${report.rebuilt > 1 ? 's' : ''} rebuilt`,
+  ].filter(Boolean)
+
+  if (!bits.length) return null
+  return <span className="tiny"><code>{report.name}</code> · {bits.join(' · ')}</span>
+}
+
 export default function Builder() {
   const { formId } = useParams()
   const navigate = useNavigate()
@@ -232,6 +247,7 @@ export default function Builder() {
               `${Object.values(saved.renamed).reduce((a, b) => a + b, 0)} existing answers moved to their new names. `}
             <Link to={`/f/${saved.form_id}`}>Open the form</Link> or <Link to={`/forms/${saved.form_id}/data`}>see responses</Link>.
           </span>
+          {saved.tabular && <TabularNote report={saved.tabular} />}
         </div>
       )}
 

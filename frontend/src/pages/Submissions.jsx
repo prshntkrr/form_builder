@@ -23,6 +23,8 @@ export default function Submissions() {
   const [data, setData] = useState(null)
   const [page, setPage] = useState(0)
   const [error, setError] = useState('')
+  const [rebuilding, setRebuilding] = useState(false)
+  const [rebuilt, setRebuilt] = useState('')
 
   useEffect(() => {
     Promise.all([api.getForm(formId), api.listSubmissions(formId, PAGE, page * PAGE)])
@@ -103,6 +105,32 @@ export default function Submissions() {
           )}
         </>
       )}
+
+      <div className="row tiny muted" style={{ marginTop: 22 }}>
+        <span>
+          Query these in Postgres: <code>{data.table_name}</code> for the full JSON,{' '}
+          <code>{data.tabular_name}</code> for one column per question.
+        </span>
+        <button
+          className="btn btn--sm btn--quiet"
+          disabled={rebuilding}
+          onClick={async () => {
+            setRebuilding(true)
+            try {
+              const r = await api.rebuildTabular(formId)
+              setRebuilt(`${data.tabular_name} rebuilt from ${r.rebuilt ?? 0} response${r.rebuilt === 1 ? '' : 's'}`)
+            } catch (e) {
+              setRebuilt(e.message)
+            } finally {
+              setRebuilding(false)
+            }
+          }}
+        >
+          {rebuilding && <span className="spin" />}
+          Rebuild
+        </button>
+        {rebuilt && <span>{rebuilt}</span>}
+      </div>
     </main>
   )
 }

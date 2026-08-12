@@ -7,7 +7,6 @@ import csv
 import io
 import logging
 import re
-import uuid
 from typing import Any, Dict, Optional, Tuple
 
 from psycopg2 import sql
@@ -17,7 +16,8 @@ from .config import settings
 from .database import transaction
 from .field_types import FieldValueError, coerce_value, get_type, json_safe
 from .form_service import FormNotFound
-from .table_service import table_exists
+from .table_service import next_survey_id, table_exists
+from . import tabular_service
 
 logger = logging.getLogger(__name__)
 
@@ -120,10 +120,6 @@ def validate_payload(form_json: Dict[str, Any], payload: Dict[str, Any]) -> Dict
 # --------------------------------------------------------------------------- #
 # writes
 # --------------------------------------------------------------------------- #
-def _new_survey_id(form_id: str) -> str:
-    return f"{form_id}-{uuid.uuid4().hex[:16]}"[:50]
-
-
 def submit(
     form: Dict[str, Any], payload: Dict[str, Any], created_by: Optional[str] = None
 ) -> Dict[str, Any]:
@@ -135,12 +131,13 @@ def submit(
         raise ValidationFailed({"_form": "This form is not accepting responses"})
 
     clean = validate_payload(form_json, payload)
-    survey_id = _new_survey_id(form["form_id"])
     version = form.get("version_no") or form_json.get("version") or 1
 
     with transaction() as cur:
         if not table_exists(cur, table_name):
             raise FormNotFound(f"Data table '{table_name}' does not exist")
+
+        survey_id = next_survey_id(cur, form["form_id"], table_name)
 
         cur.execute(
             sql.SQL(
@@ -159,6 +156,18 @@ def submit(
             ),
         )
         row = dict(cur.fetchone())
+
+        # Same transaction: the flat mirror can never be missing a response the
+        # JSONB table has.
+        tabular_service.insert(
+            cur,
+            form_json,
+            survey_id,
+            form["form_id"],
+            version,
+            created_by or settings.default_user,
+            clean,
+        )
 
     logger.info("Stored submission %s in %s", survey_id, table_name)
     return {
@@ -211,6 +220,7 @@ def list_submissions(
 
     return {
         "table_name": table_name,
+        "tabular_name": tabular_service.tabular_name(table_name) if table_name else None,
         "columns": columns,
         "total": total,
         "limit": limit,

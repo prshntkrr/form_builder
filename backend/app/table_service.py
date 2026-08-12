@@ -101,6 +101,56 @@ def _qualified(table_name: str) -> sql.Composed:
     )
 
 
+# --------------------------------------------------------------------------- #
+# survey numbering
+# --------------------------------------------------------------------------- #
+def sequence_name(table_name: str) -> str:
+    return f"{table_name[:MAX_IDENTIFIER - 12]}_survey_seq"
+
+
+def ensure_survey_sequence(cur, table_name: str) -> str:
+    """A counter per form table, so survey ids run 1, 2, 3…
+
+    A Postgres sequence rather than `MAX(...) + 1`, because `nextval` is atomic:
+    two officers submitting at the same moment cannot be handed the same number.
+    """
+    seq = sequence_name(table_name)
+    qualified = f"{settings.db_schema}.{seq}"
+
+    cur.execute("SELECT to_regclass(%s) AS found", (qualified,))
+    if cur.fetchone()["found"] is not None:
+        return qualified
+
+    cur.execute(
+        sql.SQL("CREATE SEQUENCE IF NOT EXISTS {}.{}").format(
+            sql.Identifier(settings.db_schema), sql.Identifier(seq)
+        )
+    )
+    # An adopted table may already hold rows numbered some other way; start past
+    # them so a new submission cannot collide with an existing survey_id.
+    if table_exists(cur, table_name):
+        cur.execute(
+            sql.SQL("SELECT COUNT(*) AS n FROM {}").format(_qualified(table_name))
+        )
+        existing = int(cur.fetchone()["n"])
+        if existing:
+            cur.execute("SELECT setval(%s, %s)", (qualified, existing))
+    logger.info("Created survey sequence %s", seq)
+    return qualified
+
+
+def next_survey_id(cur, form_id: str, table_name: str) -> str:
+    """`FRM00007-000001`, `FRM00007-000002`, …
+
+    Zero-padded because `survey_id` is a VARCHAR: unpadded numbers would sort
+    "10" before "2". The form id prefix keeps ids meaningful once they are
+    exported away from their table.
+    """
+    qualified = ensure_survey_sequence(cur, table_name)
+    cur.execute("SELECT nextval(%s) AS n", (qualified,))
+    return f"{form_id}-{int(cur.fetchone()['n']):06d}"[:50]
+
+
 def _create_table(cur, table_name: str) -> None:
     columns = [
         sql.SQL("{} {}").format(sql.Identifier(name), sql.SQL(ddl))
@@ -146,6 +196,7 @@ def sync_table(cur, form_json: Dict[str, Any]) -> Dict[str, Any]:
 
     if not table_exists(cur, table_name):
         _create_table(cur, table_name)
+        ensure_survey_sequence(cur, table_name)
         report["created"] = True
         report["columns"] = [name for name, _ in ENVELOPE_COLUMNS]
         return report

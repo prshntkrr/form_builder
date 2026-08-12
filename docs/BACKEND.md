@@ -18,9 +18,13 @@ A form has two halves that change at different speeds:
 | **Definition** — the questions, types, options, rules | Often. Every edit is a new version. | `forms.form_json`, `form_version.form_json` |
 | **Responses** — what people answered | Never, once written | `<form_name>.form_data` (JSONB) |
 
-Keeping answers in JSONB rather than in one column per question is what makes the rest simple.
-Adding a question, removing one, changing a type — none of it touches the table. A form's table is
-created once and keeps the same six columns for life.
+Keeping the canonical answers in JSONB rather than in one column per question is what makes the
+rest simple. Adding a question, removing one, changing a type — none of it can lose data, because
+the JSONB table is never altered. It is created once and keeps the same six columns for life.
+
+A second table, `<form_name>_tabular`, mirrors those answers as ordinary typed columns for
+reporting. It *is* altered on every version — but only ever as a projection that can be rebuilt
+from the JSONB, so nothing there is precious. See §3.
 
 ---
 
@@ -37,10 +41,13 @@ created once and keeps the same six columns for life.
            ──POST /forms──────────▶ form_service.py ──┬──▶  forms
                                         │            └──▶  form_version
                                    table_service.py ─────▶  CREATE TABLE <form_name>
+                                   tabular_service.py ────▶  CREATE TABLE <form_name>_tabular
                                         │
-  live form ─POST /{id}/submissions─▶ submission_service.py ▶  <form_name>.form_data
+  live form ─POST /{id}/submissions─▶ submission_service.py ─┬─▶ <form_name>.form_data
+                                        │                    └─▶ <form_name>_tabular
                                         │
   editor    ─PUT  /forms/{id}──────▶ migration_service.py ──▶  UPDATE form_data (renames)
+                                   tabular_service.py ────▶  ALTER TABLE + rebuild
 ```
 
 Each layer has one job and hands off:
@@ -52,7 +59,69 @@ Each layer has one job and hands off:
 
 ---
 
-## 3. The three kinds of table
+## 3. Two tables per form
+
+Saving a form creates a pair:
+
+```
+farmer_registration              farmer_registration_tabular
+─────────────────────            ───────────────────────────
+survey_id      PK                survey_id      PK
+form_id                          form_id
+form_data      JSONB   ◀── the    created_on
+created_on           record of    form_version
+form_version         truth        created_by
+created_by                        farmer_name    VARCHAR(255)  ┐
+                                  land_area      NUMERIC(18,4) │ one per
+                                  visit_date     DATE          │ question
+                                  irrigation     TEXT          ┘
+```
+
+The JSONB table holds every answer ever submitted, in the shape it was submitted in. The
+`_tabular` table is a **projection** of it — a normal table you can point a reporting tool at:
+
+```sql
+SELECT village, AVG(land_area) FROM farmer_registration_tabular GROUP BY village;
+```
+
+That direction of dependency is the whole trick. Because the mirror can be rebuilt from
+`form_data` at any time, schema changes to it are cheap and reversible: a dropped column loses
+nothing, and a retyped column is simply dropped and re-added rather than cast.
+
+Both tables are written in the same transaction on submission, so the mirror can never be missing
+a response the JSONB table has.
+
+### How a mirror column is derived
+
+| Field type | Column | Notes |
+| --- | --- | --- |
+| `text`, `email`, `select`, `radio` | `VARCHAR(255)` | |
+| `textarea`, `url`, `file`, `signature` | `TEXT` | |
+| `phone` | `VARCHAR(20)` | |
+| `number`, `rating` | `INTEGER` | |
+| `decimal` | `NUMERIC(18,4)` | |
+| `date` / `datetime` / `time` | `DATE` / `TIMESTAMP` / `TIME` | |
+| `boolean` | `BOOLEAN` | |
+| `multiselect` | `TEXT` | flattened to `Canal, Borewell` |
+| `location` | `TEXT` | flattened to `26.9,75.8` |
+
+The last two are the only lossy part, and only in the mirror — `form_data` keeps the array and the
+object. If you need them split (`plot_lat`, `plot_lng`) that is a change to `_field_columns` in
+`tabular_service.py`.
+
+### What a new version does to it
+
+| Change to the form | Mirror |
+| --- | --- |
+| Question added | `ADD COLUMN`, then rebuild so history is filled in |
+| Question removed | `DROP COLUMN` — the answers stay in `form_data` |
+| Question renamed | `RENAME COLUMN` — values move with it |
+| Type changed | column dropped and re-added, then rebuilt from `form_data` |
+
+`POST /api/forms/{id}/rebuild-tabular` does it on demand — needed only for a form whose responses
+predate the mirror.
+
+## 4. Where things are stored
 
 **`forms`** — one row per form. `form_json` holds the current definition; `form_id` is a
 generated `FRM00001`-style key.
@@ -75,13 +144,25 @@ created_by   VARCHAR(50)
 
 Plus indexes on `form_id`, `created_on`, and a GIN index on `form_data`.
 
+### survey_id
+
+Each form table gets a Postgres sequence, `<table>_survey_seq`, and ids run
+`FRM00007-000001`, `FRM00007-000002`, … A sequence rather than `MAX(...) + 1` because `nextval`
+is atomic — two officers submitting at the same moment cannot be handed the same number, and no
+retry loop is needed.
+
+The number is zero-padded because `survey_id` is a `VARCHAR(50)`: unpadded, `"10"` would sort
+before `"2"`. The form-id prefix keeps an id meaningful once it has been exported away from its
+table. When a table is adopted with rows already in it, the sequence is set past them so a new
+submission cannot collide with an existing id.
+
 If a table of that name already exists it is **adopted**, not replaced — which is how a form
 titled *Survey Form Data* lands in the pre-existing `survey_form_data` table. Two forms can never
 claim the same table; the second gets a `_2` suffix.
 
 ---
 
-## 4. The form definition
+## 5. The form definition
 
 One JSON document, the contract between the model, the database, and the React renderer:
 
@@ -127,7 +208,7 @@ options on a dropdown. The normalizer is the trust boundary and it repairs rathe
 
 ---
 
-## 5. Field types
+## 6. Field types
 
 `field_types.py` is a small registry — one entry per type, holding a coercion function and how
 the value appears in JSON. It is the single source of truth; the frontend reads it from
@@ -169,7 +250,7 @@ The message names the unit: *"National ID must be at most 12 digits"* vs *"Villa
 
 ---
 
-## 6. What happens on each request
+## 7. What happens on each request
 
 ### Creating a form
 
@@ -255,7 +336,7 @@ storage keys shown.
 
 ---
 
-## 7. Safety
+## 8. Safety
 
 **No SQL is ever built from model or user text.** Table names are slugified by `form_schema` and
 reach Postgres only through `psycopg2.sql.Identifier`; every value is a bound parameter. The only
@@ -272,7 +353,7 @@ exit and rolls back on any exception. Every multi-step service call takes one.
 
 ---
 
-## 8. Modules
+## 9. Modules
 
 | File | Owns |
 | --- | --- |
@@ -285,6 +366,7 @@ exit and rolls back on any exception. Every multi-step service call takes one.
 | `form_service.py` | `forms` + `form_version` CRUD, form ids, response counts |
 | `submission_service.py` | Validation, insert, listing, CSV export |
 | `migration_service.py` | Key renames, `revalidate` |
+| `tabular_service.py` | The flat `<form>_tabular` mirror: create, sync, insert, rebuild |
 | `diff_service.py` | Comparing two versions, tracing renames across the gap |
 | `routers/forms.py` | Authoring and management endpoints |
 | `routers/submissions.py` | Render, submit, list, export |
@@ -292,7 +374,7 @@ exit and rolls back on any exception. Every multi-step service call takes one.
 
 ---
 
-## 9. Configuration
+## 10. Configuration
 
 All from `backend/.env` (see `.env.example`):
 
@@ -306,7 +388,7 @@ CORS_ORIGINS DEFAULT_USER
 
 ---
 
-## 10. Errors
+## 11. Errors
 
 | Status | Means |
 | --- | --- |
@@ -318,7 +400,7 @@ CORS_ORIGINS DEFAULT_USER
 
 ---
 
-## 11. Extending it
+## 12. Extending it
 
 **A new field type** — add one `FieldType` to `_TYPES` in `field_types.py` with a coercion
 function, list its aliases, and name it in the LLM prompt's supported-types line. Add a `case` to

@@ -62,6 +62,9 @@ export const api = {
   revalidate: (formId, fix = false) =>
     request(`/forms/${formId}/revalidate`, { method: 'POST', body: JSON.stringify({ fix }) }),
 
+  // Repopulate the flat <form>_tabular mirror from the JSONB table.
+  rebuildTabular: (formId) => request(`/forms/${formId}/rebuild-tabular`, { method: 'POST' }),
+
   listForms: (params = {}) => {
     const qs = new URLSearchParams(
       Object.entries(params).filter(([, v]) => v !== '' && v != null),

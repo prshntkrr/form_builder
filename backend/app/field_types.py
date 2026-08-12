@@ -135,6 +135,7 @@ class FieldType:
     name: str
     coerce: Callable[[Any], Any]
     json_type: str           # how it appears inside form_data
+    pg_type: str = "TEXT"    # its column in the flat <form>_tabular mirror
     has_options: bool = False
     multi: bool = False
     # Whether min_length / max_length count digits rather than characters. True
@@ -145,30 +146,38 @@ class FieldType:
 
 
 _TYPES: List[FieldType] = [
-    FieldType("text", _to_str, "string", aliases=["string", "shorttext", "short_text"]),
-    FieldType("textarea", _to_str, "string", aliases=["longtext", "long_text", "paragraph"]),
-    FieldType("email", _to_email, "string"),
-    FieldType("phone", _to_str, "string", counts_digits=True, aliases=["tel", "mobile"]),
-    FieldType("url", _to_str, "string", aliases=["link"]),
-    FieldType("number", _to_int, "number", counts_digits=True, aliases=["integer", "int"]),
-    FieldType("decimal", _to_decimal, "number", counts_digits=True,
+    FieldType("text", _to_str, "string", "VARCHAR(255)",
+              aliases=["string", "shorttext", "short_text"]),
+    FieldType("textarea", _to_str, "string", "TEXT",
+              aliases=["longtext", "long_text", "paragraph"]),
+    FieldType("email", _to_email, "string", "VARCHAR(255)"),
+    FieldType("phone", _to_str, "string", "VARCHAR(20)",
+              counts_digits=True, aliases=["tel", "mobile"]),
+    FieldType("url", _to_str, "string", "TEXT", aliases=["link"]),
+    FieldType("number", _to_int, "number", "INTEGER",
+              counts_digits=True, aliases=["integer", "int"]),
+    FieldType("decimal", _to_decimal, "number", "NUMERIC(18,4)", counts_digits=True,
               aliases=["float", "double", "currency", "money"]),
-    FieldType("rating", _to_int, "number", counts_digits=True, aliases=["scale", "stars"]),
-    FieldType("date", _to_date, "string (YYYY-MM-DD)"),
-    FieldType("datetime", _to_datetime, "string (ISO 8601)",
+    FieldType("rating", _to_int, "number", "INTEGER",
+              counts_digits=True, aliases=["scale", "stars"]),
+    FieldType("date", _to_date, "string (YYYY-MM-DD)", "DATE"),
+    FieldType("datetime", _to_datetime, "string (ISO 8601)", "TIMESTAMP",
               aliases=["timestamp", "datetime-local"]),
-    FieldType("time", _to_time, "string (HH:MM:SS)"),
-    FieldType("boolean", _to_bool, "boolean",
+    FieldType("time", _to_time, "string (HH:MM:SS)", "TIME"),
+    FieldType("boolean", _to_bool, "boolean", "BOOLEAN",
               aliases=["checkbox", "toggle", "switch", "yesno"]),
-    FieldType("select", _to_str, "string", has_options=True, aliases=["dropdown", "combobox"]),
-    FieldType("radio", _to_str, "string", has_options=True,
+    FieldType("select", _to_str, "string", "VARCHAR(255)",
+              has_options=True, aliases=["dropdown", "combobox"]),
+    FieldType("radio", _to_str, "string", "VARCHAR(255)", has_options=True,
               aliases=["radiogroup", "radio_group", "option"]),
-    FieldType("multiselect", _to_list, "array", has_options=True, multi=True,
+    # Flattened to a comma-separated list in the mirror; the array lives in form_data.
+    FieldType("multiselect", _to_list, "array", "TEXT", has_options=True, multi=True,
               aliases=["checkboxgroup", "checkbox_group", "checkboxes",
                        "multi_select", "multiple"]),
-    FieldType("file", _to_str, "string", aliases=["upload", "image", "photo", "attachment"]),
-    FieldType("signature", _to_str, "string"),
-    FieldType("location", _to_object, "object {lat, lng}",
+    FieldType("file", _to_str, "string", "TEXT",
+              aliases=["upload", "image", "photo", "attachment"]),
+    FieldType("signature", _to_str, "string", "TEXT"),
+    FieldType("location", _to_object, "object {lat, lng}", "TEXT",
               aliases=["gps", "geo", "coordinates", "geopoint"]),
 ]
 
@@ -202,6 +211,27 @@ def get_type(name: str) -> FieldType:
 def coerce_value(field_type: str, value: Any) -> Any:
     """Validate and coerce a submitted value. Raises FieldValueError."""
     return get_type(field_type).coerce(value)
+
+
+def pg_type_for(field_type: str) -> str:
+    """The column type this field takes in the flat `<form>_tabular` mirror."""
+    return get_type(field_type).pg_type
+
+
+def flatten(value: Any) -> Any:
+    """Reduce a coerced value to something a single flat column can hold.
+
+    A multi-select becomes `Canal, Borewell`; a location becomes `26.9,75.8`.
+    The structured form is always still there in `form_data`.
+    """
+    if isinstance(value, list):
+        return ", ".join(str(v) for v in value) or None
+    if isinstance(value, dict):
+        lat, lng = value.get("lat"), value.get("lng")
+        if lat is not None or lng is not None:
+            return f"{lat if lat is not None else ''},{lng if lng is not None else ''}"
+        return ", ".join(f"{k}={v}" for k, v in value.items()) or None
+    return value
 
 
 def json_safe(value: Any) -> Any:

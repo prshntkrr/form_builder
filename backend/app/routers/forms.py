@@ -150,6 +150,22 @@ def soft_delete(form_id: str):
         raise HTTPException(status_code=404, detail=str(exc))
 
 
+@router.post("/{form_id}/rebuild-tabular")
+def rebuild_tabular(form_id: str):
+    """Rebuild the flat `<form>_tabular` mirror from the JSONB table.
+
+    Happens automatically whenever columns change; call this for a form whose
+    responses were collected before the mirror existed.
+    """
+    try:
+        return form_service.rebuild_tabular(form_id)
+    except form_service.FormNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        logger.exception("Tabular rebuild failed")
+        raise HTTPException(status_code=500, detail=f"Could not rebuild: {exc}")
+
+
 @router.get("/{form_id}/versions")
 def versions(form_id: str, include_json: bool = False):
     try:

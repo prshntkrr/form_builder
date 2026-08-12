@@ -11,6 +11,7 @@ from .form_schema import derive_table_name, normalize_form
 from .database import transaction
 from .migration_service import apply_renames, revalidate, validate_renames
 from .table_service import resolve_table_name, sync_table, table_exists
+from . import tabular_service
 
 logger = logging.getLogger(__name__)
 
@@ -167,6 +168,23 @@ def _raw_versions(cur, form_id: str) -> List[Dict[str, Any]]:
     return [dict(r) for r in cur.fetchall()]
 
 
+def rebuild_tabular(form_id: str) -> Dict[str, Any]:
+    """Repopulate a form's flat mirror from its JSONB table.
+
+    Runs automatically when columns change; this is the manual door, for a form
+    whose responses predate the mirror.
+    """
+    form = get_form(form_id)
+    definition = form["form_json"] or {}
+    if not definition.get("table_name"):
+        raise FormNotFound(f"Form {form_id} has no data table")
+
+    with transaction() as cur:
+        report = tabular_service.sync(cur, definition)
+        report.update(tabular_service.rebuild(cur, definition, form_id))
+    return report
+
+
 def get_versions(form_id: str, include_json: bool = False) -> List[Dict[str, Any]]:
     """The revision history, newest first. The full definitions are heavy, so
     they are only included when asked for."""
@@ -266,10 +284,17 @@ def create_form(
         )
 
         table_report = sync_table(cur, definition)
+        tabular_report = tabular_service.sync(cur, definition)
 
-    logger.info("Created form %s -> table %s", form_id, table_report["table_name"])
+    logger.info(
+        "Created form %s -> %s + %s",
+        form_id,
+        table_report["table_name"],
+        tabular_report["name"],
+    )
     result = _row_to_form(row, version=1)
     result["table"] = table_report
+    result["tabular"] = tabular_report
     return result
 
 
@@ -349,9 +374,16 @@ def update_form(
         # definition change, so the two can never disagree.
         moved = apply_renames(cur, definition["table_name"], rename_map) if rename_map else {}
 
+        # The flat mirror follows the definition: columns added, dropped,
+        # renamed or replaced to match the new set of questions.
+        tabular_report = tabular_service.sync(cur, definition, rename_map)
+        if tabular_report["created"] or tabular_report["added"] or tabular_report["retyped"]:
+            tabular_report.update(tabular_service.rebuild(cur, definition, form_id))
+
     logger.info("Updated form %s to version %s", form_id, version_no)
     result = _row_to_form(row, version=version_no)
     result["table"] = table_report
+    result["tabular"] = tabular_report
     result["renamed"] = moved
     return result
 
