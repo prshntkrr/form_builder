@@ -45,6 +45,11 @@ class RevalidateRequest(BaseModel):
     fix: bool = False
 
 
+class RollbackRequest(BaseModel):
+    version_no: int = Field(..., ge=1)
+    updated_by: Optional[str] = None
+
+
 class StatusRequest(BaseModel):
     form_status: str
 

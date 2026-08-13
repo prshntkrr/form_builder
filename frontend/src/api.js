@@ -65,6 +65,13 @@ export const api = {
   // Repopulate the flat <form>_tabular mirror from the JSONB table.
   rebuildTabular: (formId) => request(`/forms/${formId}/rebuild-tabular`, { method: 'POST' }),
 
+  // Restore an earlier definition as a new version. Nothing is erased.
+  rollback: (formId, versionNo, updatedBy) =>
+    request(`/forms/${formId}/rollback`, {
+      method: 'POST',
+      body: JSON.stringify({ version_no: versionNo, updated_by: updatedBy }),
+    }),
+
   listForms: (params = {}) => {
     const qs = new URLSearchParams(
       Object.entries(params).filter(([, v]) => v !== '' && v != null),

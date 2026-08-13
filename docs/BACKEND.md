@@ -133,15 +133,38 @@ object. If you need them split (`plot_lat`, `plot_lng`) that is a change to `_fi
 
 ### What a new version does to it
 
+The mirror is **additive: a column is never dropped.**
+
 | Change to the form | Mirror |
 | --- | --- |
 | Question added | `ADD COLUMN`, then rebuild so history is filled in |
-| Question removed | `DROP COLUMN` — the answers stay in `form_data` |
 | Question renamed | `RENAME COLUMN` — values move with it |
 | Type changed | column dropped and re-added, then rebuilt from `form_data` |
+| **Question removed** | **nothing** — the column stays exactly as it is |
 
-`POST /api/forms/{id}/rebuild-tabular` does it on demand — needed only for a form whose responses
-predate the mirror.
+A removed question's column is *retired*, not deleted. It keeps every answer collected while the
+question was being asked; nothing writes to it afterwards, so those values are frozen rather than
+lost. Responses submitted while the question is gone leave it `NULL`, which is accurate — they
+were never asked. Put the question back and the column is already there, history intact, with no
+rebuild needed.
+
+Retired columns come back in the sync report as `retained`, so the UI can say how many a form is
+carrying.
+
+One consequence of keeping columns forever: a rename can target a name a retired column already
+holds. Rather than overwrite or drop it, the retired column is parked as `<name>_archived` first:
+
+```
+guardian deleted        -> guardian retired, holding "Suresh"
+contact renamed to guardian
+  archived: guardian -> guardian_archived
+  renamed:  contact  -> guardian
+  row:      { guardian_archived: "Suresh", guardian: "Ramesh" }
+```
+
+`POST /api/forms/{id}/rebuild-tabular` repopulates on demand — needed only for a form whose
+responses predate the mirror. Rebuild only writes the columns the live definition names, so
+retired columns survive it too.
 
 ## 4. Where things are stored
 
@@ -355,6 +378,46 @@ primary_farmer  ──v3 renamed_from──▶  farmer_name  ──v2 renamed_fr
 
 So a rename across any number of versions reads as a single changed field, with the old and new
 storage keys shown.
+
+### Rolling back
+
+```
+POST /api/forms/{id}/rollback   { "version_no": 2 }
+```
+
+**No new version is written.** `forms.form_json` is pointed at that version's stored definition
+verbatim; the history is untouched. Rolling back is therefore not an edit — it changes which
+version is live, nothing else.
+
+```
+form_version   1     2     3        (never changes)
+                     ▲
+forms.form_json ─────┘               live = 2
+```
+
+**Which version is live** is read from the definition itself. Every definition carries its own
+`version` number, so the `forms` row says which one it is holding — no extra column needed. That
+is why `_row_to_form` reports two numbers:
+
+| | |
+| --- | --- |
+| `version_no` | the version that is **live** — what the form renders and what submissions record |
+| `latest_version` | the highest version on record |
+
+Equal in the normal case; after a rollback, `version_no < latest_version`.
+
+Editing while rolled back appends as usual: live v1 of 3, save, and you get v4 based on v1.
+
+**Field keys still move.** Rolling between versions that renamed a field would otherwise orphan
+its answers, so the rename chain is traced and applied to `form_data` and the mirror:
+
+```
+live v3 → target v1:   { farmer_name: farmer }
+live v1 → target v3:   { farmer: farmer_name }     inverted, since tracing only walks backwards
+```
+
+A question that exists only in later versions keeps its answers in `form_data` while rolled back —
+unreferenced, not deleted. Roll forward and they are live again.
 
 ---
 

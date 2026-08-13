@@ -13,6 +13,7 @@ from ..schemas import (
     GenerateRequest,
     RefineRequest,
     RevalidateRequest,
+    RollbackRequest,
     StatusRequest,
     UpdateFormRequest,
     ValidateRequest,
@@ -176,6 +177,26 @@ def soft_delete(form_id: str):
         raise HTTPException(status_code=404, detail=str(exc))
     except IntegrityError as exc:
         raise HTTPException(status_code=409, detail=_constraint_message(exc))
+
+
+@router.post("/{form_id}/rollback")
+def rollback(form_id: str, req: RollbackRequest):
+    """Make an existing version the live one.
+
+    No new version is written — the form simply points at that version's stored
+    definition. The history is untouched, so rolling anywhere else undoes it.
+    """
+    try:
+        return form_service.rollback(form_id, req.version_no, updated_by=req.updated_by)
+    except form_service.FormNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except form_service.FormServiceError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except MigrationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except Exception as exc:
+        logger.exception("Rollback failed")
+        raise HTTPException(status_code=500, detail=f"Could not roll back: {exc}")
 
 
 @router.post("/{form_id}/rebuild-tabular")

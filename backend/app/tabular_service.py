@@ -105,25 +105,41 @@ def create(cur, form_json: Dict[str, Any]) -> str:
     return name
 
 
+def _free_name(current: set, column: str) -> str:
+    """A name near `column` that nothing is using yet."""
+    candidate, n = f"{column}_archived"[:MAX_IDENTIFIER], 2
+    while candidate in current:
+        suffix = f"_archived_{n}"
+        candidate = f"{column[:MAX_IDENTIFIER - len(suffix)]}{suffix}"
+        n += 1
+    return candidate
+
+
 def sync(
     cur,
     form_json: Dict[str, Any],
     renames: Optional[Dict[str, str]] = None,
 ) -> Dict[str, Any]:
-    """Bring the mirror in line with the current definition.
+    """Bring the mirror in line with the current definition — additively.
 
-    Renames keep their data (`ALTER ... RENAME COLUMN`). New questions get a
-    column. Removed questions lose theirs. A retyped question has its column
-    replaced — safe, because the values are read back from `form_data`.
+    Adds a column for each new question, renames one whose key changed, and
+    replaces one whose type changed (safe: the values are read back from
+    `form_data`).
+
+    A column is **never dropped**. Delete a question and its column stays exactly
+    as it is, holding every answer collected while it was being asked. Nothing
+    writes to it after that, so the values are frozen rather than lost — and if
+    the question comes back, the column is already there with its history.
     """
     name = tabular_name(form_json["table_name"])
     report: Dict[str, Any] = {
         "name": name,
         "created": False,
         "added": [],
-        "dropped": [],
+        "retained": [],
         "renamed": [],
         "retyped": [],
+        "archived": [],
         "warnings": [],
     }
 
@@ -143,14 +159,27 @@ def sync(
 
     # Renames first, so the column is recognised as existing below.
     for old, new in (renames or {}).items():
-        current = existing_columns(cur, name)
-        if old in current and new not in current:
+        current = set(existing_columns(cur, name))
+        if old not in current:
+            continue
+
+        # Because columns are kept forever, the target name may be occupied by a
+        # deleted question's column. Park it rather than overwrite or drop it.
+        if new in current:
+            parked = _free_name(current, new)
             cur.execute(
                 sql.SQL("ALTER TABLE {} RENAME COLUMN {} TO {}").format(
-                    _q(name), sql.Identifier(old), sql.Identifier(new)
+                    _q(name), sql.Identifier(new), sql.Identifier(parked)
                 )
             )
-            report["renamed"].append(f"{old} -> {new}")
+            report["archived"].append(f"{new} -> {parked}")
+
+        cur.execute(
+            sql.SQL("ALTER TABLE {} RENAME COLUMN {} TO {}").format(
+                _q(name), sql.Identifier(old), sql.Identifier(new)
+            )
+        )
+        report["renamed"].append(f"{old} -> {new}")
 
     current = existing_columns(cur, name)
     wanted = _field_columns(form_json)
@@ -177,21 +206,21 @@ def sync(
             )
             report["retyped"].append(f"{column} -> {pg_type}")
 
-    for column in current:
-        if column not in wanted_names and column not in ENVELOPE_NAMES:
-            cur.execute(
-                sql.SQL("ALTER TABLE {} DROP COLUMN {}").format(_q(name), sql.Identifier(column))
-            )
-            report["dropped"].append(column)
+    # Columns for questions that are no longer asked. Left untouched, values and
+    # all — this is the whole point of never dropping.
+    report["retained"] = sorted(
+        c for c in existing_columns(cur, name)
+        if c not in wanted_names and c not in ENVELOPE_NAMES
+    )
 
-    if any(report[k] for k in ("added", "dropped", "renamed", "retyped")):
+    if any(report[k] for k in ("added", "renamed", "retyped", "archived")):
         logger.info(
-            "Synced %s: +%d -%d ~%d renamed=%d",
+            "Synced %s: +%d retyped=%d renamed=%d (kept %d retired column(s))",
             name,
             len(report["added"]),
-            len(report["dropped"]),
             len(report["retyped"]),
             len(report["renamed"]),
+            len(report["retained"]),
         )
     return report
 

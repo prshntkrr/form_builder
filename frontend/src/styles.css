@@ -448,10 +448,11 @@ table.data td { max-width: 240px; overflow: hidden; text-overflow: ellipsis; whi
 
 .diff__version {
   display: flex; align-items: center; gap: 10px;
-  padding: 4px 0 4px 0; border-top: 1px solid var(--line);
+  padding: 5px 0; border-top: 1px solid var(--line);
 }
 .diff__version:first-of-type { border-top: none; }
-.diff__version .btn { min-width: 92px; justify-content: flex-start; }
+.diff__version .btn--quiet { min-width: 92px; justify-content: flex-start; }
+.diff__version--live { font-weight: 550; }
 
 /* ══ sticky save bar ══════════════════════════════════════════════════════ */
 .savebar {

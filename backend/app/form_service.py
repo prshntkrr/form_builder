@@ -7,7 +7,7 @@ from psycopg2.extras import Json
 
 from .bootstrap import FORM_STATUSES, FORM_TYPES
 from .config import settings
-from .diff_service import diff_versions as _diff_versions
+from .diff_service import diff_versions as _diff_versions, trace_names
 from .form_schema import derive_table_name, normalize_form
 from .database import transaction
 from .migration_service import apply_renames, revalidate, validate_renames
@@ -57,7 +57,12 @@ def _current_version(cur, form_id: str) -> int:
 
 
 def _row_to_form(row: Dict[str, Any], version: Optional[int] = None) -> Dict[str, Any]:
+    """`version_no` is the version that is *live* — which after a rollback is not
+    necessarily the highest one. Each definition carries its own number, so the
+    `forms` row itself says which that is; `latest_version` is the highest."""
     form_json = row.get("form_json") or {}
+    latest = row.get("max_version_no")
+    live = version if version is not None else (form_json.get("version") or latest or 1)
     return {
         "form_id": row["form_id"],
         "form_title": row["form_title"],
@@ -71,7 +76,8 @@ def _row_to_form(row: Dict[str, Any], version: Optional[int] = None) -> Dict[str
         "created_by": row.get("created_by"),
         "table_name": form_json.get("table_name"),
         "field_count": len(form_json.get("fields") or []),
-        "version_no": version if version is not None else row.get("version_no"),
+        "version_no": int(live),
+        "latest_version": int(latest) if latest else int(live),
         "submission_count": row.get("submission_count"),
     }
 
@@ -98,7 +104,7 @@ def list_forms(
     params += [limit, offset]
     sql_text = f"""
         SELECT f.*,
-               (SELECT MAX(version_no) FROM form_version v WHERE v.form_id = f.form_id) AS version_no
+               (SELECT MAX(version_no) FROM form_version v WHERE v.form_id = f.form_id) AS max_version_no
         FROM forms f
         WHERE {' AND '.join(clauses)}
         ORDER BY f.updated_on DESC NULLS LAST, f.created_on DESC
@@ -131,7 +137,7 @@ def get_form(form_id: str) -> Dict[str, Any]:
         cur.execute(
             """
             SELECT f.*,
-                   (SELECT MAX(version_no) FROM form_version v WHERE v.form_id = f.form_id) AS version_no
+                   (SELECT MAX(version_no) FROM form_version v WHERE v.form_id = f.form_id) AS max_version_no
             FROM forms f WHERE f.form_id = %s
             """,
             (form_id,),
@@ -167,6 +173,95 @@ def _raw_versions(cur, form_id: str) -> List[Dict[str, Any]]:
         (form_id,),
     )
     return [dict(r) for r in cur.fetchall()]
+
+
+def _renames_between(
+    by_no: Dict[int, Dict[str, Any]], live_no: int, target_no: int
+) -> Dict[str, str]:
+    """How field keys must move to go from the live version to the target one.
+
+    `trace_names` only walks backwards through `renamed_from`, so going forward
+    (after an earlier rollback) means tracing the other way and inverting.
+    """
+    live_fields = [f["name"] for f in (by_no[live_no].get("fields") or [])]
+    target_fields = [f["name"] for f in (by_no[target_no].get("fields") or [])]
+
+    if target_no < live_no:
+        return trace_names(by_no, target_no, live_no, live_fields)
+
+    forward = trace_names(by_no, live_no, target_no, target_fields)
+    return {live_name: target_name for target_name, live_name in forward.items()}
+
+
+def rollback(form_id: str, version_no: int, updated_by: Optional[str] = None) -> Dict[str, Any]:
+    """Make an existing version the live one.
+
+    No new version is written. `forms.form_json` is pointed at that version's
+    stored definition verbatim, and because every definition carries its own
+    `version` number, the row itself says which version is live. The version
+    history is untouched, so this is reversible by rolling to any other version.
+
+    Fields renamed between the two versions are traced through the chain, so the
+    answers already collected move to the keys the newly live definition expects
+    rather than being orphaned.
+    """
+    with transaction() as cur:
+        cur.execute("SELECT * FROM forms WHERE form_id = %s FOR UPDATE", (form_id,))
+        existing = cur.fetchone()
+        if not existing:
+            raise FormNotFound(f"Form {form_id} not found")
+
+        rows = _raw_versions(cur, form_id)
+        by_no = {int(r["version_no"]): (r.get("form_json") or {}) for r in rows}
+        if version_no not in by_no:
+            raise FormServiceError(f"Version {version_no} does not exist")
+
+        existing_json = existing["form_json"] or {}
+        live_no = int(existing_json.get("version") or max(by_no, default=1))
+        if version_no == live_no:
+            raise FormServiceError(f"Version {version_no} is already live")
+        if live_no not in by_no:
+            raise FormServiceError(f"The live definition (version {live_no}) is not in the history")
+
+        # Copied verbatim, so `forms.form_json` and the version row stay identical
+        # and "live version N" is literally true. Only the table name is pinned,
+        # since it is fixed at creation and never travels with a definition.
+        target = dict(by_no[version_no])
+        target["table_name"] = existing_json.get("table_name") or target.get("table_name")
+        target["form_id"] = form_id
+
+        rename_map = validate_renames(
+            _renames_between(by_no, live_no, version_no),
+            existing_json.get("fields") or [],
+            target.get("fields") or [],
+        )
+
+        cur.execute(
+            """
+            UPDATE forms
+               SET form_title = %s, form_description = %s, form_json = %s,
+                   updated_on = CURRENT_TIMESTAMP
+             WHERE form_id = %s
+            RETURNING *
+            """,
+            (target.get("title"), target.get("description"), Json(target), form_id),
+        )
+        row = dict(cur.fetchone())
+
+        moved = apply_renames(cur, target["table_name"], rename_map) if rename_map else {}
+        table_report = sync_table(cur, target)
+        tabular_report = tabular_service.sync(cur, target, rename_map)
+        if tabular_report["created"] or tabular_report["added"] or tabular_report["retyped"]:
+            tabular_report.update(tabular_service.rebuild(cur, target, form_id))
+
+    logger.info("Form %s rolled from version %s to version %s (%s by)",
+                form_id, live_no, version_no, updated_by or settings.default_user)
+    result = _row_to_form(row, version=version_no)
+    result["rolled_from"] = live_no
+    result["table"] = table_report
+    result["tabular"] = tabular_report
+    result["renamed"] = moved
+    return result
 
 
 def rebuild_tabular(form_id: str) -> Dict[str, Any]:

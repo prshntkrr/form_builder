@@ -172,6 +172,11 @@ what was added, removed, retyped, renamed, or reordered — with no separate cha
 A field renamed across several versions is followed through the chain, so it reads as one changed
 field rather than a removal plus an addition.
 
+The same tab lists every version, marks which one is **Live**, and offers **Roll back** on the
+rest. Rolling back writes no new version — the form simply points at that version's stored
+definition, so the history is untouched and you can roll anywhere else afterwards. Answers already
+collected move to the keys that version uses. Editing while rolled back appends as normal.
+
 For the full picture — module map, request lifecycles, safety model — see
 [docs/BACKEND.md](docs/BACKEND.md).
 
@@ -204,6 +209,7 @@ the versioned `form_json` instead, since the `forms` table has no such column.
 | `DELETE` | `/api/forms/{form_id}` | soft delete (status = Deleted) |
 | `GET` | `/api/forms/{form_id}/versions` | version history |
 | `GET` | `/api/forms/{form_id}/diff?from=1&to=3` | what changed between two versions (defaults to latest vs previous) |
+| `POST` | `/api/forms/{form_id}/rollback` | make an existing version live (writes no new version) |
 | `POST` | `/api/forms/{form_id}/submissions` | submit a filled form |
 | `GET` | `/api/forms/{form_id}/submissions` | paginated submissions |
 | `GET` | `/api/forms/{form_id}/submissions/export` | CSV export |

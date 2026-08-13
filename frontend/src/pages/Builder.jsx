@@ -40,17 +40,32 @@ const untag = (json) => ({
 
 /** What the flat reporting mirror did in response to this save. */
 function TabularNote({ report }) {
+  const plural = (n, word) => `${n} ${word}${n > 1 ? 's' : ''}`
   const bits = [
     report.created && 'created',
-    report.added?.length && `${report.added.length} column${report.added.length > 1 ? 's' : ''} added`,
-    report.dropped?.length && `${report.dropped.length} dropped`,
+    report.added?.length && `${plural(report.added.length, 'column')} added`,
     report.renamed?.length && `${report.renamed.length} renamed`,
     report.retyped?.length && `${report.retyped.length} retyped`,
-    report.rebuilt && `${report.rebuilt} row${report.rebuilt > 1 ? 's' : ''} rebuilt`,
+    report.archived?.length && `${report.archived.length} archived`,
+    report.rebuilt && `${plural(report.rebuilt, 'row')} rebuilt`,
   ].filter(Boolean)
 
-  if (!bits.length) return null
-  return <span className="tiny"><code>{report.name}</code> · {bits.join(' · ')}</span>
+  if (!bits.length && !report.retained?.length) return null
+
+  return (
+    <span className="tiny">
+      <code>{report.name}</code>
+      {bits.length > 0 && <> · {bits.join(' · ')}</>}
+      {report.retained?.length > 0 && (
+        <>
+          {' '}·{' '}
+          <span title={report.retained.join(', ')}>
+            {plural(report.retained.length, 'retired column')} kept with their answers
+          </span>
+        </>
+      )}
+    </span>
+  )
 }
 
 export default function Builder() {
@@ -146,6 +161,15 @@ export default function Builder() {
 
   const inspect = (fix) =>
     run('check', async () => setCheck(await api.revalidate(formId, fix)))
+
+  /** Pull the definition back in after something else changed it — a rollback. */
+  const reload = async () => {
+    const f = await api.getForm(formId)
+    setForm(prep(f.form_json, true))
+    setResponses(f.submission_count || 0)
+    setSaved(null)
+    setCheck(null)
+  }
 
   // ── field operations ──────────────────────────────────────────────────────
   const put = (i, next) => {
@@ -354,7 +378,13 @@ export default function Builder() {
                 />
               )}
 
-              {tab === 'history' && <VersionDiff formId={formId} currentVersion={saved?.version_no} />}
+              {tab === 'history' && (
+                <VersionDiff
+                  formId={formId}
+                  liveVersion={saved?.version_no ?? form.version}
+                  onRolledBack={reload}
+                />
+              )}
 
               {tab === 'json' && <pre className="json">{JSON.stringify(untag(form), null, 2)}</pre>}
             </div>

@@ -87,6 +87,17 @@ export default function FormsList() {
               <div className="item__meta">
                 <span>{f.field_count} questions</span>
                 <span className="sep">·</span>
+                <Link
+                  to={`/forms/${f.form_id}/edit`}
+                  style={{ color: 'inherit' }}
+                  title={f.latest_version > f.version_no
+                    ? `Rolled back — version ${f.version_no} is live, ${f.latest_version} exist`
+                    : 'Version history'}
+                >
+                  version {f.version_no ?? 1}
+                  {f.latest_version > f.version_no && ` of ${f.latest_version}`}
+                </Link>
+                <span className="sep">·</span>
                 <span>edited {ago(f.updated_on || f.created_on)}</span>
                 {f.created_by && (
                   <>
