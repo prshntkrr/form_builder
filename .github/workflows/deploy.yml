@@ -26,13 +26,13 @@ jobs:
             echo "Starting deployment"
             echo "================================="
 
-            cd /var/www/html/eagrology-revamp.indevconsultancy.in
+            cd /var/www/html/eagrology-revamp.indevconsultancy.in/form_builder
 
             echo "Pulling latest code..."
             git pull origin master
 
             echo "Entering backend..."
-            cd form_builder/backend
+            cd backend
 
             echo "Installing Python dependencies..."
             source venv/bin/activate
