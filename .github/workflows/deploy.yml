@@ -40,14 +40,25 @@ jobs:
 
             echo "Stopping existing backend..."
 
-            BACKEND_PID=$(pgrep -f "uvicorn app.main:app.*--port 8021" || true)
+            BACKEND_PID=$(ss -ltnpH 'sport = :8021' 2>/dev/null \
+              | grep -oP 'pid=\K[0-9]+' \
+              | head -1 || true)
 
             if [ -n "$BACKEND_PID" ]; then
                 echo "Found backend PID: $BACKEND_PID"
-                kill $BACKEND_PID
-                sleep 2
+                kill "$BACKEND_PID"
+
+                echo "Waiting for backend to stop..."
+
+                for i in {1..10}; do
+                    if ! kill -0 "$BACKEND_PID" 2>/dev/null; then
+                        echo "Backend stopped."
+                        break
+                    fi
+                    sleep 1
+                done
             else
-                echo "Backend process not found."
+                echo "No process listening on port 8021."
             fi
 
             echo "Starting backend..."
