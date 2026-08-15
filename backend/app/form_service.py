@@ -7,12 +7,13 @@ from psycopg2.extras import Json
 
 from .bootstrap import FORM_STATUSES, FORM_TYPES
 from .config import settings
+from .config_validation import BusinessContext, validate_config
 from .diff_service import diff_versions as _diff_versions, trace_names
 from .form_schema import derive_table_name, normalize_form
 from .database import transaction
 from .migration_service import apply_renames, revalidate, validate_renames
 from .table_service import resolve_table_name, sync_table, table_exists
-from . import tabular_service
+from . import standard_library, tabular_service
 
 logger = logging.getLogger(__name__)
 
@@ -164,6 +165,36 @@ def check_submissions(form_id: str, fix: bool = False) -> Dict[str, Any]:
         return revalidate(cur, table, form_id, form["form_json"], fix=fix)
 
 
+def _validate_config(
+    cur,
+    form_json: Dict[str, Any],
+    *,
+    form_id: Optional[str] = None,
+    form_type: str = "parent",
+    parent_id: Optional[str] = None,
+    status: str = "Active",
+) -> None:
+    """Run the two-stage pipeline before a config is allowed to be persisted.
+
+    The database facts a business rule needs are gathered here so the pipeline
+    itself stays pure and testable without a connection.
+    """
+    context = BusinessContext(
+        form_id=form_id,
+        form_type=form_type,
+        parent_id=parent_id,
+        form_status=status,
+        known_form_ids=_known_form_ids(cur) if parent_id else (),
+        known_standard_ids=standard_library.known_ids(cur),
+    )
+    validate_config(form_json, context)
+
+
+def _known_form_ids(cur) -> List[str]:
+    cur.execute("SELECT form_id FROM forms")
+    return [r["form_id"] for r in cur.fetchall()]
+
+
 def _raw_versions(cur, form_id: str) -> List[Dict[str, Any]]:
     cur.execute(
         """
@@ -264,6 +295,48 @@ def rollback(form_id: str, version_no: int, updated_by: Optional[str] = None) ->
     return result
 
 
+def add_to_library(
+    form_id: str,
+    version_no: Optional[int] = None,
+    *,
+    standard_id: Optional[str] = None,
+    category: str = "General",
+    tags: Optional[List[str]] = None,
+    summary: Optional[str] = None,
+    added_by: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Offer one of this form's versions as a standard others can start from.
+
+    Defaults to the version that is live. The definition is copied into the
+    library, so the form itself is untouched and the standard outlives it.
+    """
+    form = get_form(form_id)
+    pinned = int(version_no or form["version_no"] or 1)
+
+    with transaction() as cur:
+        cur.execute(
+            "SELECT form_json FROM form_version WHERE form_id = %s AND version_no = %s",
+            (form_id, pinned),
+        )
+        row = cur.fetchone()
+        if not row:
+            raise FormServiceError(f"{form_id} has no version {pinned}")
+
+        # The definition is copied into the library, so what happens to this
+        # form afterwards — edits, deletion — cannot affect the standard.
+        return standard_library.add_form(
+            cur, row["form_json"] or {},
+            form_id=form_id, version_no=pinned, standard_id=standard_id,
+            title=form["form_title"], category=category, tags=tags,
+            summary=summary, added_by=added_by,
+        )
+
+
+def remove_from_library(standard_id: str) -> bool:
+    with transaction() as cur:
+        return standard_library.remove_form(cur, standard_id)
+
+
 def rebuild_tabular(form_id: str) -> Dict[str, Any]:
     """Repopulate a form's flat mirror from its JSONB table.
 
@@ -352,6 +425,10 @@ def create_form(
     author = (created_by or definition.get("created_by") or settings.default_user)[:50]
 
     with transaction() as cur:
+        # Nothing invalid reaches the INSERT below.
+        _validate_config(
+            cur, form_json, form_type=form_type, parent_id=parent_id, status=status
+        )
         form_id = _next_form_id(cur)
         definition["table_name"] = resolve_table_name(cur, definition["table_name"])
         definition["form_id"] = form_id
@@ -419,6 +496,15 @@ def update_form(
         existing = cur.fetchone()
         if not existing:
             raise FormNotFound(f"Form {form_id} not found")
+
+        _validate_config(
+            cur,
+            form_json,
+            form_id=form_id,
+            form_type=existing.get("form_type") or "parent",
+            parent_id=existing.get("parent_id"),
+            status=status or existing.get("form_status") or "Active",
+        )
 
         existing_json = existing["form_json"] or {}
         # The table is never renamed — its name is fixed at creation so live data

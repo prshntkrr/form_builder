@@ -12,6 +12,8 @@ import logging
 from pathlib import Path
 from typing import List
 
+from psycopg2.extras import Json
+
 from .config import settings
 from .database import transaction
 from .table_service import table_exists
@@ -19,7 +21,7 @@ from .table_service import table_exists
 logger = logging.getLogger(__name__)
 
 SCHEMA_FILE = Path(__file__).resolve().parent.parent / "schema.sql"
-REQUIRED_TABLES = ("forms", "form_version")
+REQUIRED_TABLES = ("forms", "form_version", "standard_form_library")
 
 # The statuses the application writes. 'Deleted' is a soft delete: the form and
 # every response it collected are kept, the form just leaves the list.
@@ -106,6 +108,78 @@ def ensure_status_values() -> bool:
         return True
     except Exception as exc:
         logger.warning("Could not widen forms_form_status_check: %s", exc)
+        return False
+
+
+def ensure_library_snapshots() -> bool:
+    """Give every library row its own copy of the definition.
+
+    The library first stored a reference — a form plus a pinned version — which
+    meant deleting the form took the standard with it. A standard should outlive
+    the form it was taken from, so each row now carries the definition itself and
+    form_id is provenance only.
+
+    Idempotent; a no-op once `form_json` is there.
+    """
+    from psycopg2 import sql
+
+    try:
+        with transaction() as cur:
+            if not table_exists(cur, "standard_form_library"):
+                return False
+
+            cur.execute(
+                """
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema = %s AND table_name = 'standard_form_library'
+                  AND column_name = 'form_json'
+                """,
+                (settings.db_schema,),
+            )
+            if cur.fetchone():
+                return False
+
+            logger.info("Migrating standard_form_library to hold its own definitions")
+            cur.execute("ALTER TABLE standard_form_library ADD COLUMN form_json JSONB")
+
+            # Copy each row's pinned version across, stripped to a template.
+            from .standard_library import to_library_entry
+            cur.execute(
+                """
+                SELECT l.standard_id, v.form_json
+                FROM   standard_form_library l
+                JOIN   form_version v
+                       ON v.form_id = l.form_id AND v.version_no = l.version_no
+                """
+            )
+            for row in [dict(r) for r in cur.fetchall()]:
+                template = to_library_entry(row["form_json"] or {})["form"]
+                cur.execute(
+                    "UPDATE standard_form_library SET form_json = %s WHERE standard_id = %s",
+                    (Json(template), row["standard_id"]),
+                )
+
+            # Anything that could not be copied has nothing to offer.
+            cur.execute("DELETE FROM standard_form_library WHERE form_json IS NULL")
+            cur.execute("ALTER TABLE standard_form_library ALTER COLUMN form_json SET NOT NULL")
+
+            # The source form is now only provenance.
+            for statement in (
+                "ALTER TABLE standard_form_library "
+                "DROP CONSTRAINT IF EXISTS standard_form_library_form_id_version_no_fkey",
+                "ALTER TABLE standard_form_library "
+                "DROP CONSTRAINT IF EXISTS standard_form_library_form_id_fkey",
+                "ALTER TABLE standard_form_library ALTER COLUMN form_id DROP NOT NULL",
+                "ALTER TABLE standard_form_library ALTER COLUMN version_no DROP NOT NULL",
+                "ALTER TABLE standard_form_library ADD CONSTRAINT standard_form_library_form_id_fkey "
+                "FOREIGN KEY (form_id) REFERENCES forms (form_id) ON DELETE SET NULL",
+            ):
+                cur.execute(statement)
+
+        logger.info("standard_form_library now holds its own definitions")
+        return True
+    except Exception as exc:
+        logger.error("Could not migrate standard_form_library: %s", exc)
         return False
 
 

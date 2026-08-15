@@ -1,105 +1,50 @@
-import React, { useEffect, useRef, useState } from 'react'
-import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
-import { api } from './api.js'
-import { initials, saveUser, useUser } from './identity.js'
+import React, { useState } from 'react'
+import { Navigate, Outlet, Route, Routes, useParams } from 'react-router-dom'
+import Sidebar from './components/Sidebar.jsx'
 import Builder from './pages/Builder.jsx'
 import FormFill from './pages/FormFill.jsx'
 import FormsList from './pages/FormsList.jsx'
-import Submissions from './pages/Submissions.jsx'
+import Library from './pages/Library.jsx'
 
-function Who() {
-  const user = useUser()
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState(user)
-  const box = useRef(null)
-
-  useEffect(() => {
-    if (editing) box.current?.select()
-  }, [editing])
-
-  const commit = () => {
-    saveUser(draft)
-    setEditing(false)
-  }
-
-  if (editing) {
-    return (
-      <span className="who">
-        <span className="who__pic">{initials(draft)}</span>
-        <input
-          ref={box}
-          value={draft}
-          placeholder="Your name"
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={commit}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') commit()
-            if (e.key === 'Escape') { setDraft(user); setEditing(false) }
-          }}
-        />
-      </span>
-    )
-  }
+/** Everything except the live form sits beside the sidebar. */
+function Shell() {
+  const [open, setOpen] = useState(false)
 
   return (
-    <button
-      className="who"
-      onClick={() => { setDraft(user); setEditing(true) }}
-      title="Your name is recorded against the forms and responses you save"
-    >
-      <span className={`who__pic${user ? '' : ' who__pic--empty'}`}>{user ? initials(user) : '+'}</span>
-      <span>{user || 'Add your name'}</span>
-    </button>
+    <div className={`app${open ? ' app--menu' : ''}`}>
+      <button className="menu-toggle" onClick={() => setOpen(!open)} aria-label="Menu">
+        {open ? '✕' : '☰'}
+      </button>
+
+      <Sidebar onNavigate={() => setOpen(false)} />
+      <div className="body" onClick={() => open && setOpen(false)}>
+        <Outlet />
+      </div>
+    </div>
   )
 }
 
-/** A quiet red dot, only when something is actually wrong. */
-function Trouble() {
-  const [problem, setProblem] = useState(null)
-
-  useEffect(() => {
-    api
-      .health()
-      .then((h) => {
-        if (!h.database?.connected) setProblem('Cannot reach the database')
-        else if (!h.openai?.configured) setProblem('No OpenAI key configured — forms cannot be generated')
-      })
-      .catch(() => setProblem('The server is not responding'))
-  }, [])
-
-  if (!problem) return null
-  return <span className="warn-dot" title={problem} />
+/** Keeps older links (/edit, /data) working. */
+function Moved({ to }) {
+  const { formId } = useParams()
+  return <Navigate to={`/forms/${formId}/${to}`} replace />
 }
 
 export default function App() {
-  const cls = ({ isActive }) => (isActive ? 'on' : undefined)
-
   return (
-    <div className="app">
-      <header className="topbar">
-        <span className="brand">
-          <span className="brand__mark">e</span>
-          e-Agrology
-        </span>
+    <Routes>
+      {/* The live form stands alone — it is what you hand to the person filling it in. */}
+      <Route path="/f/:formId" element={<FormFill />} />
 
-        <nav className="nav">
-          <NavLink to="/forms" className={cls}>Forms</NavLink>
-          <NavLink to="/builder" className={cls}>New form</NavLink>
-        </nav>
-
-        <span className="topbar__end">
-          <Trouble />
-          <Who />
-        </span>
-      </header>
-
-      <Routes>
+      <Route element={<Shell />}>
         <Route path="/" element={<Navigate to="/forms" replace />} />
         <Route path="/builder" element={<Builder />} />
+        <Route path="/library" element={<Library />} />
         <Route path="/forms" element={<FormsList />} />
-        <Route path="/forms/:formId/edit" element={<Builder />} />
-        <Route path="/forms/:formId/data" element={<Submissions />} />
-        <Route path="/f/:formId" element={<FormFill />} />
+        <Route path="/forms/:formId" element={<Moved to="questions" />} />
+        <Route path="/forms/:formId/edit" element={<Moved to="questions" />} />
+        <Route path="/forms/:formId/data" element={<Moved to="responses" />} />
+        <Route path="/forms/:formId/:section" element={<Builder />} />
         <Route
           path="*"
           element={
@@ -111,7 +56,7 @@ export default function App() {
             </main>
           }
         />
-      </Routes>
-    </div>
+      </Route>
+    </Routes>
   )
 }

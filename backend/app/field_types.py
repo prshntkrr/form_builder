@@ -199,9 +199,19 @@ SUPPORTED_TYPES = sorted(FIELD_TYPES)
 DEFAULT_TYPE = "text"
 
 
+def resolve_type(raw: Any) -> Optional[str]:
+    """The supported type this name refers to, or None if it refers to nothing.
+
+    Separate from `normalize_type` because the two callers want opposite things:
+    the normalizer repairs unknown input by falling back to text, while
+    validation needs to report it.
+    """
+    return _ALIAS_MAP.get(_key(raw))
+
+
 def normalize_type(raw: Any) -> str:
     """Map whatever the LLM produced onto a supported type name."""
-    return _ALIAS_MAP.get(_key(raw), DEFAULT_TYPE)
+    return resolve_type(raw) or DEFAULT_TYPE
 
 
 def get_type(name: str) -> FieldType:

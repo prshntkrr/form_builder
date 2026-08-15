@@ -21,9 +21,20 @@ async function request(path, options = {}) {
 
   if (!res.ok) {
     const detail = body?.detail ?? body
-    const error = new Error(
-      typeof detail === 'string' ? detail : detail?.errors ? 'Please fix the highlighted fields' : res.statusText,
-    )
+    let message
+    if (res.status === 404 && detail === 'Not Found') {
+      // FastAPI's reply for a path it has no route for — almost always a server
+      // running older code, which "Not Found" on its own does not convey.
+      message = `The server has no ${path} endpoint. It may be running an older version — restart it and try again.`
+    } else if (typeof detail === 'string') {
+      message = detail
+    } else if (detail?.errors) {
+      message = 'Please fix the highlighted fields'
+    } else {
+      message = res.statusText || 'Request failed'
+    }
+
+    const error = new Error(message)
     error.status = res.status
     error.fieldErrors = detail?.errors ?? null
     throw error
@@ -64,6 +75,41 @@ export const api = {
 
   // Repopulate the flat <form>_tabular mirror from the JSONB table.
   rebuildTabular: (formId) => request(`/forms/${formId}/rebuild-tabular`, { method: 'POST' }),
+
+  // --- standard form library ---
+  listStandards: (params = {}) => {
+    const qs = new URLSearchParams(
+      Object.entries(params).filter(([, v]) => v !== '' && v != null),
+    ).toString()
+    return request(`/standard-forms${qs ? `?${qs}` : ''}`)
+  },
+
+  getStandard: (standardId) => request(`/standard-forms/${standardId}`),
+
+  // The whole standard as a new draft.
+  startFromStandard: (standardId, title) =>
+    request(`/standard-forms/${standardId}/start`, {
+      method: 'POST',
+      body: JSON.stringify({ title }),
+    }),
+
+  // Merge a standard's fields, or one of its sections, into the draft in hand.
+  borrowStandard: (standardId, formJson, section) =>
+    request(`/standard-forms/${standardId}/borrow`, {
+      method: 'POST',
+      body: JSON.stringify({ form_json: formJson, section }),
+    }),
+
+  // How far a saved form has drifted from the standard it started from.
+  standardDiff: (formId) => request(`/forms/${formId}/standard-diff`),
+
+  // Offer a saved form as a standard others can start from.
+  addToLibrary: (body) =>
+    request('/standard-forms', { method: 'POST', body: JSON.stringify(body) }),
+
+  // Take one back out. The form it was taken from is untouched.
+  removeFromLibrary: (standardId) =>
+    request(`/standard-forms/${standardId}`, { method: 'DELETE' }),
 
   // Restore an earlier definition as a new version. Nothing is erased.
   rollback: (formId, versionNo, updatedBy) =>

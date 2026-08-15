@@ -24,9 +24,9 @@ function JustPublished({ result, onClose }) {
         </button>
       </span>
       <span className="row row--tight tiny">
-        <Link to={`/forms/${result.form_id}/edit`}>Edit it</Link>
+        <Link to={`/forms/${result.form_id}/questions`}>Edit it</Link>
         <span className="sep">·</span>
-        <Link to={`/forms/${result.form_id}/data`}>See responses</Link>
+        <Link to={`/forms/${result.form_id}/responses`}>See responses</Link>
         <span className="spacer" />
         <button className="btn btn--sm btn--quiet" onClick={onClose}>Dismiss</button>
       </span>

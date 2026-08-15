@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .bootstrap import (
     ensure_base_tables,
+    ensure_library_snapshots,
     ensure_relations,
     ensure_status_values,
     missing_tables,
@@ -14,7 +15,7 @@ from .bootstrap import (
 from .config import settings
 from .database import close_pool, init_pool, ping
 from .field_types import FIELD_TYPES, SUPPORTED_TYPES
-from .routers import forms, submissions
+from .routers import forms, standard_forms, submissions
 
 logging.basicConfig(
     level=logging.INFO,
@@ -29,6 +30,7 @@ async def lifespan(app: FastAPI):
         init_pool()
         ensure_base_tables()
         ensure_status_values()
+        ensure_library_snapshots()
         ensure_relations()
     except Exception as exc:  # keep the API up so /api/health can explain the problem
         logger.error("Startup could not reach Postgres: %s", exc)
@@ -52,6 +54,7 @@ app.add_middleware(
 )
 
 app.include_router(forms.router)
+app.include_router(standard_forms.router)
 app.include_router(submissions.router)
 
 

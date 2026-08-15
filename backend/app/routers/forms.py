@@ -5,7 +5,8 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 from psycopg2 import IntegrityError
 
-from .. import form_service, llm
+from .. import form_service, llm, standard_library
+from ..config_validation import ConfigValidationError, validate_config
 from ..form_schema import FormSchemaError, normalize_form
 from ..migration_service import MigrationError
 from ..schemas import (
@@ -71,9 +72,17 @@ def refine(req: RefineRequest):
 
 @router.post("/validate")
 def validate(req: ValidateRequest):
-    """Normalize a hand-edited definition without calling the model."""
+    """Run the validation pipeline over a config without saving it.
+
+    Returns the normalized definition on success; on failure, the same
+    `{valid, errors}` payload the save endpoints return, so a client can show
+    which stage rejected it and why.
+    """
     try:
-        return {"form_json": normalize_form(req.form_json)}
+        validate_config(req.form_json)
+        return {"valid": True, "form_json": normalize_form(req.form_json)}
+    except ConfigValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.as_payload())
     except FormSchemaError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
 
@@ -92,6 +101,8 @@ def create(req: CreateFormRequest):
             parent_id=req.parent_id,
             status=req.form_status,
         )
+    except ConfigValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.as_payload())
     except FormSchemaError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
     except form_service.FormServiceError as exc:
@@ -134,6 +145,8 @@ def update(form_id: str, req: UpdateFormRequest):
         )
     except form_service.FormNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+    except ConfigValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.as_payload())
     except (FormSchemaError, MigrationError) as exc:
         raise HTTPException(status_code=422, detail=str(exc))
     except Exception as exc:
@@ -197,6 +210,26 @@ def rollback(form_id: str, req: RollbackRequest):
     except Exception as exc:
         logger.exception("Rollback failed")
         raise HTTPException(status_code=500, detail=f"Could not roll back: {exc}")
+
+
+@router.get("/{form_id}/standard-diff")
+def standard_diff(form_id: str):
+    """How far this form has drifted from the standard it started from.
+
+    404 if it did not come from one — the same shape as a version diff, so a
+    client can render it with the same component.
+    """
+    try:
+        form = form_service.get_form(form_id)
+    except form_service.FormNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+    result = standard_library.diff_against_standard(form["form_json"] or {})
+    if result is None:
+        raise HTTPException(
+            status_code=404, detail="This form did not start from a standard form"
+        )
+    return result
 
 
 @router.post("/{form_id}/rebuild-tabular")

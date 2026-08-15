@@ -50,6 +50,29 @@ class RollbackRequest(BaseModel):
     updated_by: Optional[str] = None
 
 
+class StartFromStandardRequest(BaseModel):
+    # Rename it on the way out; the standard's own title is used otherwise.
+    title: Optional[str] = Field(default=None, max_length=200)
+
+
+class AddToLibraryRequest(BaseModel):
+    form_id: str
+    # Defaults to the form's live version.
+    version_no: Optional[int] = Field(default=None, ge=1)
+    # Defaults to a slug of the form title.
+    standard_id: Optional[str] = Field(default=None, max_length=55)
+    category: str = Field(default="General", max_length=50)
+    tags: List[str] = Field(default_factory=list)
+    summary: Optional[str] = None
+    added_by: Optional[str] = Field(default=None, max_length=50)
+
+
+class BorrowRequest(BaseModel):
+    form_json: Dict[str, Any]
+    # One section of the standard, or all of its fields when omitted.
+    section: Optional[str] = None
+
+
 class StatusRequest(BaseModel):
     form_status: str
 

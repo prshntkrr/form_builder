@@ -50,6 +50,10 @@ RESERVED_FIELD_NAMES = {
     "survey_id", "form_id", "form_data", "created_on", "form_version", "created_by",
 }
 
+# Types whose answer is stored as text, so a regex `pattern` rule can be matched
+# against it. On anything else a pattern is never applied.
+PATTERN_TYPES = {"text", "textarea", "email", "phone", "url", "signature", "file"}
+
 # Table names Postgres or this application already owns.
 RESERVED_TABLE_NAMES = {
     "forms", "form_version", "user", "table", "select", "order", "group",
@@ -139,7 +143,7 @@ def _normalize_options(raw: Any) -> List[Dict[str, str]]:
         if label is None:
             continue
         label, value = str(label).strip(), str(value).strip()
-        if not label or value in seen:
+        if not label or not value or value in seen:
             continue
         seen.add(value)
         options.append({"label": label, "value": value})
@@ -147,6 +151,14 @@ def _normalize_options(raw: Any) -> List[Dict[str, str]]:
 
 
 def _normalize_validation(raw: Any, ftype: str) -> Dict[str, Any]:
+    """Repair the rules on one field.
+
+    A rule that cannot be applied is dropped rather than kept: an unsatisfiable
+    range or an uncompilable pattern would otherwise be silently ignored at
+    submission time, which looks like the rule working when it is not. Dropping
+    it here is also what keeps `config_validation` able to reject the same
+    things without rejecting anything the normalizer produces.
+    """
     raw = raw if isinstance(raw, dict) else {}
     keys = ("min", "max", "min_length", "max_length", "pattern", "step")
     out: Dict[str, Any] = {}
@@ -161,14 +173,40 @@ def _normalize_validation(raw: Any, ftype: str) -> Dict[str, Any]:
                 continue
         elif key in ("min_length", "max_length"):
             try:
-                out[key] = int(value)
+                length = int(value)
             except (TypeError, ValueError):
                 continue
+            if length >= 1:
+                out[key] = length
         else:
             out[key] = str(value)
+
     if ftype == "rating":
         out.setdefault("min", 1)
         out.setdefault("max", int(out.get("max") or 5))
+
+    spec = get_type(ftype)
+    if spec.json_type != "number":
+        # Value bounds only ever compare numbers.
+        out.pop("min", None)
+        out.pop("max", None)
+        out.pop("step", None)
+    if ftype not in PATTERN_TYPES:
+        out.pop("pattern", None)
+    if "pattern" in out:
+        try:
+            re.compile(out["pattern"])
+        except re.error:
+            out.pop("pattern")
+
+    if out.get("min") is not None and out.get("max") is not None and out["min"] > out["max"]:
+        out.pop("max")
+    if (
+        out.get("min_length") is not None
+        and out.get("max_length") is not None
+        and out["min_length"] > out["max_length"]
+    ):
+        out.pop("max_length")
     return out
 
 
@@ -194,6 +232,14 @@ def _normalize_field(raw: Any, index: int, taken: set) -> Optional[Dict[str, Any
         # than shipping a broken control.
         ftype, spec = "text", get_type("text")
 
+    default = raw.get("default") if raw.get("default") not in ("", None) else None
+    if default is not None and options:
+        # A default the field would reject on submission is worse than none.
+        allowed = {o["value"] for o in options}
+        chosen = default if isinstance(default, list) else [default]
+        if any(str(v) not in allowed for v in chosen):
+            default = None
+
     field: Dict[str, Any] = {
         "name": name,
         "label": label,
@@ -201,7 +247,7 @@ def _normalize_field(raw: Any, index: int, taken: set) -> Optional[Dict[str, Any
         "required": bool(raw.get("required") or raw.get("is_required")),
         "placeholder": str(raw.get("placeholder") or "").strip(),
         "help_text": str(raw.get("help_text") or raw.get("helpText") or raw.get("hint") or "").strip(),
-        "default": raw.get("default") if raw.get("default") not in ("", None) else None,
+        "default": default,
         "section": slugify_identifier(raw.get("section") or "", "") or None,
         "options": options,
         "validation": _normalize_validation(raw.get("validation"), ftype),
@@ -271,11 +317,21 @@ def normalize_form(raw: Any, fallback_title: str = "Untitled Form") -> Dict[str,
     # It is only a suggestion — an explicit created_by on the request wins.
     author = str(raw.get("created_by") or raw.get("author") or "").strip()[:50]
 
+    # Where this definition came from, if it started life in the standard form
+    # library. Carried through every edit so drift can be measured later.
+    standard_id = slugify_identifier(raw.get("standard_id") or "", "") or None
+    try:
+        standard_version = int(raw["standard_version"]) if standard_id else None
+    except (KeyError, TypeError, ValueError):
+        standard_version = None
+
     return {
         "title": title or fallback_title,
         "description": str(raw.get("description") or raw.get("form_description") or "").strip(),
         "table_name": derive_table_name(title, raw.get("table_name")),
         "created_by": author or None,
+        "standard_id": standard_id,
+        "standard_version": standard_version,
         "submit_label": str(raw.get("submit_label") or "Submit").strip()[:50],
         "success_message": str(
             raw.get("success_message") or "Your response has been recorded."

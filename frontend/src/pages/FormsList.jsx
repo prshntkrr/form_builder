@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../api.js'
+import { formsChanged } from '../events.js'
 
 const ago = (value) => {
   if (!value) return ''
@@ -30,13 +31,13 @@ export default function FormsList() {
 
   const flip = async (form) => {
     await api.setStatus(form.form_id, form.form_status === 'Active' ? 'Inactive' : 'Active')
-    load()
+    load(); formsChanged()
   }
 
   const remove = async (form) => {
     if (!window.confirm(`Remove "${form.form_title}"? Responses already collected are kept.`)) return
     await api.deleteForm(form.form_id)
-    load()
+    load(); formsChanged()
   }
 
   return (
@@ -81,14 +82,14 @@ export default function FormsList() {
             <div className="item__body">
               <div className="item__title">
                 <span className={`dot dot--${(f.form_status || '').toLowerCase()}`} title={f.form_status} />
-                <Link to={`/forms/${f.form_id}/edit`}>{f.form_title}</Link>
+                <Link to={`/forms/${f.form_id}/questions`}>{f.form_title}</Link>
               </div>
               {f.form_description && <div className="item__sub">{f.form_description}</div>}
               <div className="item__meta">
                 <span>{f.field_count} questions</span>
                 <span className="sep">·</span>
                 <Link
-                  to={`/forms/${f.form_id}/edit`}
+                  to={`/forms/${f.form_id}/history`}
                   style={{ color: 'inherit' }}
                   title={f.latest_version > f.version_no
                     ? `Rolled back — version ${f.version_no} is live, ${f.latest_version} exist`
@@ -108,13 +109,13 @@ export default function FormsList() {
               </div>
             </div>
 
-            <Link className="count" to={`/forms/${f.form_id}/data`} style={{ color: 'inherit' }}>
+            <Link className="count" to={`/forms/${f.form_id}/responses`} style={{ color: 'inherit' }}>
               <b>{f.submission_count ?? '—'}</b>
               <span>{f.submission_count === 1 ? 'response' : 'responses'}</span>
             </Link>
 
             <div className="item__acts">
-              <Link className="btn btn--sm" to={`/f/${f.form_id}`}>Open</Link>
+              <a className="btn btn--sm" href={`/f/${f.form_id}`} target="_blank" rel="noreferrer">Open</a>
               <button className="btn btn--sm btn--quiet" onClick={() => flip(f)}>
                 {f.form_status === 'Active' ? 'Pause' : 'Resume'}
               </button>

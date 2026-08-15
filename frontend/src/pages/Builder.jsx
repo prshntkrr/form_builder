@@ -1,10 +1,15 @@
 import React, { useEffect, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api.js'
+import { formsChanged } from '../events.js'
 import { currentUser } from '../identity.js'
 import FieldEditor from '../components/FieldEditor.jsx'
 import FormRenderer from '../components/FormRenderer.jsx'
+import ContributeToLibrary from '../components/ContributeToLibrary.jsx'
+import LibraryPicker from '../components/LibraryPicker.jsx'
+import StandardDrift from '../components/StandardDrift.jsx'
 import VersionDiff from '../components/VersionDiff.jsx'
+import Responses from './Responses.jsx'
 
 const SEEDS = [
   ['Farmer registration', 'A farmer registration form with name, mobile number, village, land holding in acres, main crop, irrigation type and the plot location'],
@@ -69,24 +74,27 @@ function TabularNote({ report }) {
 }
 
 export default function Builder() {
-  const { formId } = useParams()
+  const { formId, section = 'questions' } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
   const editing = Boolean(formId)
 
   const [prompt, setPrompt] = useState('')
   const [ask, setAsk] = useState('')
   const [form, setForm] = useState(null)
   const [responses, setResponses] = useState(0)
-  const [tab, setTab] = useState('fields')
+  const [draftTab, setDraftTab] = useState('questions')  // only for an unsaved form
   const [busy, setBusy] = useState(editing ? 'load' : null)
   const [error, setError] = useState('')
   const [saved, setSaved] = useState(null)
   const [check, setCheck] = useState(null)
   const [trial, setTrial] = useState({})
+  const [picker, setPicker] = useState(null)   // 'start' | 'borrow'
+  const [contributing, setContributing] = useState(false)
+
+  const view = editing ? section : draftTab
 
   useEffect(() => {
-    // /builder and /forms/:id/edit share this component, so React keeps the
-    // instance alive across the switch. Clear it out for whatever we moved to.
     setPrompt('')
     setAsk('')
     setForm(null)
@@ -95,9 +103,19 @@ export default function Builder() {
     setCheck(null)
     setError('')
     setTrial({})
-    setTab('fields')
+    setDraftTab('questions')
 
     if (!formId) {
+      const fromLibrary = location.state?.standardId
+      if (fromLibrary) {
+        setBusy('make')
+        api
+          .startFromStandard(fromLibrary)
+          .then((res) => setForm(prep(res.form_json)))
+          .catch((e) => setError(e.message))
+          .finally(() => setBusy(null))
+        return
+      }
       setBusy(null)
       return
     }
@@ -122,16 +140,19 @@ export default function Builder() {
     run('make', async () => {
       const res = await api.generate(prompt)
       setForm(prep(res.form_json))
-      setTrial({}); setTab('fields')
+      setTrial({}); setDraftTab('questions')
     })
 
   const revise = () =>
     run('revise', async () => {
       const res = await api.refine(untag(form), ask)
-      // Keep the rename trail: a field the model kept keeps its original key.
       const before = new Map((form.fields || []).map((f) => [f.name, f._orig]))
       setForm(prep({
         ...res.form_json,
+        // The model returns the whole form and may drop what it does not
+        // understand; where the draft came from is ours to keep.
+        standard_id: form.standard_id ?? res.form_json.standard_id ?? null,
+        standard_version: form.standard_version ?? res.form_json.standard_version ?? null,
         fields: res.form_json.fields.map((f) => ({ ...f, _orig: before.get(f.name) })),
       }))
       setAsk('')
@@ -149,8 +170,9 @@ export default function Builder() {
         ? await api.updateForm(formId, payload, who, renames)
         : await api.createForm(payload, who)
 
+      formsChanged()
+
       if (!editing) {
-        // A new form goes straight to the thing you just made, ready to fill in.
         navigate(`/f/${result.form_id}`, { replace: true, state: { published: result } })
         return
       }
@@ -169,6 +191,7 @@ export default function Builder() {
     setResponses(f.submission_count || 0)
     setSaved(null)
     setCheck(null)
+    formsChanged()
   }
 
   // ── field operations ──────────────────────────────────────────────────────
@@ -199,16 +222,14 @@ export default function Builder() {
     })
   }
 
-  // ── drag to reorder ───────────────────────────────────────────────────────
-  const [lifted, setLifted] = useState(null)   // index being dragged
-  const [over, setOver] = useState(null)       // index it is hovering
+  const [lifted, setLifted] = useState(null)
+  const [over, setOver] = useState(null)
 
   const settle = (target) => {
     const from = lifted
     setLifted(null)
     setOver(null)
     if (from == null || target == null || from === target) return
-
     const fields = [...form.fields]
     const [moved] = fields.splice(from, 1)
     fields.splice(target, 0, moved)
@@ -219,10 +240,14 @@ export default function Builder() {
   if (busy === 'load') {
     return (
       <main className="main">
-        <div className="skeleton" style={{ height: 120, marginBottom: 12 }} />
+        <div className="skeleton" style={{ height: 90, marginBottom: 14 }} />
         <div className="skeleton" style={{ height: 320 }} />
       </main>
     )
+  }
+
+  if (editing && !form && error) {
+    return <main className="main"><div className="note note--bad">{error}</div></main>
   }
 
   const renameCount = form ? form.fields.filter((f) => f._orig && f._orig !== f.name).length : 0
@@ -245,6 +270,9 @@ export default function Builder() {
               ))}
             </div>
             <span className="spacer" />
+            <button className="btn" onClick={() => setPicker('start')} disabled={busy === 'make'}>
+              Start from a standard form
+            </button>
             <button className="btn btn--primary" onClick={create} disabled={busy === 'make' || prompt.trim().length < 5}>
               {busy === 'make' && <span className="spin" />}
               {busy === 'make' ? 'Drafting' : form ? 'Start over' : 'Create form'}
@@ -253,15 +281,16 @@ export default function Builder() {
         </div>
       )}
 
-      {error && <div className="note note--bad" style={{ marginBottom: 16 }}>{error}</div>}
+      {error && form && <div className="note note--bad" style={{ marginBottom: 16 }}>{error}</div>}
 
       {saved && (
         <div className="note note--good" style={{ marginBottom: 16 }}>
-          <strong>{editing ? 'Changes saved.' : `${saved.form_title} is live.`}</strong>
+          <strong>Changes saved as version {saved.version_no}.</strong>
           <span>
             {Object.keys(saved.renamed || {}).length > 0 &&
               `${Object.values(saved.renamed).reduce((a, b) => a + b, 0)} existing answers moved to their new names. `}
-            <Link to={`/f/${saved.form_id}`}>Open the form</Link> or <Link to={`/forms/${saved.form_id}/data`}>see responses</Link>.
+            <a href={`/f/${saved.form_id}`} target="_blank" rel="noreferrer">Open the form</a> or{' '}
+            <Link to={`/forms/${saved.form_id}/responses`}>see responses</Link>.
           </span>
           {saved.tabular && <TabularNote report={saved.tabular} />}
         </div>
@@ -291,6 +320,10 @@ export default function Builder() {
         </div>
       )}
 
+      {form?.standard_id && (
+        <StandardDrift formId={editing ? formId : null} definition={form} />
+      )}
+
       {form && (
         <>
           <div className="card">
@@ -313,19 +346,18 @@ export default function Builder() {
               </div>
             </div>
 
-            <div className="tabs">
-              {[
-                ['fields', 'Questions'],
-                ['preview', 'Preview'],
-                ...(editing ? [['history', 'History']] : []),
-                ['json', 'JSON'],
-              ].map(([id, name]) => (
-                <button key={id} className={tab === id ? 'on' : undefined} onClick={() => setTab(id)}>{name}</button>
-              ))}
-            </div>
+            {!editing && (
+              <div className="tabs">
+                {[['questions', 'Questions'], ['preview', 'Preview'], ['json', 'JSON']].map(([id, name]) => (
+                  <button key={id} className={draftTab === id ? 'on' : undefined} onClick={() => setDraftTab(id)}>
+                    {name}
+                  </button>
+                ))}
+              </div>
+            )}
 
             <div className="editor__body">
-              {tab === 'fields' && (
+              {view === 'questions' && (
                 <>
                   <div className="tweak" style={{ margin: 0, padding: '0 0 20px', border: 'none' }}>
                     <input
@@ -338,6 +370,9 @@ export default function Builder() {
                     <button className="btn" onClick={revise} disabled={busy === 'revise' || ask.trim().length < 3}>
                       {busy === 'revise' && <span className="spin" />}
                       {busy === 'revise' ? 'Revising' : 'Revise'}
+                    </button>
+                    <button className="btn" onClick={() => setPicker('borrow')} title="Add questions from the standard form library">
+                      Library
                     </button>
                   </div>
 
@@ -370,7 +405,7 @@ export default function Builder() {
                 </>
               )}
 
-              {tab === 'preview' && (
+              {view === 'preview' && (
                 <FormRenderer
                   formJson={form}
                   values={trial}
@@ -378,7 +413,7 @@ export default function Builder() {
                 />
               )}
 
-              {tab === 'history' && (
+              {view === 'history' && editing && (
                 <VersionDiff
                   formId={formId}
                   liveVersion={saved?.version_no ?? form.version}
@@ -386,29 +421,63 @@ export default function Builder() {
                 />
               )}
 
-              {tab === 'json' && <pre className="json">{JSON.stringify(untag(form), null, 2)}</pre>}
+              {view === 'responses' && editing && <Responses formId={formId} />}
+
+              {view === 'json' && <pre className="json">{JSON.stringify(untag(form), null, 2)}</pre>}
             </div>
           </div>
 
-          <div className="savebar">
-            <span className="tiny muted">
-              {form.fields.length} question{form.fields.length === 1 ? '' : 's'}
-              {responses > 0 && <> <span className="sep">·</span> {responses} response{responses === 1 ? '' : 's'}</>}
-              {renameCount > 0 && <> <span className="sep">·</span> {renameCount} renamed</>}
-            </span>
-            <span className="spacer" />
-            {editing && responses > 0 && (
-              <button className="btn btn--quiet btn--sm" onClick={() => inspect(false)} disabled={busy === 'check'}>
-                {busy === 'check' && <span className="spin" />}
-                Check responses
+          {view !== 'responses' && (
+            <div className="savebar">
+              <span className="tiny muted">
+                {form.fields.length} question{form.fields.length === 1 ? '' : 's'}
+                {responses > 0 && <> <span className="sep">·</span> {responses} response{responses === 1 ? '' : 's'}</>}
+                {renameCount > 0 && <> <span className="sep">·</span> {renameCount} renamed</>}
+              </span>
+              <span className="spacer" />
+              {editing && (
+                <button
+                  className="btn btn--quiet btn--sm"
+                  onClick={() => setContributing(true)}
+                  title="Turn this form into a standard others can start from"
+                >
+                  Add to library
+                </button>
+              )}
+              {editing && responses > 0 && (
+                <button className="btn btn--quiet btn--sm" onClick={() => inspect(false)} disabled={busy === 'check'}>
+                  {busy === 'check' && <span className="spin" />}
+                  Check responses
+                </button>
+              )}
+              <button className="btn btn--primary" onClick={save} disabled={busy === 'save'}>
+                {busy === 'save' && <span className="spin" />}
+                {busy === 'save' ? 'Saving' : editing ? 'Save changes' : 'Publish'}
               </button>
-            )}
-            <button className="btn btn--primary" onClick={save} disabled={busy === 'save'}>
-              {busy === 'save' && <span className="spin" />}
-              {busy === 'save' ? 'Saving' : editing ? 'Save changes' : 'Publish'}
-            </button>
-          </div>
+            </div>
+          )}
         </>
+      )}
+      {contributing && (
+        <ContributeToLibrary
+          formId={formId}
+          title={form?.title}
+          version={form?.version}
+          onClose={() => setContributing(false)}
+        />
+      )}
+
+      {picker && (
+        <LibraryPicker
+          mode={picker}
+          draft={picker === 'borrow' ? untag(form) : null}
+          onClose={() => setPicker(null)}
+          onPick={(formJson) => {
+            setForm(prep(formJson, editing))
+            setPicker(null)
+            setTrial({})
+          }}
+        />
       )}
     </main>
   )

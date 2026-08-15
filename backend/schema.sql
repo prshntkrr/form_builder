@@ -33,8 +33,38 @@ CREATE TABLE IF NOT EXISTS form_version (
     form_json   JSONB
 );
 
-CREATE INDEX IF NOT EXISTS idx_forms_status       ON forms (form_status);
-CREATE INDEX IF NOT EXISTS idx_form_version_form  ON form_version (form_id, version_no);
+CREATE INDEX IF NOT EXISTS idx_forms_status ON forms (form_status);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_form_version_form_no
+    ON form_version (form_id, version_no);
+
+-- ---------------------------------------------------------------------------
+-- Standard form library.
+--
+-- Forms worth starting from. Each row keeps its **own copy** of the definition,
+-- so a standard stands on its own: delete the form it was taken from and the
+-- standard keeps working.
+--
+-- form_id / version_no are provenance only — where this came from — and go NULL
+-- if that form is ever deleted.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS standard_form_library (
+    standard_id      VARCHAR(55)  NOT NULL PRIMARY KEY,
+    form_json        JSONB        NOT NULL,
+    title            VARCHAR(200) NOT NULL,
+    category         VARCHAR(50)  DEFAULT 'General',
+    tags             JSONB        DEFAULT '[]'::jsonb,
+    summary          TEXT,
+    standard_version INTEGER      DEFAULT 1,
+    form_id          VARCHAR(20)  UNIQUE
+                     REFERENCES forms (form_id) ON DELETE SET NULL,
+    version_no       INTEGER,
+    added_on         TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+    added_by         VARCHAR(50)
+);
+
+CREATE INDEX IF NOT EXISTS idx_standard_library_category
+    ON standard_form_library (category);
 
 -- ---------------------------------------------------------------------------
 -- For reference only — do not run this by hand.

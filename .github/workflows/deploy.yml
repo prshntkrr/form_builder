@@ -1,0 +1,75 @@
+name: Deploy Eagrology
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  deploy:
+    name: Deploy to Server
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy application
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.HOST }}
+          port: 22
+          username: ${{ secrets.USER }}
+          password: ${{ secrets.PASSWORD }}
+
+          script: |
+            set -e
+
+            echo "================================="
+            echo "Starting deployment"
+            echo "================================="
+
+            cd /var/www/html/eagrology-revamp.indevconsultancy.in
+
+            echo "Pulling latest code..."
+            git pull origin master
+
+            echo "Entering backend..."
+            cd form_builder/backend
+
+            echo "Installing Python dependencies..."
+            source venv/bin/activate
+            pip install -r requirements.txt
+
+            echo "Stopping existing backend..."
+
+            BACKEND_PID=$(pgrep -f "uvicorn app.main:app.*--port 8021" || true)
+
+            if [ -n "$BACKEND_PID" ]; then
+                echo "Found backend PID: $BACKEND_PID"
+                kill $BACKEND_PID
+                sleep 2
+            else
+                echo "Backend process not found."
+            fi
+
+            echo "Starting backend..."
+
+            nohup venv/bin/uvicorn app.main:app \
+              --host 0.0.0.0 \
+              --port 8021 \
+              > backend.log 2>&1 &
+
+            sleep 3
+
+            echo "Checking backend..."
+
+            if pgrep -f "uvicorn app.main:app.*--port 8021" > /dev/null; then
+                echo "Backend is running successfully."
+            else
+                echo "Backend failed to start."
+                echo "Last backend logs:"
+                tail -50 backend.log
+                exit 1
+            fi
+
+            echo "================================="
+            echo "Deployment completed successfully"
+            echo "================================="
