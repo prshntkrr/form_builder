@@ -24,6 +24,7 @@ dist/
 npm-debug.log*
 yarn-error.log*
 .eslintcache
+**/vite.config.js
 
 # ── editors & os ─────────────────────────────────────────────────────────────
 .vscode/
