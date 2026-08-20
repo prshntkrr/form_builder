@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api.js'
 import { formsChanged } from '../events.js'
-import { currentUser } from '../identity.js'
 import FieldEditor from '../components/FieldEditor.jsx'
 import FormRenderer from '../components/FormRenderer.jsx'
 import ContributeToLibrary from '../components/ContributeToLibrary.jsx'
@@ -164,11 +163,10 @@ export default function Builder() {
       for (const f of form.fields) if (f._orig && f._orig !== f.name) renames[f._orig] = f.name
 
       const payload = untag(form)
-      const who = currentUser() || undefined
 
       const result = editing
-        ? await api.updateForm(formId, payload, who, renames)
-        : await api.createForm(payload, who)
+        ? await api.updateForm(formId, payload, undefined, renames)
+        : await api.createForm(payload)
 
       formsChanged()
 

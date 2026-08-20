@@ -3,11 +3,21 @@
 // time when the API lives somewhere else (and add that origin to CORS_ORIGINS).
 const BASE = `${import.meta.env.VITE_API_BASE || ''}/api`
 
+// Held in memory and set by the auth provider, so no request has to remember
+// to pass it and none can accidentally leave it out.
+let authToken = null
+export const setAuthToken = (token) => { authToken = token || null }
+
 async function request(path, options = {}) {
-  const res = await fetch(`${BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options,
-  })
+  const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) }
+  if (authToken) headers.Authorization = `Bearer ${authToken}`
+
+  const res = await fetch(`${BASE}${path}`, { ...options, headers })
+
+  if (res.status === 401 && !path.startsWith('/auth/')) {
+    // The session ended while the app was open. Tell whoever is listening.
+    window.dispatchEvent(new Event('ea_session_expired'))
+  }
 
   if (res.status === 204) return null
 
@@ -44,6 +54,65 @@ async function request(path, options = {}) {
 
 export const api = {
   health: () => request('/health'),
+
+  // --- session ---
+  login: (email, password) =>
+    request('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
+  logout: () => request('/auth/logout', { method: 'POST' }),
+  me: () => request('/auth/me'),
+
+  changePassword: (currentPassword, newPassword) =>
+    request('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+    }),
+
+  forgotPassword: (email) =>
+    request('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) }),
+
+  resetPassword: (token, password) =>
+    request('/auth/reset-password', { method: 'POST', body: JSON.stringify({ token, password }) }),
+
+  // --- people ---
+  listUsers: () => request('/users'),
+  // The roles that can be assigned, light shape, for a picker.
+  listRoles: () => request('/users/roles'),
+
+  // --- roles and permissions ---
+  listRolesFull: () => request('/roles'),
+  permissionCatalogue: () => request('/roles/permissions'),
+
+  createRole: (body) => request('/roles', { method: 'POST', body: JSON.stringify(body) }),
+
+  updateRole: (roleId, body) =>
+    request(`/roles/${roleId}`, { method: 'PATCH', body: JSON.stringify(body) }),
+
+  deleteRole: (roleId, reassignTo) =>
+    request(`/roles/${roleId}`, {
+      method: 'DELETE',
+      body: JSON.stringify({ reassign_to: reassignTo || null }),
+    }),
+
+  createUser: (body) => request('/users', { method: 'POST', body: JSON.stringify(body) }),
+
+  updateUser: (userId, body) =>
+    request(`/users/${userId}`, { method: 'PATCH', body: JSON.stringify(body) }),
+
+  deactivateUser: (userId) => request(`/users/${userId}`, { method: 'DELETE' }),
+
+  userResetLink: (userId) => request(`/users/${userId}/reset-link`, { method: 'POST' }),
+
+  // --- forms a field officer may fill ---
+  liveForms: () => request('/forms/live/list'),
+
+  // Records as the caller is allowed to see them — hidden columns never arrive.
+  records: (formId, limit = 50, offset = 0) =>
+    request(`/forms/${formId}/records?limit=${limit}&offset=${offset}`),
+
+  getViewConfig: (formId) => request(`/forms/${formId}/view-config`),
+
+  setViewConfig: (formId, body) =>
+    request(`/forms/${formId}/view-config`, { method: 'PUT', body: JSON.stringify(body) }),
 
   generate: (prompt, language) =>
     request('/forms/generate', { method: 'POST', body: JSON.stringify({ prompt, language }) }),

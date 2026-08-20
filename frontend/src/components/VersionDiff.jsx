@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react'
 import { api } from '../api.js'
-import { currentUser } from '../identity.js'
 import DiffView from './DiffView.jsx'
 
 export default function VersionDiff({ formId, liveVersion, onRolledBack }) {
@@ -41,7 +40,7 @@ export default function VersionDiff({ formId, liveVersion, onRolledBack }) {
     setRolling(versionNo)
     setError('')
     try {
-      const result = await api.rollback(formId, versionNo, currentUser() || undefined)
+      const result = await api.rollback(formId, versionNo)
       setRolled(result)
       setNonce((n) => n + 1)
       onRolledBack?.()

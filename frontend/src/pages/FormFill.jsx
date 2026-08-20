@@ -1,43 +1,11 @@
 import React, { useEffect, useState } from 'react'
-import { Link, useLocation, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api.js'
-import { currentUser } from '../identity.js'
 import FormRenderer from '../components/FormRenderer.jsx'
-
-/** Shown once, on the hop straight from publishing. */
-function JustPublished({ result, onClose }) {
-  const [copied, setCopied] = useState(false)
-  const link = `${window.location.origin}/f/${result.form_id}`
-
-  return (
-    <div className="note note--good" style={{ marginBottom: 20 }}>
-      <strong>Your form is live.</strong>
-      <span className="row row--tight">
-        <code className="grow" style={{ overflowWrap: 'anywhere' }}>{link}</code>
-        <button
-          className="btn btn--sm"
-          onClick={() => {
-            navigator.clipboard?.writeText(link).then(() => setCopied(true))
-          }}
-        >
-          {copied ? 'Copied' : 'Copy link'}
-        </button>
-      </span>
-      <span className="row row--tight tiny">
-        <Link to={`/forms/${result.form_id}/questions`}>Edit it</Link>
-        <span className="sep">·</span>
-        <Link to={`/forms/${result.form_id}/responses`}>See responses</Link>
-        <span className="spacer" />
-        <button className="btn btn--sm btn--quiet" onClick={onClose}>Dismiss</button>
-      </span>
-    </div>
-  )
-}
 
 export default function FormFill() {
   const { formId } = useParams()
-  const location = useLocation()
-  const [published, setPublished] = useState(location.state?.published || null)
+  const navigate = useNavigate()
   const [form, setForm] = useState(null)
   const [values, setValues] = useState({})
   const [errors, setErrors] = useState({})
@@ -65,7 +33,7 @@ export default function FormFill() {
   const send = async () => {
     setSending(true); setErrors({}); setError('')
     try {
-      setDone(await api.submit(formId, values, currentUser() || undefined))
+      setDone(await api.submit(formId, values))
     } catch (e) {
       if (e.fieldErrors) {
         setErrors(e.fieldErrors)
@@ -82,7 +50,6 @@ export default function FormFill() {
   if (loading) {
     return (
       <main className="main main--narrow">
-        {published && <JustPublished result={published} onClose={() => setPublished(null)} />}
         <div className="skeleton" style={{ height: 400 }} />
       </main>
     )
@@ -94,7 +61,7 @@ export default function FormFill() {
         <div className="blank">
           <h2>This form isn't available</h2>
           <p>{error}</p>
-          <Link className="btn" to="/forms">Back to forms</Link>
+          <Link className="btn" to="/">Back to your forms</Link>
         </div>
       </main>
     )
@@ -107,12 +74,14 @@ export default function FormFill() {
           <div className="done__tick">✓</div>
           <h2>{form.form_json.success_message || 'Thanks — that’s recorded.'}</h2>
           <p className="muted" style={{ marginBottom: 22 }}>Reference <code>{done.survey_id}</code></p>
-          <button
-            className="btn btn--primary"
-            onClick={() => { setDone(null); setValues({}); setErrors({}) }}
-          >
-            Add another
-          </button>
+          <div className="row row--tight center">
+            <button className="btn" onClick={() => { setDone(null); setValues({}); setErrors({}) }}>
+              Add another
+            </button>
+            <button className="btn btn--primary" onClick={() => navigate(`/f/${formId}`)}>
+              See all records
+            </button>
+          </div>
         </div>
       </main>
     )
@@ -120,7 +89,9 @@ export default function FormFill() {
 
   return (
     <main className="main main--narrow">
-      {published && <JustPublished result={published} onClose={() => setPublished(null)} />}
+      <p className="tiny" style={{ marginBottom: 14 }}>
+        <Link to={`/f/${formId}`}>← Back to records</Link>
+      </p>
 
       {error && <div className="note note--bad" style={{ marginBottom: 18 }}>{error}</div>}
 

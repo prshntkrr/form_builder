@@ -10,7 +10,7 @@ useful where the application's database user is not allowed to run DDL.
 """
 import logging
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 from psycopg2.extras import Json
 
@@ -21,7 +21,11 @@ from .table_service import table_exists
 logger = logging.getLogger(__name__)
 
 SCHEMA_FILE = Path(__file__).resolve().parent.parent / "schema.sql"
-REQUIRED_TABLES = ("forms", "form_version", "standard_form_library")
+REQUIRED_TABLES = (
+    "forms", "form_version", "standard_form_library",
+    "app_user", "app_role", "role_permission", "user_session",
+    "password_reset", "form_view",
+)
 
 # The statuses the application writes. 'Deleted' is a soft delete: the form and
 # every response it collected are kept, the form just leaves the list.
@@ -109,6 +113,122 @@ def ensure_status_values() -> bool:
     except Exception as exc:
         logger.warning("Could not widen forms_form_status_check: %s", exc)
         return False
+
+
+def ensure_roles() -> List[str]:
+    """Create the built-in roles, and move accounts onto them.
+
+    The first version of this app had a fixed `app_user.role` column holding one
+    of three names. Roles are now rows with their own permissions, so the column
+    becomes a foreign key — matched by name, which is why the built-in roles keep
+    the names they had.
+    """
+    from psycopg2 import sql
+
+    from .role_service import ensure_built_in
+
+    try:
+        with transaction() as cur:
+            if not table_exists(cur, "app_role"):
+                return []
+
+        made = ensure_built_in()
+
+        with transaction() as cur:
+            cur.execute(
+                """
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema = %s AND table_name = 'app_user' AND column_name = 'role'
+                """,
+                (settings.db_schema,),
+            )
+            if not cur.fetchone():
+                cur.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_app_user_role ON app_user (role_id)")
+                return made
+
+            logger.info("Moving accounts from the old role column onto role_id")
+            cur.execute("ALTER TABLE app_user ADD COLUMN IF NOT EXISTS role_id VARCHAR(20)")
+            cur.execute(
+                "UPDATE app_user u SET role_id = r.role_id "
+                "FROM app_role r WHERE r.name = u.role AND u.role_id IS NULL"
+            )
+            # Anything unmatched lands on the least-privileged role rather than
+            # being left without one.
+            cur.execute("SELECT role_id FROM app_role WHERE name = 'field'")
+            fallback = cur.fetchone()
+            if fallback:
+                cur.execute(
+                    "UPDATE app_user SET role_id = %s WHERE role_id IS NULL",
+                    (fallback["role_id"],),
+                )
+
+            for statement in (
+                "ALTER TABLE app_user DROP CONSTRAINT IF EXISTS app_user_role_check",
+                "ALTER TABLE app_user DROP COLUMN role",
+                "ALTER TABLE app_user ADD CONSTRAINT app_user_role_id_fkey "
+                "FOREIGN KEY (role_id) REFERENCES app_role (role_id)",
+                "CREATE INDEX IF NOT EXISTS idx_app_user_role ON app_user (role_id)",
+            ):
+                cur.execute(statement)
+
+        logger.info("Accounts now hold a role_id")
+        return made
+    except Exception as exc:
+        logger.error("Could not set up roles: %s", exc)
+        return []
+
+
+def ensure_admin_account() -> Optional[str]:
+    """Make sure somebody can sign in.
+
+    Runs only when there is no admin at all. With no `ADMIN_PASSWORD` set, one is
+    generated and written to the log once — there is no other way to see it, and
+    an installation nobody can enter is worse than a password in a log file you
+    control.
+    """
+    import secrets
+
+    from . import permissions
+    from .auth_service import ROLE_ADMIN, create_user
+
+    try:
+        with transaction() as cur:
+            if not table_exists(cur, "app_user") or not table_exists(cur, "app_role"):
+                return None
+            # "Is there anybody who can hand out roles" — not "is there an admin",
+            # because the roles that can do so are now up to the installation.
+            cur.execute(
+                """
+                SELECT COUNT(*) AS n
+                FROM   app_user u
+                JOIN   role_permission p ON p.role_id = u.role_id AND p.permission = %s
+                WHERE  u.is_active
+                """,
+                (permissions.ROLES_MANAGE,),
+            )
+            if int(cur.fetchone()["n"]):
+                return None
+
+        password = settings.admin_password or secrets.token_urlsafe(12)
+        create_user(
+            settings.admin_email, password,
+            full_name="Administrator", role=ROLE_ADMIN, created_by="setup",
+        )
+
+        if settings.admin_password:
+            logger.info("Created the first admin: %s", settings.admin_email)
+        else:
+            logger.warning(
+                "\n%s\n  No admin account existed, so one was created.\n"
+                "    email    %s\n    password %s\n"
+                "  Sign in and change it. Set ADMIN_PASSWORD in .env to choose your own.\n%s",
+                "=" * 68, settings.admin_email, password, "=" * 68,
+            )
+        return settings.admin_email
+    except Exception as exc:
+        logger.error("Could not create the first admin account: %s", exc)
+        return None
 
 
 def ensure_library_snapshots() -> bool:

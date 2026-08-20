@@ -3,19 +3,17 @@ import copy
 import uuid
 
 import pytest
-from fastapi.testclient import TestClient
 from psycopg2 import sql
 
 from app.database import ping, transaction
-from app.main import app
 from app.tabular_service import tabular_name
 
 pytestmark = pytest.mark.skipif(not ping(), reason="Postgres is not reachable")
 
 
-@pytest.fixture(scope="module")
-def client():
-    return TestClient(app)
+@pytest.fixture
+def client(editor_client):
+    return editor_client
 
 
 def cleanup(form_id: str, table: str) -> None:

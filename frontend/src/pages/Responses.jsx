@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api.js'
+import ViewColumns from '../components/ViewColumns.jsx'
 
 const PAGE = 25
 
@@ -40,6 +41,8 @@ export default function Responses({ formId }) {
 
   return (
     <div className="col" style={{ gap: 16 }}>
+      <ViewColumns formId={formId} />
+
       <div className="row">
         <span className="muted">
           {data.total} response{data.total === 1 ? '' : 's'}

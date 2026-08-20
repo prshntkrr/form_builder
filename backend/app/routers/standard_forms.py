@@ -6,11 +6,13 @@ through exactly the same validation and table creation as one built by hand,
 and is just as editable afterwards.
 """
 import logging
-from typing import Optional
+from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
-from .. import form_service, standard_library
+from .. import auth_service, form_service, standard_library
+from ..auth import needs
+from ..permissions import LIBRARY_MANAGE, LIBRARY_VIEW
 from ..config_validation import ConfigValidationError, validate_config
 from ..schemas import AddToLibraryRequest, BorrowRequest, StartFromStandardRequest
 
@@ -22,6 +24,7 @@ router = APIRouter(prefix="/api/standard-forms", tags=["standard forms"])
 def index(
     search: Optional[str] = None,
     category: Optional[str] = Query(None, description="Exact category match"),
+    user: Dict[str, Any] = Depends(needs(LIBRARY_VIEW)),
 ):
     """Look up standard forms by title, summary, category or tag."""
     return {
@@ -31,7 +34,7 @@ def index(
 
 
 @router.get("/{standard_id}")
-def detail(standard_id: str):
+def detail(standard_id: str, user: Dict[str, Any] = Depends(needs(LIBRARY_VIEW))):
     """One standard form, with its full definition."""
     entry = standard_library.get(standard_id)
     if entry is None:
@@ -40,7 +43,7 @@ def detail(standard_id: str):
 
 
 @router.post("", status_code=201)
-def add(req: AddToLibraryRequest):
+def add(req: AddToLibraryRequest, user: Dict[str, Any] = Depends(needs(LIBRARY_MANAGE))):
     """Offer a saved form as a standard others can start from.
 
     The definition is copied into the library, so the standard is independent of
@@ -54,7 +57,7 @@ def add(req: AddToLibraryRequest):
             category=req.category,
             tags=req.tags,
             summary=req.summary,
-            added_by=req.added_by,
+            added_by=req.added_by or auth_service.display_name(user),
         )
     except form_service.FormNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc))
@@ -67,7 +70,7 @@ def add(req: AddToLibraryRequest):
 
 
 @router.delete("/{standard_id}")
-def withdraw(standard_id: str):
+def withdraw(standard_id: str, user: Dict[str, Any] = Depends(needs(LIBRARY_MANAGE))):
     """Take a standard back out of the library.
 
     Only the library entry goes; the form it was taken from is untouched, and
@@ -80,7 +83,7 @@ def withdraw(standard_id: str):
 
 
 @router.post("/{standard_id}/start")
-def start(standard_id: str, req: StartFromStandardRequest):
+def start(standard_id: str, req: StartFromStandardRequest, user: Dict[str, Any] = Depends(needs(LIBRARY_VIEW))):
     """The whole standard as a new draft.
 
     An ordinary draft: rename it, reword it, add or remove questions, or hand it
@@ -93,7 +96,7 @@ def start(standard_id: str, req: StartFromStandardRequest):
 
 
 @router.post("/{standard_id}/borrow")
-def borrow(standard_id: str, req: BorrowRequest):
+def borrow(standard_id: str, req: BorrowRequest, user: Dict[str, Any] = Depends(needs(LIBRARY_VIEW))):
     """Merge this standard's fields, or one section of them, into a draft.
 
     Returns the combined draft. Colliding field keys are suffixed rather than

@@ -1,11 +1,15 @@
 """Form authoring + management endpoints."""
 import logging
-from typing import Optional
+from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from psycopg2 import IntegrityError
 
-from .. import form_service, llm, standard_library
+from .. import auth_service, form_service, llm, standard_library
+from ..auth import needs
+from ..permissions import (
+    FORMS_CREATE, FORMS_DELETE, FORMS_EDIT, FORMS_VIEW, LIBRARY_MANAGE,
+)
 from ..config_validation import ConfigValidationError, validate_config
 from ..form_schema import FormSchemaError, normalize_form
 from ..migration_service import MigrationError
@@ -47,7 +51,7 @@ def _constraint_message(exc: IntegrityError) -> str:
 # authoring (LLM) — nothing here touches the database
 # --------------------------------------------------------------------------- #
 @router.post("/generate")
-def generate(req: GenerateRequest):
+def generate(req: GenerateRequest, user: Dict[str, Any] = Depends(needs(FORMS_CREATE))):
     """Prompt -> a complete, normalized form definition (not yet saved)."""
     try:
         raw = llm.generate_form(req.prompt, req.language)
@@ -59,7 +63,7 @@ def generate(req: GenerateRequest):
 
 
 @router.post("/refine")
-def refine(req: RefineRequest):
+def refine(req: RefineRequest, user: Dict[str, Any] = Depends(needs(FORMS_CREATE))):
     """Existing definition + instruction -> revised definition (not yet saved)."""
     try:
         raw = llm.refine_form(req.form_json, req.instruction)
@@ -71,7 +75,7 @@ def refine(req: RefineRequest):
 
 
 @router.post("/validate")
-def validate(req: ValidateRequest):
+def validate(req: ValidateRequest, user: Dict[str, Any] = Depends(needs(FORMS_CREATE))):
     """Run the validation pipeline over a config without saving it.
 
     Returns the normalized definition on success; on failure, the same
@@ -91,12 +95,12 @@ def validate(req: ValidateRequest):
 # persistence
 # --------------------------------------------------------------------------- #
 @router.post("", status_code=201)
-def create(req: CreateFormRequest):
+def create(req: CreateFormRequest, user: Dict[str, Any] = Depends(needs(FORMS_CREATE))):
     """Save the form, open version 1, and create its Postgres table."""
     try:
         return form_service.create_form(
             req.form_json,
-            created_by=req.created_by,
+            created_by=auth_service.display_name(user),
             form_type=req.form_type,
             parent_id=req.parent_id,
             status=req.form_status,
@@ -120,12 +124,13 @@ def index(
     search: Optional[str] = None,
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
+    user: Dict[str, Any] = Depends(needs(FORMS_VIEW)),
 ):
     return form_service.list_forms(status=status, search=search, limit=limit, offset=offset)
 
 
 @router.get("/{form_id}")
-def detail(form_id: str):
+def detail(form_id: str, user: Dict[str, Any] = Depends(needs(FORMS_VIEW))):
     try:
         return form_service.get_form(form_id)
     except form_service.FormNotFound as exc:
@@ -133,13 +138,13 @@ def detail(form_id: str):
 
 
 @router.put("/{form_id}")
-def update(form_id: str, req: UpdateFormRequest):
+def update(form_id: str, req: UpdateFormRequest, user: Dict[str, Any] = Depends(needs(FORMS_EDIT))):
     """Save a revision, moving stored answers for any renamed field."""
     try:
         return form_service.update_form(
             form_id,
             req.form_json,
-            updated_by=req.updated_by,
+            updated_by=auth_service.display_name(user),
             status=req.form_status,
             renames=req.renames,
         )
@@ -155,7 +160,7 @@ def update(form_id: str, req: UpdateFormRequest):
 
 
 @router.post("/{form_id}/revalidate")
-def revalidate(form_id: str, req: RevalidateRequest):
+def revalidate(form_id: str, req: RevalidateRequest, user: Dict[str, Any] = Depends(needs(FORMS_EDIT))):
     """Check stored responses against the current definition after a hand edit.
 
     `fix: false` reports only; `fix: true` also re-coerces the values it can.
@@ -170,7 +175,7 @@ def revalidate(form_id: str, req: RevalidateRequest):
 
 
 @router.patch("/{form_id}/status")
-def change_status(form_id: str, req: StatusRequest):
+def change_status(form_id: str, req: StatusRequest, user: Dict[str, Any] = Depends(needs(FORMS_EDIT))):
     try:
         return form_service.set_status(form_id, req.form_status)
     except form_service.FormNotFound as exc:
@@ -182,7 +187,7 @@ def change_status(form_id: str, req: StatusRequest):
 
 
 @router.delete("/{form_id}")
-def soft_delete(form_id: str):
+def soft_delete(form_id: str, user: Dict[str, Any] = Depends(needs(FORMS_DELETE))):
     """Marks the form Deleted. The data table and its rows are left untouched."""
     try:
         return form_service.set_status(form_id, "Deleted")
@@ -193,14 +198,15 @@ def soft_delete(form_id: str):
 
 
 @router.post("/{form_id}/rollback")
-def rollback(form_id: str, req: RollbackRequest):
+def rollback(form_id: str, req: RollbackRequest, user: Dict[str, Any] = Depends(needs(FORMS_EDIT))):
     """Make an existing version the live one.
 
     No new version is written — the form simply points at that version's stored
     definition. The history is untouched, so rolling anywhere else undoes it.
     """
     try:
-        return form_service.rollback(form_id, req.version_no, updated_by=req.updated_by)
+        return form_service.rollback(
+            form_id, req.version_no, updated_by=auth_service.display_name(user))
     except form_service.FormNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     except form_service.FormServiceError as exc:
@@ -213,7 +219,7 @@ def rollback(form_id: str, req: RollbackRequest):
 
 
 @router.get("/{form_id}/standard-diff")
-def standard_diff(form_id: str):
+def standard_diff(form_id: str, user: Dict[str, Any] = Depends(needs(FORMS_VIEW))):
     """How far this form has drifted from the standard it started from.
 
     404 if it did not come from one — the same shape as a version diff, so a
@@ -233,7 +239,7 @@ def standard_diff(form_id: str):
 
 
 @router.post("/{form_id}/rebuild-tabular")
-def rebuild_tabular(form_id: str):
+def rebuild_tabular(form_id: str, user: Dict[str, Any] = Depends(needs(FORMS_EDIT))):
     """Rebuild the flat `<form>_tabular` mirror from the JSONB table.
 
     Happens automatically whenever columns change; call this for a form whose
@@ -249,7 +255,7 @@ def rebuild_tabular(form_id: str):
 
 
 @router.get("/{form_id}/versions")
-def versions(form_id: str, include_json: bool = False):
+def versions(form_id: str, include_json: bool = False, user: Dict[str, Any] = Depends(needs(FORMS_VIEW))):
     try:
         form_service.get_form(form_id)
     except form_service.FormNotFound as exc:
@@ -262,6 +268,7 @@ def diff(
     form_id: str,
     from_version: Optional[int] = Query(None, alias="from"),
     to_version: Optional[int] = Query(None, alias="to"),
+    user: Dict[str, Any] = Depends(needs(FORMS_VIEW)),
 ):
     """What changed between two saved versions.
 

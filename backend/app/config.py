@@ -31,6 +31,26 @@ class Settings(BaseSettings):
     # App
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     default_user: str = "system"
+    # Where the frontend is served from — used to build password reset links.
+    app_url: str = "http://localhost:5173"
+
+    # Auth
+    session_hours: int = 12
+    reset_minutes: int = 60
+    # The account created on first run, so there is somebody who can sign in.
+    admin_email: str = "admin@e-agrology.local"
+    admin_password: str = ""
+    # Local development only: returns the reset link in the API response instead
+    # of relying on the log. Never enable this where users are real.
+    auth_expose_reset_link: bool = False
+
+    # Email (optional). Without a host, reset links are written to the log.
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""
+    smtp_tls: bool = True
 
     @property
     def dsn(self) -> str:

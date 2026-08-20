@@ -1,7 +1,6 @@
 import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api.js'
-import { currentUser } from '../identity.js'
 
 const CATEGORIES = ['Registration', 'Survey', 'Soil', 'Crop', 'Inputs', 'Monitoring', 'General']
 
@@ -31,7 +30,6 @@ export default function ContributeToLibrary({ formId, title, version, onClose, o
         category,
         tags: tags.split(',').map((t) => t.trim()).filter(Boolean),
         summary: summary || undefined,
-        added_by: currentUser() || undefined,
       })
       setAdded(result)
       onAdded?.(result)

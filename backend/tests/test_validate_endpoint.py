@@ -1,18 +1,17 @@
-"""The pipeline through the API. /api/forms/validate touches no database."""
+"""The pipeline through the API.
+
+The endpoint itself touches no database, but reaching it needs a session.
+"""
 import copy
 
 import pytest
-from fastapi.testclient import TestClient
 
 from app.config_validation import BUSINESS_RULE, STRUCTURAL
-from app.main import app
 
 
-@pytest.fixture(scope="module")
-def client():
-    # Not `with TestClient(app)`: the lifespan opens a connection pool, and
-    # these cases are pure validation.
-    return TestClient(app)
+@pytest.fixture
+def client(editor_client):
+    return editor_client
 
 
 def post(client, config):

@@ -1,55 +1,40 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { NavLink, useMatch, useNavigate } from 'react-router-dom'
 import { api } from '../api.js'
+import { initials, useAuth } from '../auth.jsx'
 import { useFormsRevision } from '../events.js'
-import { initials, saveUser, useUser } from '../identity.js'
 
 export const SECTIONS = [
   ['questions', 'Questions'],
   ['preview', 'Preview'],
   ['json', 'JSON'],
   ['history', 'History'],
-  ['responses', 'Responses'],
+  ['responses', 'View'],
 ]
 
-function Who() {
-  const user = useUser()
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState(user)
-  const box = useRef(null)
+/** Who you are, and the way out. Both always visible — no menu to discover. */
+function Account() {
+  const { user, signOut } = useAuth()
+  const navigate = useNavigate()
+  const [busy, setBusy] = useState(false)
 
-  useEffect(() => { if (editing) box.current?.select() }, [editing])
-
-  const commit = () => { saveUser(draft); setEditing(false) }
-
-  if (editing) {
-    return (
-      <span className="who">
-        <span className="who__pic">{initials(draft)}</span>
-        <input
-          ref={box}
-          value={draft}
-          placeholder="Your name"
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={commit}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') commit()
-            if (e.key === 'Escape') { setDraft(user); setEditing(false) }
-          }}
-        />
-      </span>
-    )
+  const leave = async () => {
+    setBusy(true)
+    await signOut()
+    navigate('/login', { replace: true, state: { signedOut: true } })
   }
 
   return (
-    <button
-      className="who"
-      onClick={() => { setDraft(user); setEditing(true) }}
-      title="Recorded against the forms and responses you save"
-    >
-      <span className={`who__pic${user ? '' : ' who__pic--empty'}`}>{user ? initials(user) : '+'}</span>
-      <span className="grow" style={{ textAlign: 'left' }}>{user || 'Add your name'}</span>
-    </button>
+    <div className="account">
+      <span className="who__pic">{initials(user)}</span>
+      <span className="account__id">
+        <span className="ellipsis strong">{user?.full_name || user?.email}</span>
+        <span className="tiny faint">{user?.role_label || user?.role}</span>
+      </span>
+      <button className="btn btn--sm btn--quiet" onClick={leave} disabled={busy} title="Sign out">
+        {busy ? <span className="spin" /> : 'Sign out'}
+      </button>
+    </div>
   )
 }
 
@@ -62,7 +47,6 @@ function Trouble() {
       .then((h) => {
         if (!h.database?.connected) setProblem('Cannot reach the database')
         else if (h.database?.missing_tables?.length) setProblem('Database tables are missing')
-        else if (!h.openai?.configured) setProblem('No OpenAI key — forms cannot be generated')
       })
       .catch(() => setProblem('The server is not responding'))
   }, [])
@@ -77,15 +61,23 @@ function Trouble() {
 
 export default function Sidebar({ onNavigate }) {
   const navigate = useNavigate()
+  const { can } = useAuth()
   const revision = useFormsRevision()
-  const active = useMatch('/forms/:formId/*')
-  const activeId = active?.params?.formId
+
+  const builder = can.build_forms
+  const editing = useMatch('/forms/:formId/*')
+  const filling = useMatch('/f/:formId')
+  const activeId = editing?.params?.formId || filling?.params?.formId
 
   const [forms, setForms] = useState(null)
 
+  // Two lists behind one sidebar: the builder's forms, or the live ones a field
+  // officer may fill in. `GET /api/forms` is editor-only, so asking for it as a
+  // field officer would only ever be a 403.
   useEffect(() => {
-    api.listForms({ limit: 200 }).then(setForms).catch(() => setForms([]))
-  }, [revision])
+    const load = builder ? api.listForms({ limit: 200 }) : api.liveForms()
+    load.then(setForms).catch(() => setForms([]))
+  }, [revision, builder])
 
   const go = (to) => { navigate(to); onNavigate?.() }
 
@@ -98,20 +90,38 @@ export default function Sidebar({ onNavigate }) {
         </span>
       </div>
 
-      <button className="btn btn--primary side__new" onClick={() => go('/builder')}>
-        New form
-      </button>
+      {builder && (
+        <>
+          <button className="btn btn--primary side__new" onClick={() => go('/builder')}>
+            New form
+          </button>
 
-      <nav className="side__links">
-        <NavLink to="/library" className={({ isActive }) => `side__form${isActive ? ' on' : ''}`}
-                 onClick={onNavigate}>
-          <span className="grow">Standard forms</span>
-        </NavLink>
-      </nav>
+          <nav className="side__links">
+            <NavLink to="/library" className={({ isActive }) => `side__form${isActive ? ' on' : ''}`}
+                     onClick={onNavigate}>
+              <span className="grow">Standard forms</span>
+            </NavLink>
+            {can.manage_roles && (
+              <NavLink to="/roles" className={({ isActive }) => `side__form${isActive ? ' on' : ''}`}
+                       onClick={onNavigate}>
+                <span className="grow">Roles</span>
+              </NavLink>
+            )}
+            {can.manage_users && (
+              <NavLink to="/users" className={({ isActive }) => `side__form${isActive ? ' on' : ''}`}
+                       onClick={onNavigate}>
+                <span className="grow">Users</span>
+              </NavLink>
+            )}
+          </nav>
+        </>
+      )}
 
       <div className="side__label">
-        Forms
-        <NavLink to="/forms" className="side__all" onClick={onNavigate}>All</NavLink>
+        {builder ? 'Forms' : 'Forms to fill in'}
+        <NavLink to={builder ? '/forms' : '/fill'} className="side__all" onClick={onNavigate}>
+          All
+        </NavLink>
       </div>
 
       <nav className="side__forms">
@@ -120,11 +130,29 @@ export default function Sidebar({ onNavigate }) {
         ))}
 
         {forms?.length === 0 && (
-          <p className="side__empty">Nothing yet — start with a new form.</p>
+          <p className="side__empty">
+            {builder ? 'Nothing yet — start with a new form.' : 'Nothing to fill in yet.'}
+          </p>
         )}
 
         {forms?.map((f) => {
           const open = f.form_id === activeId
+
+          // A field officer goes straight to the form; there is nothing to edit.
+          if (!builder) {
+            return (
+              <NavLink
+                key={f.form_id}
+                to={`/f/${f.form_id}`}
+                className={`side__form${open ? ' on' : ''}`}
+                onClick={onNavigate}
+                title={f.form_description || f.form_title}
+              >
+                <span className="grow ellipsis">{f.form_title}</span>
+              </NavLink>
+            )
+          }
+
           return (
             <div key={f.form_id}>
               <NavLink
@@ -138,7 +166,7 @@ export default function Sidebar({ onNavigate }) {
                 {f.submission_count > 0 && <span className="side__count">{f.submission_count}</span>}
               </NavLink>
 
-              {open && (
+              {open && editing && (
                 <div className="side__sections">
                   {SECTIONS.map(([key, label]) => (
                     <NavLink
@@ -150,14 +178,13 @@ export default function Sidebar({ onNavigate }) {
                       {label}
                     </NavLink>
                   ))}
-                  <a
+                  <NavLink
                     className="side__section side__section--out"
-                    href={`/f/${f.form_id}`}
-                    target="_blank"
-                    rel="noreferrer"
+                    to={`/f/${f.form_id}`}
+                    onClick={onNavigate}
                   >
-                    Open live form ↗
-                  </a>
+                    Open live form
+                  </NavLink>
                 </div>
               )}
             </div>
@@ -167,7 +194,7 @@ export default function Sidebar({ onNavigate }) {
 
       <div className="side__foot">
         <Trouble />
-        <Who />
+        <Account />
       </div>
     </aside>
   )
