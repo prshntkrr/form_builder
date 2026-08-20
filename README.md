@@ -64,6 +64,40 @@ OPENAI_MODEL=gpt-4o-mini
 The three base tables (`forms`, `form_version`, `survey_form_data`) already exist in your DB.
 `backend/schema.sql` reproduces them with `IF NOT EXISTS` for a fresh environment.
 
+### The first sign-in
+
+Startup creates an administrator if no account can hand out roles yet. Choose its
+password before that first run:
+
+```
+ADMIN_EMAIL=you@example.org
+ADMIN_PASSWORD=something-long-and-yours
+```
+
+Leave `ADMIN_PASSWORD` blank and one is generated and printed to the log once —
+the only time you will see it. Real environment variables win over `.env`, so a
+container or service unit can supply it without the value touching a file:
+
+```bash
+ADMIN_PASSWORD='...' python -m uvicorn app.main:app          # Docker -e, systemd Environment=
+```
+
+This applies to the *first* run only. Afterwards the account exists and startup
+leaves it alone, so use the CLI:
+
+```bash
+cd backend
+.venv/Scripts/python set_admin_password.py                      # prompts, ADMIN_EMAIL by default
+.venv/Scripts/python set_admin_password.py you@example.org
+.venv/Scripts/python set_admin_password.py you@example.org --grant-admin
+echo 'new-password' | .venv/Scripts/python set_admin_password.py --stdin
+```
+
+It creates the account if there is none, clears any lockout, and signs out every
+existing session and reset link. `--grant-admin` also moves the account onto the
+admin role, which is how you recover an installation where nobody can reach
+Roles and Users any more.
+
 ## 2. Frontend setup
 
 ```bash

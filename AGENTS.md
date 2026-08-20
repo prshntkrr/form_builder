@@ -29,7 +29,11 @@ cd backend && .venv/Scripts/python.exe -m pytest
 
 `backend/.env` holds the database password and OpenAI key. It is gitignored;
 `backend/.env.example` is the template. Tables and the first admin account are
-created on first boot — see *Bootstrap*.
+created on first boot.
+
+`ADMIN_PASSWORD` applies **only** when no account can manage roles yet —
+`ensure_admin_account` returns early otherwise. Afterwards, passwords are set
+with `backend/set_admin_password.py`, not by editing `.env`.
 
 ## The five ideas that explain the rest
 
