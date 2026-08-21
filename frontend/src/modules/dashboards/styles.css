@@ -1,0 +1,5 @@
+/* Rules that belong only to the dashboards module.
+ *
+ * The shared design system — buttons, cards, layout, the sidebar frame — lives
+ * in core/styles.css. Never edit that file for something only this module
+ * needs; add it here and prefix the class with the module (`.dash__…`). */

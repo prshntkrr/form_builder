@@ -13,6 +13,13 @@ Postgres tables that collect the answers.
 - `backend/` — FastAPI + psycopg2. No ORM, no migration tool (see *Schema changes*).
 - `frontend/` — React + Vite, plain CSS. No component library.
 
+Both are split into `core/` (the platform) and `modules/` (forms, dashboards).
+A module owns its permissions, tables, migrations, routes and screens, and joins
+the app through a manifest that a registry discovers — so adding one edits
+nothing shared. Read [docs/MODULES.md](docs/MODULES.md) before adding anything;
+if you find yourself editing `main.py`, `App.jsx`, or core's permission
+catalogue to add a feature, you are working against the design.
+
 ## Running it
 
 ```bash
@@ -99,18 +106,27 @@ would defeat the point of letting an installation define its own roles.
 Changing a role or a user's role deletes their sessions, so a revoked permission
 applies immediately.
 
+Modules register their own permissions, so the catalogue is assembled on first
+read rather than at import time — which is why `app/core/permissions.py` uses a
+module-level `__getattr__`, and why `needs()` looks a label up at request time
+and never at import time. A module is mid-import when it registers; anything
+that reads the catalogue from module scope re-enters discovery and sees a
+half-built registry.
+
 ## Schema changes
 
 There is no Alembic. `backend/schema.sql` is the desired state and is run at
 startup when a required table is missing (`bootstrap.ensure_base_tables`).
 
-For a change to an **existing** table, add an idempotent function to
-`bootstrap.py` and call it from `main.py`'s lifespan — see `ensure_status_values`,
-`ensure_library_snapshots`, `ensure_roles`. Each checks whether the work is
-already done and returns early. Existing deployments migrate on their next boot.
+Each module owns a `schema.sql`; core owns `app/core/schema.sql`. For a change
+to an **existing** table, add an idempotent function to that module's
+`bootstrap.py` and list it in the module's `MODULE.migrations` — see
+`ensure_status_values`, `ensure_library_snapshots`. Each checks whether the work
+is already done and returns early. Existing deployments migrate on their next
+boot. `main.py` does not change.
 
-`schema.sql` runs as a single batch, so one failing statement rolls back the
-whole file. An index on a column a migration has not added yet will take the
+Each schema file runs as a single batch in its own transaction, so one failing
+statement rolls back that whole file (but not the others). An index on a column a migration has not added yet will take the
 entire schema with it — that happened; the fix was to create that index inside
 the migration instead.
 

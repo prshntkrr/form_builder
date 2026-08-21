@@ -1,23 +1,26 @@
-"""FastAPI application entry point."""
+"""FastAPI application entry point.
+
+Deliberately thin. It mounts core's own routers and then whatever the module
+registry found — so adding a module never means editing this file, and two
+people adding two modules never touch the same line.
+"""
 import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .bootstrap import (
+from app.core import registry
+from app.core.bootstrap import (
     ensure_admin_account,
-    ensure_roles,
     ensure_base_tables,
-    ensure_library_snapshots,
-    ensure_relations,
-    ensure_status_values,
+    ensure_roles,
     missing_tables,
+    run_module_migrations,
 )
-from .config import settings
-from .database import close_pool, init_pool, ping
-from .field_types import FIELD_TYPES, SUPPORTED_TYPES
-from .routers import auth, forms, roles, standard_forms, submissions, users
+from app.core.config import settings
+from app.core.database import close_pool, init_pool, ping
+from app.core.routers import auth, roles, users
 
 logging.basicConfig(
     level=logging.INFO,
@@ -30,11 +33,9 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     try:
         init_pool()
-        ensure_base_tables()
-        ensure_status_values()
-        ensure_library_snapshots()
-        ensure_relations()
-        ensure_roles()
+        ensure_base_tables()      # core schema, then every module's
+        run_module_migrations()   # each module's idempotent ensure_*
+        ensure_roles()            # after the modules, so their permissions exist
         ensure_admin_account()
     except Exception as exc:  # keep the API up so /api/health can explain the problem
         logger.error("Startup could not reach Postgres: %s", exc)
@@ -43,9 +44,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="e-Agrology AI Form Builder",
-    description="Generate forms from a prompt, store them in Postgres, and collect responses.",
-    version="1.0.0",
+    title="e-Agrology Platform",
+    description="Modular form building, data collection and reporting on Postgres.",
+    version="2.0.0",
     lifespan=lifespan,
 )
 
@@ -57,18 +58,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Core: signing in, accounts, roles.
 app.include_router(auth.router)
 app.include_router(roles.router)
 app.include_router(users.router)
-app.include_router(forms.router)
-app.include_router(standard_forms.router)
-app.include_router(submissions.router)
+
+# Everything else arrives from app/modules/*/ via its manifest.
+for module_router in registry.routers():
+    app.include_router(module_router)
 
 
 @app.get("/api/health", tags=["meta"])
 def health():
     db_ok = ping()
-    absent = missing_tables() if db_ok else list(("forms", "form_version"))
+    absent = missing_tables() if db_ok else []
     return {
         "status": "ok" if db_ok and not absent else "degraded",
         "database": {
@@ -78,6 +81,11 @@ def health():
             "schema": settings.db_schema,
             "missing_tables": absent,
         },
+        "modules": [
+            {"name": m.name, "label": m.label, "routes": len(m.routers)}
+            for m in registry.modules()
+        ],
+        "modules_disabled": registry.disabled(),
         "openai": {
             "configured": bool(settings.openai_api_key),
             "model": settings.openai_model,
@@ -89,6 +97,8 @@ def health():
 @app.get("/api/field-types", tags=["meta"])
 def field_types():
     """The type registry, so the frontend renders exactly what the backend stores."""
+    from app.modules.forms.field_types import FIELD_TYPES, SUPPORTED_TYPES
+
     return [
         {
             "name": t.name,

@@ -20,7 +20,7 @@ def _signed_in(role: str):
     """A TestClient carrying a session for a throwaway account of `role`."""
     from fastapi.testclient import TestClient
 
-    from app import auth_service
+    from app.core import auth_service
     from app.main import app
 
     email = f"fixture.{role}.{uuid.uuid4().hex[:8]}@example.test"
@@ -33,7 +33,7 @@ def _signed_in(role: str):
 
 
 def _drop_user(user_id: str) -> None:
-    from app.database import transaction
+    from app.core.database import transaction
     with transaction() as cur:
         cur.execute("DELETE FROM app_user WHERE user_id = %s", (user_id,))
 
@@ -41,8 +41,8 @@ def _drop_user(user_id: str) -> None:
 @pytest.fixture(scope="module")
 def editor_client():
     """Signed in as an editor — enough for anything in the builder."""
-    from app.auth_service import ROLE_EDITOR
-    from app.database import ping
+    from app.core.auth_service import ROLE_EDITOR
+    from app.core.database import ping
 
     if not ping():
         pytest.skip("Postgres is not reachable")
@@ -55,8 +55,8 @@ def editor_client():
 @pytest.fixture(scope="module")
 def admin_client():
     """Signed in as an admin — adds managing people."""
-    from app.auth_service import ROLE_ADMIN
-    from app.database import ping
+    from app.core.auth_service import ROLE_ADMIN
+    from app.core.database import ping
 
     if not ping():
         pytest.skip("Postgres is not reachable")

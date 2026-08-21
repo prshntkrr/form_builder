@@ -1,0 +1,32 @@
+# Who reviews what.
+#
+# The point is not gatekeeping — it is that a pull request touching someone
+# else's area gets seen by them before it merges, which is when a conflict is
+# cheap to resolve. Replace the placeholders with real GitHub handles.
+#
+# Last matching pattern wins, so the module rules below override the default.
+
+# Anything not claimed below.
+*                                   @prshntkrr
+
+# The platform. A change here affects every module, so it is reviewed even when
+# the person making it owns the module that needed it.
+/backend/app/core/                  @prshntkrr
+/backend/app/main.py                @prshntkrr
+/frontend/src/core/                 @prshntkrr
+/frontend/src/App.jsx               @prshntkrr
+
+# Dependencies: lock-file conflicts are the expensive kind, so both of you see
+# every change to them.
+/frontend/package.json              @prshntkrr
+/frontend/package-lock.json         @prshntkrr
+/backend/requirements.txt           @prshntkrr
+
+# Modules — owned outright by whoever builds them.
+/backend/app/modules/forms/         @prshntkrr
+/backend/tests/modules/forms/       @prshntkrr
+/frontend/src/modules/forms/        @prshntkrr
+
+/backend/app/modules/dashboards/    @junior-handle
+/backend/tests/modules/dashboards/  @junior-handle
+/frontend/src/modules/dashboards/   @junior-handle

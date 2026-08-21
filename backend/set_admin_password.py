@@ -5,24 +5,32 @@ first account and then never touches it again. This is how you set a password
 afterwards: for a forgotten one, for a locked-out installation, or to hand a
 deployment its real credentials without going through the browser.
 
-    .venv\Scripts\python set_admin_password.py
-    .venv\Scripts\python set_admin_password.py someone@example.org
-    .venv\Scripts\python set_admin_password.py someone@example.org --grant-admin
+    python set_admin_password.py
+    python set_admin_password.py someone@example.org
+    python set_admin_password.py someone@example.org --grant-admin
+
+Run it with the venv's interpreter — `.venv/bin/python` on Linux,
+`.venv/Scripts/python.exe` on Windows — so it reads the same .env as the server.
 
 The password is asked for interactively so it never reaches your shell history
 or the process list. For an unattended run, pipe it in:
 
-    echo my-new-password | .venv\Scripts\python set_admin_password.py --stdin
+    echo my-new-password | python set_admin_password.py --stdin
+
+Or put ADMIN_EMAIL / ADMIN_PASSWORD in .env — where you would expect them to work
+— and apply them by hand, which is the step startup will not do for you:
+
+    python set_admin_password.py --from-env
 """
 import argparse
 import getpass
 import sys
 
-from app import permissions
-from app.auth_service import ROLE_ADMIN, AuthError, create_user
-from app.config import settings
-from app.database import ping, transaction
-from app.security import WeakPassword, check_password_strength, hash_password
+from app.core import permissions
+from app.core.auth_service import ROLE_ADMIN, AuthError, create_user
+from app.core.config import settings
+from app.core.database import ping, transaction
+from app.core.security import WeakPassword, check_password_strength, hash_password
 
 
 def read_password(from_stdin: bool) -> str:
@@ -50,6 +58,8 @@ def main() -> int:
                         help="which account (default: ADMIN_EMAIL from .env)")
     parser.add_argument("--stdin", action="store_true",
                         help="read the password from stdin instead of prompting")
+    parser.add_argument("--from-env", action="store_true",
+                        help="use ADMIN_EMAIL and ADMIN_PASSWORD from .env")
     parser.add_argument("--grant-admin", action="store_true",
                         help="also move the account onto the admin role")
     args = parser.parse_args()
@@ -60,13 +70,18 @@ def main() -> int:
 
     email = args.email.strip().lower()
 
+    if args.from_env and not settings.admin_password:
+        print("ADMIN_PASSWORD is blank in .env — set it, save the file, and run this again.")
+        return 1
+
     with transaction() as cur:
         cur.execute("SELECT user_id, role_id, is_active FROM app_user WHERE email = %s",
                     (email,))
         existing = cur.fetchone()
 
     try:
-        password = read_password(args.stdin)
+        password = settings.admin_password if args.from_env else read_password(args.stdin)
+        check_password_strength(password)
     except (KeyboardInterrupt, EOFError):
         print("\nCancelled.")
         return 1

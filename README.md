@@ -64,6 +64,18 @@ OPENAI_MODEL=gpt-4o-mini
 The three base tables (`forms`, `form_version`, `survey_form_data`) already exist in your DB.
 `backend/schema.sql` reproduces them with `IF NOT EXISTS` for a fresh environment.
 
+### Hiding a module
+
+A module still being built stays out of a client's hands with one line:
+
+```
+DISABLED_MODULES=dashboards
+```
+
+Comma-separated, in `backend/.env`. A module named there is not loaded at all —
+no routes, no permissions, no tables — and the UI hides its screens because the
+server tells it which modules are live. Restart to apply; no rebuild needed.
+
 ### The first sign-in
 
 Startup creates an administrator if no account can hand out roles yet. Choose its
@@ -87,11 +99,15 @@ leaves it alone, so use the CLI:
 
 ```bash
 cd backend
-.venv/Scripts/python set_admin_password.py                      # prompts, ADMIN_EMAIL by default
-.venv/Scripts/python set_admin_password.py you@example.org
-.venv/Scripts/python set_admin_password.py you@example.org --grant-admin
-echo 'new-password' | .venv/Scripts/python set_admin_password.py --stdin
+python set_admin_password.py --from-env           # apply ADMIN_EMAIL / ADMIN_PASSWORD
+python set_admin_password.py                      # prompts; ADMIN_EMAIL by default
+python set_admin_password.py you@example.org
+python set_admin_password.py you@example.org --grant-admin
+echo 'new-password' | python set_admin_password.py --stdin
 ```
+
+Use the venv's interpreter — `.venv/bin/python` on Linux,
+`.venv/Scripts/python.exe` on Windows — so it reads the same `.env` as the server.
 
 It creates the account if there is none, clears any lockout, and signs out every
 existing session and reset link. `--grant-admin` also moves the account onto the
@@ -212,7 +228,10 @@ definition, so the history is untouched and you can roll anywhere else afterward
 collected move to the keys that version uses. Editing while rolled back appends as normal.
 
 For the full picture — module map, request lifecycles, safety model — see
-[docs/BACKEND.md](docs/BACKEND.md).
+[docs/BACKEND.md](docs/BACKEND.md). For what is built, what is missing, and the
+order the remaining features want to be done in, see
+[docs/ROADMAP.md](docs/ROADMAP.md). For how the code is split into modules and
+how two people work in it without conflicts, see [docs/MODULES.md](docs/MODULES.md).
 
 ## 6. Attribution (`created_by`)
 

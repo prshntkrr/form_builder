@@ -1,0 +1,6 @@
+/* Rules that belong only to the forms module.
+ *
+ * The shared design system — buttons, cards, layout, the sidebar frame — lives
+ * in core/styles.css. Anything that styles a screen in this module goes here,
+ * so two modules never edit the same stylesheet. Prefix new class names with
+ * the module (`.forms__…`) to keep that true as both files grow. */

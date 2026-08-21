@@ -1,0 +1,17 @@
+-- Dashboards module schema.
+--
+-- Owned by the dashboards module. Runs after the core schema, so it may
+-- reference core tables (app_user, app_role). It must not assume another
+-- module exists — a foreign key to `forms` would couple this module to the
+-- forms module, so carry the form_id and check it in the service instead.
+--
+-- Idempotent: safe to run against an existing database.
+
+-- CREATE TABLE IF NOT EXISTS dashboard (
+--     dashboard_id   VARCHAR(20)  NOT NULL PRIMARY KEY,
+--     title          VARCHAR(255) NOT NULL,
+--     dashboard_json JSONB        NOT NULL,
+--     status         VARCHAR(20)  NOT NULL DEFAULT 'Active',
+--     created_on     TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+--     created_by     VARCHAR(50)
+-- );

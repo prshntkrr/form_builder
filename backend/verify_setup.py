@@ -9,11 +9,11 @@ field to confirm the table shape stays fixed.
 """
 import sys
 
-from app.config import settings
-from app.database import ping, transaction
-from app.form_service import create_form, get_form, update_form
-from app.submission_service import list_submissions, submit
-from app.table_service import existing_columns, table_exists
+from app.core.config import settings
+from app.core.database import ping, transaction
+from app.modules.forms.form_service import create_form, get_form, update_form
+from app.modules.forms.submission_service import list_submissions, submit
+from app.modules.forms.table_service import existing_columns, table_exists
 
 TEST_TITLE = "Setup Check Form"
 
