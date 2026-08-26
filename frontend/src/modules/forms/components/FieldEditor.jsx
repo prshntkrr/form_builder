@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react'
 import { DIGITS, NUMERIC, TEXTUAL, TYPES, WITH_OPTIONS } from '../fieldTypes.js'
+import ConceptPicker from './ConceptPicker.jsx'
 
 const slug = (t) =>
   String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '')
@@ -51,8 +52,10 @@ export default function FieldEditor({
 
   const editOption = (i, label) => {
     const options = [...(field.options || [])]
+    // Typing over a choice makes it yours: the ontology's URI no longer
+    // describes it, so carrying that URI would be a lie about where it came from.
     options[i] = { label, value: slug(label) || `option_${i + 1}` }
-    patch({ options })
+    patch({ options, option_source: 'manual' })
   }
 
   const classes = [
@@ -202,6 +205,12 @@ export default function FieldEditor({
               {hasResponses ? ' — existing answers move across when you save.' : '.'}
             </p>
           )}
+
+          <ConceptPicker
+            field={field}
+            canLoadOptions={WITH_OPTIONS.has(field.type)}
+            onChange={patch}
+          />
 
           {WITH_OPTIONS.has(field.type) && (
             <div className="opts">

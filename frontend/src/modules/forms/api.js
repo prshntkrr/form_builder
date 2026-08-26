@@ -26,10 +26,61 @@ export const api = {
   validate: (formJson) =>
     request('/forms/validate', { method: 'POST', body: JSON.stringify({ form_json: formJson }) }),
 
-  createForm: (formJson, createdBy) =>
+  // --- ontology ---
+  searchConcepts: (q) => request(`/ontology/search?q=${encodeURIComponent(q)}`),
+
+  // The picker stores a URI; this turns it back into a row so children can be read.
+  conceptByUri: async (uri) => {
+    const hits = await request(`/ontology/search?q=${encodeURIComponent(uri.split('/').pop())}`)
+    return hits.find((c) => c.concept_uri === uri) || null
+  },
+
+  conceptChildren: (conceptId) => request(`/ontology/${conceptId}/children`),
+  conceptOptions: (conceptId) => request(`/ontology/${conceptId}/options`),
+
+  // --- data dictionary ---
+  dictionary: (search) =>
+    request(`/dictionary${search ? `?search=${encodeURIComponent(search)}` : ''}`),
+
+  addDictionaryEntry: (body) =>
+    request('/dictionary', { method: 'POST', body: JSON.stringify(body) }),
+
+  updateDictionaryEntry: (entryId, changes) =>
+    request(`/dictionary/${entryId}`, { method: 'PATCH', body: JSON.stringify(changes) }),
+
+  deleteDictionaryEntry: (entryId) =>
+    request(`/dictionary/${entryId}`, { method: 'DELETE' }),
+
+  // Bring a draft into line with the dictionary. Nothing is saved.
+  applyDictionary: (formJson) =>
+    request('/dictionary/apply', {
+      method: 'POST',
+      body: JSON.stringify({ form_json: formJson }),
+    }),
+
+  // The languages a form can be offered in.
+  languages: () => request('/forms/languages'),
+
+  // Ask the model for one language's wording. Returns only the translations.
+  translateForm: (formJson, language) =>
+    request('/forms/translate', {
+      method: 'POST',
+      body: JSON.stringify({ form_json: formJson, language }),
+    }),
+
+  // A dry run: same validation and coercion as a real submission, nothing
+  // written. `formJson` tests what is on screen rather than what is saved.
+  testSubmission: (formId, data, formJson) =>
+    request(`/forms/${formId}/test-submission`, {
+      method: 'POST',
+      body: JSON.stringify({ data, form_json: formJson }),
+    }),
+
+  // `status` is 'Draft' to build without publishing, 'Active' to go live.
+  createForm: (formJson, createdBy, status) =>
     request('/forms', {
       method: 'POST',
-      body: JSON.stringify({ form_json: formJson, created_by: createdBy }),
+      body: JSON.stringify({ form_json: formJson, created_by: createdBy, form_status: status }),
     }),
 
   updateForm: (formId, formJson, updatedBy, renames) =>
@@ -113,12 +164,13 @@ export const api = {
 
   deleteForm: (formId) => request(`/forms/${formId}`, { method: 'DELETE' }),
 
-  renderForm: (formId) => request(`/forms/${formId}/render`),
+  renderForm: (formId, language) =>
+    request(`/forms/${formId}/render${language ? `?language=${language}` : ''}`),
 
-  submit: (formId, data, createdBy) =>
+  submit: (formId, data, createdBy, language) =>
     request(`/forms/${formId}/submissions`, {
       method: 'POST',
-      body: JSON.stringify({ data, created_by: createdBy }),
+      body: JSON.stringify({ data, created_by: createdBy, language }),
     }),
 
   listSubmissions: (formId, limit = 50, offset = 0) =>

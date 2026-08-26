@@ -9,13 +9,15 @@ from pathlib import Path
 from app.core.registry import Module
 
 from . import bootstrap, permissions  # noqa: F401  (importing registers the permissions)
-from .routers import forms, standard_forms, submissions
+from .routers import dictionary, forms, standard_forms, submissions
 
 MODULE = Module(
     name="forms",
     label="Forms",
-    routers=[forms.router, standard_forms.router, submissions.router],
-    tables=["forms", "form_version", "standard_form_library", "form_view"],
+    routers=[forms.router, standard_forms.router, submissions.router,
+             dictionary.router],
+    tables=["forms", "form_version", "standard_form_library", "form_view",
+            "data_dictionary"],
     schema_file=Path(__file__).resolve().parent / "schema.sql",
     migrations=[
         bootstrap.ensure_status_values,

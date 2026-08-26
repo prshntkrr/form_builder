@@ -111,3 +111,30 @@ CREATE TABLE IF NOT EXISTS form_view (
 --
 -- If a table of that name already exists it is adopted, not replaced.
 -- ---------------------------------------------------------------------------
+
+-- ---------------------------------------------------------------------------
+-- Data dictionary.
+--
+-- What a field called "age" or "plant_height" means everywhere in this
+-- installation: which type it is and what values are allowed. Maintained by
+-- hand, and applied when a form is drafted, so the same question does not end
+-- up as text on one form and a number on another.
+--
+-- `aliases` lets one entry catch the several names people write for the same
+-- thing — "first name", "firstname", "fname" all reach `first_name`.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS data_dictionary (
+    entry_id    VARCHAR(64)  NOT NULL PRIMARY KEY,
+    name        VARCHAR(64)  NOT NULL UNIQUE,
+    label       VARCHAR(200) NOT NULL,
+    field_type  VARCHAR(30)  NOT NULL,
+    aliases     JSONB        NOT NULL DEFAULT '[]'::jsonb,
+    validation  JSONB        NOT NULL DEFAULT '{}'::jsonb,
+    options     JSONB        NOT NULL DEFAULT '[]'::jsonb,
+    help_text   VARCHAR(300) NOT NULL DEFAULT '',
+    placeholder VARCHAR(200) NOT NULL DEFAULT '',
+    notes       VARCHAR(500) NOT NULL DEFAULT '',
+    created_on  TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+    updated_on  TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+    updated_by  VARCHAR(50)
+);

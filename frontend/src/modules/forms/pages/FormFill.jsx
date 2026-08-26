@@ -13,10 +13,13 @@ export default function FormFill() {
   const [sending, setSending] = useState(false)
   const [done, setDone] = useState(null)
   const [error, setError] = useState('')
+  const [language, setLanguage] = useState(null)
 
+  // The server returns the form already in the chosen language, so there is
+  // nothing to translate here — just ask again when the reader picks one.
   useEffect(() => {
     api
-      .renderForm(formId)
+      .renderForm(formId, language)
       .then((res) => {
         setForm(res)
         const start = {}
@@ -28,12 +31,12 @@ export default function FormFill() {
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false))
-  }, [formId])
+  }, [formId, language])
 
   const send = async () => {
     setSending(true); setErrors({}); setError('')
     try {
-      setDone(await api.submit(formId, values))
+      setDone(await api.submit(formId, values, undefined, language || form.language))
     } catch (e) {
       if (e.fieldErrors) {
         setErrors(e.fieldErrors)
@@ -89,9 +92,24 @@ export default function FormFill() {
 
   return (
     <main className="main main--narrow">
-      <p className="tiny" style={{ marginBottom: 14 }}>
-        <Link to={`/f/${formId}`}>← Back to records</Link>
-      </p>
+      <div className="row" style={{ marginBottom: 14 }}>
+        <p className="tiny grow">
+          <Link to={`/f/${formId}`}>← Back to records</Link>
+        </p>
+
+        {(form.languages || []).length > 1 && (
+          <select
+            className="input input--sm"
+            value={language || form.language}
+            onChange={(e) => setLanguage(e.target.value)}
+            aria-label="Language"
+          >
+            {form.languages.map((l) => (
+              <option key={l.code} value={l.code}>{l.name}</option>
+            ))}
+          </select>
+        )}
+      </div>
 
       {error && <div className="note note--bad" style={{ marginBottom: 18 }}>{error}</div>}
 

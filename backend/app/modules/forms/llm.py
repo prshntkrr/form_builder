@@ -160,3 +160,58 @@ def refine_form(current_form: Dict[str, Any], instruction: str) -> Dict[str, Any
         ],
         temperature=0.2,
     )
+
+
+TRANSLATE_PROMPT = """You translate the wording of a data-collection form.
+
+You are given the form's English strings and a target language. Return ONLY the
+translated strings, as JSON, in exactly this shape:
+
+{
+  "title": "...",
+  "description": "...",
+  "submit_label": "...",
+  "success_message": "...",
+  "sections": {"<section key>": {"title": "...", "description": "..."}},
+  "fields": {
+    "<field name>": {
+      "label": "...",
+      "help_text": "...",
+      "placeholder": "...",
+      "options": {"<option value>": "<translated option label>"}
+    }
+  }
+}
+
+Rules:
+- Keep every key exactly as given. Field names, section keys and option values
+  are identifiers, not words — never translate them, never invent new ones.
+- Translate only the values.
+- Leave out any string that was empty or missing.
+- Use the wording a farmer would use, not a literal word-for-word translation.
+- Output raw JSON only. No markdown fences, no commentary."""
+
+
+def translate_form(form_json: Dict[str, Any], language_name: str) -> Dict[str, Any]:
+    """Form definition + language -> that language's block of translated words.
+
+    Returns just the translations, not a whole form, so a bad reply can never
+    damage the definition — the caller cleans it and stores it under the
+    language code.
+    """
+    if not language_name:
+        raise LLMError("Say which language to translate into.")
+
+    return _chat(
+        [
+            {"role": "system", "content": TRANSLATE_PROMPT},
+            {
+                "role": "user",
+                "content": (
+                    f"Target language: {language_name}\n\n"
+                    f"Form JSON:\n{json.dumps(form_json, ensure_ascii=False)}"
+                ),
+            },
+        ],
+        temperature=0.2,
+    )

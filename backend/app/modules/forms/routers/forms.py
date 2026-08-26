@@ -16,6 +16,8 @@ from app.modules.forms.permissions import (
 from app.modules.forms.config_validation import ConfigValidationError, validate_config
 from app.modules.forms.form_schema import FormSchemaError, normalize_form
 from app.modules.forms.migration_service import MigrationError
+from app.modules.forms import dictionary_service
+from app.modules.forms import translations
 from app.modules.forms.schemas import (
     CreateFormRequest,
     GenerateRequest,
@@ -23,6 +25,7 @@ from app.modules.forms.schemas import (
     RevalidateRequest,
     RollbackRequest,
     StatusRequest,
+    TranslateRequest,
     UpdateFormRequest,
     ValidateRequest,
 )
@@ -58,7 +61,15 @@ def generate(req: GenerateRequest, user: Dict[str, Any] = Depends(needs(FORMS_CR
     """Prompt -> a complete, normalized form definition (not yet saved)."""
     try:
         raw = llm.generate_form(req.prompt, req.language)
-        return {"form_json": normalize_form(raw), "prompt": req.prompt}
+        # The model guesses types and limits; the dictionary is where this
+        # installation has already decided them. Applied before the draft is
+        # shown, so the editor opens on the agreed shape rather than a guess.
+        result = dictionary_service.apply_to_form(normalize_form(raw))
+        return {
+            "form_json": normalize_form(result["form_json"]),
+            "dictionary": result["applied"],
+            "prompt": req.prompt,
+        }
     except llm.LLMError as exc:
         raise HTTPException(status_code=502, detail=str(exc))
     except FormSchemaError as exc:
@@ -92,6 +103,47 @@ def validate(req: ValidateRequest, user: Dict[str, Any] = Depends(needs(FORMS_CR
         raise HTTPException(status_code=422, detail=exc.as_payload())
     except FormSchemaError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
+
+
+@router.get("/languages")
+def languages(user: Dict[str, Any] = Depends(needs(FORMS_VIEW))):
+    """The languages a form can be offered in."""
+    result = []
+    for code, name in translations.SUPPORTED_LANGUAGES.items():
+        result.append({"code": code, "name": name})
+    return result
+
+
+@router.post("/translate")
+def translate(req: TranslateRequest, user: Dict[str, Any] = Depends(needs(FORMS_EDIT))):
+    """Translate a form's wording with the model, and return the cleaned block.
+
+    Only the words come back — the caller stores them under the language code.
+    Field names, section keys and option values are identifiers and are never
+    translated, so a stored answer means the same thing in every language.
+    """
+    if not translations.is_supported(req.language):
+        raise HTTPException(status_code=400, detail=f"Unsupported language '{req.language}'")
+    if req.language == translations.DEFAULT_LANGUAGE:
+        raise HTTPException(
+            status_code=400,
+            detail="That is the language the form is already written in.",
+        )
+
+    language_name = translations.SUPPORTED_LANGUAGES[req.language]
+    try:
+        raw = llm.translate_form(req.form_json, language_name)
+    except llm.LLMError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+
+    cleaned = translations.normalize_translations({req.language: raw})
+    if not cleaned:
+        raise HTTPException(
+            status_code=502,
+            detail="The model did not return anything usable. Try again.",
+        )
+
+    return {"language": req.language, "translations": cleaned[req.language]}
 
 
 # --------------------------------------------------------------------------- #

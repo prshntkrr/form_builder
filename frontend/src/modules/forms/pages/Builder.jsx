@@ -11,11 +11,23 @@ import VersionDiff from '../components/VersionDiff.jsx'
 import Responses from './Responses.jsx'
 
 const SEEDS = [
-  ['Farmer registration', 'A farmer registration form with name, mobile number, village, land holding in acres, main crop, irrigation type and the plot location'],
-  ['Soil health survey', 'A soil health survey with sample id, collection date, pH, nitrogen, phosphorus, potassium, organic carbon and a photo of the sample'],
-  ['Crop damage report', 'A crop damage assessment for flood-affected plots covering farmer details, crop stage, area damaged and estimated loss'],
-  ['Pesticide log', 'A pesticide usage log recording product name, dosage, application date, applicator and safety measures taken'],
-]
+  [
+    'Farmer registration',
+    'Create a farmer registration form covering farmer name, mobile number, village, land holding, main crops, irrigation type and farm location',
+  ],
+  [
+    'Plot survey',
+    'Create a plot survey covering plot ID, farm location, plot area, soil type, irrigation, current crop and planting date',
+  ],
+  [
+    'Crop damage report',
+    'Create a crop damage assessment covering farmer details, plot location, crop, growth stage, affected area, damage type, damage severity and estimated loss',
+  ],
+  [
+    'Market survey',
+    'Create a market survey covering market location, commodity, quantity, unit, price, buyer or seller, transaction date and market conditions',
+  ],
+];
 
 const slug = (t) =>
   String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '')
@@ -86,9 +98,14 @@ export default function Builder() {
   const [busy, setBusy] = useState(editing ? 'load' : null)
   const [error, setError] = useState('')
   const [saved, setSaved] = useState(null)
+  // Draft or Active, as the server last told us. Kept apart from `saved`,
+  // which only exists for a moment after a save.
+  const [status, setStatus] = useState(null)
   const [check, setCheck] = useState(null)
   const [trial, setTrial] = useState({})
+  const [trialResult, setTrialResult] = useState(null)
   const [picker, setPicker] = useState(null)   // 'start' | 'borrow'
+  const [dict, setDict] = useState(null)      // what the dictionary changed, if anything
   const [contributing, setContributing] = useState(false)
 
   const view = editing ? section : draftTab
@@ -99,10 +116,12 @@ export default function Builder() {
     setForm(null)
     setResponses(0)
     setSaved(null)
+    setStatus(null)
     setCheck(null)
     setError('')
     setTrial({})
     setDraftTab('questions')
+    setDict(null)
 
     if (!formId) {
       const fromLibrary = location.state?.standardId
@@ -125,6 +144,7 @@ export default function Builder() {
       .then((f) => {
         setForm(prep(f.form_json, true))
         setResponses(f.submission_count || 0)
+        setStatus(f.form_status)
       })
       .catch((e) => setError(e.message))
       .finally(() => setBusy(null))
@@ -139,6 +159,8 @@ export default function Builder() {
     run('make', async () => {
       const res = await api.generate(prompt)
       setForm(prep(res.form_json))
+      // The dictionary still shapes the draft — it just does not announce it.
+      // Nobody asked it to run, so a report here is noise on top of a new form.
       setTrial({}); setDraftTab('questions')
     })
 
@@ -157,7 +179,9 @@ export default function Builder() {
       setAsk('')
     })
 
-  const save = () =>
+  // `saveAs`, not `status` — that name belongs to the state above, and shadowing
+  // it here would be a trap for the next person to read this.
+  const save = (saveAs = 'Active') =>
     run('save', async () => {
       const renames = {}
       for (const f of form.fields) if (f._orig && f._orig !== f.name) renames[f._orig] = f.name
@@ -166,17 +190,54 @@ export default function Builder() {
 
       const result = editing
         ? await api.updateForm(formId, payload, undefined, renames)
-        : await api.createForm(payload)
+        : await api.createForm(payload, undefined, saveAs)
 
       formsChanged()
 
       if (!editing) {
-        navigate(`/f/${result.form_id}`, { replace: true, state: { published: result } })
+        // A draft has nothing live to open, so stay in the builder on it. Only a
+        // published form goes straight to the form people will fill in.
+        navigate(
+          saveAs === 'Draft' ? `/forms/${result.form_id}/preview` : `/f/${result.form_id}`,
+          { replace: true, state: saveAs === 'Draft' ? undefined : { published: result } },
+        )
         return
       }
       setSaved(result)
+      setStatus(result.form_status)
       setCheck(null)
       setForm(prep(payload, true))
+    })
+
+  /** Publish a draft, or put a live form back into draft. */
+  const setLive = (next) =>
+    run('publish', async () => {
+      const result = await api.setStatus(formId, next)
+      setSaved(result)
+      setStatus(result.form_status)
+      formsChanged()
+    })
+
+  /** A dry run against what is on screen: nothing is written. */
+  const tryIt = () =>
+    run('try', async () => {
+      if (!editing) {
+        setTrialResult({ unsaved: true })
+        return
+      }
+      setTrialResult(await api.testSubmission(formId, trial, untag(form)))
+    })
+
+  /** Bring what is on screen into line with the dictionary. Nothing is saved. */
+  const conform = () =>
+    run('dict', async () => {
+      const res = await api.applyDictionary(untag(form))
+      const before = new Map((form.fields || []).map((f) => [f.name, f._orig]))
+      setForm(prep({
+        ...res.form_json,
+        fields: res.form_json.fields.map((f) => ({ ...f, _orig: before.get(f.name) })),
+      }))
+      setDict(res.applied)
     })
 
   const inspect = (fix) =>
@@ -187,6 +248,7 @@ export default function Builder() {
     const f = await api.getForm(formId)
     setForm(prep(f.form_json, true))
     setResponses(f.submission_count || 0)
+    setStatus(f.form_status)
     setSaved(null)
     setCheck(null)
     formsChanged()
@@ -294,6 +356,26 @@ export default function Builder() {
         </div>
       )}
 
+      {dict?.length > 0 && (
+        <div className="note note--good" style={{ marginBottom: 16 }}>
+          <strong>The data dictionary set {dict.length} field{dict.length === 1 ? '' : 's'}.</strong>
+          {dict.map((d) => (
+            <span key={d.field} className="tiny">
+              <code>{d.field}</code> — {d.changes.join('; ')}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {dict?.length === 0 && (
+        <div className="note" style={{ marginBottom: 16 }}>
+          <strong>Nothing matched the data dictionary.</strong>
+          <span className="tiny">
+            Field names have to match an entry or one of its other names.
+          </span>
+        </div>
+      )}
+
       {check && (
         <div className={`note note--${check.rows_with_issues.length ? 'warn' : 'good'}`} style={{ marginBottom: 16 }}>
           <strong>
@@ -372,6 +454,15 @@ export default function Builder() {
                     <button className="btn" onClick={() => setPicker('borrow')} title="Add questions from the standard form library">
                       Library
                     </button>
+                    <button
+                      className="btn"
+                      onClick={conform}
+                      disabled={busy === 'dict'}
+                      title="Set every known field to the type and limits agreed in the data dictionary"
+                    >
+                      {busy === 'dict' && <span className="spin" />}
+                      Apply dictionary
+                    </button>
                   </div>
 
                   <div className="rows">
@@ -404,17 +495,61 @@ export default function Builder() {
               )}
 
               {view === 'preview' && (
-                <FormRenderer
-                  formJson={form}
-                  values={trial}
-                  onChange={(name, value) => setTrial({ ...trial, [name]: value })}
-                />
+                <>
+                  <FormRenderer
+                    formJson={form}
+                    values={trial}
+                    onChange={(name, value) => {
+                      setTrial({ ...trial, [name]: value })
+                      setTrialResult(null)
+                    }}
+                    errors={trialResult?.errors || {}}
+                  />
+
+                  <div className="row trial__bar">
+                    <button className="btn btn--primary" onClick={tryIt} disabled={busy === 'try'}>
+                      {busy === 'try' && <span className="spin" />}
+                      Test these answers
+                    </button>
+                    <button
+                      className="btn btn--quiet btn--sm"
+                      onClick={() => { setTrial({}); setTrialResult(null) }}
+                    >
+                      Clear
+                    </button>
+                    <span className="tiny muted">Checked against the rules. Nothing is saved.</span>
+                  </div>
+
+                  {trialResult?.unsaved && (
+                    <div className="alert">Save the form once before testing it.</div>
+                  )}
+
+                  {trialResult?.valid === false && (
+                    <div className="alert alert--bad">
+                      {Object.keys(trialResult.errors).length} answer
+                      {Object.keys(trialResult.errors).length === 1 ? '' : 's'} need fixing —
+                      each one is marked above.
+                    </div>
+                  )}
+
+                  {trialResult?.valid === true && (
+                    <div className="trial__ok">
+                      <div className="alert alert--good">
+                        Every answer passed. This is what would be stored:
+                      </div>
+                      <pre className="json">{JSON.stringify(trialResult.form_data, null, 2)}</pre>
+                    </div>
+                  )}
+                </>
               )}
 
               {view === 'history' && editing && (
                 <VersionDiff
                   formId={formId}
                   liveVersion={saved?.version_no ?? form.version}
+                  isDraft={status === 'Draft'}
+                  publishing={busy === 'publish'}
+                  onPublish={() => setLive('Active')}
                   onRolledBack={reload}
                 />
               )}
@@ -448,7 +583,43 @@ export default function Builder() {
                   Check responses
                 </button>
               )}
-              <button className="btn btn--primary" onClick={save} disabled={busy === 'save'}>
+              {editing && status === 'Draft' && (
+                <button
+                  className="btn btn--primary"
+                  onClick={() => setLive('Active')}
+                  disabled={busy === 'publish'}
+                  title="Make this form live so people can fill it in"
+                >
+                  {busy === 'publish' && <span className="spin" />}
+                  Publish
+                </button>
+              )}
+              {editing && status === 'Active' && (
+                <button
+                  className="btn btn--quiet btn--sm"
+                  onClick={() => setLive('Draft')}
+                  disabled={busy === 'publish'}
+                  title="Take it out of circulation. Answers already collected are kept"
+                >
+                  {busy === 'publish' && <span className="spin" />}
+                  Back to draft
+                </button>
+              )}
+              {!editing && (
+                <button
+                  className="btn btn--quiet"
+                  onClick={() => save('Draft')}
+                  disabled={busy === 'save'}
+                  title="Build it now, publish when it is ready"
+                >
+                  Save as draft
+                </button>
+              )}
+              <button
+                className="btn btn--primary"
+                onClick={() => save('Active')}
+                disabled={busy === 'save'}
+              >
                 {busy === 'save' && <span className="spin" />}
                 {busy === 'save' ? 'Saving' : editing ? 'Save changes' : 'Publish'}
               </button>

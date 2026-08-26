@@ -233,6 +233,107 @@ order the remaining features want to be done in, see
 [docs/ROADMAP.md](docs/ROADMAP.md). For how the code is split into modules and
 how two people work in it without conflicts, see [docs/MODULES.md](docs/MODULES.md).
 
+### Ontology concepts
+
+The data dictionary says how a field must **behave**. An ontology says what it
+**means** — and, where it has them, what its standardised answers are.
+
+Import one once:
+
+```bash
+cd backend
+python import_ontology.py                                # data_dictionary/seont.owl
+python import_ontology.py path/to/agro.owl --name AgrO   # another ontology
+python import_ontology.py --list                         # what is loaded
+```
+
+Safe to re-run: concepts are matched on their URI, so a second import updates
+labels and adds what is new rather than duplicating anything.
+
+In the builder, open a question's settings and search under **Semantic
+concept**. Picking one records what the field means. If the concept has named
+subclasses, **Load standardised values** turns them into the dropdown's choices;
+if it has none — which is true of about half of them — you are told so and type
+the choices yourself, exactly as before.
+
+Each loaded choice keeps the URI it came from:
+
+```json
+{ "label": "lake", "value": "lake",
+  "ontology_uri": "http://purl.obolibrary.org/obo/ENVO_00000020" }
+```
+
+so a stored answer of `lake` can always be traced back to the concept, without
+anything extra being written alongside the response. Nothing about this is
+required: a field with no concept behaves exactly as it always has.
+
+### The data dictionary
+
+What a field name means everywhere in the installation. Agree once that `age` is
+a whole number between 1 and 120, that `plant_height` is a decimal no greater
+than 25, that `first_name` is text of 2–60 characters — and every form drafted
+afterwards starts that way.
+
+Open **Data dictionary** in the sidebar and add a field. `Also known as` catches
+the other spellings people use, so one entry for `plant_height` also claims
+`height` and `plant ht`.
+
+It is applied automatically when AI drafts a form, and on demand from the
+builder with **Apply dictionary**. What it changed is always reported — never
+silent. The dictionary decides the **type, the limits and the choices**, because
+agreeing those once is the point; it only fills in the **label, hint and
+placeholder** when they were left empty, so the wording stays yours.
+
+Forms already built are untouched: the dictionary shapes a form while it is
+being drafted and holds nothing afterwards.
+
+### More than one language
+
+A form keeps **one definition and one data table** however many languages it is
+offered in. Only the words are translated — the field name is the key inside
+`form_data` and the column in the tabular mirror, so a Hindi answer and an
+English answer land in the same column and count together.
+
+Open a form's **Languages** section, add a language, and fill in the wording —
+or press *Translate with AI* and correct what comes back. Anything left empty
+falls back to English, so a half-finished translation still works.
+
+People filling the form get a language picker. The server returns the definition
+already translated, so the page that draws the form has no translation logic of
+its own. Validation messages come back in the same language.
+
+Languages live in one block on the definition:
+
+```json
+"languages": ["en", "hi"],
+"translations": {
+  "hi": {
+    "title": "किसान पंजीकरण",
+    "fields": { "farmer_name": { "label": "किसान का नाम" } }
+  }
+}
+```
+
+Field names, section keys and option values are identifiers, never words, and
+are never translated — an answer has to mean the same thing in every language.
+Add a language to `SUPPORTED_LANGUAGES` in
+`backend/app/modules/forms/translations.py` to offer another one.
+
+### Drafts
+
+A form does not have to go live the moment it is built. **Save as draft** keeps
+it out of circulation: it gets its tables and its version history as usual, but
+it stays out of every field officer's list and refuses real submissions.
+
+Test it from the **Preview** tab. *Test these answers* runs what you have typed
+through exactly the validation and coercion a real submission goes through, and
+shows the `form_data` that would be stored — without storing it. Nothing to clean
+up afterwards, and a failing answer is marked on the field that caused it.
+Preview tests what is on screen, so you can try a change before saving it.
+
+**Publish** when it is ready, and **Back to draft** takes a live form out of
+circulation again. Answers already collected are kept either way.
+
 ## 6. Attribution (`created_by`)
 
 `forms.created_by` and each submission row's `created_by` are resolved in this order:

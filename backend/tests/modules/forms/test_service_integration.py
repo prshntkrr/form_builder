@@ -169,3 +169,83 @@ def test_listing_a_form_with_no_data_table_has_the_usual_shape():
     assert set(result) >= {"table_name", "columns", "total", "limit", "offset", "rows"}
     assert result["limit"] == 25 and result["offset"] == 10
     assert result["rows"] == [] and result["total"] == 0
+
+
+# --- drafts ----------------------------------------------------------------- #
+def _draft(client, cleanup, valid_config, title):
+    """A form saved but not published, registered for removal."""
+    import copy
+    import uuid
+
+    config = copy.deepcopy(valid_config)
+    suffix = uuid.uuid4().hex[:6]
+    config["title"] = f"{title} {suffix}"
+    config["table_name"] = f"{title.lower().replace(' ', '_')}_{suffix}"
+
+    made = client.post("/api/forms", json={"form_json": config, "form_status": "Draft"}).json()
+    cleanup.append((made["form_id"], made["table"]["table_name"]))
+    return made
+
+
+def test_a_draft_is_built_but_not_live(editor_client, cleanup, valid_config):
+    """A draft has its tables and its version, refuses answers, and stays out of
+    every field officer's list until somebody publishes it."""
+    made = _draft(editor_client, cleanup, valid_config, "draft test")
+    form_id = made["form_id"]
+
+    assert made["form_status"] == "Draft"
+    assert made["table"]["table_name"], "a draft still gets its table"
+
+    live = [f["form_id"] for f in editor_client.get("/api/forms/live/list").json()]
+    assert form_id not in live
+
+    refused = editor_client.post(f"/api/forms/{form_id}/submissions",
+                                 json={"data": {"farmer_name": "Asha"}})
+    assert refused.status_code == 422
+    assert "draft" in str(refused.json()["detail"]).lower()
+
+    published = editor_client.patch(f"/api/forms/{form_id}/status",
+                                    json={"form_status": "Active"})
+    assert published.json()["form_status"] == "Active"
+    assert editor_client.post(f"/api/forms/{form_id}/submissions",
+                              json={"data": {"farmer_name": "Asha"}}).status_code == 201
+
+
+def test_testing_a_draft_writes_nothing(editor_client, cleanup, valid_config):
+    """The dry run reports what would be stored, and stores none of it."""
+    form_id = _draft(editor_client, cleanup, valid_config, "dry run")["form_id"]
+
+    bad = editor_client.post(f"/api/forms/{form_id}/test-submission",
+                             json={"data": {"land_area": 9000}}).json()
+    assert bad["valid"] is False
+    assert "farmer_name" in bad["errors"], "a required answer that is missing"
+    assert "land_area" in bad["errors"], "a number outside its range"
+
+    good = editor_client.post(
+        f"/api/forms/{form_id}/test-submission",
+        json={"data": {"farmer_name": "Asha", "land_area": "2.5"}},
+    ).json()
+    assert good["valid"] is True
+    # Exactly what a real submission would store — coerced, and with the optional
+    # answer nobody gave present as null rather than missing.
+    assert good["form_data"] == {
+        "farmer_name": "Asha", "land_area": 2.5, "irrigation": None,
+    }
+
+    stored = editor_client.get(f"/api/forms/{form_id}/submissions").json()
+    assert stored["total"] == 0, "a dry run left a row behind"
+
+
+def test_a_test_can_use_the_definition_on_screen(editor_client, cleanup, valid_config):
+    """The builder tests unsaved edits, so a change can be tried before saving."""
+    form_id = _draft(editor_client, cleanup, valid_config, "unsaved edit")["form_id"]
+
+    on_screen = {"fields": [{"name": "nickname", "type": "text", "label": "Nickname",
+                             "required": True, "options": [], "validation": {}}]}
+    result = editor_client.post(
+        f"/api/forms/{form_id}/test-submission",
+        json={"data": {"nickname": "Ashu"}, "form_json": on_screen},
+    ).json()
+
+    assert result["valid"] is True
+    assert result["form_data"] == {"nickname": "Ashu"}, "the saved definition was used instead"

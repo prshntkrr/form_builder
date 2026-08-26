@@ -16,6 +16,7 @@ from app.core.config import settings
 from app.core.database import transaction
 from app.modules.forms.field_types import FieldValueError, coerce_value, get_type, json_safe
 from app.modules.forms.form_schema import field_name
+from app.modules.forms import translations
 from app.modules.forms.form_service import FormNotFound
 from app.modules.forms.table_service import next_survey_id, table_exists
 from app.modules.forms import tabular_service
@@ -50,8 +51,16 @@ def _measure(spec, raw: Any, value: Any) -> Tuple[Optional[str], str]:
     return None, ""
 
 
-def validate_payload(form_json: Dict[str, Any], payload: Dict[str, Any]) -> Dict[str, Any]:
+def validate_payload(
+    form_json: Dict[str, Any],
+    payload: Dict[str, Any],
+    language: Optional[str] = None,
+) -> Dict[str, Any]:
     """Check the answers against the form definition.
+
+    `language` decides the wording of any error. The rules themselves are the
+    same in every language, and so are the keys in the result — only what the
+    person reads changes.
 
     Returns the normalized answer set destined for the `form_data` JSONB column:
     numbers as numbers, booleans as booleans, dates as ISO strings, multi-selects
@@ -59,6 +68,10 @@ def validate_payload(form_json: Dict[str, Any], payload: Dict[str, Any]) -> Dict
     """
     errors: Dict[str, str] = {}
     clean: Dict[str, Any] = {}
+
+    # Translate first, so every label quoted back in an error is in the language
+    # the person filled the form in.
+    form_json = translations.translate_form(form_json, language)
 
     for field in form_json.get("fields") or []:
         name = field_name(field)
@@ -70,7 +83,7 @@ def validate_payload(form_json: Dict[str, Any], payload: Dict[str, Any]) -> Dict
 
         if _is_empty(raw):
             if field.get("required"):
-                errors[name] = f"{label} is required"
+                errors[name] = translations.message(language, "required", label=label)
             clean[name] = None
             continue
 
@@ -80,7 +93,8 @@ def validate_payload(form_json: Dict[str, Any], payload: Dict[str, Any]) -> Dict
             selected = raw if isinstance(raw, list) else [raw]
             invalid = [str(v) for v in selected if str(v) not in allowed]
             if invalid:
-                errors[name] = f"{label}: '{invalid[0]}' is not an available option"
+                errors[name] = translations.message(
+                    language, "not_an_option", label=label, value=invalid[0])
                 continue
             if not spec.multi and isinstance(raw, list):
                 raw = raw[0] if raw else None
@@ -96,21 +110,27 @@ def validate_payload(form_json: Dict[str, Any], payload: Dict[str, Any]) -> Dict
 
         if numeric and value is not None:
             if rules.get("min") is not None and float(value) < float(rules["min"]):
-                errors[name] = f"{label} must be at least {rules['min']}"
+                errors[name] = translations.message(
+                    language, "min", label=label, limit=rules["min"])
             if rules.get("max") is not None and float(value) > float(rules["max"]):
-                errors[name] = f"{label} must be at most {rules['max']}"
+                errors[name] = translations.message(
+                    language, "max", label=label, limit=rules["max"])
 
         measured, unit = _measure(spec, raw, value)
         if measured is not None:
             if rules.get("min_length") and len(measured) < int(rules["min_length"]):
-                errors[name] = f"{label} must be at least {rules['min_length']} {unit}"
+                errors[name] = translations.message(
+                    language, "min_length", label=label,
+                    limit=rules["min_length"], unit=translations.word(language, unit))
             if rules.get("max_length") and len(measured) > int(rules["max_length"]):
-                errors[name] = f"{label} must be at most {rules['max_length']} {unit}"
+                errors[name] = translations.message(
+                    language, "max_length", label=label,
+                    limit=rules["max_length"], unit=translations.word(language, unit))
 
         if rules.get("pattern") and isinstance(raw, str):
             try:
                 if not re.match(rules["pattern"], raw.strip()):
-                    errors[name] = f"{label} is not in the expected format"
+                    errors[name] = translations.message(language, "pattern", label=label)
             except re.error:
                 pass  # a bad pattern from the model must not block a submission
 
@@ -121,20 +141,58 @@ def validate_payload(form_json: Dict[str, Any], payload: Dict[str, Any]) -> Dict
     return clean
 
 
+def test_payload(
+    form_json: Dict[str, Any],
+    payload: Dict[str, Any],
+    language: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Answer what a submission *would* do, and write nothing.
+
+    The same validation and coercion a real submission goes through, so a draft
+    can be tested against its own rules before anyone publishes it — and the
+    caller sees the exact `form_data` that would land in Postgres, not a guess.
+
+    Nothing is stored, so a test needs no cleaning up and cannot be mistaken for
+    a real answer later.
+    """
+    try:
+        clean = validate_payload(form_json, payload, language)
+    except ValidationFailed as failed:
+        return {"valid": False, "errors": failed.errors, "form_data": None}
+
+    return {
+        "valid": True,
+        "errors": {},
+        "form_data": clean,
+        # What the row would look like. `survey_id` is only allocated on a real
+        # submission, so it is deliberately absent rather than invented.
+        "columns": sorted(clean),
+        "table_name": form_json.get("table_name"),
+    }
+
+
 # --------------------------------------------------------------------------- #
 # writes
 # --------------------------------------------------------------------------- #
 def submit(
-    form: Dict[str, Any], payload: Dict[str, Any], created_by: Optional[str] = None
+    form: Dict[str, Any],
+    payload: Dict[str, Any],
+    created_by: Optional[str] = None,
+    language: Optional[str] = None,
 ) -> Dict[str, Any]:
     form_json = form["form_json"] or {}
     table_name = form_json.get("table_name")
     if not table_name:
         raise FormNotFound(f"Form {form['form_id']} has no data table")
+    if form.get("form_status") == "Draft":
+        raise ValidationFailed(
+            {"_form": "This form is still a draft. Publish it before collecting answers — "
+                      "until then, use Preview to test it."}
+        )
     if form.get("form_status") != "Active":
         raise ValidationFailed({"_form": "This form is not accepting responses"})
 
-    clean = validate_payload(form_json, payload)
+    clean = validate_payload(form_json, payload, language)
     version = form.get("version_no") or form_json.get("version") or 1
 
     with transaction() as cur:

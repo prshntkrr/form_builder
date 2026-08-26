@@ -4,3 +4,85 @@
  * in core/styles.css. Anything that styles a screen in this module goes here,
  * so two modules never edit the same stylesheet. Prefix new class names with
  * the module (`.forms__…`) to keep that true as both files grow. */
+
+/* Testing a draft in the Preview tab. */
+.trial__bar {
+  margin-top: 18px; padding-top: 14px;
+  border-top: 1px solid var(--line);
+  align-items: center; gap: 10px;
+}
+.trial__ok { margin-top: 14px; }
+.trial__ok .json { margin-top: 10px; }
+
+/* Translating a form: what it says now on the left, the translation on the right. */
+.i18n__pick { gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+.i18n__add { padding: 4px 8px; font-size: 13px; }
+
+.i18n__bar { gap: 10px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+.grow-end { margin-left: auto; }
+
+.i18n__group {
+  margin: 22px 0 8px; font-size: 12px; font-weight: 600;
+  letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3);
+}
+.i18n__field { padding-bottom: 8px; }
+
+.i18n__row {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+  align-items: center; padding: 6px 0;
+}
+.i18n__from { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.i18n__note { margin-top: 18px; }
+
+@media (max-width: 720px) {
+  .i18n__row { grid-template-columns: 1fr; gap: 4px; }
+}
+
+/* The data dictionary list. */
+.dict { display: flex; flex-direction: column; }
+.dict__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) 90px minmax(0, 1.3fr) minmax(0, 1fr) auto;
+  gap: 12px; align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--line); border-radius: var(--r);
+  background: var(--card);
+  margin-bottom: 6px;
+}
+.dict__id { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.dict__id code { font-size: 11.5px; color: var(--ink-3); }
+.dict__type {
+  font-size: 11.5px; text-align: center;
+  padding: 2px 8px; border-radius: 999px;
+  background: var(--accent-wash); color: var(--accent-deep);
+}
+.dict__rules, .dict__aliases { min-width: 0; }
+.dict__acts { display: flex; gap: 6px; align-items: center; }
+.col--wide { grid-column: 1 / -1; }
+
+@media (max-width: 820px) {
+  .dict__row { grid-template-columns: 1fr auto; }
+  .dict__type { justify-self: start; }
+}
+
+/* Choosing what a question means, in the ontology's vocabulary. */
+.concept { display: flex; flex-direction: column; gap: 7px; }
+.concept__chosen {
+  align-items: center; gap: 8px;
+  padding: 7px 10px;
+  background: var(--accent-wash);
+  border: 1px solid var(--line); border-radius: var(--r-sm);
+}
+.concept__hits {
+  display: flex; flex-direction: column;
+  max-height: 190px; overflow-y: auto;
+  border: 1px solid var(--line); border-radius: var(--r-sm);
+}
+.concept__hit {
+  display: flex; align-items: baseline; gap: 10px;
+  padding: 7px 10px; text-align: left;
+  border-bottom: 1px solid var(--line);
+}
+.concept__hit:last-child { border-bottom: 0; }
+.concept__hit:hover { background: var(--paper); }
+.concept__hit .ellipsis { display: inline-block; max-width: 320px; vertical-align: bottom; }

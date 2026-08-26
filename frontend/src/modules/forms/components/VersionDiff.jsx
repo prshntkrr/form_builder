@@ -2,7 +2,14 @@ import React, { useEffect, useState } from 'react'
 import { api } from '../api.js'
 import DiffView from './DiffView.jsx'
 
-export default function VersionDiff({ formId, liveVersion, onRolledBack }) {
+export default function VersionDiff({
+  formId,
+  liveVersion,
+  isDraft,
+  publishing,
+  onPublish,
+  onRolledBack,
+}) {
   const [versions, setVersions] = useState([])
   const [from, setFrom] = useState(null)
   const [to, setTo] = useState(null)
@@ -120,7 +127,11 @@ export default function VersionDiff({ formId, liveVersion, onRolledBack }) {
                 Version {v.version_no}
               </button>
 
-              {isLive && <span className="tag tag--add">Live</span>}
+              {isLive && (
+                <span className={`tag ${isDraft ? '' : 'tag--add'}`}>
+                  {isDraft ? 'Draft' : 'Live'}
+                </span>
+              )}
               {v.version_no === latest && !isLive && <span className="tag">Newest</span>}
 
               <span className="tiny muted">
@@ -130,6 +141,15 @@ export default function VersionDiff({ formId, liveVersion, onRolledBack }) {
               </span>
 
               <span className="spacer" />
+
+              {/* A draft's live version is the one publishing would make live,
+                  so the button belongs on that row. */}
+              {isLive && isDraft && onPublish && (
+                <button className="btn btn--sm btn--primary" onClick={onPublish} disabled={publishing}>
+                  {publishing && <span className="spin" />}
+                  Publish
+                </button>
+              )}
 
               {!isLive && (
                 <button

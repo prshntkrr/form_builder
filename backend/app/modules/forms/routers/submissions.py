@@ -1,6 +1,6 @@
 """Live form rendering + submission endpoints."""
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
@@ -8,13 +8,15 @@ from fastapi.responses import Response
 from app.core import auth_service
 from app.modules.forms import form_service
 from app.modules.forms import submission_service
+from app.modules.forms import translations
 from app.modules.forms import view_service
 from app.core.deps import needs, viewer
 from app.modules.forms.permissions import (
-    RECORDS_CREATE, RECORDS_VIEW, RESPONSES_EXPORT, RESPONSES_VIEW, VIEW_CONFIGURE,
+    FORMS_EDIT, RECORDS_CREATE, RECORDS_VIEW, RESPONSES_EXPORT, RESPONSES_VIEW,
+    VIEW_CONFIGURE,
 )
 from app.core.database import transaction
-from app.modules.forms.schemas import SubmitRequest, ViewConfigRequest
+from app.modules.forms.schemas import SubmitRequest, TestSubmissionRequest, ViewConfigRequest
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/forms", tags=["submissions"])
@@ -47,8 +49,17 @@ def live_forms(user: Dict[str, Any] = Depends(needs(RECORDS_VIEW))):
 
 
 @router.get("/{form_id}/render")
-def render(form_id: str, user: Dict[str, Any] = Depends(needs(RECORDS_CREATE))):
-    """Everything a client needs to draw the live form."""
+def render(
+    form_id: str,
+    language: Optional[str] = Query(None, description="Language code, e.g. 'hi'"),
+    user: Dict[str, Any] = Depends(needs(RECORDS_CREATE)),
+):
+    """Everything a client needs to draw the live form.
+
+    `language` returns the definition with its words already swapped, so the
+    page that draws the form needs no translation logic of its own. Field names
+    are untouched, so the answers still land in the same columns.
+    """
     form = _load(form_id)
     if form["form_status"] != "Active":
         raise HTTPException(
@@ -57,11 +68,20 @@ def render(form_id: str, user: Dict[str, Any] = Depends(needs(RECORDS_CREATE))):
             if form["form_status"] == "Inactive"
             else "This form is no longer available.",
         )
+    form_json = form["form_json"] or {}
+    languages = translations.form_languages(form_json)
+    chosen = language if language in languages else translations.default_language(form_json)
+
     return {
         "form_id": form["form_id"],
         "form_status": form["form_status"],
         "version_no": form["version_no"],
-        "form_json": form["form_json"],
+        "form_json": translations.translate_form(form_json, chosen),
+        "language": chosen,
+        "languages": [
+            {"code": code, "name": translations.SUPPORTED_LANGUAGES[code]}
+            for code in languages
+        ],
     }
 
 
@@ -70,7 +90,10 @@ def create_submission(form_id: str, req: SubmitRequest, user: Dict[str, Any] = D
     form = _load(form_id)
     try:
         return submission_service.submit(
-            form, req.data, created_by=auth_service.display_name(user))
+            form, req.data,
+            created_by=auth_service.display_name(user),
+            language=req.language,
+        )
     except submission_service.ValidationFailed as exc:
         raise HTTPException(status_code=422, detail={"errors": exc.errors})
     except form_service.FormNotFound as exc:
@@ -78,6 +101,28 @@ def create_submission(form_id: str, req: SubmitRequest, user: Dict[str, Any] = D
     except Exception as exc:
         logger.exception("Submission failed for %s", form_id)
         raise HTTPException(status_code=500, detail=f"Could not save submission: {exc}")
+
+
+@router.post("/{form_id}/test-submission")
+def test_submission(
+    form_id: str,
+    req: TestSubmissionRequest,
+    user: Dict[str, Any] = Depends(needs(FORMS_EDIT)),
+):
+    """Run a submission through validation and write nothing.
+
+    How a draft is tested before anyone publishes it: the answers go through the
+    same coercion a real submission would, and the reply is the exact `form_data`
+    that would be stored. Because nothing is written, a test leaves no row to
+    explain later and works on a form that is not accepting answers yet.
+
+    Pass `form_json` to test what is on screen rather than what is saved, so the
+    builder can try a change before committing to it.
+    """
+    form = _load(form_id)
+    definition = req.form_json or form["form_json"] or {}
+    result = submission_service.test_payload(definition, req.data, req.language)
+    return {**result, "form_id": form_id, "form_status": form["form_status"]}
 
 
 @router.get("/{form_id}/records")

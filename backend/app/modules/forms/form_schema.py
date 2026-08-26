@@ -40,6 +40,11 @@ import re
 from typing import Any, Dict, List, Optional
 
 from app.modules.forms.field_types import get_type, normalize_type
+from app.modules.forms.translations import (
+    DEFAULT_LANGUAGE,
+    SUPPORTED_LANGUAGES,
+    normalize_translations,
+)
 
 MAX_IDENTIFIER = 55  # leaves headroom under Postgres' 63-byte NAMEDATALEN limit
 
@@ -146,7 +151,14 @@ def _normalize_options(raw: Any) -> List[Dict[str, str]]:
         if not label or not value or value in seen:
             continue
         seen.add(value)
-        options.append({"label": label, "value": value})
+
+        option = {"label": label, "value": value}
+        # An option pulled from an ontology carries the concept it came from, so
+        # a stored answer can be traced back to a URI without anything extra
+        # being written alongside the response.
+        if isinstance(item, dict) and item.get("ontology_uri"):
+            option["ontology_uri"] = str(item["ontology_uri"]).strip()
+        options.append(option)
     return options
 
 
@@ -271,6 +283,23 @@ def _normalize_field(raw: Any, index: int, taken: set) -> Optional[Dict[str, Any
         "validation": _normalize_validation(raw.get("validation"), ftype),
         "order": index + 1,
     }
+
+    # What this field means, in an ontology's vocabulary. Optional, and separate
+    # from everything above: the ontology says what a field *is*, the rules above
+    # say how it must *behave*. A field with no concept behaves exactly as before.
+    #
+    # The URI is stored rather than a row id, because this definition is versioned
+    # JSONB that outlives any particular import — re-importing the ontology, or
+    # swapping SEOnt for AgrO, renumbers the rows but never the URIs.
+    concept_uri = str(raw.get("ontology_concept_uri") or "").strip()
+    if concept_uri:
+        field["ontology_concept_uri"] = concept_uri
+        field["ontology_concept_label"] = str(raw.get("ontology_concept_label") or "").strip()
+
+    source = str(raw.get("option_source") or "").strip().lower()
+    if source == "ontology" and concept_uri:
+        field["option_source"] = "ontology"
+
     return field
 
 
@@ -331,6 +360,11 @@ def normalize_form(raw: Any, fallback_title: str = "Untitled Form") -> Dict[str,
     title = str(raw.get("title") or raw.get("form_title") or fallback_title).strip()[:200]
     sections = _normalize_sections(raw.get("sections"), fields)
 
+    # The words this form can be shown in. The field names never change with the
+    # language, so a translated form still writes to the same columns.
+    translated_words = normalize_translations(raw.get("translations"))
+    languages = _normalize_languages(raw.get("languages"), translated_words)
+
     # The model fills this in when the prompt names an author ("created by admin").
     # It is only a suggestion — an explicit created_by on the request wins.
     author = str(raw.get("created_by") or raw.get("author") or "").strip()[:50]
@@ -356,4 +390,27 @@ def normalize_form(raw: Any, fallback_title: str = "Untitled Form") -> Dict[str,
         ).strip()[:200],
         "sections": sections,
         "fields": fields,
+        "languages": languages,
+        "default_language": DEFAULT_LANGUAGE,
+        "translations": translated_words,
     }
+
+
+def _normalize_languages(raw: Any, translations: Dict[str, Any]) -> List[str]:
+    """The languages a form offers, default first and no duplicates.
+
+    A language that has translations is always included, even if nobody listed
+    it — otherwise a translation somebody added would be invisible.
+    """
+    languages = [DEFAULT_LANGUAGE]
+
+    if isinstance(raw, list):
+        for code in raw:
+            if code in SUPPORTED_LANGUAGES and code not in languages:
+                languages.append(code)
+
+    for code in translations:
+        if code not in languages:
+            languages.append(code)
+
+    return languages

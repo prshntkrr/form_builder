@@ -92,6 +92,51 @@ class ViewConfigRequest(BaseModel):
 class SubmitRequest(BaseModel):
     data: Dict[str, Any]
     created_by: Optional[str] = None
+    # Which language the form was filled in, so errors come back in it.
+    language: Optional[str] = None
+
+
+class DictionaryEntryRequest(BaseModel):
+    """One agreed field: what it is called, what type it is, what it allows."""
+    name: str
+    label: str = ""
+    field_type: str
+    aliases: List[str] = Field(default_factory=list)
+    validation: Dict[str, Any] = Field(default_factory=dict)
+    options: List[Any] = Field(default_factory=list)
+    help_text: str = ""
+    placeholder: str = ""
+    notes: str = ""
+
+
+class UpdateDictionaryEntryRequest(BaseModel):
+    """Only the parts being changed. The name is the entry's identity."""
+    label: Optional[str] = None
+    field_type: Optional[str] = None
+    aliases: Optional[List[str]] = None
+    validation: Optional[Dict[str, Any]] = None
+    options: Optional[List[Any]] = None
+    help_text: Optional[str] = None
+    placeholder: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class ApplyDictionaryRequest(BaseModel):
+    form_json: Dict[str, Any]
+
+
+class TranslateRequest(BaseModel):
+    """Translate a form's wording into one language."""
+    form_json: Dict[str, Any]
+    language: str
+
+
+class TestSubmissionRequest(BaseModel):
+    """A dry run. `form_json` lets the builder test unsaved edits; without it the
+    saved definition is used."""
+    data: Dict[str, Any]
+    form_json: Optional[Dict[str, Any]] = None
+    language: Optional[str] = None
 
 
 class FormSummary(BaseModel):

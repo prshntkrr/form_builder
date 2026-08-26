@@ -25,6 +25,10 @@ RECORDS_CREATE = "records.create"
 LIBRARY_VIEW = "library.view"
 LIBRARY_MANAGE = "library.manage"
 
+# --- data dictionary --------------------------------------------------------
+DICTIONARY_VIEW = "dictionary.view"
+DICTIONARY_MANAGE = "dictionary.manage"
+
 CATALOGUE = [
     Permission(RECORDS_VIEW, "See records",
                "Open a form and read the records, in the columns an admin has made visible",
@@ -53,12 +57,18 @@ CATALOGUE = [
                "Browse the library and start a form from one", "Standard forms"),
     Permission(LIBRARY_MANAGE, "Manage standard forms",
                "Offer a form as a standard, or withdraw one", "Standard forms"),
+
+    Permission(DICTIONARY_VIEW, "See the data dictionary",
+               "Read the agreed type and limits for each known field", "Data dictionary"),
+    Permission(DICTIONARY_MANAGE, "Manage the data dictionary",
+               "Add, change and remove entries everyone's forms are built from",
+               "Data dictionary"),
 ]
 
 register(
     permissions=CATALOGUE,
     # Most-used first; core appends Administration after every module's groups.
-    groups=["Records", "Forms", "Responses", "Standard forms"],
+    groups=["Records", "Forms", "Responses", "Standard forms", "Data dictionary"],
     # What the built-in roles get when an installation is first seeded. Narrowing
     # a role afterwards sticks — roles are seeded once, never re-seeded.
     grants={
@@ -67,6 +77,7 @@ register(
             FORMS_VIEW, FORMS_CREATE, FORMS_EDIT, FORMS_DELETE,
             RESPONSES_VIEW, RESPONSES_EXPORT,
             LIBRARY_VIEW, LIBRARY_MANAGE,
+            DICTIONARY_VIEW, DICTIONARY_MANAGE,
         ],
         "field": [RECORDS_VIEW, RECORDS_CREATE],
     },
@@ -74,6 +85,8 @@ register(
     # knowing which permission each one rests on.
     capabilities={
         "build_forms": FORMS_VIEW,
+        "use_dictionary": DICTIONARY_VIEW,
+        "manage_dictionary": DICTIONARY_MANAGE,
         "use_library": LIBRARY_VIEW,
         "see_responses": RESPONSES_VIEW,
     },

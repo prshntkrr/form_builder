@@ -31,6 +31,12 @@ export default function FormsNav({ onNavigate }) {
                  onClick={onNavigate}>
           <span className="grow">Standard forms</span>
         </NavLink>
+        {can.use_dictionary && (
+          <NavLink to="/dictionary" className={({ isActive }) => `side__form${isActive ? ' on' : ''}`}
+                   onClick={onNavigate}>
+            <span className="grow">Data dictionary</span>
+          </NavLink>
+        )}
       </nav>
     </>
   )
@@ -110,7 +116,6 @@ export function FormsPanel({ onNavigate }) {
               >
                 <span className={`dot dot--${(f.form_status || '').toLowerCase()}`} />
                 <span className="grow ellipsis">{f.form_title}</span>
-                {f.submission_count > 0 && <span className="side__count">{f.submission_count}</span>}
               </NavLink>
 
               {open && editing && (
