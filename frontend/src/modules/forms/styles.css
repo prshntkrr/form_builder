@@ -86,3 +86,32 @@
 .concept__hit:last-child { border-bottom: 0; }
 .concept__hit:hover { background: var(--paper); }
 .concept__hit .ellipsis { display: inline-block; max-width: 320px; vertical-align: bottom; }
+
+/* The standards a question is mapped to. */
+.std { display: flex; flex-direction: column; gap: 14px; }
+.std__block { display: flex; flex-direction: column; gap: 6px; }
+.std__chosen {
+  align-items: center; gap: 8px;
+  padding: 7px 10px;
+  background: var(--accent-wash);
+  border: 1px solid var(--line); border-radius: var(--r-sm);
+}
+.std__badge {
+  font-size: 10.5px; font-weight: 600; letter-spacing: .04em;
+  padding: 1px 6px; border-radius: 999px;
+  background: var(--card); color: var(--accent-deep);
+  border: 1px solid var(--line);
+}
+.std__hits {
+  display: flex; flex-direction: column;
+  max-height: 190px; overflow-y: auto;
+  border: 1px solid var(--line); border-radius: var(--r-sm);
+}
+.std__hit {
+  display: flex; align-items: baseline; gap: 10px;
+  padding: 7px 10px; text-align: left;
+  border-bottom: 1px solid var(--line);
+}
+.std__hit:last-child { border-bottom: 0; }
+.std__hit:hover { background: var(--paper); }
+.std__hit .ellipsis { display: inline-block; max-width: 300px; vertical-align: bottom; }

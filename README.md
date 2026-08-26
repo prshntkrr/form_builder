@@ -233,6 +233,44 @@ order the remaining features want to be done in, see
 [docs/ROADMAP.md](docs/ROADMAP.md). For how the code is split into modules and
 how two people work in it without conflicts, see [docs/MODULES.md](docs/MODULES.md).
 
+### Standards on a field
+
+Three separate things can be attached to a question, and they answer different
+questions. Any of them may be absent.
+
+| | answers | comes from |
+|---|---|---|
+| Data dictionary | how must this behave? | your own entries — type, limits, required |
+| Semantic concept | what does this mean? | SEOnt, an ontology concept URI |
+| Data standard | what is it officially called? | ICASA, a variable id, unit and data type |
+
+Only the first changes how a form behaves. The other two are metadata, and
+neither ever replaces **Stored as** — that stays the key an answer is written
+under.
+
+Import the ICASA dictionary once:
+
+```bash
+cd backend
+python import_icasa.py --version 2026-01-29
+python import_icasa.py --list
+```
+
+Safe to re-run: variables are matched on ICASA's own `var_uid`, the only
+identifier in the dictionary that is unique. A re-import with no `--version`
+keeps the one already recorded.
+
+**Drafts are enriched automatically.** A form generated from a prompt is looked
+up in both standards before you see it — nobody has to write "use ICASA" in the
+prompt. The matcher is deliberately strict: it attaches only an exact name or
+code match, and where two variables fit equally well it attaches nothing and
+offers both instead. A wrong mapping is silently wrong in an exported dataset
+months later; a missing one is merely absent.
+
+`GET /api/standards/mapping/{form_id}` returns the standard identifiers behind
+a form's columns, so a downstream job can key on ICASA's `variable_id` rather
+than on your column names.
+
 ### Ontology concepts
 
 The data dictionary says how a field must **behave**. An ontology says what it

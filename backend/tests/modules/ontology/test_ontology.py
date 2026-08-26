@@ -134,8 +134,8 @@ def test_a_field_can_carry_a_concept():
             "label": "Irrigation Source",
             "type": "select",
             "option_source": "ontology",
-            "ontology_concept_uri": IRRIGATION_SOURCE,
-            "ontology_concept_label": "irrigation source",
+            "semantic_concept": {"standard": "SEOnt", "uri": IRRIGATION_SOURCE,
+                                 "label": "irrigation source"},
             "options": [
                 {"label": "lake", "value": "lake", "ontology_uri": LAKE},
                 {"label": "depression", "value": "depression", "ontology_uri": DEPRESSION},
@@ -144,7 +144,8 @@ def test_a_field_can_carry_a_concept():
     })
     field = form["fields"][0]
 
-    assert field["ontology_concept_uri"] == IRRIGATION_SOURCE
+    assert field["semantic_concept"]["uri"] == IRRIGATION_SOURCE
+    assert field["semantic_concept"]["standard"] == "SEOnt"
     assert field["option_source"] == "ontology"
     assert field["options"][0]["ontology_uri"] == LAKE, \
         "an answer must be traceable to the concept it came from"
@@ -175,7 +176,7 @@ def test_a_form_with_no_ontology_anywhere_is_unchanged():
     })
 
     for field in form["fields"]:
-        assert "ontology_concept_uri" not in field
+        assert "semantic_concept" not in field
         assert "option_source" not in field
     assert form["fields"][1]["validation"] == {"min": 0, "max": 120}, \
         "the rules stay with the data dictionary, not the ontology"
@@ -190,12 +191,12 @@ def test_a_concept_without_values_leaves_the_choices_manual():
         "fields": [{
             "label": "Irrigation Method",
             "type": "select",
-            "ontology_concept_uri": IRRIGATION_METHOD,
+            "semantic_concept": {"standard": "SEOnt", "uri": IRRIGATION_METHOD},
             "options": ["Drip", "Sprinkler"],
         }],
     })
     field = form["fields"][0]
 
-    assert field["ontology_concept_uri"] == IRRIGATION_METHOD
+    assert field["semantic_concept"]["uri"] == IRRIGATION_METHOD
     assert "option_source" not in field, "nothing came from the ontology"
     assert [o["label"] for o in field["options"]] == ["Drip", "Sprinkler"]

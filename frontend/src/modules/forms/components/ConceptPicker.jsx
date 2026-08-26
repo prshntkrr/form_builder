@@ -2,33 +2,117 @@ import React, { useState } from 'react'
 import { api } from '../api.js'
 
 /**
- * What this question means, in the ontology's vocabulary.
+ * The standards a question is mapped to.
  *
- * Optional everywhere. A field with no concept behaves exactly as it always
- * has — this only adds meaning, never rules. The type, the limits and whether
- * an answer is required stay with the data dictionary, because "what is this?"
- * and "how must it behave?" are different questions.
+ * Two separate, optional mappings that answer different questions:
  *
- * For a dropdown, a concept's named children can be pulled in as standardised
- * choices. Plenty of concepts have none; that is a normal answer, and the
- * manual choices below stay available either way.
+ *   Semantic concept (SEOnt)  what does this field mean?
+ *   Data standard (ICASA)     what is it officially called, in what unit?
+ *
+ * A field may carry either, both or neither, and neither changes how it
+ * behaves — the type, the limits and whether an answer is required stay with
+ * the application's own data dictionary.
+ *
+ * "Stored as" is untouched by both. That remains the key the answer is written
+ * under, and no URI or variable id ever replaces it.
  */
 export default function ConceptPicker({ field, canLoadOptions, onChange }) {
+  return (
+    <div className="std">
+      <Mapping
+        title="Semantic concept"
+        hint="What this field means"
+        current={field.semantic_concept}
+        describe={(c) => ({ name: c.label || c.uri, detail: c.uri, badge: c.standard })}
+        search={(term) => api.searchConcepts(term)}
+        describeHit={(c) => ({
+          name: c.label,
+          detail: c.definition,
+          note: c.child_count > 0 ? `${c.child_count} values` : 'no values',
+        })}
+        pick={(c) => onChange({
+          semantic_concept: {
+            standard: c.ontology_name || 'SEOnt',
+            uri: c.concept_uri,
+            label: c.label,
+          },
+        })}
+        clear={() => onChange({ semantic_concept: null, option_source: 'manual' })}
+        loadOptions={canLoadOptions ? async () => {
+          const hits = await api.searchConcepts(field.semantic_concept.label || '')
+          const found = hits.find((c) => c.concept_uri === field.semantic_concept.uri)
+          if (!found) return { error: 'That concept is no longer in the imported ontology.' }
+          const options = await api.conceptOptions(found.concept_id)
+          if (!options.length) return { empty: true }
+          onChange({ options, option_source: 'ontology' })
+          return { count: options.length }
+        } : null}
+      />
+
+      <Mapping
+        title="Data standard"
+        hint="What it is officially called"
+        current={field.data_standard}
+        describe={(d) => ({
+          name: d.variable_name,
+          detail: [d.variable_code, d.unit && `unit ${d.unit}`, d.data_type]
+            .filter(Boolean).join(' · '),
+          badge: d.standard,
+        })}
+        search={(term) => api.searchVariables(term)}
+        describeHit={(v) => ({
+          name: v.name,
+          detail: v.definition,
+          note: v.option_count > 0 ? `${v.option_count} codes` : (v.unit || 'no codes'),
+        })}
+        pick={(v) => onChange({
+          data_standard: {
+            standard: v.standard,
+            standard_version: v.standard_version || '',
+            variable_id: v.external_id,
+            variable_code: v.code,
+            variable_name: v.name,
+            unit: v.unit,
+            data_type: v.data_type,
+          },
+        })}
+        clear={() => onChange({ data_standard: null, option_source: 'manual' })}
+        loadOptions={canLoadOptions ? async () => {
+          const hits = await api.searchVariables(field.data_standard.variable_name || '')
+          const found = hits.find((v) => v.external_id === field.data_standard.variable_id)
+          if (!found) return { error: 'That variable is no longer in the imported standard.' }
+          const options = await api.variableOptions(found.variable_id)
+          if (!options.length) return { empty: true }
+          onChange({ options, option_source: 'standard' })
+          return { count: options.length }
+        } : null}
+      />
+
+      {field.option_source && field.option_source !== 'manual' && (
+        <p className="tiny muted">
+          These choices came from the {field.option_source === 'ontology' ? 'ontology' : 'standard'}.
+          Editing them below makes them yours again.
+        </p>
+      )}
+    </div>
+  )
+}
+
+/** One mapping: search for it, see it, replace it, remove it. */
+function Mapping({
+  title, hint, current, describe, search, describeHit, pick, clear, loadOptions,
+}) {
   const [term, setTerm] = useState('')
   const [hits, setHits] = useState(null)
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState('')
   const [error, setError] = useState('')
 
-  const chosen = field.ontology_concept_uri
-
   const look = async () => {
     if (term.trim().length < 2) return
-    setBusy(true)
-    setError('')
-    setNote('')
+    setBusy(true); setError(''); setNote('')
     try {
-      setHits(await api.searchConcepts(term.trim()))
+      setHits(await search(term.trim()))
     } catch (e) {
       setError(e.message)
     } finally {
@@ -36,68 +120,39 @@ export default function ConceptPicker({ field, canLoadOptions, onChange }) {
     }
   }
 
-  const choose = (concept) => {
-    onChange({
-      ontology_concept_uri: concept.concept_uri,
-      ontology_concept_label: concept.label,
-    })
-    setHits(null)
-    setTerm('')
-    setNote(
-      concept.child_count > 0
-        ? `${concept.child_count} standardised value${concept.child_count === 1 ? '' : 's'} available.`
-        : 'No standardised ontology values found — add the choices yourself.',
-    )
-  }
-
-  const clear = () => {
-    onChange({
-      ontology_concept_uri: null,
-      ontology_concept_label: null,
-      option_source: 'manual',
-    })
-    setNote('')
-  }
-
-  /** Replace the choices with the concept's children. */
-  const loadValues = async () => {
-    setBusy(true)
-    setError('')
-    setNote('')
+  const load = async () => {
+    setBusy(true); setError(''); setNote('')
     try {
-      const concept = await api.conceptByUri(field.ontology_concept_uri)
-      if (!concept) {
-        setError('That concept is not in the imported ontology any more.')
-        return
-      }
-      const options = await api.conceptOptions(concept.concept_id)
-      if (options.length === 0) {
-        setNote('No standardised ontology values found — add the choices yourself.')
-        return
-      }
-      onChange({ options, option_source: 'ontology' })
-      setNote(`${options.length} choices loaded from the ontology.`)
+      const result = await loadOptions()
+      if (result.error) setError(result.error)
+      else if (result.empty) setNote('No standardised values here — add the choices yourself.')
+      else setNote(`${result.count} choices loaded.`)
     } catch (e) {
       setError(e.message)
     } finally {
       setBusy(false)
     }
   }
+
+  const shown = current ? describe(current) : null
 
   return (
-    <div className="concept">
-      <span className="minilabel">Semantic concept</span>
+    <div className="std__block">
+      <span className="minilabel">
+        {title} <span className="faint">— {hint}</span>
+      </span>
 
-      {chosen ? (
-        <div className="row concept__chosen">
+      {shown ? (
+        <div className="row std__chosen">
           <span className="grow">
-            <strong>{field.ontology_concept_label || chosen}</strong>
-            <span className="tiny muted"> {chosen}</span>
+            <span className="std__badge">{shown.badge}</span>
+            <strong> {shown.name}</strong>
+            {shown.detail && <span className="tiny muted"> {shown.detail}</span>}
           </span>
-          {canLoadOptions && (
-            <button className="btn btn--sm" onClick={loadValues} disabled={busy}>
+          {loadOptions && (
+            <button className="btn btn--sm" onClick={load} disabled={busy}>
               {busy && <span className="spin" />}
-              Load standardised values
+              Load values
             </button>
           )}
           <button className="btn btn--sm btn--quiet" onClick={clear}>Remove</button>
@@ -107,7 +162,7 @@ export default function ConceptPicker({ field, canLoadOptions, onChange }) {
           <input
             className="control grow"
             value={term}
-            placeholder="Search the ontology — irrigation, soil, crop…"
+            placeholder={`Search — irrigation, soil, yield…`}
             onChange={(e) => setTerm(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && look()}
           />
@@ -121,29 +176,28 @@ export default function ConceptPicker({ field, canLoadOptions, onChange }) {
       {hits?.length === 0 && <p className="tiny muted">Nothing matches “{term}”.</p>}
 
       {hits?.length > 0 && (
-        <div className="concept__hits">
-          {hits.map((c) => (
-            <button key={c.concept_id} className="concept__hit" onClick={() => choose(c)}>
-              <span className="grow">
-                <strong>{c.label}</strong>
-                {c.definition && <span className="tiny muted ellipsis"> {c.definition}</span>}
-              </span>
-              <span className="tiny muted">
-                {c.child_count > 0 ? `${c.child_count} values` : 'no values'}
-              </span>
-            </button>
-          ))}
+        <div className="std__hits">
+          {hits.map((hit, i) => {
+            const d = describeHit(hit)
+            return (
+              <button
+                key={i}
+                className="std__hit"
+                onClick={() => { pick(hit); setHits(null); setTerm('') }}
+              >
+                <span className="grow">
+                  <strong>{d.name}</strong>
+                  {d.detail && <span className="tiny muted ellipsis"> {d.detail}</span>}
+                </span>
+                <span className="tiny muted">{d.note}</span>
+              </button>
+            )
+          })}
         </div>
       )}
 
       {note && <p className="tiny muted">{note}</p>}
       {error && <p className="tiny" style={{ color: 'var(--rose)' }}>{error}</p>}
-
-      {field.option_source === 'ontology' && (
-        <p className="tiny muted">
-          These choices came from the ontology. Editing them below makes them yours again.
-        </p>
-      )}
     </div>
   )
 }

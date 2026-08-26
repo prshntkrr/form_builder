@@ -284,23 +284,79 @@ def _normalize_field(raw: Any, index: int, taken: set) -> Optional[Dict[str, Any
         "order": index + 1,
     }
 
-    # What this field means, in an ontology's vocabulary. Optional, and separate
-    # from everything above: the ontology says what a field *is*, the rules above
-    # say how it must *behave*. A field with no concept behaves exactly as before.
+    # Two optional, independent mappings. Both are separate from everything
+    # above: a standard says what a field *is* or is *called*; the rules above
+    # say how it must *behave*. A field with neither behaves exactly as before.
     #
-    # The URI is stored rather than a row id, because this definition is versioned
-    # JSONB that outlives any particular import — re-importing the ontology, or
-    # swapping SEOnt for AgrO, renumbers the rows but never the URIs.
-    concept_uri = str(raw.get("ontology_concept_uri") or "").strip()
-    if concept_uri:
-        field["ontology_concept_uri"] = concept_uri
-        field["ontology_concept_label"] = str(raw.get("ontology_concept_label") or "").strip()
+    # Each records the standard's own identifier — a URI, a variable id — never a
+    # database row id. This definition is versioned JSONB that outlives any
+    # particular import, and re-importing renumbers rows but never identifiers.
+    concept = _normalize_semantic_concept(raw)
+    if concept:
+        field["semantic_concept"] = concept
+
+    standard = _normalize_data_standard(raw.get("data_standard"))
+    if standard:
+        field["data_standard"] = standard
 
     source = str(raw.get("option_source") or "").strip().lower()
-    if source == "ontology" and concept_uri:
-        field["option_source"] = "ontology"
+    if source in ("ontology", "standard") and (concept or standard):
+        field["option_source"] = source
 
     return field
+
+
+def _normalize_semantic_concept(raw: Dict[str, Any]) -> Optional[Dict[str, str]]:
+    """What this field means, as an ontology concept.
+
+    Also accepts the flat `ontology_concept_uri` / `ontology_concept_label` this
+    used to be written as, so a definition saved before the nested shape still
+    reads correctly.
+    """
+    nested = raw.get("semantic_concept")
+    if isinstance(nested, dict):
+        uri = str(nested.get("uri") or "").strip()
+        if uri:
+            return {
+                "standard": str(nested.get("standard") or "SEOnt").strip(),
+                "uri": uri,
+                "label": str(nested.get("label") or "").strip(),
+            }
+        return None
+
+    uri = str(raw.get("ontology_concept_uri") or "").strip()
+    if not uri:
+        return None
+    return {
+        "standard": "SEOnt",
+        "uri": uri,
+        "label": str(raw.get("ontology_concept_label") or "").strip(),
+    }
+
+
+def _normalize_data_standard(raw: Any) -> Optional[Dict[str, str]]:
+    """Which standardised variable this field collects.
+
+    `variable_id` is the standard's published identifier — ICASA's var_uid — and
+    is the one part that must be there: without it the mapping cannot be looked
+    up again after the dictionary is re-imported or re-versioned.
+    """
+    if not isinstance(raw, dict):
+        return None
+
+    variable_id = str(raw.get("variable_id") or "").strip()
+    if not variable_id:
+        return None
+
+    return {
+        "standard": str(raw.get("standard") or "").strip() or "ICASA",
+        "standard_version": str(raw.get("standard_version") or "").strip(),
+        "variable_id": variable_id,
+        "variable_code": str(raw.get("variable_code") or "").strip(),
+        "variable_name": str(raw.get("variable_name") or "").strip(),
+        "unit": str(raw.get("unit") or "").strip(),
+        "data_type": str(raw.get("data_type") or "").strip(),
+    }
 
 
 def _normalize_sections(raw: Any, fields: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

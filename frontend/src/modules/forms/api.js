@@ -38,6 +38,15 @@ export const api = {
   conceptChildren: (conceptId) => request(`/ontology/${conceptId}/children`),
   conceptOptions: (conceptId) => request(`/ontology/${conceptId}/options`),
 
+  // --- data standards (ICASA) ---
+  searchVariables: (q) =>
+    request(`/standards/variables/search?q=${encodeURIComponent(q)}`),
+
+  variableOptions: (variableId) => request(`/standards/variables/${variableId}/options`),
+
+  // The standard identifiers behind a form's columns, for a downstream job.
+  standardMapping: (formId) => request(`/standards/mapping/${formId}`),
+
   // --- data dictionary ---
   dictionary: (search) =>
     request(`/dictionary${search ? `?search=${encodeURIComponent(search)}` : ''}`),

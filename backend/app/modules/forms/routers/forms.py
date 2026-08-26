@@ -34,6 +34,24 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/forms", tags=["forms"])
 
 
+def _enrich(form_json: Dict[str, Any]) -> Dict[str, Any]:
+    """Attach standards to a draft, if the standards module is installed.
+
+    Imported here and defensively: the module can be switched off in .env, and a
+    form must still be generated when it is.
+    """
+    try:
+        from app.modules.standards import enrichment
+    except Exception:
+        return {"form_json": form_json, "attached": []}
+
+    try:
+        return enrichment.enrich_form(form_json)
+    except Exception:
+        logger.exception("Standard enrichment failed; the draft is unchanged")
+        return {"form_json": form_json, "attached": []}
+
+
 def _constraint_message(exc: IntegrityError) -> str:
     """Turn a database constraint into something a person can act on.
 
@@ -61,13 +79,21 @@ def generate(req: GenerateRequest, user: Dict[str, Any] = Depends(needs(FORMS_CR
     """Prompt -> a complete, normalized form definition (not yet saved)."""
     try:
         raw = llm.generate_form(req.prompt, req.language)
-        # The model guesses types and limits; the dictionary is where this
-        # installation has already decided them. Applied before the draft is
-        # shown, so the editor opens on the agreed shape rather than a guess.
+
+        # Two passes over the draft before anyone sees it, in this order because
+        # they answer different questions:
+        #
+        #   the data dictionary  — how must this field behave?  (type, limits)
+        #   standard enrichment  — what is it, and what is it called?
+        #
+        # Nobody has to ask for either in the prompt.
         result = dictionary_service.apply_to_form(normalize_form(raw))
+        enriched = _enrich(result["form_json"])
+
         return {
-            "form_json": normalize_form(result["form_json"]),
+            "form_json": normalize_form(enriched["form_json"]),
             "dictionary": result["applied"],
+            "standards": enriched["attached"],
             "prompt": req.prompt,
         }
     except llm.LLMError as exc:

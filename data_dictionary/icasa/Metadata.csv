@@ -1,0 +1,100 @@
+"Variable_Name","Code_Display","Code_Query","Variable_Order","Variable_Key","Description","Unit_or_type","Data_type","Dataset","Subset","Group","SubGroup","Set_group_order","Version_or_questions","DSSAT_synon","DSSAT_group","DSSAT_order","MinVal","MaxVal","var_uid"
+"experiment_id","EID","EID",1,1,"Experiment identifier used to link experiments across subsets, groups and subgroups","text","single","EXPERIMENT","METADATA","GENERAL",,1011,,,,,,,1
+"name_of_experiment","EXNAME","EXNAME",2,,"Name of experiment","text","text","EXPERIMENT","METADATA","GENERAL",,1011,,,,,1,,2
+"exp_code_local","LOCAL_ID","LOCAL_ID",3,,"Locally used identifier for an experiment","text","text","EXPERIMENT","METADATA","GENERAL",,1011,,,,,,,3
+"experiment_name_local","LOCAL_NAME","LOCAL_NAME",4,,"Locally used name for an experiment","text","text","EXPERIMENT","METADATA","GENERAL",,1011,,".",,,,,4
+"objectives_of_study","OBJECTIVES","OBJECTIVES",5,,"Objectives of the study","text","memo","EXPERIMENT","METADATA","GENERAL",,1011,,".",,,,,5
+"experiment_narrative","EXP_NARR","EXP_NARR",,,"General description of experiment. Can include noteworthy events, findings, etc.","text","memo","EXPERIMENT","METADATA","GENERAL",,1011,"2017-09-14, JWW",,,,,,6
+"main_experiment_factor","MAIN_FACTOR","MAIN_FACTOR",6,,"Main factor, factors or interactions of interest in an experiment","text","text","EXPERIMENT","METADATA","GENERAL",,1011,,,,,,,7
+"experimental_factor_comb","FACTORS","FACTORS",7,,"Experimental factor combinations","text","text","EXPERIMENT","METADATA","GENERAL",,1011,,".",,,,,8
+"number_of_replicates","REP_NO","REP_NO",8,,"Number of blocks or replicates","number","integer","EXPERIMENT","METADATA","GENERAL",,1011,,,,,,,9
+"number_of_treatments","TRT_COUNT","TRT_COUNT",9,,"Number of treatments","number","integer","EXPERIMENT","METADATA","GENERAL",,1011,"2023-03-22, CHP",,,,,,10
+"method_notes","METHODS","METHODS",10,,"General notes on execution of experiment.","text","memo","EXPERIMENT","METADATA","GENERAL",,1011,,".",,,,,11
+"experiment_type","EXPER_TYPE","EXPER_TYPE",11,,"General type of experiment, e.g., varietal trial","code","text","EXPERIMENT","METADATA","GENERAL",,1011,,,,,,,12
+"experimental_design","EXPER_DESIGN","EXPER_DESIGN",12,,"Experimental design","text","text","EXPERIMENT","METADATA","GENERAL",,1011,,,,,,,13
+"site_name","SITE_NAME","SITE_NAME",13,,"Name of site for experiment","text","text","EXPERIMENT","METADATA","GENERAL",,1011,,,,,,,14
+"site_type","SITE_TYPE","SITE_TYPE",14,,"Type of site, e.g., station, on-farm","code","text","EXPERIMENT","METADATA","GENERAL",,1011,,,,,,,15
+"management_type","MGMT_TYPE","MGMT_TYPE",15,,"Whether managed by researchers, producers","code","text","EXPERIMENT","METADATA","GENERAL",,1011,,,,,,,16
+"experiment_year","EXP_YEAR","EXP_YEAR",16,,"Year associated with experiment or crop rotation","date[yyyy]","single","EXPERIMENT","METADATA","GENERAL",,1011,"2020-06-09, CHP",,,,,,17
+"experiment_duration","EXP_DUR","EXP_DUR",17,,"Duration of experiment in years","year","single","EXPERIMENT","METADATA","GENERAL",,1011,,,,,,,18
+"exper_duration_seasons","EXP_DUR_SEAS","EXP_DUR_SEAS",18,,"Duration of experiment in seasons","number","single","EXPERIMENT","METADATA","GENERAL",,1011,"2020-12-03, CHP",,,,,,19
+"anonymization","ANONYMIZ","ANONYMIZ",19,,"Indication of whether location should be anonymized (N= anonymize names, L = anonymize locations, NL or LN  = anonymize both names and location)","text","text","EXPERIMENT","METADATA","GENERAL",,1011,"2023-03-06, CHP",,,,,,20
+"rotation","ROTATION","ROTATION",20,,"Crop rotation indicator (=1 for continuous, multi-year simulation, =0 for single year simulations with multiple initializations)","code","text","EXPERIMENT","METADATA","GENERAL",,1011,,,,,,,21
+"cropping_system","CR_SYSTEM","CR_SYSTEM",21,,"Cropping system descriptive name","text","text","EXPERIMENT","METADATA","GENERAL",,1011,,,,,,,22
+"ex_license","EX_LICENSE","EX_LICENSE",22,,"Data license name and url","text","memo","EXPERIMENT","METADATA","GENERAL",,1011,"2015-11-24, CHP",".",,,,,23
+"distrib_restrictions","EX_DISTRIB","EX_DISTRIB",23,,"Distribution limitations for the data set","text","memo","EXPERIMENT","METADATA","GENERAL",,1011,"2013-02-14, CHP",".",,,,,24
+"ex_funding_source","EX_FUNDING_SOURCE","EX_FUNDING_SOURCE",24,,"Funding source(s) for this data set","text","memo","EXPERIMENT","METADATA","GENERAL",,1011,"2015-11-24, CHP",".",,,,,25
+"file_version","VERSION","VERSION",31,,"File version for ICASA standard","text","text","EXPERIMENT","METADATA","GENERAL",,1011,,".",,,,,26
+"revision_date_first","REV_DATE_FIRST","REV_DATE_FIRST",32,,"Date the file was first created","date","date","EXPERIMENT","METADATA","GENERAL",,1011,,".",,,,,27
+"revision_date_latest","REV_DATE_LATEST","REV_DATE_LATEST",33,,"Date the file was last revised","date","date","EXPERIMENT","METADATA","GENERAL",,1011,,".",,,,,28
+"revision_notes","REVISION_NOTES","REVISION_NOTES",39,,"Notes describing reasons for the revision","text","memo","EXPERIMENT","METADATA","GENERAL",,1011,"2025-07-03, JWW",,,,,,29
+"metadata_notes","METAD_NOTES","METAD_NOTES",99,,"Any additional information describing or clarifying the metadata.","text","memo","EXPERIMENT","METADATA","GENERAL",,1011,"2025-07-03, JWW",,,,,,30
+"people_level","PP","PP",1,,"Unique identifier to identify a person associated with a dataset","number","single","EXPERIMENT","METADATA","PERSONS",,1031,,,,,,,31
+"researcher_last_name","LAST_NAME","LAST_NAME",2,,"Last name of researchers involved with the experiment(s) or data","text","text","EXPERIMENT","METADATA","PERSONS",,1031,,".",,,,,32
+"researcher_first_name","FIRST_NAME","FIRST_NAME",3,,"First name of researchers involved with the experiment(s) or data","text","text","EXPERIMENT","METADATA","PERSONS",,1031,,,,,,,33
+"researcher_name_mi","MID_INITIAL","MID_INITIAL",4,,"Middle initial of researchers involved with the experiment(s) or data","text","text","EXPERIMENT","METADATA","PERSONS",,1031,,,,,,,34
+"researcher_role","PP_ROLE","PP_ROLE",5,,"Role of researcher or other person in experiment or dataset preparation","code","text","EXPERIMENT","METADATA","PERSONS",,1031,,,,,,,35
+"researcher_address","EX_ADDRESS","EX_ADDRESS",6,,"Mailing address of researcher","text","text","EXPERIMENT","METADATA","PERSONS",,1031,"2014-03-14, chp",,,,,,36
+"institute_id","IN","IN",7,,"Links to institution associated w person","number","single","EXPERIMENT","METADATA","PERSONS",,1031,,,,,,,37
+"e_mail_address","EX_EMAIL","EX_EMAIL",8,,"E-mail address of researcher","text","text","EXPERIMENT","METADATA","PERSONS",,1031,,,,,,,38
+"persons_notes","PERSON_NOTES","PERSON_NOTES",99,,"Additional notes on persons involved with the experiment(s)","text","memo","EXPERIMENT","METADATA","PERSONS",,1031,,,,,,,39
+"institute_id","IN","IN",1,,"Unique identifier to identify an institution associated with a dataset","number","single","EXPERIMENT","METADATA","INSTITUTIONS",,1041,,,,,,,40
+"institute_name","INSTITUTION","INSTITUTION",2,,"Names of participating institutions","text","text","EXPERIMENT","METADATA","INSTITUTIONS",,1041,,,,,,,41
+"institute_type","IN_TYPE","IN_TYPE",3,,"Type of participating institutions","code","single","EXPERIMENT","METADATA","INSTITUTIONS",,1041,,,,,,,42
+"institute_role","IN_ROLE","IN_ROLE",4,,"Role of participating institutions","code","single","EXPERIMENT","METADATA","INSTITUTIONS",,1041,,,,,,,43
+"institute_notes","IN_NOTES","IN_NOTES",99,,"Additional notes on institutions associated with the experiment(s)","text","text","EXPERIMENT","METADATA","INSTITUTIONS",,1041,,,,,,,44
+"document_id","DOC_ID","DOC_ID",1,,"Unique identifier to identify an document associated with a dataset","number","single","EXPERIMENT","METADATA","DOCUMENTS",,1051,,,,,,,45
+"document_name","DOCUMENT","DOCUMENT",2,,"Document name in abbreviated form","text","memo","EXPERIMENT","METADATA","DOCUMENTS",,1051,,,,,,,46
+"digital_object_id","DIGITAL_OBJ_ID","DIGITAL_OBJ_ID",3,,"Digital Object Identifier according to international standard (DOI)","text","memo","EXPERIMENT","METADATA","DOCUMENTS",,1051,,,,,,,47
+"document_type","DOC_TYPE","DOC_TYPE",4,,"Description of type of document (e.g., photo, graphic, memo, etc.","text","text","EXPERIMENT","METADATA","DOCUMENTS",,1051,,,,,,,48
+"document_date","DOC_DATE","DOC_DATE",5,,"Description of type of document (e.g., photo, graphic, memo, etc.","text","text","EXPERIMENT","METADATA","DOCUMENTS",,1051,"2017-09-14, JWW",,,,,,49
+"document_link","DOC_LINK","DOC_LINK",6,,"URL for location of digital document","text","text","EXPERIMENT","METADATA","DOCUMENTS",,1051,"2025-07-03, JWW",,,,,,50
+"document_notes","DOC_NOTES","DOC_NOTES",99,,"Additional notes on a document related to the dataset","text","text","EXPERIMENT","METADATA","DOCUMENTS",,1051,"2025-07-03, JWW",,,,,,51
+"plot_id","PLTID","PLTID",1,,"Plot identification","text","text","EXPERIMENT","METADATA","PLOT_DETAILS",,1071,"2020-06-09, CHP",".",,,0,,52
+"plot_area","PLTA","PLTA",2,,"Plot area (gross) per rep","m2","single","EXPERIMENT","METADATA","PLOT_DETAILS",,1071,,"PAREA","GENERAL",1121,0,,53
+"plot_row_number","PLTR#","PLTRno",3,,"Plot row number for single plot or treatment","number","single","EXPERIMENT","METADATA","PLOT_DETAILS",,1071,,"PRNO","GENERAL",1122,,,54
+"plot_length","PLTLN","PLTLN",4,,"Plot length (gross) for single plot or treatment","m","single","EXPERIMENT","METADATA","PLOT_DETAILS",,1071,,"PLEN","GENERAL",1123,,,55
+"plot_width","PLTWI","PLTWI",5,,"Plot width (gross) for single plot or treatment","m","single","EXPERIMENT","METADATA","PLOT_DETAILS",,1071,,".",,,,,56
+"plot_orientation","PLTOR","PLTOR",6,,"Plot orientation (from North)","arc_degrees","single","EXPERIMENT","METADATA","PLOT_DETAILS",,1071,,"PLOR","GENERAL",1125,0,359,57
+"drainage_orientation","PLTOD","PLTOD",7,,"Drainage orientation (from North)","arc_degrees","single","EXPERIMENT","METADATA","PLOT_DETAILS",,1071,,"PLFR","GENERAL",1126,,,58
+"plots_relative_to_drains","PLDR","PLDR",8,,"Plots relative to drains","arc_degrees","single","EXPERIMENT","METADATA","PLOT_DETAILS",,1071,,".",,,0,179,59
+"plot_separation","PLTSP","PLTSP",9,,"Spacing between individual plots, if any","cm","single","EXPERIMENT","METADATA","PLOT_DETAILS",,1071,,"PLSP","GENERAL",1127,0,,60
+"plot_harvest_area","PLTHA","PLTHA",21,,"Plot harvest area","m2","single","EXPERIMENT","METADATA","PLOT_DETAILS",,1071,,"HAREA","GENERAL",1128,0,,61
+"plot_harvest_row_number","PLTH#","PLTHno",22,,"Plot harvest row number","number","single","EXPERIMENT","METADATA","PLOT_DETAILS",,1071,,"HRNO","GENERAL",1129,,,62
+"plot_harvest_length","PLTHL","PLTHL",23,,"Plot harvest length","m","single","EXPERIMENT","METADATA","PLOT_DETAILS",,1071,,"HLEN","GENERAL",1130,,,63
+"plot_harvest_width","PLTHW","PLTHW",24,,"Plot harvest width","m","single","EXPERIMENT","METADATA","PLOT_DETAILS",,1071,,".",,,,,64
+"harvest_method_plot","PLTHM","PLTHM",25,,"Plot harvest method (eg.Hand, combine)","code","text","EXPERIMENT","METADATA","PLOT_DETAILS",,1071,,"HARM","GENERAL",1132,,,65
+"plot_layout","PLLAY","PLLAY",26,,"Plot layout or experimental design (e.g., ""RCBD with four blocks"")","text","memo","EXPERIMENT","METADATA","PLOT_DETAILS",,1071,,".",,,,,66
+"constraints","CNSTR","CNSTR",1,,"Constraints known to affect crop performance","text","text","EXPERIMENT","METADATA","NOTES",,1081,,,,,,,67
+"complications","CMPLC","CMPLC",2,,"Complications arising during experiment","text","text","EXPERIMENT","METADATA","NOTES",,1081,,,,,,,68
+"experiment_rating","EXPER_RATING","EXPER_RATING",1,,"Rating of experiment for completeness, correctness, etc. (e.g., using AgMIP sentinal site rating system)","text","text","EXPERIMENT","METADATA","RATINGS",,1091,"2025-07-02, JWW",,,,,,69
+"exper_rating_system","RATING_SYS","RATING_SYS",2,,"Name of the system used to rate the data from the experiment ","text","text","EXPERIMENT","METADATA","RATINGS",,1091,"2025-07-02, JWW",,,,,,70
+"exper_rating_date","RATING_DATE","AGMIP_DATE",3,,"Date of rating","date","date","EXPERIMENT","METADATA","RATINGS",,1091,"2025-07-02, JWW",,,,,,71
+"exper_rating_person","RATER","AGMIP_RATER",4,,"Initials of person conducting the assessment","text","text","EXPERIMENT","METADATA","RATINGS",,1091,"2025-07-02, JWW",,,,,,72
+"orig_data_source","DATA_SOURCE","DATA_SOURCE",5,,"Original format of data (DSSAT, APSIM, CIMMYT, field log, etc)","text","text","EXPERIMENT","METADATA","RATINGS",,1091,"2025-07-02, JWW",,,,,,73
+"last_update","LAST_UPDATE","LAST_UPDATE",6,,"Date of last upload of information to experimental data","date","date","EXPERIMENT","METADATA","RATINGS",,1091,"2025-07-02, JWW",,,,,,74
+"crop_model_version","MODEL_VER","MODEL_VER",7,,"Crop model version related to experiment (if any)","text","text","EXPERIMENT","METADATA","RATINGS",,1091,"2025-07-02, JWW",,,,,,75
+"exper_rating_mgmt","RATING_MGMT","RATING_MGMT",8,,"Rating of experiment for management data","text","text","EXPERIMENT","METADATA","RATINGS",,1091,"2025-07-02, JWW",,,,,,76
+"exper_rating_observations","RATING_OBS","RATING_OBS",9,,"Rating of experiment for observed data","text","text","EXPERIMENT","METADATA","RATINGS",,1091,"2025-07-02, JWW",,,,,,77
+"exper_rating_soils","RATING_SOIL","RATING_SOIL",10,,"Rating of experiment for soil data","text","text","EXPERIMENT","METADATA","RATINGS",,1091,"2025-07-02, JWW",,,,,,78
+"exper_rating_weather","RATING_WTH","RATING_WTH",11,,"Rating of experiment for weather data","text","text","EXPERIMENT","METADATA","RATINGS",,1091,"2025-07-02, JWW",,,,,,79
+"exper_rating_notes","RATING_NOTES","RATING_NOTES",99,,"Deatailed explanations of reasons behind rating or other relevant information","text","text","EXPERIMENT","METADATA","RATINGS",,1091,"2025-07-02, JWW",,,,,,80
+"suite_id","SUITEID","SUITEID",1,,"Suite identifiers","text","text","SUITE","METADATA","GENERAL",,8011,"2013-02-04, JWW",,,,,,81
+"suite_name","SUITE_NAME","SUITE_NAME",1,,"Brief name of suite of experiments","text","text","SUITE","METADATA","GENERAL",,8011,"2015-11-24, CHP",,,,,,82
+"suite_objectives_of_study","SUITE_OBJ","SUITE_OBJ",5,,"Objectives of the study","text","memo","SUITE","METADATA","GENERAL",,8011,"2014-04-07, CHP",".",,,,,83
+"suite_main_experiment_factor","SUITE_MAIN_FAC","SUITE_MAIN_FAC",6,,"Main factor, factors or interactions of interest in an experiment","text","text","SUITE","METADATA","GENERAL",,8011,"2014-04-07, CHP",,,,,,84
+"suite_experimental_factor_comb","SUITE_FACTORS","SUITE_FACTORS",7,,"Experimental factor combinations","text","text","SUITE","METADATA","GENERAL",,8011,"2014-04-07, CHP",".",,,,,85
+"suite_experiment_type","SUITE_EXPER_TYPE","SUITE_EXPER_TYPE",9,,"General type of experiment, e.g., varietal trial","code","text","SUITE","METADATA","GENERAL",,8011,"2014-04-07, CHP",,,,,,86
+"suite_distrib_restrictions","SUITE_DISTRIB","SUITE_DISTRIB",21,,"Distribution limitations for the data set","text","memo","SUITE","METADATA","GENERAL",,8011,"2013-02-14, CHP",".",,,,,87
+"suite_keywords","SUITE_KEYWORDS","SUITE_KEYWORDS",3,,"Keywords for dataset","text","memo","SUITE","METADATA","GENERAL",,8051,"2015-11-24, CHP",,,,,,88
+"suite_data_source","SUITE_DATA_SOURCE","SUITE_DATA_SOURCE",4,,"Original format of  data (DSSAT, APSIM, CIMMYT, field log, etc)","code","text","SUITE","METADATA","GENERAL",,8012,"2014-04-07, CHP",,,,,,89
+"suite_citation","SUITE_CITATION","SUITE_CITATION",1,,"Full citation for experimental data","text","text","SUITE","METADATA","GENERAL",,8012,"2014-04-07, CHP",,,,,,90
+"suite_license","SUITE_LICENSE","SUITE_LICENSE",1,,"License associated with experiment","text","text","SUITE","METADATA","GENERAL",,8012,"2014-04-07, CHP",,,,,,91
+"suite_notes","SUITE_NOTES","SUITE_NOTES",3,,"Additional notes describing the datasets comprising a suite","text","memo","SUITE","METADATA","GENERAL",,8051,"2016-03-04, CHP",,,,,,92
+"suite_researcher_address","SUITE_ADDRESS","SUITE_ADDRESS",4,,"Mailing address of researcher","text","memo","SUITE","METADATA","PERSONS",,8031,"2014-03-14, chp",,,,,,93
+"suite_persons_notes","SUITE_PERSON_NOTES","SUITE_PERSON_NOTES",20,,"Additional notes on persons involved with the experiment(s)","text","memo","SUITE","METADATA","PERSONS",,8031,"2014-04-07, CHP",,,,,,94
+"suite_email_address","SUITE_EMAIL","SUITE_EMAIL",7,,"E-mail address of researcher","text","text","SUITE","METADATA","PERSONS",,8031,"2014-04-07, CHP",,,,,,95
+"suite_orcid","SUITE_ORCID","SUITE_ORCID",7,,"ORCId of researcher(s)","text","text","SUITE","METADATA","PERSONS",,8031,"2015-11-24, CHP",,,,,,96
+"suite_institute_name","SUITE_INSTITUTION","SUITE_INSTITUTION",2,,"Names of participating institutions","text","text","SUITE","METADATA","INSTITUTIONS",,8041,"2014-04-07, CHP",,,,,,97
+"suite_document_name","SUITE_DOCUMENT","SUITE_DOCUMENT",2,,"Document name in abbreviated form","text","memo","SUITE","METADATA","DOCUMENTS",,8051,"2014-04-07, CHP",,,,,,98
+"suite_digital_object_id","SUITE_DOI","SUITE_DOI",3,,"Digital Object Identifier (DOI) according to international standard","text","memo","SUITE","METADATA","DOCUMENTS",,8051,"2014-04-07, CHP",,,,,,99

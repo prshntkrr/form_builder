@@ -38,17 +38,18 @@ jobs:
             source venv/bin/activate
             pip install -r requirements.txt
 
-            echo "Importing ontology..."
+            echo "Importing standards (SEOnt, ICASA)..."
 
-            # Idempotent: matches concepts on their URI, so this updates labels
-            # and adds what is new rather than duplicating anything. Takes about
-            # 12 seconds. It creates its own tables, so it does not care whether
-            # the new backend has started yet.
+            # Both are idempotent — SEOnt matches concepts on their URI, ICASA
+            # matches variables on var_uid — so these update and add rather than
+            # duplicating. About 9 seconds between them. Each creates its own
+            # tables, so neither cares whether the new backend has started yet.
             #
-            # Not fatal: the application runs perfectly well without an ontology
-            # loaded — the concept picker simply finds nothing — and a failed
+            # Neither is fatal: the application runs perfectly well with no
+            # standards loaded (the pickers simply find nothing), and a failed
             # import is no reason to leave the service down.
             python import_ontology.py || echo "WARNING: ontology import failed, continuing"
+            python import_icasa.py || echo "WARNING: ICASA import failed, continuing"
 
             echo "Stopping existing backend..."
 

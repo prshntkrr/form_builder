@@ -1,0 +1,117 @@
+"Variable_Name","Code_Display","Code_Query","Variable_Order","Variable_Key","Description","Unit_or_type","Data_type","Dataset","Subset","Group","SubGroup","Set_group_order","Version_or_questions","DSSAT_synon","DSSAT_group","DSSAT_order","MinVal","MaxVal","var_uid"
+"weather_file","WST_DATASET","WST_DATASET",1,,"Weather dataset containing relevant data","text","text","WEATHER","WEATHER_METADATA","GENERAL",,5001,,,,,,,614
+"weather_notes","WST_NOTES","WST_NOTES",2,,"General notes on the weather dataset","text","memo","WEATHER","WEATHER_METADATA","GENERAL",,5001,,".",,,,,615
+"distrib_restrictions_wst","WST_DISTRIB","WST_DISTRIB",3,,"Distribution limitations for the weather data set","text","memo","WEATHER","WEATHER_METADATA","GENERAL",,5001,"2013-02-14, 2013-04-18, CHP",".",,,,,616
+"file_version_wst","VERSION_WST","VERSION_WST",4,,"File version for ICASA standard","text","text","WEATHER","WEATHER_METADATA","GENERAL",,5001,"2013-04-18, CHP",".",,,,,617
+"revision_date_first_wst","REV_DATE_FIRST_WST","REV_DATE_FIRST_WST",5,,"Date the file was first created","date","date","WEATHER","WEATHER_METADATA","GENERAL",,5001,"2013-04-18, CHP",".",,,,,618
+"revision_date_latest_wst","REV_DATE_LATEST_WST","REV_DATE_LATEST_WST",6,,"Date the file was last modified","date","date","WEATHER","WEATHER_METADATA","GENERAL",,5001,"2013-04-18, CHP",".",,,,,619
+"revision_notes_wst","REVISION_NOTES_WST","REVISION_NOTES_WST",7,,"Notes describing reasons for the revision","text","memo","WEATHER","WEATHER_METADATA","GENERAL",,5001,"2013-04-18, CHP",".",,,,,620
+"weather_citation","WST_CITATION","WST_CITATION",1,,"Full citation for weather data","text","text","WEATHER","WEATHER_METADATA","GENERAL",,5001,"2014-03-17, chp",,,,,,621
+"weather_license","WST_LICENSE","WST_LICENSE",1,,"License associated with weather data","text","text","WEATHER","WEATHER_METADATA","GENERAL",,5001,"2014-03-17, chp",,,,,,622
+"weather_sta_reference","WST_REF","WST_REF",12,,"URL, DOI or other link to description of weather station","text","text","WEATHER","WEATHER_METADATA","GENERAL",,,,,,,,,623
+"researcher_last_name","LAST_NAME","LAST_NAME",2,,"Last name of researchers involved with the experiment(s) or data","text","text","WEATHER","WEATHER_METADATA","PERSONS",,5011,,".",,,,,624
+"researcher_first_name","FIRST_NAME","FIRST_NAME",3,,"First name of researchers involved with the experiment(s) or data","text","text","WEATHER","WEATHER_METADATA","PERSONS",,5011,,,,,,,625
+"researcher_name_mi","MID_INITIAL","MID_INITIAL",4,,"Middle initial of researchers involved with the experiment(s) or data","text","text","WEATHER","WEATHER_METADATA","PERSONS",,5011,,,,,,,626
+"researcher_role","PP_ROLE","PP_ROLE",5,,"Role of researcher in experiment or dataset preparation","code","text","WEATHER","WEATHER_METADATA","PERSONS",,5011,,,,,,,627
+"researcher_address","WST_ADDRESS","WST_ADDRESS",4,,"Mailing address of researcher","text","text","WEATHER","WEATHER_METADATA","PERSONS",,5011,"2014-03-14, chp",,,,,,628
+"institute_id_person","IN","INP",6,,"Links to institutions for researcher providing weather data","integer","single","WEATHER","WEATHER_METADATA","PERSONS",,5011,,,,,,,629
+"e_mail_address","WST_EMAIL","WST_EMAIL",7,,"E-mail address of researcher","text","text","WEATHER","WEATHER_METADATA","PERSONS",,5011,,,,,,,630
+"institute_name","INST_NAME","INST_NAME",2,,"Names of participating institute","text","text","WEATHER","WEATHER_METADATA","INSTITUTIONS",,5012,,,,,,,631
+"institute_type","IN_TYPE","IN_TYPE",3,,"Type of participating institutions","code","single","WEATHER","WEATHER_METADATA","INSTITUTIONS",,5012,,,,,,,632
+"institute_role","IN_ROLE","IN_ROLE",4,,"Role of participating institutions","code","single","WEATHER","WEATHER_METADATA","INSTITUTIONS",,5012,,,,,,,633
+"document_id_wst","DOC_ID_WST","DOC_ID_WST",1,1,"Unique identifier for a single document that describes the weather data or their source","text","single","WEATHER","WEATHER_METADATA","DOCUMENTS",,5013,"2013-04-18, CHP",,,,,,634
+"document_name_wst","DOCUMENT_WST","DOCUMENT_WST",2,,"Document name in abbreviated form","text","memo","WEATHER","WEATHER_METADATA","DOCUMENTS",,5013,"2013-04-18, CHP",,,,,,635
+"digital_object_id_wst","DIGITAL_OBJ_ID_WST","DIGITAL_OBJ_ID_WST",3,,"Digital_object_identifier according to international standard","text","memo","WEATHER","WEATHER_METADATA","DOCUMENTS",,5013,"2013-04-18, CHP",,,,,,636
+"weather_station_id","WST_ID","WST_ID",1,,"Weather station identifier to link to site information","text","text","WEATHER","WEATHER_STATION","STATION_METADATA",,5041,,"WST_ID","WTH META",6001,,,637
+"weather_station_name","WST_NAME","WST_NAME",2,,"Weather station name","text","text","WEATHER","WEATHER_STATION","STATION_METADATA",,5041,"2014-03-17, chp","WST_NAME","WTH META",6002,,,638
+"weather_station_site","WST_SITE","WST_SITE",3,,"Name and location of site for weather data","text","text","WEATHER","WEATHER_STATION","STATION_METADATA",,5041,"2014-03-17, chp",,,,,,639
+"wsta_location_country","WST_LOC_1","WST_LOC_1",4,,"First admin for location of site for soil profile (usually country)","text","text","WEATHER","WEATHER_STATION","STATION_METADATA",,5041,,,,,,,640
+"wsta_loc_2nd_level","WST_LOC_2","WST_LOC_2",5,,"Second admin level for location of site for soil profile (usually state or province)","text","text","WEATHER","WEATHER_STATION","STATION_METADATA",,5041,,,,,,,641
+"wsta_loc_3rd_level","WST_LOC_3","WST_LOC_3",6,,"Third admin level for location of site for soil profile (usually county or municipality)","text","text","WEATHER","WEATHER_STATION","STATION_METADATA",,5041,,,,,,,642
+"weather_sta_latitude","WST_LAT","WST_LAT",7,,"Latitude of station, degrees decimal with North as positive value","decimal_degrees","single","WEATHER","WEATHER_STATION","STATION_METADATA",,5041,,"LAT","WTH META",6003,-80,80,643
+"weather_sta_longitude","WST_LONG","WST_LONG",8,,"Longitude of station, degrees decimals with East as positive value","decimal_degrees","single","WEATHER","WEATHER_STATION","STATION_METADATA",,5041,,"LONG","WTH META",6004,-180,180,644
+"weather_sta_elevation","WST_ELEV","WST_ELEV",9,,"Elevation of weather station","m","single","WEATHER","WEATHER_STATION","STATION_METADATA",,5041,,"ELEV","WTH META",6005,-400,5000,645
+"anonymize_sta_location","WST_ANONYMIZE","WST_ANONYMIZE",9.5,,"Whether location of weather station is anonymized (Y/N)","text","text","WEATHER","WEATHER_STATION","STATION_METADATA",,5041,,,,,,,646
+"source_daily_weather","WST_SOURCE","WST_SOURCE",10,,"Source of daily weather data for calculated means or weather generator parameters","text","text","WEATHER","WEATHER_STATION","STATION_METADATA",,5041,,".",,,,,647
+"weather_sta_start_date","WST_START_DATE","WST_START_DATE",11,,"Start date of all weather records from station.","date","date","WEATHER","WEATHER_STATION","STATION_METADATA",,5041,"2017-03-17, jww",,,,,,648
+"weather_sta_end_date","WST_END_DATE","WST_END_DATE",12,,"End date of all weather records from station.","date","date","WEATHER","WEATHER_STATION","STATION_METADATA",,5041,"2017-03-17, jww",,,,,,649
+"temperature_avg_year","TAV","TAV",13,,"Temperature average for whole year","degree_C","single","WEATHER","WEATHER_STATION","STATION_METADATA",,5041,,"TAV","WTH META",6006,-10,40,650
+"temp_range_month_avg","TRANGE","TRANGE",14,,"Temperature range (peak to trough) of 12 monthly averages","degree_C","single","WEATHER","WEATHER_STATION","STATION_METADATA",,5041,,,,,,,651
+"temp_amplit_month_avg","TAMP","TAMP",15,,"Temperature amplitude (peak to trough) of 12 monthly averages","degree_C","single","WEATHER","WEATHER_STATION","STATION_METADATA",,5041,,"AMP","WTH META",6007,,,652
+"temperature_sensor_ht","TEMHT","TEMHT",16,,"Weather station temperature sensor height","m","single","WEATHER","WEATHER_STATION","STATION_METADATA",,5041,,"REFHT","WTH META",6008,0,,653
+"ref_height_windsp_meas","WNDHT","WNDHT",17,,"Reference height for windspeed measurement","m","single","WEATHER","WEATHER_STATION","STATION_METADATA",,5041,,"WNDHT","WTH META",6009,0,,654
+"ref_height_weather_meas","REFHT","REFHT",18,,"Reference height for weather measurement","m","single","WEATHER","WEATHER_STATION","STATION_METADATA",,5041,,".",,,0,,655
+"CO2_concentration_annual","CO2Y","CO2Y",19,,"CO2 concentration, annual (yearly)","ppm","single","WEATHER","WEATHER_STATION","STATION_METADATA",,5041,,,,,0,,656
+"CO2_conc_annual_increase","CO2A","CO2A",20,,"CO2 concentration, annual increase ","vpm","single","WEATHER","WEATHER_STATION","STATION_METADATA",,5041,,,,,,,657
+"durat_summarization_per","DURN","DURN",21,,"Duration of summarization period","day","single","WEATHER","WEATHER_STATION","STATION_METADATA",,5041,,".",,,0,366,658
+"growing_season_duration","GSDU","GSDU",22,,"Growing season duration","day","single","WEATHER","WEATHER_STATION","STATION_METADATA",,5041,,".",,,0,366,659
+"growing_season_start_day","GSST","GSST",23,,"Growing season start day","doy","single","WEATHER","WEATHER_STATION","STATION_METADATA",,5041,,".",,,1,366,660
+"start_yr_weather_summary","START_YR","START_YR",24,,"Start of summary period weather summary","year","single","WEATHER","WEATHER_STATION","STATION_METADATA",,5041,,,,,,,661
+"maximum_temp_avg_year","TMXY","TMXY",25,,"Temperature maximum, yearly average","degree_C","single","WEATHER","WEATHER_STATION","STATION_METADATA",,5041,,".",,,,,662
+"minimum_temp_avg_year","TMNY","TMNY",26,,"Temperature minimum, yearly average","degree_C","single","WEATHER","WEATHER_STATION","STATION_METADATA",,5041,,".",,,,,663
+"rainfall_yearly_total","RAIY","RAIY",27,,"Rainfall, yearly total","mm","single","WEATHER","WEATHER_STATION","STATION_METADATA",,5041,,".",,,0,,664
+"solar_rad_yearly_avg","SRAY","SRAY",28,,"Solar radiation, yearly average","MJ/(m2.d)","single","WEATHER","WEATHER_STATION","STATION_METADATA",,5041,,".",,,0,,665
+"angstrom_coef_a_year","ANGA","ANGA",29,,"Angstrom A coefficient, yearly","unitless","single","WEATHER","WEATHER_STATION","STATION_METADATA",,5041,,".",,,,,666
+"angstrom_coef_b_year","ANGB","ANGB",30,,"Angstrom B coefficient, yearly","unitless","single","WEATHER","WEATHER_STATION","STATION_METADATA",,5041,,".",,,,,667
+"psychrometric_constant ","PSYCON","PSYCON",31,,"Psychrometric constant ","kPa/degree_C","single","WEATHER","WEATHER_STATION","STATION_METADATA",,5041,"2013-02-06, JWW",,,,,,668
+"flag_for_summary_data","FLAGA","FLAGA",51,,"Flag to identify summary data with specific problems or significance","code","text","WEATHER","WEATHER_STATION","STATION_METADATA",,5041,,,,,,,669
+"psychrometer_ventilation","PSYVNT","PSYVNT",32,,"Psychrometer ventilation (ventilated or natural air flow)","code","text","WEATHER","WEATHER_STATION","STATION_METADATA",,5041,"2013-02-08, JWW",,,,,,670
+"weather_station_id","WST_ID","WST_ID",1,1,"Weather station identifier to link to site information","text","text","WEATHER","WEATHER_STATION","WEATHER_GENER_PARMS",,5046,,,,,,,671
+"solar_rad_all_day_mon_av","SAMN","SAMN",1,,"Solar radiation, all days, monthly avera","MJ/(m2.d)","single","WEATHER","WEATHER_STATION","WEATHER_GENER_PARMS",,5046,,".",,,,,672
+"solar_rad_dry_d_mon_sd","SDSD","SDSD",2,,"Solar radiation, dry days, monthly st de","MJ/(m2.d)","single","WEATHER","WEATHER_STATION","WEATHER_GENER_PARMS",,5046,,".",,,,,673
+"solar_rad_dry_day_mon_av","SDMN","SDMN",3,,"Solar radiation, dry days, monthly avera","MJ/(m2.d)","single","WEATHER","WEATHER_STATION","WEATHER_GENER_PARMS",,5046,,".",,,,,674
+"solar_rad_wet_d_mon_avg","SWMN","SWMN",4,,"Solar radiation, wet days, monthly avera","MJ/(m2.d)","single","WEATHER","WEATHER_STATION","WEATHER_GENER_PARMS",,5046,,".",,,,,675
+"solar_rad_wet_d_mon_sd","SWSD","SWSD",5,,"Solar radiation, wet days, monthly st de","MJ/(m2.d)","single","WEATHER","WEATHER_STATION","WEATHER_GENER_PARMS",,5046,,".",,,,,676
+"sunshine_duration_month","SHMN","SHMN",6,,"Daily sunshine duration, monthly average","%","single","WEATHER","WEATHER_STATION","WEATHER_GENER_PARMS",,5046,,".",,,0,95,677
+"temp_max_all_days_mon_av","XAMN","XAMN",11,,"Temperature maximum, all days, monthly average","degree_C","single","WEATHER","WEATHER_STATION","WEATHER_GENER_PARMS",,5046,,".",,,,,678
+"temp_max_dry_days_mon_av","XDMN","XDMN",12,,"Temperature maximum, dry days, monthly average","degree_C","single","WEATHER","WEATHER_STATION","WEATHER_GENER_PARMS",,5046,,".",,,,,679
+"temp_max_dry_days_st_dev","XDSD","XDSD",13,,"Temperature maximum, dry days, standard deviation","degree_C","single","WEATHER","WEATHER_STATION","WEATHER_GENER_PARMS",,5046,,".",,,,,680
+"temp_max_wet_days_mon_av","XWMN","XWMN",14,,"Temperature maximum, wet days, monthly average","degree_C","single","WEATHER","WEATHER_STATION","WEATHER_GENER_PARMS",,5046,,".",,,,,681
+"temp_max_wet_days_st_dev","XWSD","XWSD",15,,"Temperature maximum, wet days, standard deviation","degree_C","single","WEATHER","WEATHER_STATION","WEATHER_GENER_PARMS",,5046,,".",,,,,682
+"temp_min_all_days_mon_av","NAMN","NAMN",21,,"Temperature minimum, monthly average of all days","degree_C","single","WEATHER","WEATHER_STATION","WEATHER_GENER_PARMS",,5046,,".",,,,,683
+"temp_min_all_days_mon_sd","NASD","NASD",22,,"Temperature minimum, standard dev. for all days in a month","degree_C","single","WEATHER","WEATHER_STATION","WEATHER_GENER_PARMS",,5046,,".",,,,,684
+"angstrom_coef_a_month","AMTH","AMTH",46,,"Angstrom A coefficient, monthly","unitless","single","WEATHER","WEATHER_STATION","WEATHER_GENER_PARMS",,5046,,".",,,,,685
+"angstrom_coef_b_month","BMTH","BMTH",47,,"Angstrom B coefficient, monthly","unitless","single","WEATHER","WEATHER_STATION","WEATHER_GENER_PARMS",,5046,,".",,,,,686
+"rainfall_parm_alpha","ALPHA","ALPHA",48,,"Rainfall distribution scale parameter,","1/mm2","single","WEATHER","WEATHER_STATION","WEATHER_GENER_PARMS",,5046,,".",,,,,687
+"rainfall_total","RTOT","RTOT",49,,"Monthly rainfall total","mm","single","WEATHER","WEATHER_STATION","WEATHER_GENER_PARMS",,5046,,".",,,0,,688
+"month","MONTH","fd_MONTH",50,,"Month of year","number","single","WEATHER","WEATHER_STATION","WEATHER_GENER_PARMS",,5046,,"MTH",,,,,689
+"prob_dry-wet_sequence","PDW","PDW",51,,"Probability of a dry-wet sequence","number","single","WEATHER","WEATHER_STATION","WEATHER_GENER_PARMS",,5046,,".",,,,,690
+"rainy_days","RNUM","RNUM",52,,"Rainy days","number/month","single","WEATHER","WEATHER_STATION","WEATHER_GENER_PARMS",,5046,,".",,,0,,691
+"weather_gen_notes","WG_NOTES","WG_NOTES",99,,"Additional information describing weather generator parameters","text","text","WEATHER","WEATHER_STATION","WEATHER_GENER_PARMS",,5046,"2025-06-19, JWW",,,,,,692
+"weather_station_id","WST_ID","WST_ID",1,,"Weather station identifier to link to site/field information","code","single","WEATHER","WEATHER_STATION","WEATHER_DAILY",,5052,,,,,,,693
+"weather_date","W_DATE","W_DATE",2,,"Date for daily weather, field observations, etc.","date","date","WEATHER","WEATHER_STATION","WEATHER_DAILY",,5052,,"DATE","WTH DAILY",6102,,,694
+"year","YEAR","WTYR",3,,"Year (4 digits) for daily weather data","year","single","WEATHER","WEATHER_STATION","WEATHER_DAILY",,5052,,".",,,,,695
+"day_of_year","DOY","WTDOY",4,,"Day of year for daily weather record","doy","single","WEATHER","WEATHER_STATION","WEATHER_DAILY",,5052,,".",,,1,366,696
+"solar_radiation","SRAD","SRAD",5,,"Solar radiation","MJ/(m2.d)","single","WEATHER","WEATHER_STATION","WEATHER_DAILY",,5052,,"SRAD","WTH DAILY",6103,1,50,697
+"maximum_temperature","TMAX","TMAX",6,,"Temperature of air, daily maximum","degree_C","single","WEATHER","WEATHER_STATION","WEATHER_DAILY",,5052,,"TMAX","WTH DAILY",6104,-30,50,698
+"minimum_temperature","TMIN","TMIN",7,,"Temperature of air, daily minimum","degree_C","single","WEATHER","WEATHER_STATION","WEATHER_DAILY",,5052,,"TMIN","WTH DAILY",6105,-30,40,699
+"precipitation","RAIN","RAIN",8,,"Rainfall, including moisture in snow, in one day","mm","single","WEATHER","WEATHER_STATION","WEATHER_DAILY",,5052,"chp 2018-19-25","RAIN","WTH DAILY",6106,0,,700
+"wind_speed_daily","WIND","WIND",9,,"Wind speed, daily","km/d","single","WEATHER","WEATHER_STATION","WEATHER_DAILY",,5052,,"WIND","WTH DAILY",6107,0,,701
+"temperature_dewpoint","TDEW","TDEW",10,,"Temperature, dewpoint","degree_C","single","WEATHER","WEATHER_STATION","WEATHER_DAILY",,5052,,"TDEW","WTH DAILY",6108,,,702
+"ozone_daily_max","OZONX","OZONX",11,,"Daily maximum ozone concentration","ppb","single","WEATHER","WEATHER_STATION","WEATHER_DAILY",,5052,"chp 2016-10-18",,,,,,703
+"CO2_conc_atmosphere_daily","CO2D","CO2D",12,,"CO2 concentration, atmospheric average over day","vpm","single","WEATHER","WEATHER_STATION","WEATHER_DAILY",,5052,,"CO2","WTH DAILY",6109,,,704
+"cloudiness_factor","CLDD","CLDD",13,,"Cloudiness factor, relative","number","single","WEATHER","WEATHER_STATION","WEATHER_DAILY",,5052,,".",,,,,705
+"PAR_photon_flux_density","PARD","PARD",14,,"PAR or photon flux density","mole/(m2.d)","single","WEATHER","WEATHER_STATION","WEATHER_DAILY",,5052,,"PAR","WTH DAILY",6110,,,706
+"radiation_shortwave","DTR","DTR",15,,"Solar radiation, daily shortwave","MJ/(m2.d)","single","WEATHER","WEATHER_STATION","WEATHER_DAILY",,5052,,".",,,0,,707
+"sunshine_duration","SUNH","SUNH",16,,"Sunshine duration over 24 h period","hr","single","WEATHER","WEATHER_STATION","WEATHER_DAILY",,5052,"chp 2013-02-05",".",,,0,100,708
+"dry_bulb_temper_avg_day","TDRY","TDRY",17,,"Temperature, dry-bulb, daily average","degree_C","single","WEATHER","WEATHER_STATION","WEATHER_DAILY",,5052,,".",,,,,709
+"evaporation_pan","EVAP","EVAP",18,,"Evaporation,pan","mm/d","single","WEATHER","WEATHER_STATION","WEATHER_DAILY",,5052,,".",,,0,,710
+"evapotranspiration_reference","ETO","ETO",19,,"Evapotranspiration, reference","mm/d","single","WEATHER","WEATHER_STATION","WEATHER_DAILY",,5052,,".",,,0,,711
+"temperature_wet-bulb","TWET","TWET",20,,"Temperature, wet-bulb","degree_C","single","WEATHER","WEATHER_STATION","WEATHER_DAILY",,5052,,".",,,,,712
+"daylength_sunrise_sunset","DAYD","DAYD",21,,"Daylength (sunrise-sunset)","h","single","WEATHER","WEATHER_STATION","WEATHER_DAILY",,5052,,"DAYL",,,0,,713
+"daylength_3_deg","DA3D","DA3D",22,,"Daylength (3 deg basis)","h","single","WEATHER","WEATHER_STATION","WEATHER_DAILY",,5052,,".",,,0,,714
+"daylength_twilight_basis","TWLD","TWLD",23,,"Daylength (twilight to twilight)","h","single","WEATHER","WEATHER_STATION","WEATHER_DAILY",,5052,,".",,,0,,715
+"ambient_CO2_conc","ACO2","ACO2",24,,"CO2, ambient","ppm","single","WEATHER","WEATHER_STATION","WEATHER_DAILY",,5052,,".",,,0,,716
+"flag_for_weather_data","FLAGW","FLAGW",25,,"Flag to identify daily weather data with specific problems or significance","code","text","WEATHER","WEATHER_STATION","WEATHER_DAILY",,5052,,,,,,,717
+"relative_humidity_min ","RHUMD","RHUMD",26,,"Relative humidity at maximum daily temperature (or minimum daily relative humidity)","%","single","WEATHER","WEATHER_STATION","WEATHER_DAILY",,5052,"2013-02-05, JWW","RHMND",,,,,718
+"relative_humidity_max","RHMXD","RHMXD",27,,"Relative humidity, maximum daily value","%","single","WEATHER","WEATHER_STATION","WEATHER_DAILY",,5052,"2013-02-05, JWW",,,,,,719
+"realtive_humidity_avg","RHAVD","RHAVD",28,,"Realtive humidity, average daily value","%","single","WEATHER","WEATHER_STATION","WEATHER_DAILY",,5052,,,,,,,720
+"temp_average_daily","TAVD","TAVD",29,,"Temperature of air, average daily","degree_C","single","WEATHER","WEATHER_STATION","WEATHER_DAILY",,5052,,".",,,,,721
+"temp_avg_daylight","TDYD","TDYD",30,,"Temperature of air, average during daylight hours","degree_C","single","WEATHER","WEATHER_STATION","WEATHER_DAILY",,5052,,,,,,,722
+"temp_avg_daily_air","TGAD","TGAD",31,,"Temperature, average daily air, growth","degree_C","single","WEATHER","WEATHER_STATION","WEATHER_DAILY",,5052,,,,,,,723
+"temp_avg_daylight_air","TGRD","TGRD",32,,"Temperature, average air, daylight hours","degree_C","single","WEATHER","WEATHER_STATION","WEATHER_DAILY",,5052,,,,,,,724
+"min_temp_average","TMNA","TMNA",33,,"Temperature of air, minimum, averaged over time period (e.g., 5 days)","degree_C","single","WEATHER","WEATHER_STATION","WEATHER_DAILY",,5052,"Model output","TMND",,,,,725
+"max_temp_average","TMXA","TMXA",34,,"Temperature of air, maximum, averaged over time period (e.g., 5 days)","degree_C","single","WEATHER","WEATHER_STATION","WEATHER_DAILY",,5052,"Model output",,,,,,726
+"vapor_pressure","VPRSD","VPRSD",35,,"Vapor pressure, average daily","kPa","single","WEATHER","WEATHER_STATION","WEATHER_DAILY",,5052,,"VAPR",,,,,727
+"rainfall","PRED","PRED",36,,"Rainfall","mm/d","single","WEATHER","WEATHER_STATION","WEATHER_DAILY",,5052,"Model output",".",,,0,,728
+"weather_daily_comments","WD_COMMENT","WD_COMMENT",99,,"Additional information on a single day of weather","text","text","WEATHER","WEATHER_STATION","WEATHER_DAILY",,5052,,,,,,,729
