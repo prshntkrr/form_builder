@@ -114,6 +114,21 @@ export default function FieldEditor({
           Required
         </label>
 
+        {/* Which standards this question carries, without having to open it. */}
+        {(field.semantic_concept || field.data_standard) && (
+          <span className="frow__std" title={[
+            field.semantic_concept && `${field.semantic_concept.standard}: ${field.semantic_concept.label || field.semantic_concept.uri}`,
+            field.data_standard && `${field.data_standard.standard}: ${field.data_standard.variable_name} (${field.data_standard.variable_code})`,
+          ].filter(Boolean).join('  ·  ')}>
+            {field.semantic_concept && <span className="pill">{field.semantic_concept.standard}</span>}
+            {field.data_standard && (
+              <span className="pill pill--std">
+                {field.data_standard.variable_code || field.data_standard.standard}
+              </span>
+            )}
+          </span>
+        )}
+
         <span className="frow__acts">
           {/* Not a chevron — the type dropdown next to it already has one. */}
           <button

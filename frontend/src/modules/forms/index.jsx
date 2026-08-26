@@ -3,6 +3,7 @@ import { Navigate, useParams } from 'react-router-dom'
 import FormsNav, { FormsPanel } from './Nav.jsx'
 import Builder from './pages/Builder.jsx'
 import Dictionary from './pages/Dictionary.jsx'
+import Standards from './pages/Standards.jsx'
 import FormFill from './pages/FormFill.jsx'
 import FormRecords from './pages/FormRecords.jsx'
 import FormsList from './pages/FormsList.jsx'
@@ -40,6 +41,7 @@ export default {
     { path: '/builder', element: <Builder />, requires: 'build_forms' },
     { path: '/library', element: <Library />, requires: 'build_forms' },
     { path: '/dictionary', element: <Dictionary />, requires: 'use_dictionary' },
+    { path: '/standards', element: <Standards />, requires: 'use_standards' },
     { path: '/forms', element: <FormsList />, requires: 'build_forms' },
     { path: '/forms/:formId', element: <Moved to="questions" />, requires: 'build_forms' },
     { path: '/forms/:formId/edit', element: <Moved to="questions" />, requires: 'build_forms' },

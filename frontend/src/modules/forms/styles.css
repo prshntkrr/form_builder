@@ -115,3 +115,47 @@
 .std__hit:last-child { border-bottom: 0; }
 .std__hit:hover { background: var(--paper); }
 .std__hit .ellipsis { display: inline-block; max-width: 300px; vertical-align: bottom; }
+
+/* Which standards a question carries, on its row. */
+.frow__std { display: inline-flex; gap: 4px; align-items: center; }
+.pill {
+  font-size: 10px; font-weight: 600; letter-spacing: .03em;
+  padding: 1px 6px; border-radius: 999px;
+  background: var(--paper); color: var(--ink-3);
+  border: 1px solid var(--line);
+  white-space: nowrap;
+}
+.pill--std { background: var(--accent-wash); color: var(--accent-deep); border-color: transparent; }
+
+/* Browsing the imported standards. */
+.tabs { gap: 4px; margin-bottom: 16px; border-bottom: 1px solid var(--line); }
+.tab {
+  padding: 8px 14px; font-size: 13.5px; font-weight: 500; color: var(--ink-3);
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.tab:hover { color: var(--ink); }
+.tab.on { color: var(--accent-deep); border-bottom-color: var(--accent); }
+
+.loaded { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 18px; }
+.loaded__card {
+  display: flex; flex-direction: column; gap: 1px;
+  padding: 10px 14px; min-width: 150px;
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--r);
+}
+
+.std__row {
+  display: flex; flex-direction: column; gap: 5px;
+  padding: 10px 12px; margin-bottom: 6px;
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--r);
+}
+.std__row-top { display: flex; align-items: center; gap: 12px; }
+.std__row-top .dict__id { flex: 1; min-width: 0; }
+.std__row-top .dict__id code { word-break: break-all; }
+.std__codes {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 4px; padding-top: 8px; margin-top: 4px;
+  border-top: 1px solid var(--line);
+}
+.std__code { display: flex; gap: 8px; align-items: baseline; font-size: 12.5px; }
+.std__code code { flex: none; color: var(--accent-deep); }
+.std__code span { color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -39,6 +39,9 @@ export const api = {
   conceptOptions: (conceptId) => request(`/ontology/${conceptId}/options`),
 
   // --- data standards (ICASA) ---
+  loadedStandards: () => request('/standards'),
+  loadedOntologies: () => request('/ontology'),
+
   searchVariables: (q) =>
     request(`/standards/variables/search?q=${encodeURIComponent(q)}`),
 
