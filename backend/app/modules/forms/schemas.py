@@ -125,6 +125,23 @@ class ApplyDictionaryRequest(BaseModel):
     form_json: Dict[str, Any]
 
 
+class TestDefinitionRequest(BaseModel):
+    """A dry run against a definition that is not saved anywhere."""
+    form_json: Dict[str, Any]
+    data: Dict[str, Any] = Field(default_factory=dict)
+    language: Optional[str] = None
+
+
+class SaveImportedFormRequest(BaseModel):
+    """Save a workbook import into the library. Only sent when the user says so."""
+    form_json: Dict[str, Any]
+    title: Optional[str] = None
+    category: Optional[str] = None
+    tags: List[str] = Field(default_factory=list)
+    summary: Optional[str] = None
+    source: Optional[str] = None
+
+
 class TranslateRequest(BaseModel):
     """Translate a form's wording into one language."""
     form_json: Dict[str, Any]

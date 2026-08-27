@@ -16,6 +16,7 @@ from app.core.config import settings
 from app.core.database import transaction
 from app.modules.forms.field_types import FieldValueError, coerce_value, get_type, json_safe
 from app.modules.forms.form_schema import field_name
+from app.modules.forms import standardization
 from app.modules.forms import translations
 from app.modules.forms.form_service import FormNotFound
 from app.modules.forms.table_service import next_survey_id, table_exists
@@ -49,6 +50,56 @@ def _measure(spec, raw: Any, value: Any) -> Tuple[Optional[str], str]:
     if isinstance(raw, str):
         return raw.strip(), "characters"
     return None, ""
+
+
+def _not_offered(field: Dict[str, Any], selected: Any, payload: Dict[str, Any]) -> list:
+    """Which of these answers the field's source would not have offered.
+
+    Nothing is rejected when the source is unreachable — a switched-off module
+    must not make an existing form unanswerable.
+
+    A dependent field is checked against its parent's answer, not just against
+    the list as a whole: a municipality of one state is not an answer when a
+    different state is selected, and with no state selected there is no answer
+    at all yet.
+    """
+    source = field.get("options_from") or {}
+    kind_of_source = source.get("source")
+
+    depends_on = source.get("depends_on")
+    depends_on_value = payload.get(depends_on) if depends_on else None
+
+    if depends_on and depends_on_value in (None, "", [], {}):
+        # The list this one narrows has not been answered, so nothing on it has
+        # been offered. Accepting anything here would let a stale value through.
+        return [str(value) for value in selected]
+
+    if kind_of_source == "crop_ontology":
+        try:
+            from app.modules.crop_ontology import dynamic_options
+        except Exception:
+            return []
+
+        check = lambda value: dynamic_options.is_valid(  # noqa: E731
+            source.get("kind"), value, depends_on_value)
+
+    elif kind_of_source == "client_catalog":
+        try:
+            from app.modules.client_catalog import catalog_options
+        except Exception:
+            return []
+
+        check = lambda value: catalog_options.is_valid(  # noqa: E731
+            source.get("catalog"), value, depends_on_value)
+
+    else:
+        return []
+
+    try:
+        return [str(value) for value in selected if not check(value)]
+    except Exception:
+        logger.exception("Could not check %s against its source", field.get("name"))
+        return []
 
 
 def validate_payload(
@@ -89,9 +140,17 @@ def validate_payload(
 
         # option membership
         if spec.has_options:
-            allowed = {o["value"] for o in field.get("options") or []}
             selected = raw if isinstance(raw, list) else [raw]
-            invalid = [str(v) for v in selected if str(v) not in allowed]
+
+            if field.get("options_from"):
+                # The choices were never written onto the form — they are read
+                # when it is drawn — so the answer is checked against the source
+                # itself, and against whatever the field it depends on says.
+                invalid = _not_offered(field, selected, payload)
+            else:
+                allowed = {o["value"] for o in field.get("options") or []}
+                invalid = [str(v) for v in selected if str(v) not in allowed]
+
             if invalid:
                 errors[name] = translations.message(
                     language, "not_an_option", label=label, value=invalid[0])
@@ -135,6 +194,13 @@ def validate_payload(
                 pass  # a bad pattern from the model must not block a submission
 
         clean[name] = json_safe(value)
+
+    # Last, because it works on the coerced answers, and after the form's own
+    # min/max rules because those are the client's rules in the client's unit.
+    # A figure collected in centimetres is stored in the metres its standard
+    # uses; a field with no standard is returned exactly as it always was.
+    clean, unit_errors = standardization.standardize(form_json, clean)
+    errors.update(unit_errors)
 
     if errors:
         raise ValidationFailed(errors)

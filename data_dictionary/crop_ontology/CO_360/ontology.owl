@@ -1,0 +1,3334 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rdf:RDF
+  xmlns:ns1="http://www.w3.org/2004/02/skos/core#"
+  xmlns:ns2="http://www.w3.org/2002/07/owl#"
+  xmlns:ns3="http://purl.org/dc/terms/"
+  xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+  xmlns:ns4="https://cropontology.org/rdf/"
+  xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000035">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N5170487d2e5740b7a5d50ac0615ea20f">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000033"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">GR_Comp_cmd</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N466f26cc2dd649fca40294025ce8b02c">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000032"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N2702ecbbb8cf44b9b842934d46fd10ba">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000034"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <ns3:contributor>Cornell University</ns3:contributor>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000237">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N4245219a0b904c7890b0aff884211f61">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000002"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N8282bbce06a742d49261863f29678668">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000220"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:label xml:lang="en">SPW_WM_g</rdfs:label>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N3710455d95af4a22b6f5d0c49e18e84b">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000202"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000248">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N15a0ba17d84641ba8bed168d1ccf0413">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000196"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:label xml:lang="en">BT_M_mm</rdfs:label>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N402e1be78f4347d6ba3853c2496d9f3d">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000222"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N4b2cd8164f5b4af19386648945cee7c2">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000184"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000167">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nc8cdcb1b0cc940fa8b772cf70f6cb412">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000164"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nf49115e7e58e4029939ae6ad0698de42">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">NIC_M_mg</rdfs:label>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nc4c64a85a3024ab58bc2b8a0c2cd9f29">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000042"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000235">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Ndc3b893ac761414db3c92a8ce323ada5">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000186"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Ncb65b08f0952479cb3a6716a217df518">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000198"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N841b266511624f748e385778097b0372">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000036"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:label xml:lang="en">M_E_0to1</rdfs:label>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000257">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N44cb2b6635b04d0a9c0f1d0a12ef7781">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000228"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">TSW_DM_g</rdfs:label>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N70d68c34339e4426bf4a6e426e5ce435">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000002"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N0a08ea1893aa4da98a7d51348b2aa74f">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000212"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000292">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N27c52763c00947cd87bfa392d2231a8e">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000289"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N7550befd6ee3420eb38296dddaf88aa9">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000266"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N566db060fb3b42588fdc1804a5945385">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000264"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">BN_PTM_count</rdfs:label>
+    <ns3:contributor>Cornell University</ns3:contributor>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000115">
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Na863b6198d524c45913503a503f6b474">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N593c5372bdbe4894a4bd6d68666b1222">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000112"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">ASC_M_mg</rdfs:label>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N418c6b0fccf84adb83e76c95485fc8ee">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000042"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000163">
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N2da86c3b600449bfa503993424b1c0a3">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000042"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nefefea9ca660417ab2277b67a18298d2">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000160"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nb8a50b1e53174c27803f114bcbd36045">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">MNC_M_mg</rdfs:label>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000135">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N40d42fd633744e01bae21dbe46c92b30">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:label xml:lang="en">PBC_M_mg</rdfs:label>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nde9f1f9540e3425b8b29fb06243d0df2">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000132"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N7c826e649964485e84893533fb40c58b">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000042"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000287">
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Ncb8dc1541fa74fc58700d346a22997f6">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000284"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">SPTC_M_count</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Na09abad0f39d48508486a6da93b532f4">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000264"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nd24b5d1a1f2d41fe8af8e1db24f84542">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000282"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000263">
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N5d99f9c4d3e44462aebdb67667f23aff">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000038"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">WPP_M_pa</rdfs:label>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N7e119805b9584b1abcac197e7a273013">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000234"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nd1e3fe34b9324903bcdfe033a30ffc3a">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000218"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000279">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N40886240d75a4feaab96fb0e7df17c79">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000010"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nd591f7eb58a74c6182ad93e96a77f2c0">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000277"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nd1fad087979f405faabc8cd5c4253049">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000278"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">PTL_M_cm</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000171">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N3008485ea476490c927c198c59700e31">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000042"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N32f7aa7e61664c55a8575ea870b7af32">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000168"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nd3cb073909dc414f8f5bd8a6ac01ddf2">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">GAC_M_mg</rdfs:label>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000103">
+    <rdfs:label xml:lang="en">COC_M_mg</rdfs:label>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Ned10344b0b0d4f8b8447ea775e6c8d52">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N8685ae9e30844c3aa9fb76793b6c9938">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000042"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N8b8ec5a28dfb4b49a87965bd8c322ec6">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000100"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <ns3:contributor>Cornell University</ns3:contributor>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000067">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N45fdb6f50283401092f2171d3f578a3c">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000064"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nf8f1b2471b5449e794c21b87c3134f7a">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000199"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N80df7e0165bb4d82b75fa04953857fdc">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000042"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:label xml:lang="en">NC_M_mg</rdfs:label>
+    <ns3:contributor>Cornell University</ns3:contributor>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000131">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nb4fea1e35fc54b01bc5cddbb382ec491">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:label xml:lang="en">CDC_M_mg</rdfs:label>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nd50faa641c4a45a1813da20020c72dc4">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000128"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N95541df4f5fa4c8dba557216818c16a1">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000042"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000123">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N4dcd1cfcd62047c8918fc8107b9c2f98">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000042"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N5f6489f732654adfac6b4810ff1d0d25">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Na7e47e233692447f808b0280ed17d6a5">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000120"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:label xml:lang="en">SRC_M_mg</rdfs:label>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000091">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N1731824cb61a4b35981ac70866988529">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N962b5fc8cd474fdbbf2304ffc8a5935b">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000088"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N29b2d92bfb8147a48dd8423729275a23">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000042"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">CAC_M_mg</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000095">
+    <rdfs:label xml:lang="en">SOC_M_mg</rdfs:label>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Na53f5ec91b61498eb8d23b243a41b9e3">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000042"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N46248996269c4f44b908e85f52100d3a">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000092"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N21acc38012d2412993781f2ceb0ea553">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000071">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N4b5cc509dd1443e0b34ee05270197771">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000068"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N03db2fbfa6014e12a6ed0fdd5feca947">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000042"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nb8a82bbc9d5b4efe81a3dd95dd6065c6">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:label xml:lang="en">LIC_M_mg</rdfs:label>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000252">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:label xml:lang="en">BUP_M_pa</rdfs:label>
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N7d7e5d0f24904d5ea5455ee79d1af8d2">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000225"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N1d725f5590644ba0ad9e04b0c7bb2b6c">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000207"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N1fd1b9742e824d909857d754385f898d">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000038"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000111">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nb526f06767e24b34b6d4759b2d76378c">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:label xml:lang="en">ZNC_M_mg</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Ndff86320753545f1a0695cc091a839d7">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000042"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N83658547ac7a4ddb8eef1020520e33d1">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000108"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000258">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nbc0534bc18bf45caa72d0d330b8c7617">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000213"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">TSPWD_C_%</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N7a7c00f5d6d24621a741cc5654e7e930">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000229"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Ncb5203c5ab5c469d97c5bc07c97955b5">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000186"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000262">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nb4d32e31d5b34f4c99306a86b75c4164">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000038"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N7107fc7bb90842a3b8359c3629ad30dd">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000233"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">HEP_M_pa</rdfs:label>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N3f6e7f6e728c415e80ea058c31f5ebce">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000217"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000251">
+    <rdfs:label xml:lang="en">SCO_M_sc</rdfs:label>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nfeacf454f00e4fdf9587ef74adbf9475">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000185"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nfa9afc60d1ba41cba13f6569cb7ef97b">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000224"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Na37407ae91f34c03a0cc3fa54faa008a">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000206"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000107">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nf083528598e24d8798720f5cc66c8f00">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000104"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N59b6e0f7ef7448fab51cf251f731bef3">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000042"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nd7d0afddd13541a396816aa9b6838b71">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">CUC_M_mg</rdfs:label>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000253">
+    <rdfs:label xml:lang="en">SOP_M_pa</rdfs:label>
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nc3124227f9454bcabb44145bc5991b04">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000038"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Ndc521749e7b444eeb813a13389ee7bab">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000208"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N8e9bf765b25a4a9ba1a484ee457bda5e">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000226"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000139">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Ned45153ca3f249d29c9a7776a39fd3ed">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nb29117bd0cc645e79ac5f5ec04c14371">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000136"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N7284489b87684d21ab319188de65eed7">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000042"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:label xml:lang="en">BC_M_mg</rdfs:label>
+  </ns2:Class>
+  <rdf:Description rdf:about="https://cropontology.org/rdf/CO_360:0000185/1">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/CO_360:0000185"/>
+    <rdfs:label xml:lang="en">Solid</rdfs:label>
+    <ns1:altLabel xml:lang="en">1</ns1:altLabel>
+  </rdf:Description>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000175">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:label xml:lang="en">RBC_M_mg</rdfs:label>
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N50e73599015a4e74a2245837ce87b12b">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N9f24f03297bf49018979e8404b2f9271">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000172"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nfff3e4d575ce4137b33250c3ceda34ae">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000042"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000254">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N61a1580505374db3ae6833c58c016f68">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000227"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N38d06c36063243d290c3bf4fecf51b7c">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000209"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">SOA_E_sqcm</rdfs:label>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N28d1a86567384013b1a3c6d9970e41b7">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000187"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000087">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nfcbd973507544619bfc7918fd8d68627">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N1fad26a836cf4511874b3afd61034cd5">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000042"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">CLC_M_mg</rdfs:label>
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N2c416b4115e5456ab237a71931fd32b9">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000084"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000063">
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N495b5959cd4049cea85ee8ecf07349e7">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000042"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">HC_M_mg</rdfs:label>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N57b90e65aa524b078229d677455122d1">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000060"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N9e8984c107794acf9b67001b8323304a">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000199"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000179">
+    <rdfs:label xml:lang="en">INC_M_mg</rdfs:label>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N99e59db5d0e945c08242aa31b2010700">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N6f8d6b9d273b4912b497602fc1a12221">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000042"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nf492f98c4f7e48f88dae43782711f136">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000176"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000276">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N295398776e494c2fa3d7a4596c3bafeb">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000271"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N5978f1876e264ff9bae094c6778bb1af">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000273"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N514b36cabc844348895cf497957df129">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000002"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">SPTW_DM_g</rdfs:label>
+  </ns2:Class>
+  <rdf:Description rdf:about="https://cropontology.org/rdf/CO_360:0000185/0">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/CO_360:0000185"/>
+    <rdfs:label xml:lang="en">Hollow</rdfs:label>
+    <ns1:altLabel xml:lang="en">0</ns1:altLabel>
+  </rdf:Description>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000043">
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nceb822e5ac0041ae9527dc56954ef31d">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000041"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nc927d99c22cd404ea90fa6f2050c7b7d">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000040"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:label xml:lang="en">CFC_M_%</rdfs:label>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N2204d9180b56415a862d4f0edf933f33">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000186"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <ns2:AnnotationProperty rdf:about="https://cropontology.org/rdf/attribute">
+    <rdfs:label>attribute</rdfs:label>
+  </ns2:AnnotationProperty>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000099">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nda5f25346a74436f9409a26b246ce548">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000042"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N9c861dde4a0a4f059866ff83e3c0d04f">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:label xml:lang="en">FEC_M_mg</rdfs:label>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N58426ec26ad3450f8534056a98390902">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000096"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000183">
+    <rdfs:label xml:lang="en">IC_M_mg</rdfs:label>
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nd21071b5e77f47838e61195ea92c5462">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nf1f989a674394acb8ed65dec2573f56e">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000042"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N7fc642ddc12a4644ba31bcfa6f2c935a">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000180"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000127">
+    <rdfs:label xml:lang="en">MOC_M_mg</rdfs:label>
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N989e88c3f6254a3d8f454926bab0f626">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000042"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N8566ccf7138246a6859917546ef0b1ef">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000124"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N52286664d04e4fd6995a571f0bcaf471">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000256">
+    <rdfs:label xml:lang="en">TSW_TDM_g</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N33bd835728e34571838f6620a60009eb">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000002"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N1655f93be9714a7ea5badc5b84d06c27">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000211"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N84c4d9e92fb243b9a512ac6c291d15df">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000228"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000238">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Na0462e79bd954fe3aeb80c0c6fe4e475">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000220"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N11c58bcbd5ce4e9098827606d40dd108">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000002"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N2f9fe425036f451b972b6c0b9ac4a8fd">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000203"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">SPW_DM_g</rdfs:label>
+    <ns3:contributor>Cornell University</ns3:contributor>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000250">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N3ec9db1cd4ff4102b410367908e850be">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000184"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N203a7ded47b044a79a33fca69724f30e">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000205"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">SD_M_mm</rdfs:label>
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N272207d18e2a43e5b6a10940fc1e0011">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000223"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000286">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:label xml:lang="en">CSPTW_DM_g</rdfs:label>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N72b55194bdbe4d48a7953134088fa644">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000002"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Ne3d7708b786546ab81c78437cb951ce3">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000283"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N8cb5220ae3f9468b928f30833ef700b2">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000281"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000159">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nef64e50be28947d19f1af9b2b35af0fc">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000156"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N13e820aafdf543f2aeb7e2fa035ec58c">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000042"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N2ca244277ec54150850f18c927563f81">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:label xml:lang="en">CRC_M_mg</rdfs:label>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000051">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nc93440e1e7bc4ca28464183ba6e63c16">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000049"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">LC_M_%</rdfs:label>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N00088185d6bd43e481b5e4ea54e84271">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000186"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N1c7d9b404e0c4c5299cac25ded87c9d6">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000048"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+  </ns2:Class>
+  <ns2:Ontology rdf:about="https://cropontology.org/rdf/">
+    <ns3:license rdf:resource="https://creativecommons.org/licenses/by/4.0/"/>
+    <rdfs:label>Sugar Kelp ontology</rdfs:label>
+  </ns2:Ontology>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000119">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N671ff9c955984415be78d7db19140942">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000042"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N108bfbb08b864d19be31cbc650d998e6">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nb3ee00e0400741f9ac6c913499397cc6">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000116"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">SEC_M_mg</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <ns3:contributor>Cornell University</ns3:contributor>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000261">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nc9f6b30a5155478bbc915a368875bec1">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000232"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N06c050670892491f9e84e62a5291db05">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000038"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">BRP_M_pa</rdfs:label>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Na36189f878f64476886d24bf9789ad00">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000216"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <rdf:Description rdf:about="https://cropontology.org/rdf/CO_360:0000038/0">
+    <ns1:altLabel xml:lang="en">0</ns1:altLabel>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/CO_360:0000038"/>
+    <rdfs:label xml:lang="en">Absent</rdfs:label>
+  </rdf:Description>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000075">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N539c8d919802438ba6c7043f777e2678">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000042"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">NAC_M_mg</rdfs:label>
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N69df70aa3c35460b85ee7ef6b530f486">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N4ac5713223144885ab0338471f39d2f1">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000072"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000249">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N8b7262e9b5cc4c878b9a2d8582ae19c1">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000024"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N3237b2a3dae74415aa105afc96c45944">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000197"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N41c22ff8d7ac437db52ac46717689d28">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000010"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">SL_M_cm</rdfs:label>
+    <ns3:contributor>Cornell University</ns3:contributor>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000240">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N0e3e7c90cbb24f9abf1620146523a1ed">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000188"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N51a1330c3ea24b81bc242fb027e1ff2e">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000010"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N9ce46a173c29436fab7d5bbbdcbfa0f4">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000008"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">BL_M_cm</rdfs:label>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000147">
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N6b3d5b32ef234920bad08b27a032cffd">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:label xml:lang="en">ALC_M_mg</rdfs:label>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N77870b2b2c62468c997383e9ae51341b">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000042"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Ncede572697e845348e4ad80627e701c3">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000144"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000259">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N729dfff0ee3d40fbb7baccc3b0d76693">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000230"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N33054789dc5c4c3d8651cf76bd4f6c23">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000214"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:label xml:lang="en">FOP_M_pa</rdfs:label>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N687ed80efb2f4a8db276841e05745151">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000038"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000274">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N2a2319dbb8ca43ff9a92b40a6959caa9">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000268"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Ne7ec4a60370449ea84e5a1f7d238688e">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000272"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">PTW_WM_kg</rdfs:label>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N3629cf196f3b44149b4c7ef58b8875b0">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000269"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+  </ns2:Class>
+  <ns2:AnnotationProperty rdf:about="https://cropontology.org/rdf/acronym">
+    <rdfs:label>acronym</rdfs:label>
+  </ns2:AnnotationProperty>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000255">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N49d8bddcf6be4e6fa8e4eb7800f84132">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000002"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">TSW_WM_g</rdfs:label>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nc11d01c45b574900936a4ffa79f83340">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000210"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N568664817f29419c904a6025fe0bace6">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000228"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000083">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nc25f2bb137cc4ffc8b1842282ab5b84b">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000080"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N3a5c3de0810a49d184939663858649a3">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000042"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">OC_M_mg</rdfs:label>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nf25e587b5ce64bdf90c115cde6e1bf08">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <ns3:contributor>Cornell University</ns3:contributor>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000285">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N9281eacfb85c49d48e60b41cbd2c28c3">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000002"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N432d61ba33ed4d6d9e85bee13c113d74">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000283"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:label xml:lang="en">CSPTW_WM_g</rdfs:label>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Ndfefd6aba6364705bc5b11957edadc2c">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000280"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000275">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N022decb7820f45b9af9f63eb9b95f30f">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000002"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">SPTW_WM_g</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N92422ed4750249f380f3e1b747b29004">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000270"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N97c69da1838a4dd5b3f3a6621294c972">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000273"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000155">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:label xml:lang="en">KC_M_mg</rdfs:label>
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N27b1a2b8b819495b9e6f4837123c95fa">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000042"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N8d2f040e25f242dd9075793ec6c71c1a">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000152"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N1ba8f144e40a4871b422f543bc42a580">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000047">
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:label xml:lang="en">PC_M_%</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nf6509c5cab8e4fc091c3cfdeb3511ba7">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000186"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N4aaffe65d6b44fa18ab5da2258f3efc3">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000044"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nb2d364ecf56a4282ad040092acbe8d9b">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000045"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000055">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N9e75a1c877a44065a54a674f1d305187">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000186"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">AC_M_%</rdfs:label>
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N11540df7c67b4befa8c97f8f3377766c">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000053"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N995e283416634db6b088a7ebaf0b4b09">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000052"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000296">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nb2e921e9b1c84b209bf9749d57aa1a92">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000294"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nd9c2fd5061b2497c8bb39134603adebe">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000186"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N48fee9bf4e2c47e9b328159b6648da20">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000295"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:label xml:lang="en">MC_M_%</rdfs:label>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000241">
+    <rdfs:label xml:lang="en">BW_M_cm</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N2d6e8abfdd7e4b8b96e68e0df78f6708">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000010"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N4502c986ff014357a510fe8fbc1590bd">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000016"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N87f73bd1d6ba4837b0f48da9f061a4ab">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000189"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000242">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N617b74c6671b4d0693ea4613eff93229">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000010"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:label xml:lang="en">BW_10_M_cm</rdfs:label>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N38ed6df2bb8c4a13960f655304ea0a6c">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000016"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nc3f1433ecd244d729db4912b025b4cda">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000190"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000291">
+    <rdfs:label xml:lang="en">PTW_DM_kg</rdfs:label>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N02ef27d3b1cb490fa2f217a3b25424ca">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000288"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N8a00620b008147838c12a6d71d84ba53">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000268"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N8bc371b8451248bca8fd18262b883d4e">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000272"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000239">
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N111aa095f169466c8fc41b5a330e9a3e">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000204"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N1a983a5d58b84632b9e54f7dfe70fe28">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000221"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">SW_M_g</rdfs:label>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nb0e776256bbb4308871481f92a4a8a88">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000002"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <ns2:AnnotationProperty rdf:about="https://cropontology.org/rdf/entity">
+    <rdfs:label>entity</rdfs:label>
+  </ns2:AnnotationProperty>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000293">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:label xml:lang="en">BN_SPTM_count</rdfs:label>
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N492ccc2835a44b7e96121d3d0c675c22">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000264"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N05590b4ca98a4069a06a8074f0ee742c">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000266"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N6663a4476a6d469bbca1c2a8f2e96518">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000290"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000059">
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N1198c27c888b4e40be6d11de72bf034c">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000056"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N5a6c30fb97f445f88af474d373f59d6c">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000199"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">CC_M_mg</rdfs:label>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nffc67deba38a426bb8f45f4ef509c275">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000042"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000245">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N96368c832e674bba9d02ea5b16ba8b19">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000010"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">BW_W_M_cm</rdfs:label>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Ne42c7e5b0e48433cae7825690c758ad7">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000016"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nb9547edcee0d4ceba2889e0bf092330d">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000193"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <ns3:contributor>Cornell University</ns3:contributor>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000260">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:label xml:lang="en">FOA_E_sqcm</rdfs:label>
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N9935a21ef56c4d898402a50b64378c58">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000215"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N3a1a5acf517341c4a97c302131c8207a">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000231"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Naac3f2ee25214bfaa75b647e0f683634">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000187"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000151">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nd20c1471b9774d0faed6e6c1dd2617ab">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000148"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N3cf5d270173e4046998c40ddfa8032b9">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:label xml:lang="en">SC_M_mg</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nbb413a80a4424c5c904f4947e1678ccb">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000042"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000079">
+    <rdfs:label xml:lang="en">MGC_M_mg</rdfs:label>
+    <ns3:contributor>Cornell University</ns3:contributor>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Ncf65e0408e08496a8fb9dc8510026ad0">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N62d44040b8264269b64cb3221bf00224">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000042"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N13109c10078843169a14379875a1e9f7">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000076"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+  </ns2:Class>
+  <rdf:Description rdf:about="https://cropontology.org/rdf/CO_360:0000038/1">
+    <rdfs:label xml:lang="en">Present</rdfs:label>
+    <ns1:altLabel xml:lang="en">1</ns1:altLabel>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/CO_360:0000038"/>
+  </rdf:Description>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000199">
+    <ns1:definition xml:lang="en">Done by UC Davis or UConn </ns1:definition>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N2ee4654aca154e098f2424042082b808">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000064"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N749d81e3b4854c3c8ed2322ea9d643d9">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000056"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <rdf:Description rdf:about="https://cropontology.org/rdf/Measurement">
+        <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Method"/>
+      </rdf:Description>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">CHN content - Measurement</rdfs:label>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N4b90d4bada524f97879a47ce84e5357d">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000060"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000225">
+    <rdfs:subClassOf>
+      <rdf:Description rdf:about="https://cropontology.org/rdf/Morphological">
+        <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Trait"/>
+      </rdf:Description>
+    </rdfs:subClassOf>
+    <ns1:definition xml:lang="en">Presence of bullations</ns1:definition>
+    <ns4:entity>Kelp</ns4:entity>
+    <rdfs:label xml:lang="en">Presence of bullations</rdfs:label>
+    <ns4:attribute>Presence of bullations</ns4:attribute>
+    <ns4:acronym xml:lang="en">BUP</ns4:acronym>
+  </ns2:Class>
+  <rdf:Description rdf:about="https://cropontology.org/rdf/Physiological">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Trait"/>
+  </rdf:Description>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000264">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N396ecdf4690446879d13dc9a31875c54">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000289"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N0e5ab249d19d4c4183c21ce4f59a17ed">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000282"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <rdf:Description rdf:about="https://cropontology.org/rdf/Numerical">
+        <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Scale"/>
+      </rdf:Description>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N0db489ded7b34216b6de461682a875a6">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000290"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">count</rdfs:label>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000230">
+    <ns4:attribute>Presence of fouling</ns4:attribute>
+    <rdfs:label xml:lang="en">Presence of fouling</rdfs:label>
+    <rdfs:subClassOf>
+      <rdf:Description rdf:about="https://cropontology.org/rdf/Biotic_stress">
+        <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Trait"/>
+      </rdf:Description>
+    </rdfs:subClassOf>
+    <ns4:entity>Kelp</ns4:entity>
+    <ns1:definition xml:lang="en">Presence of fouling</ns1:definition>
+    <ns4:acronym xml:lang="en">FOP</ns4:acronym>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000269">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+    <ns1:definition xml:lang="en">Direct measurement of the wet weight of the entire plot</ns1:definition>
+    <rdfs:label xml:lang="en">Wet weight of plot - Measurement</rdfs:label>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nb4b03a6d54c940c28a60a87de5d06ed9">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000272"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000160">
+    <rdfs:subClassOf>
+      <rdf:Description rdf:about="https://cropontology.org/rdf/Biochemical">
+        <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Trait"/>
+      </rdf:Description>
+    </rdfs:subClassOf>
+    <ns4:entity>Kelp</ns4:entity>
+    <rdfs:label xml:lang="en">Mn content</rdfs:label>
+    <ns1:definition xml:lang="en">Mn content</ns1:definition>
+    <ns4:acronym xml:lang="en">MNC</ns4:acronym>
+    <ns4:attribute>Mn content</ns4:attribute>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000036">
+    <ns4:attribute>Maturity</ns4:attribute>
+    <ns4:entity>Kelp</ns4:entity>
+    <ns4:acronym xml:lang="en">M</ns4:acronym>
+    <ns1:definition xml:lang="en">Maturity</ns1:definition>
+    <rdfs:subClassOf>
+      <rdf:Description rdf:about="https://cropontology.org/rdf/Phenological">
+        <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Trait"/>
+      </rdf:Description>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">Maturity</rdfs:label>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000164">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Biochemical"/>
+    <ns4:acronym xml:lang="en">NIC</ns4:acronym>
+    <ns4:entity>Kelp</ns4:entity>
+    <ns1:definition xml:lang="en">Ni content</ns1:definition>
+    <ns4:attribute>Ni content</ns4:attribute>
+    <rdfs:label xml:lang="en">Ni content</rdfs:label>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000281">
+    <rdfs:label xml:lang="en">Dry weight of combined subplots - Measurement</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+    <ns1:definition xml:lang="en">Direct measurement of the dry weight of all sampled 1cm subplots</ns1:definition>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N3ef7b4b4292d409eb10bd055cec832ec">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000283"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000273">
+    <rdfs:subClassOf>
+      <rdf:Description rdf:about="https://cropontology.org/rdf/Agronomic">
+        <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Trait"/>
+      </rdf:Description>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">Subplot weight</rdfs:label>
+    <ns4:acronym xml:lang="en">SPTW</ns4:acronym>
+    <ns4:attribute>Subplot weight</ns4:attribute>
+    <ns1:definition xml:lang="en">Weight of all individuals in a single subplot (1cm subsample)</ns1:definition>
+    <ns4:entity>Subplot</ns4:entity>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000284">
+    <ns4:attribute>Sampled subplot count</ns4:attribute>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Agronomic"/>
+    <ns1:definition xml:lang="en">The count of the number of sampled subplots (1cm subsamples)</ns1:definition>
+    <rdfs:label xml:lang="en">Sampled subplot count</rdfs:label>
+    <ns4:acronym xml:lang="en">SPTC</ns4:acronym>
+    <ns4:entity>Subplot</ns4:entity>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000034">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nbb52bcdab5ee4cb5a0dd43d85a0ab0dd">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000033"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Numerical"/>
+    <rdfs:label xml:lang="en">cm/day</rdfs:label>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000278">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Agronomic"/>
+    <ns1:definition xml:lang="en">Length of the line within a plot containing kelp growth</ns1:definition>
+    <rdfs:label xml:lang="en">Plot length</rdfs:label>
+    <ns4:entity>Plot</ns4:entity>
+    <ns4:acronym xml:lang="en">PTL</ns4:acronym>
+    <ns4:attribute>Plot length</ns4:attribute>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000200">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Ne4572b28996743fc829f6c5369df71ed">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000124"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Ncba970298e7f462cb406d991003b6b3f">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000132"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N47e3fdd90f124123829a5fd46b6ee0db">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000088"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N1a815498deb14cd490c7ee397d9b76e2">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000128"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Ncf53e2914ab341b5a8b4562827f63315">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000112"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N5e051090797f47d19f0653cdec82ee36">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000176"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N85d2916b66b34d4d9714ea4cc3d0fdef">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000100"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N78b5486858484091a0c58328f8d826a5">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000160"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nb36b9f2feea245609ec8c68a130b9f91">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000104"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N5806ef4157e8422090750230d6ae1197">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000120"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N419defb196104eb4800ed5865e620a9b">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000116"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nb8368359e5084aa58dc1ef52474afdaa">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000136"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N38c6b944865944c8b896579d1c438021">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000180"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N1ef34a49487a49148a72f798f0ec9f8b">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000144"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N4fc85c3767084859bac72218a22863fb">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000092"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N323643b873404b6ebbc92171a2c14a26">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000084"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N00efcaedad1747de9af9a0cb5b8cc459">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000076"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N565eeff4acc948248bacbe693067b05c">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000168"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nc16375a1de4a47f0a06acefe9d27c961">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000108"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nb6fffb74ef7d4e48aa54d9e48a2cb99c">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000164"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nc1bc690af7e8483db0d4db5a99f1584f">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000096"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nd5c0f0729c374f9aaebbe70d4209ea15">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000072"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N9bc6fca72b4e434693f6b33789642189">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000068"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+    <rdfs:label xml:lang="en">Mineral content - Measurement</rdfs:label>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N95a06c9bdc974fd5a255c5c42602b54f">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000148"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N3343ff09d5124703860fcad9e18c6f95">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000156"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <ns1:definition xml:lang="en">Ionomics facility, Donald Danforth Center</ns1:definition>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N268f1b13d03e48d8baca7a207802c46c">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000152"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Na760d9de8dba4387abc6c6f4a4773321">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000080"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Ndc907fa2b0ec407683a2cc031a69f3dc">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000172"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000176">
+    <ns4:attribute>In content</ns4:attribute>
+    <ns4:entity>Kelp</ns4:entity>
+    <ns4:acronym xml:lang="en">INC</ns4:acronym>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Biochemical"/>
+    <ns1:definition xml:lang="en">In content</ns1:definition>
+    <rdfs:label xml:lang="en">In content</rdfs:label>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000068">
+    <rdfs:label xml:lang="en">Li content</rdfs:label>
+    <ns1:definition xml:lang="en">Li content</ns1:definition>
+    <ns4:acronym xml:lang="en">LIC</ns4:acronym>
+    <ns4:attribute>Li content</ns4:attribute>
+    <ns4:entity>Kelp</ns4:entity>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Biochemical"/>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000033">
+    <rdfs:label xml:lang="en">Growth rate - Computation</rdfs:label>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Na2fd47d5ae53452891799556875e1c8e">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000032"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <rdf:Description rdf:about="https://cropontology.org/rdf/Computation">
+        <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Method"/>
+      </rdf:Description>
+    </rdfs:subClassOf>
+    <ns1:definition xml:lang="en">Calculation of growth rate based at harvest</ns1:definition>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000042">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N6e416ae626a945d3a8e6b0027dcd7e06">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nc105499d9ad54aa78339c4e717d33d5c">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N5009f1f7292d4e17a4f97de8b5ec9ec1">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N74b0991c31ec4f86ba4d7255570a8ca3">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000199"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N3df0143b2969454eb394ce08f0b247d9">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nc87ec58a86f34792b28ef6d9acd63a91">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N0a99ef20829c4690ba6b41551fd66fbb">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nf010b3647cbc4eed890534aae5765df4">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000199"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N67006ba441e342eba22d7bb3fc911ed9">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N89a6d1bb2be84f09a9d9b1859bf1dfdf">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">mg</rdfs:label>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N17cf0a1849164beaab21cbb5295145ca">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000199"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nce1cfe3647784a35b1144b53b0a6cc7d">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N22c9e31184724829b25386051df2f5e7">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N1aefdd4c0e8245c499b5ccceb0233de9">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nc3c2ddb4aaf54e49b7b12fe878d2999b">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N50981ed2859c4193a8a2876c03a51bbe">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N8308762371674c5a9696917309ba162c">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Na8cc37e13b6f428f97004b2103784a33">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nba7e44c7c5a249eeaf38134b74a5a855">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nd6b95c6d953948ae967601d77ec50dbd">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N7f5e2d7a3f684b38b438ec807aba235b">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N072d97ff86854e11a2d6a58836e96435">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Na796a092580c4b158b9bee30b6a5341d">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Numerical"/>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N29b2bd5ebc2342428800c365b577261a">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nf778890178ce44f983c3bacc239d5160">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N63b7fc83dfcf41668d4a6096c196b38a">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N714bbadb549847f0b605530aed770b64">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N66f798f2a69f4e0abdfafb4e5dd5eba3">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N17fd5d9508a546929409704fb7bcdb53">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N9f8792a14d5b463399ef590184e4451f">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N2ea5ecd01937414692ba711d6d059796">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000200"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000072">
+    <ns1:definition xml:lang="en">Na content</ns1:definition>
+    <ns4:acronym xml:lang="en">NAC</ns4:acronym>
+    <ns4:entity>Kelp</ns4:entity>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Biochemical"/>
+    <ns4:attribute>Na content</ns4:attribute>
+    <rdfs:label xml:lang="en">Na content</rdfs:label>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000052">
+    <ns4:entity>Kelp</ns4:entity>
+    <rdfs:label xml:lang="en">Ash content</rdfs:label>
+    <ns4:acronym xml:lang="en">AC</ns4:acronym>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Biochemical"/>
+    <ns4:attribute>Ash content</ns4:attribute>
+    <ns1:definition xml:lang="en">Ash content </ns1:definition>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000266">
+    <ns4:acronym xml:lang="en">BN</ns4:acronym>
+    <ns1:definition xml:lang="en">Blade count</ns1:definition>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Agronomic"/>
+    <ns4:attribute>Blade count</ns4:attribute>
+    <ns4:entity>Kelp</ns4:entity>
+    <rdfs:label xml:lang="en">Blade count</rdfs:label>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000294">
+    <ns1:definition xml:lang="en">Done by New Jersey Feed Labs </ns1:definition>
+    <rdfs:label xml:lang="en">Moisture content - Measurement</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N480d65bf13684b7cae75677d7bc745da">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000295"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <ns2:ObjectProperty rdf:about="https://cropontology.org/rdf/method_of">
+    <rdfs:label>method_of</rdfs:label>
+  </ns2:ObjectProperty>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000104">
+    <ns1:definition xml:lang="en">Cu content</ns1:definition>
+    <ns4:attribute>Cu content</ns4:attribute>
+    <ns4:acronym xml:lang="en">CUC</ns4:acronym>
+    <rdfs:label xml:lang="en">Cu content</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Biochemical"/>
+    <ns4:entity>Kelp</ns4:entity>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000289">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N5c6b58c88e244d0b87f2351e0c4a4cc0">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000266"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">Plot blade count - Measurement</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+    <ns1:definition xml:lang="en">Direct count of the number of blades in the entire plot</ns1:definition>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000228">
+    <ns1:definition xml:lang="en">Tissue sample weight</ns1:definition>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Morphological"/>
+    <ns4:acronym xml:lang="en">TSW</ns4:acronym>
+    <rdfs:label xml:lang="en">Tissue sample weight</rdfs:label>
+    <ns4:attribute>Tissue sample weight</ns4:attribute>
+    <ns4:entity>Kelp</ns4:entity>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000010">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N7f651bba50ce459fa2f31644a03e2926">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000190"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Naee26524acc04761afe5b9bb02a33165">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000277"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">cm</rdfs:label>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N95bbac486b4c450f9defe6907b52bf23">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000193"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N947b381d9bcb431d9887a2ba48067682">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000189"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Numerical"/>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nce0f3e7e2e0f4fe8956069b4a0d68ff7">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000188"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N168d5377160e408abd4139db56e72e91">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000197"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000040">
+    <ns4:attribute>Carbohydrate / fiber content</ns4:attribute>
+    <ns4:acronym xml:lang="en">CFC</ns4:acronym>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Biochemical"/>
+    <ns1:definition xml:lang="en">Carbohydrate / fiber content </ns1:definition>
+    <rdfs:label xml:lang="en">Carbohydrate / fiber content</rdfs:label>
+    <ns4:entity>Kelp</ns4:entity>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000056">
+    <ns4:acronym xml:lang="en">CC</ns4:acronym>
+    <ns1:definition xml:lang="en">C content</ns1:definition>
+    <rdfs:label xml:lang="en">C content</rdfs:label>
+    <ns4:attribute>C content</ns4:attribute>
+    <ns4:entity>Kelp</ns4:entity>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Biochemical"/>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000116">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Biochemical"/>
+    <ns4:attribute>Se content</ns4:attribute>
+    <rdfs:label xml:lang="en">Se content</rdfs:label>
+    <ns4:entity>Kelp</ns4:entity>
+    <ns1:definition xml:lang="en">Se content</ns1:definition>
+    <ns4:acronym xml:lang="en">SEC</ns4:acronym>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000132">
+    <ns4:attribute>Pb content</ns4:attribute>
+    <ns4:entity>Kelp</ns4:entity>
+    <ns4:acronym xml:lang="en">PBC</ns4:acronym>
+    <ns1:definition xml:lang="en">Pb content</ns1:definition>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Biochemical"/>
+    <rdfs:label xml:lang="en">Pb content</rdfs:label>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000290">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N2398d2c54cf146e48929179a62d6e81a">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000266"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <ns1:definition xml:lang="en">Direct count of the number of blades in a 1cm subsample of a plot</ns1:definition>
+    <rdfs:label xml:lang="en">Subplot blade count - Measurement</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000223">
+    <ns4:attribute>Diameter</ns4:attribute>
+    <ns1:definition xml:lang="en">Stipe diameter</ns1:definition>
+    <ns4:acronym xml:lang="en">SD</ns4:acronym>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Morphological"/>
+    <rdfs:label xml:lang="en">Stipe diameter</rdfs:label>
+    <ns4:entity>Stipe</ns4:entity>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000100">
+    <ns1:definition xml:lang="en">Co content</ns1:definition>
+    <rdfs:label xml:lang="en">Co content</rdfs:label>
+    <ns4:attribute>Co content</ns4:attribute>
+    <ns4:acronym xml:lang="en">COC</ns4:acronym>
+    <ns4:entity>Kelp</ns4:entity>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Biochemical"/>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000080">
+    <ns4:attribute>O content</ns4:attribute>
+    <rdfs:label xml:lang="en">O content</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Biochemical"/>
+    <ns1:definition xml:lang="en">O content</ns1:definition>
+    <ns4:entity>Kelp</ns4:entity>
+    <ns4:acronym xml:lang="en">OC</ns4:acronym>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000295">
+    <ns4:acronym xml:lang="en">MC</ns4:acronym>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Biochemical"/>
+    <ns4:attribute>Moisture content</ns4:attribute>
+    <rdfs:label xml:lang="en">Moisture content</rdfs:label>
+    <ns1:definition xml:lang="en">Moisture content</ns1:definition>
+    <ns4:entity>Kelp</ns4:entity>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000218">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+    <rdfs:label xml:lang="en">Presence of white patches - Measurement</rdfs:label>
+    <ns1:definition xml:lang="en">Presence or absence of white patches</ns1:definition>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N6e5c1250e4d141f39af66635ee1ca0c2">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000234"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000124">
+    <ns4:attribute>Mo content</ns4:attribute>
+    <ns4:acronym xml:lang="en">MOC</ns4:acronym>
+    <ns1:definition xml:lang="en">Mo content</ns1:definition>
+    <ns4:entity>Kelp</ns4:entity>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Biochemical"/>
+    <rdfs:label xml:lang="en">Mo content</rdfs:label>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000186">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N63b7b34059fe446eb4f85412ce94414f">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000053"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">%</rdfs:label>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N97c5a7ff87514a39904a1fe8ea8387e9">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000041"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N7ab1f61705b04e248d1f0aa42bbee7df">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000198"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nf61cf284f27141e3b61efaefa76b6302">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000294"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N039938dec0b94448a3f86a0d6005e845">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000049"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Numerical"/>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nb5b06940eb694219a537297453b1d245">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000213"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N0c28bd717c74475a9a3e47581e6f5e65">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000045"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000112">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Biochemical"/>
+    <ns4:entity>Kelp</ns4:entity>
+    <ns4:attribute>As content</ns4:attribute>
+    <rdfs:label xml:lang="en">As content</rdfs:label>
+    <ns4:acronym xml:lang="en">ASC</ns4:acronym>
+    <ns1:definition xml:lang="en">As content</ns1:definition>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000048">
+    <ns1:definition xml:lang="en">Lipid content </ns1:definition>
+    <ns4:entity>Kelp</ns4:entity>
+    <rdfs:label xml:lang="en">Lipid content</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Biochemical"/>
+    <ns4:acronym xml:lang="en">LC</ns4:acronym>
+    <ns4:attribute>Lipid content</ns4:attribute>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000288">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Ndc56b38add944d12b8a085721df092e6">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000272"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">Dry weight of plot - Measurement</rdfs:label>
+    <ns1:definition xml:lang="en">Direct measurement of the dry weight of the entire plot</ns1:definition>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000272">
+    <ns4:entity>Plot</ns4:entity>
+    <ns4:acronym xml:lang="en">PTW</ns4:acronym>
+    <rdfs:label xml:lang="en">Plot weight</rdfs:label>
+    <ns4:attribute>Plot weight</ns4:attribute>
+    <ns1:definition xml:lang="en">Weight of all individuals in the entire plot</ns1:definition>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Agronomic"/>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000064">
+    <ns4:entity>Kelp</ns4:entity>
+    <rdfs:label xml:lang="en">N content</rdfs:label>
+    <ns4:attribute>N content</ns4:attribute>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Biochemical"/>
+    <ns1:definition xml:lang="en">N content</ns1:definition>
+    <ns4:acronym xml:lang="en">NC</ns4:acronym>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000152">
+    <ns4:attribute>K content</ns4:attribute>
+    <ns4:entity>Kelp</ns4:entity>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Biochemical"/>
+    <ns1:definition xml:lang="en">K content</ns1:definition>
+    <rdfs:label xml:lang="en">K content</rdfs:label>
+    <ns4:acronym xml:lang="en">KC</ns4:acronym>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000180">
+    <ns1:definition xml:lang="en">I content</ns1:definition>
+    <ns4:attribute>I content</ns4:attribute>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Biochemical"/>
+    <ns4:entity>Kelp</ns4:entity>
+    <rdfs:label xml:lang="en">I content</rdfs:label>
+    <ns4:acronym xml:lang="en">IC</ns4:acronym>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000024">
+    <ns4:acronym xml:lang="en">SL</ns4:acronym>
+    <ns4:entity>Stipe</ns4:entity>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Morphological"/>
+    <ns4:attribute>Length</ns4:attribute>
+    <ns1:definition xml:lang="en">Stipe length</ns1:definition>
+    <rdfs:label xml:lang="en">Stipe length</rdfs:label>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000197">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+    <rdfs:label xml:lang="en">Stipe length - Measurement</rdfs:label>
+    <ns1:definition xml:lang="en">Direct measurement of stipe length</ns1:definition>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N4c1e7a1680d0404f9319304631af5308">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000024"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000060">
+    <ns4:attribute>H content</ns4:attribute>
+    <ns1:definition xml:lang="en">H content</ns1:definition>
+    <ns4:acronym xml:lang="en">HC</ns4:acronym>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Biochemical"/>
+    <ns4:entity>Kelp</ns4:entity>
+    <rdfs:label xml:lang="en">H content</rdfs:label>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000198">
+    <rdfs:label xml:lang="en">Maturity - Estimation</rdfs:label>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N80609b228abc4b9db015af4611d2b42b">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000036"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <ns1:definition xml:lang="en">Visual estimation of percent maturity at harvest</ns1:definition>
+    <rdfs:subClassOf>
+      <rdf:Description rdf:about="https://cropontology.org/rdf/Estimation">
+        <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Method"/>
+      </rdf:Description>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000280">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nf4ceb9643f934f418383d5fbcf93c7b0">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000283"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <ns1:definition xml:lang="en">Direct measurement of the wet weight of all sampled 1cm subplots</ns1:definition>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+    <rdfs:label xml:lang="en">Wet weight of combined subplots - Measurement</rdfs:label>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000172">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Biochemical"/>
+    <ns4:attribute>Rb content</ns4:attribute>
+    <ns4:entity>Kelp</ns4:entity>
+    <ns4:acronym xml:lang="en">RBC</ns4:acronym>
+    <rdfs:label xml:lang="en">Rb content</rdfs:label>
+    <ns1:definition xml:lang="en">Rb content</ns1:definition>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000156">
+    <rdfs:label xml:lang="en">Cr content</rdfs:label>
+    <ns4:attribute>Cr content</ns4:attribute>
+    <ns4:entity>Kelp</ns4:entity>
+    <ns4:acronym xml:lang="en">CRC</ns4:acronym>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Biochemical"/>
+    <ns1:definition xml:lang="en">Cr content</ns1:definition>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000234">
+    <ns4:acronym xml:lang="en">WPP</ns4:acronym>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Biotic_stress"/>
+    <ns4:attribute>Presence of white patches</ns4:attribute>
+    <ns4:entity>Kelp</ns4:entity>
+    <ns1:definition xml:lang="en">Presence of white patches</ns1:definition>
+    <rdfs:label xml:lang="en">Presence of white patches</rdfs:label>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000193">
+    <rdfs:label xml:lang="en">Blade width - at widest - Measurement</rdfs:label>
+    <ns1:definition xml:lang="en">Direct width measurement (at widest) of randomly sampled blades</ns1:definition>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N44d250de13b641479326f31ae8dd3744">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000016"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000002">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nb9bf263e99bf4711bfa6847d93a9c295">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000203"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Numerical"/>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nd14c0475e7b2458484e17ef81dc2bd21">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000271"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nbaf3fe57dcd74991b64cc438aa46fefa">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000280"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N52364a1cbcc4410a9d79affaf6995a37">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000211"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N8b328ad880b748489e3579e7769bb8a4">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000281"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nadc71abe65bf4d9eb980cd72024cd803">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000202"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">g</rdfs:label>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N956bf922fc8f4c47861ae942ff391b69">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000212"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N8b9ad343d16f44e5b133e255aa0995d4">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000270"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N003c85eb00b04e9d8363a7662070b8cc">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000210"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nf11983370a074915ad52e93f5c6a4863">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000204"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000184">
+    <rdfs:label xml:lang="en">mm</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Numerical"/>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Ncad5d50e04994ca3ab37d6fcad1f5db3">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000205"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nf341d51813fb4dd8a14591aa792ec66a">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000196"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000120">
+    <ns4:acronym xml:lang="en">SRC</ns4:acronym>
+    <ns4:attribute>Sr content</ns4:attribute>
+    <ns4:entity>Kelp</ns4:entity>
+    <rdfs:label xml:lang="en">Sr content</rdfs:label>
+    <ns1:definition xml:lang="en">Sr content</ns1:definition>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Biochemical"/>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000044">
+    <ns4:acronym xml:lang="en">PC</ns4:acronym>
+    <rdfs:label xml:lang="en">Protein content</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Biochemical"/>
+    <ns1:definition xml:lang="en">Protein content </ns1:definition>
+    <ns4:attribute>Protein content</ns4:attribute>
+    <ns4:entity>Kelp</ns4:entity>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000211">
+    <ns1:definition xml:lang="en">Direct measurement of the towel-dried weight of a tissue sample</ns1:definition>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N257fa0f6589d471da0171d3b28bd58f9">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000228"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+    <rdfs:label xml:lang="en">Towel-dried weight of tissue sample - Measurement</rdfs:label>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000185">
+    <rdfs:subClassOf>
+      <rdf:Description rdf:about="https://cropontology.org/rdf/Nominal">
+        <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Scale"/>
+      </rdf:Description>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">stipe composition</rdfs:label>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N81d3338ced494b549d3ac152776108c2">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000206"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000208">
+    <ns1:definition xml:lang="en">Presence or absence of sori</ns1:definition>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nb7eecf47836d46ea9c7e131f17d8bbe3">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000226"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+    <rdfs:label xml:lang="en">Presence of sori - Measurement</rdfs:label>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000038">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N354e9cf01d2c453fb0eaed39502a0248">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000216"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N8430ed35935444ccbf70b6a3ee7cb733">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000208"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nebec30b1dd7d4f3ea55b45d53b09fb24">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000217"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nbd7e126b36a74ad79214a22ef3ca6560">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000207"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <rdf:Description rdf:about="https://cropontology.org/rdf/Ordinal">
+        <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Scale"/>
+      </rdf:Description>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N6598683587604a87a787ffb371757a49">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000214"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N5291044fdf394c47a583119083d43986">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000218"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">0-1 Absence/Presence</rdfs:label>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000188">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nf24adea0c57549d2b009eb5ad1a087f1">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000008"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <ns1:definition xml:lang="en">Direct length measurement of randomly sampled blades</ns1:definition>
+    <rdfs:label xml:lang="en">Blade length - Measurement</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000088">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Biochemical"/>
+    <ns4:acronym xml:lang="en">CAC</ns4:acronym>
+    <ns4:entity>Kelp</ns4:entity>
+    <ns4:attribute>Ca content</ns4:attribute>
+    <ns1:definition xml:lang="en">Ca content</ns1:definition>
+    <rdfs:label xml:lang="en">Ca content</rdfs:label>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000217">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+    <rdfs:label xml:lang="en">Presence of herbivores - Measurement</rdfs:label>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nb6824f6d111d4c6b8f599cdf5d19865d">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000233"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <ns1:definition xml:lang="en">Presence or absence of herbivores</ns1:definition>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000213">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Computation"/>
+    <ns1:definition xml:lang="en">Calculation of the percent dry weight of a tissue sample</ns1:definition>
+    <rdfs:label xml:lang="en">Percent dry weight of tissue sample - Computation</rdfs:label>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N68218d2d8ac64bc2a41ab968a12a2be2">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000229"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000226">
+    <ns4:attribute>Presence of sori</ns4:attribute>
+    <ns1:definition xml:lang="en">Presence of sori</ns1:definition>
+    <ns4:entity>Kelp</ns4:entity>
+    <rdfs:label xml:lang="en">Presence of sori</rdfs:label>
+    <ns4:acronym xml:lang="en">SOP</ns4:acronym>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Morphological"/>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000232">
+    <ns1:definition xml:lang="en">Presence of bryozoan</ns1:definition>
+    <rdfs:label xml:lang="en">Presence of bryozoan</rdfs:label>
+    <ns4:attribute>Presence of bryozoan</ns4:attribute>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Biotic_stress"/>
+    <ns4:entity>Kelp</ns4:entity>
+    <ns4:acronym xml:lang="en">BRP</ns4:acronym>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000231">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Biotic_stress"/>
+    <ns4:entity>Kelp</ns4:entity>
+    <rdfs:label xml:lang="en">Fouling area</rdfs:label>
+    <ns4:attribute>Fouling area</ns4:attribute>
+    <ns4:acronym xml:lang="en">FOA</ns4:acronym>
+    <ns1:definition xml:lang="en">Fouling area</ns1:definition>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000220">
+    <ns1:definition xml:lang="en">Weight of a single sporophyte</ns1:definition>
+    <rdfs:label xml:lang="en">Sporophyte weight</rdfs:label>
+    <ns4:entity>Kelp</ns4:entity>
+    <ns4:attribute>Sporophyte weight</ns4:attribute>
+    <ns4:acronym xml:lang="en">SPW</ns4:acronym>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Morphological"/>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000205">
+    <ns1:definition xml:lang="en">Direct measurement of the diameter of the stipe</ns1:definition>
+    <rdfs:label xml:lang="en">Stipe diameter - Measurement</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N9507c41707e749b0aa6ccb694e925b1a">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000223"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000084">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Biochemical"/>
+    <ns4:acronym xml:lang="en">CLC</ns4:acronym>
+    <ns4:entity>Kelp</ns4:entity>
+    <ns4:attribute>Cl content</ns4:attribute>
+    <ns1:definition xml:lang="en">Cl content</ns1:definition>
+    <rdfs:label xml:lang="en">Cl content</rdfs:label>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000187">
+    <rdfs:label xml:lang="en">sq cm</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Numerical"/>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N1ef80e51a45945df8efc8303fbaa4bfd">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000215"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nc1e3243ce0294d538a00050fa40ac571">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000209"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000053">
+    <rdfs:label xml:lang="en">Ash content - Measurement</rdfs:label>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N3e4aaa1775f7439db63e3bca43e6a5c3">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000052"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <ns1:definition xml:lang="en">Done by New Jersey Feed Labs </ns1:definition>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000214">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+    <ns1:definition xml:lang="en">Presence or absence of any fouling</ns1:definition>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N564b84d7f87140609d217675f86ddf69">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000230"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">Presence of fouling - Measurement</rdfs:label>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000209">
+    <ns1:definition xml:lang="en">Visual estimation of area covered by sori</ns1:definition>
+    <rdfs:label xml:lang="en">Sorus area - Estimation</rdfs:label>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nddfcd18571ce4914ba292d9d0eb9a8f2">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000227"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Estimation"/>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000076">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Biochemical"/>
+    <ns1:definition xml:lang="en">Mg content</ns1:definition>
+    <ns4:acronym xml:lang="en">MGC</ns4:acronym>
+    <ns4:attribute>Mg content</ns4:attribute>
+    <rdfs:label xml:lang="en">Mg content</rdfs:label>
+    <ns4:entity>Kelp</ns4:entity>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000215">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N40cbfdb0565e4b4fa33478a5e097c6bd">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000231"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <ns1:definition xml:lang="en">Visual estimation of area fouled</ns1:definition>
+    <rdfs:label xml:lang="en">Fouling area - Estimation</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Estimation"/>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000168">
+    <ns4:attribute>Ga content</ns4:attribute>
+    <rdfs:label xml:lang="en">Ga content</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Biochemical"/>
+    <ns4:acronym xml:lang="en">GAC</ns4:acronym>
+    <ns4:entity>Kelp</ns4:entity>
+    <ns1:definition xml:lang="en">Ga content</ns1:definition>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000221">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Morphological"/>
+    <ns1:definition xml:lang="en">Stipe weight</ns1:definition>
+    <ns4:entity>Stipe</ns4:entity>
+    <ns4:attribute>Weight</ns4:attribute>
+    <ns4:acronym xml:lang="en">SW</ns4:acronym>
+    <rdfs:label xml:lang="en">Stipe weight</rdfs:label>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000148">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Biochemical"/>
+    <ns1:definition xml:lang="en">S content</ns1:definition>
+    <ns4:acronym xml:lang="en">SC</ns4:acronym>
+    <ns4:entity>Kelp</ns4:entity>
+    <rdfs:label xml:lang="en">S content</rdfs:label>
+    <ns4:attribute>S content</ns4:attribute>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000224">
+    <ns1:definition xml:lang="en">Stipe composition</ns1:definition>
+    <ns4:acronym xml:lang="en">SCO</ns4:acronym>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Morphological"/>
+    <rdfs:label xml:lang="en">Stipe composition</rdfs:label>
+    <ns4:entity>Stipe</ns4:entity>
+    <ns4:attribute>Composition</ns4:attribute>
+  </ns2:Class>
+  <ns2:ObjectProperty rdf:about="https://cropontology.org/rdf/scale_of">
+    <rdfs:label>scale_of</rdfs:label>
+  </ns2:ObjectProperty>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000233">
+    <ns4:entity>Kelp</ns4:entity>
+    <ns4:acronym xml:lang="en">HEP</ns4:acronym>
+    <ns4:attribute>Presence of herbivores</ns4:attribute>
+    <rdfs:label xml:lang="en">Presence of herbivores</rdfs:label>
+    <ns1:definition xml:lang="en">Presence of herbivores</ns1:definition>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Biotic_stress"/>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000008">
+    <ns4:acronym xml:lang="en">BL</ns4:acronym>
+    <ns4:attribute>Length</ns4:attribute>
+    <rdfs:label xml:lang="en">Blade length</rdfs:label>
+    <ns4:entity>Blade</ns4:entity>
+    <ns1:definition xml:lang="en">Blade length</ns1:definition>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Morphological"/>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000136">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Biochemical"/>
+    <ns1:definition xml:lang="en">B content</ns1:definition>
+    <rdfs:label xml:lang="en">B content</rdfs:label>
+    <ns4:acronym xml:lang="en">BC</ns4:acronym>
+    <ns4:entity>Kelp</ns4:entity>
+    <ns4:attribute>B content</ns4:attribute>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000128">
+    <rdfs:label xml:lang="en">Cd content</rdfs:label>
+    <ns4:entity>Kelp</ns4:entity>
+    <ns4:acronym xml:lang="en">CDC</ns4:acronym>
+    <ns1:definition xml:lang="en">Cd content</ns1:definition>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Biochemical"/>
+    <ns4:attribute>Cd content</ns4:attribute>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000108">
+    <ns4:acronym xml:lang="en">ZNC</ns4:acronym>
+    <ns4:entity>Kelp</ns4:entity>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Biochemical"/>
+    <ns4:attribute>Zn content</ns4:attribute>
+    <ns1:definition xml:lang="en">Zn content</ns1:definition>
+    <rdfs:label xml:lang="en">Zn content</rdfs:label>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000227">
+    <ns1:definition xml:lang="en">Sori area</ns1:definition>
+    <ns4:entity>Kelp</ns4:entity>
+    <ns4:acronym xml:lang="en">SOA</ns4:acronym>
+    <ns4:attribute>Sori area</ns4:attribute>
+    <rdfs:label xml:lang="en">Sori area</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Morphological"/>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000016">
+    <ns4:acronym xml:lang="en">BW</ns4:acronym>
+    <ns4:entity>Blade</ns4:entity>
+    <ns4:attribute>Width</ns4:attribute>
+    <rdfs:label xml:lang="en">Blade width</rdfs:label>
+    <ns1:definition xml:lang="en">Blade width</ns1:definition>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Morphological"/>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000207">
+    <ns1:definition xml:lang="en">Presence or absence of bullations</ns1:definition>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N535001d8217041fcbd5346bac977c851">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000225"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">Presence of bullations - Measurement</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000032">
+    <rdfs:label xml:lang="en">Growth rate</rdfs:label>
+    <ns1:definition xml:lang="en">Growth rate </ns1:definition>
+    <ns4:attribute>Growth rate</ns4:attribute>
+    <ns4:entity>Kelp</ns4:entity>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Physiological"/>
+    <ns4:acronym xml:lang="en">GR</ns4:acronym>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000189">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Na2df2b1e8a2d4d708eb75b1e92e63ac0">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000016"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">Blade width - Measurement</rdfs:label>
+    <ns1:definition xml:lang="en">Direct width measurement of randomly sampled blades</ns1:definition>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000271">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nd3df8cfe73284cb58d729338afdd20ed">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000273"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <ns1:definition xml:lang="en">Direct measurement of the dry weight of a 1cm subsample of a plot</ns1:definition>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+    <rdfs:label xml:lang="en">Dry weight of subplot - Measurement</rdfs:label>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000202">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N974aad3f2ff142dbaddb7312515bd8d0">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000220"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <ns1:definition xml:lang="en">Direct measurement of the wet weight of randomly sampled blades or all blades within 3 5cm plots</ns1:definition>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+    <rdfs:label xml:lang="en">Wet weight of sporophyte - Measurement</rdfs:label>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000206">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N3cd6a4d25fb24dac881e6c888c0b81e0">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000224"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <ns1:definition xml:lang="en">Composition of the stipe (either hollow if there is any hollow portion, or solid if completely solid)</ns1:definition>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+    <rdfs:label xml:lang="en">Stipe composition - Measurement</rdfs:label>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000277">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nd5923ca326ea4aad85e937ec8a282649">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000278"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">Plot length - Measurement</rdfs:label>
+    <ns1:definition xml:lang="en">Direct measurement of the length of the plot containing kelp growth</ns1:definition>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000049">
+    <rdfs:label xml:lang="en">Lipid content - Measurement</rdfs:label>
+    <ns1:definition xml:lang="en">Done by New Jersey Feed Labs </ns1:definition>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Ne21656de435a490691d15b178d12a338">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000048"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000045">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N046f13f0dd8f418db2cfd452f7505bfe">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000044"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">Protein content - Measurement</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+    <ns1:definition xml:lang="en">Done by New Jersey Feed Labs </ns1:definition>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000196">
+    <ns1:definition xml:lang="en">Direct thickness measurement of randomly sampled blades</ns1:definition>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N7754d42069774ac88712a6150ead5ba0">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000222"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+    <rdfs:label xml:lang="en">Blade thickness - Measurement</rdfs:label>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000096">
+    <ns4:entity>Kelp</ns4:entity>
+    <ns1:definition xml:lang="en">Fe content</ns1:definition>
+    <ns4:attribute>Fe content</ns4:attribute>
+    <ns4:acronym xml:lang="en">FEC</ns4:acronym>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Biochemical"/>
+    <rdfs:label xml:lang="en">Fe content</rdfs:label>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000282">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nfb9c1eefdc264245aff3b62bf653400b">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000284"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+    <rdfs:label xml:lang="en">Sampled subplot count - Measurement</rdfs:label>
+    <ns1:definition xml:lang="en">Direct count of the number of subplots sampled from within a plot</ns1:definition>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000283">
+    <ns4:attribute>Combined subplot weight</ns4:attribute>
+    <ns1:definition xml:lang="en">Weight of all individuals in all sampled subplots (1cm subsamples)</ns1:definition>
+    <ns4:entity>Subplot</ns4:entity>
+    <ns4:acronym xml:lang="en">CSPTW</ns4:acronym>
+    <rdfs:label xml:lang="en">Combined subplot weight</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Agronomic"/>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000212">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N9f111b410a7a4160a8c22e8657bd5fe0">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000228"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <ns1:definition xml:lang="en">Direct measurement of the dried weight of a tissue sample</ns1:definition>
+    <rdfs:label xml:lang="en">Dry weight of tissue sample - Measurement</rdfs:label>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000204">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nf071d6e300ee409e979634b17865ea1d">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000221"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">Stipe weight - Measurement</rdfs:label>
+    <ns1:definition xml:lang="en">Direct measurement of the weight of the stipe</ns1:definition>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000210">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+    <ns1:definition xml:lang="en">Direct measurement of the wet weight of a tissue sample</ns1:definition>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N2dda8861a505462bba7aa0f4239f1b6f">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000228"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">Wet weight of tissue sample - Measurement</rdfs:label>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000229">
+    <ns4:acronym xml:lang="en">TSPDW</ns4:acronym>
+    <ns4:entity>Kelp</ns4:entity>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Morphological"/>
+    <ns4:attribute>Percent dry weight</ns4:attribute>
+    <ns1:definition xml:lang="en">Percent dry weight of tissue sample</ns1:definition>
+    <rdfs:label xml:lang="en">Percent dry weight of tissue sample</rdfs:label>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000190">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N60de4abd70b340ceafb792856748e75e">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000016"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">Blade width - at 10cm - Measurement</rdfs:label>
+    <ns1:definition xml:lang="en">Direct width measurement (at 10 cm) of randomly sampled blades</ns1:definition>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+  </ns2:Class>
+  <ns2:ObjectProperty rdf:about="https://cropontology.org/rdf/variable_of">
+    <rdfs:label>variable_of</rdfs:label>
+  </ns2:ObjectProperty>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000268">
+    <rdfs:label xml:lang="en">kg</rdfs:label>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N332bb754853345439fcc128ccdf96969">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000269"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Ne24b7b5fdd234901b5ac4191199ace96">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000288"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Numerical"/>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000144">
+    <ns4:acronym xml:lang="en">ALC</ns4:acronym>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Biochemical"/>
+    <rdfs:label xml:lang="en">Al content</rdfs:label>
+    <ns4:entity>Kelp</ns4:entity>
+    <ns4:attribute>Al content</ns4:attribute>
+    <ns1:definition xml:lang="en">Al content</ns1:definition>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000203">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N95a28fe070b5437981ef8a72ca826272">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000220"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">Dry weight of sporophyte - Measurement</rdfs:label>
+    <ns1:definition xml:lang="en">Direct measurement of the dried weight of randomly sampled blades or all blades within 3 5cm plots</ns1:definition>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000041">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="Nffcbb65dad1944b6be49396a1d324c64">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000040"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">Carbohydrate / fiber content - Measurement</rdfs:label>
+    <ns1:definition xml:lang="en">Done by New Jersey Feed Labs </ns1:definition>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000222">
+    <ns1:definition xml:lang="en">Blade thickness</ns1:definition>
+    <ns4:attribute>Thickness</ns4:attribute>
+    <ns4:entity>Blade</ns4:entity>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Morphological"/>
+    <ns4:acronym xml:lang="en">BT</ns4:acronym>
+    <rdfs:label xml:lang="en">Blade thickness</rdfs:label>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000092">
+    <ns4:attribute>SO content</ns4:attribute>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Biochemical"/>
+    <ns4:acronym xml:lang="en">SOC</ns4:acronym>
+    <ns4:entity>Kelp</ns4:entity>
+    <ns1:definition xml:lang="en">SO content</ns1:definition>
+    <rdfs:label xml:lang="en">SO content</rdfs:label>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000216">
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N14af703cf8e34dd6b68e6278ca697f8a">
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000232"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+    <rdfs:label xml:lang="en">Presence of bryozoan - Measurement</rdfs:label>
+    <ns1:definition xml:lang="en">Presence or absence of bryozoan</ns1:definition>
+  </ns2:Class>
+  <ns2:Class rdf:about="https://cropontology.org/rdf/CO_360:0000270">
+    <rdfs:label xml:lang="en">Wet weight of subplot - Measurement</rdfs:label>
+    <rdfs:subClassOf>
+      <ns2:Restriction rdf:nodeID="N665c3a02383e4debba595e2a875d5768">
+        <ns2:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_360:0000273"/>
+        <ns2:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns2:Restriction>
+    </rdfs:subClassOf>
+    <ns1:definition xml:lang="en">Direct measurement of the wet weight of a 1cm subsample of a plot</ns1:definition>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+  </ns2:Class>
+</rdf:RDF>

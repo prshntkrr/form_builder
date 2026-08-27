@@ -180,6 +180,11 @@ class FieldConfig(_Config):
         default_factory=list, validation_alias=AliasChoices("options", "choices", "values"))
     validation: ValidationRules = Field(default_factory=ValidationRules)
     order: Optional[int] = None
+    # Where the choices are read from, for a field that does not carry them.
+    options_from: Optional[Dict[str, Any]] = None
+    # Where the field itself came from, when it was imported. Read only to
+    # honour what an import already established; never written here.
+    source: Optional[Dict[str, Any]] = None
 
     @field_validator("options", mode="before")
     @classmethod
@@ -345,10 +350,18 @@ def field_names_are_not_reserved(config: FormConfig, _: BusinessContext) -> List
 
 
 def choice_fields_have_options(config: FormConfig, _: BusinessContext) -> List[ValidationIssue]:
-    """A dropdown with nothing to choose from cannot be answered."""
+    """A dropdown with nothing to choose from cannot be answered.
+
+    Unless it names a source: those choices are read when the form is drawn, so
+    an empty list on the definition is correct rather than broken. An imported
+    field the client declared a controlled list is the same case — the list
+    exists, in a catalog this installation has not been given yet.
+    """
     issues = []
     for i, f in enumerate(config.fields):
-        if get_type(f.type).has_options and not f.options:
+        if (f.source or {}).get("controlled_list"):
+            continue
+        if get_type(f.type).has_options and not f.options and not f.options_from:
             issues.append(_issue(
                 f"fields.{i}.options",
                 f"'{f.label}' is a {f.type} field and needs at least one option",

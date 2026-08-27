@@ -209,20 +209,44 @@ def _describe_concept(concept: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def enrich_field(field: Dict[str, Any]) -> Dict[str, Any]:
+def match_crop_variable(field: Dict[str, Any], ontology_id: Optional[str]) -> Dict[str, Any]:
+    """The crop ontology provider.
+
+    Imported lazily and defensively: the module can be switched off, and a
+    missing crop context is the normal case rather than an error.
+    """
+    try:
+        from app.modules.crop_ontology import enrichment as crop
+    except Exception:
+        return {"match": None, "confidence": 0.0, "candidates": []}
+
+    try:
+        return crop.match_variable(field, ontology_id=ontology_id)
+    except Exception:
+        logger.exception("Crop ontology matching failed for %s", field.get("name"))
+        return {"match": None, "confidence": 0.0, "candidates": []}
+
+
+def enrich_field(field: Dict[str, Any], crop_ontology_id: Optional[str] = None) -> Dict[str, Any]:
     """Everything the standards can say about one field.
 
     The field itself is not modified — the caller decides what to keep.
+
+    `crop_ontology_id` is the crop the form is about. Without it the crop
+    ontology provider stays silent, because the same trait exists in every crop.
     """
     concept = match_concept(field)
     variable = match_variable(field)
+    crop = match_crop_variable(field, crop_ontology_id)
 
     return {
         "semantic_concept": concept["match"],
         "data_standard": variable["match"],
-        "confidence": max(concept["confidence"], variable["confidence"]),
+        "crop_ontology": crop["match"],
+        "confidence": max(concept["confidence"], variable["confidence"], crop["confidence"]),
         "concept_candidates": concept.get("candidates") or [],
         "variable_candidates": variable.get("candidates") or [],
+        "crop_candidates": crop.get("candidates") or [],
     }
 
 
@@ -255,6 +279,12 @@ def _apply_standard_options(field: Dict[str, Any]) -> Optional[str]:
         # on request; enrichment does not do it behind anyone's back.
         return None
 
+    if field.get("options_from") or (field.get("source") or {}).get("catalog_is_client_controlled"):
+        # The field is answered from a list held elsewhere — the client's own
+        # catalog, or the crop ontology. That list is the authority on what may
+        # be answered; a standard describes the field, it does not re-stock it.
+        return None
+
     options = variable_service.options_by_external_id(
         variable_id, standard.get("standard") or "ICASA"
     )
@@ -272,12 +302,30 @@ def _apply_standard_options(field: Dict[str, Any]) -> Optional[str]:
     return f"{len(options)} coded values"
 
 
-def enrich_form(form_json: Dict[str, Any]) -> Dict[str, Any]:
+def _crop_for(form_json: Dict[str, Any], prompt: str) -> Optional[str]:
+    """Which crop this form is about, worked out once for the whole form."""
+    try:
+        from app.modules.crop_ontology import enrichment as crop
+    except Exception:
+        return None
+    try:
+        return crop.crop_context(form_json, prompt)
+    except Exception:
+        return None
+
+
+def enrich_form(form_json: Dict[str, Any], prompt: str = "") -> Dict[str, Any]:
     """Attach standards to every field of a draft that has a confident match.
 
     What is already there wins: a person who chose a concept by hand is not
     overruled by the matcher. Returns the form and a note of what was attached.
+
+    `prompt` is read only for crop context — a form asked for as "maize
+    phenotyping" should reach the maize ontology even when its title does not
+    repeat the word.
     """
+    crop_ontology_id = _crop_for(form_json, prompt)
+
     fields = []
     attached = []
 
@@ -287,7 +335,7 @@ def enrich_form(form_json: Dict[str, Any]) -> Dict[str, Any]:
             continue
 
         updated = dict(field)
-        found = enrich_field(field)
+        found = enrich_field(field, crop_ontology_id)
         notes = []
 
         if found["semantic_concept"] and not updated.get("semantic_concept"):
@@ -299,6 +347,13 @@ def enrich_form(form_json: Dict[str, Any]) -> Dict[str, Any]:
             notes.append(
                 f"ICASA: {found['data_standard']['variable_name']}"
                 f" ({found['data_standard']['variable_code']})"
+            )
+
+        if found["crop_ontology"] and not updated.get("crop_ontology"):
+            updated["crop_ontology"] = found["crop_ontology"]
+            notes.append(
+                f"CropOntology: {found['crop_ontology']['trait_name'] or found['crop_ontology']['variable_name']}"
+                f" ({found['crop_ontology']['variable_id']})"
             )
 
         # A mapping alone leaves the field free text. If the variable publishes
@@ -316,4 +371,8 @@ def enrich_form(form_json: Dict[str, Any]) -> Dict[str, Any]:
                 "attached": notes,
             })
 
-    return {"form_json": {**form_json, "fields": fields}, "attached": attached}
+    return {
+        "form_json": {**form_json, "fields": fields},
+        "attached": attached,
+        "crop_ontology_id": crop_ontology_id,
+    }

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rdf:RDF
+  xmlns:ns1="http://www.w3.org/2002/07/owl#"
+  xmlns:ns2="http://purl.org/dc/terms/"
+  xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+  xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+>
+  <ns1:ObjectProperty rdf:about="https://cropontology.org/rdf/variable_of">
+    <rdfs:label>variable_of</rdfs:label>
+  </ns1:ObjectProperty>
+  <ns1:ObjectProperty rdf:about="https://cropontology.org/rdf/method_of">
+    <rdfs:label>method_of</rdfs:label>
+  </ns1:ObjectProperty>
+  <ns1:ObjectProperty rdf:about="https://cropontology.org/rdf/scale_of">
+    <rdfs:label>scale_of</rdfs:label>
+  </ns1:ObjectProperty>
+  <ns1:Ontology rdf:about="https://cropontology.org/rdf/">
+    <ns2:license rdf:resource="https://creativecommons.org/licenses/by/4.0/"/>
+  </ns1:Ontology>
+  <ns1:AnnotationProperty rdf:about="https://cropontology.org/rdf/entity">
+    <rdfs:label>entity</rdfs:label>
+  </ns1:AnnotationProperty>
+  <ns1:AnnotationProperty rdf:about="https://cropontology.org/rdf/acronym">
+    <rdfs:label>acronym</rdfs:label>
+  </ns1:AnnotationProperty>
+  <ns1:AnnotationProperty rdf:about="https://cropontology.org/rdf/attribute">
+    <rdfs:label>attribute</rdfs:label>
+  </ns1:AnnotationProperty>
+</rdf:RDF>

@@ -25,6 +25,7 @@ from app.modules.forms.schemas import (
     RevalidateRequest,
     RollbackRequest,
     StatusRequest,
+    TestDefinitionRequest,
     TranslateRequest,
     UpdateFormRequest,
     ValidateRequest,
@@ -34,7 +35,25 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/forms", tags=["forms"])
 
 
-def _enrich(form_json: Dict[str, Any]) -> Dict[str, Any]:
+def _dynamic_options(form_json: Dict[str, Any]) -> Dict[str, Any]:
+    """Point crop and feature fields at the imported ontologies.
+
+    Imported here and defensively: the module can be switched off, and a draft
+    must still be generated when it is.
+    """
+    try:
+        from app.modules.crop_ontology import enrichment as crop
+    except Exception:
+        return {"form_json": form_json, "dynamic": []}
+
+    try:
+        return crop.apply_dynamic_options(form_json)
+    except Exception:
+        logger.exception("Could not wire the crop fields; the draft is unchanged")
+        return {"form_json": form_json, "dynamic": []}
+
+
+def _enrich(form_json: Dict[str, Any], prompt: str = "") -> Dict[str, Any]:
     """Attach standards to a draft, if the standards module is installed.
 
     Imported here and defensively: the module can be switched off in .env, and a
@@ -46,7 +65,7 @@ def _enrich(form_json: Dict[str, Any]) -> Dict[str, Any]:
         return {"form_json": form_json, "attached": []}
 
     try:
-        return enrichment.enrich_form(form_json)
+        return enrichment.enrich_form(form_json, prompt)
     except Exception:
         logger.exception("Standard enrichment failed; the draft is unchanged")
         return {"form_json": form_json, "attached": []}
@@ -88,12 +107,20 @@ def generate(req: GenerateRequest, user: Dict[str, Any] = Depends(needs(FORMS_CR
         #
         # Nobody has to ask for either in the prompt.
         result = dictionary_service.apply_to_form(normalize_form(raw))
-        enriched = _enrich(result["form_json"])
+        # Crop and feature choices are the application's data, not the model's
+        # guess. Done before enrichment so a rewired field is matched in its
+        # final shape.
+        dynamic = _dynamic_options(result["form_json"])
+        enriched = _enrich(dynamic["form_json"], req.prompt)
 
         return {
             "form_json": normalize_form(enriched["form_json"]),
             "dictionary": result["applied"],
             "standards": enriched["attached"],
+            # Which crop ontology was used, so the builder can say so rather
+            # than leaving the reader to guess why a maize form got maize ids.
+            "crop_ontology_id": enriched.get("crop_ontology_id"),
+            "dynamic_options": dynamic["dynamic"],
             "prompt": req.prompt,
         }
     except llm.LLMError as exc:
@@ -129,6 +156,25 @@ def validate(req: ValidateRequest, user: Dict[str, Any] = Depends(needs(FORMS_CR
         raise HTTPException(status_code=422, detail=exc.as_payload())
     except FormSchemaError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
+
+
+@router.post("/test-definition")
+def test_definition(req: TestDefinitionRequest,
+                    user: Dict[str, Any] = Depends(needs(FORMS_CREATE))):
+    """Try answers against a definition that has not been saved.
+
+    The same validation and coercion a real submission goes through, and the
+    same reply — but there is no form and no table, so nothing can be written.
+    This is how an imported workbook is tried before anyone commits to it.
+    """
+    from app.modules.forms import submission_service
+
+    try:
+        definition = normalize_form(req.form_json)
+    except FormSchemaError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+    return submission_service.test_payload(definition, req.data, req.language)
 
 
 @router.get("/languages")

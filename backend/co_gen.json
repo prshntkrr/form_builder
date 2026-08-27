@@ -1,0 +1,100 @@
+{
+  "title": "Maize Phenotyping Form",
+  "description": "This form is used to collect data on maize phenotyping including plant height, days to flowering, and grain yield.",
+  "table_name": "maize_phenotyping",
+  "created_by": null,
+  "standard_id": null,
+  "standard_version": null,
+  "submit_label": "Submit",
+  "success_message": "Your maize phenotyping data has been successfully submitted.",
+  "sections": [
+    {
+      "key": "plant_data",
+      "title": "Plant Data",
+      "description": ""
+    },
+    {
+      "key": "yield_data",
+      "title": "Yield Data",
+      "description": ""
+    }
+  ],
+  "fields": [
+    {
+      "name": "plant_height",
+      "label": "Plant Height (cm)",
+      "type": "decimal",
+      "required": true,
+      "placeholder": "Enter height in cm",
+      "help_text": "Measure the height of the plant in centimeters.",
+      "default": null,
+      "section": "plant_data",
+      "options": [],
+      "validation": {
+        "min": 0,
+        "step": 0.1
+      },
+      "order": 1,
+      "data_standard": {
+        "standard": "ICASA",
+        "standard_version": "2026-01-29",
+        "variable_id": "935",
+        "variable_code": "PHTD",
+        "variable_name": "plant_height",
+        "unit": "m",
+        "data_type": "single"
+      },
+      "crop_ontology": {
+        "standard": "CropOntology",
+        "ontology_id": "CO_322",
+        "ontology_version": "2021-11-22 14:10:06.895000",
+        "crop": "Maize",
+        "variable_id": "CO_322:0000996",
+        "variable_name": "PH_M_cm",
+        "trait_id": "CO_322:0000994",
+        "trait_name": "Plant height",
+        "method_id": "CO_322:0000995",
+        "method_name": "PH - Measurement",
+        "scale_id": "CO_322:0000348",
+        "scale_name": "cm"
+      }
+    },
+    {
+      "name": "days_to_flowering",
+      "label": "Days to Flowering",
+      "type": "number",
+      "required": true,
+      "placeholder": "Enter days",
+      "help_text": "Record the number of days from planting to flowering.",
+      "default": null,
+      "section": "plant_data",
+      "options": [],
+      "validation": {
+        "min": 0,
+        "step": 1
+      },
+      "order": 2
+    },
+    {
+      "name": "grain_yield",
+      "label": "Grain Yield (kg/ha)",
+      "type": "decimal",
+      "required": true,
+      "placeholder": "Enter yield in kg/ha",
+      "help_text": "Measure the grain yield in kilograms per hectare.",
+      "default": null,
+      "section": "yield_data",
+      "options": [],
+      "validation": {
+        "min": 0,
+        "step": 0.1
+      },
+      "order": 3
+    }
+  ],
+  "languages": [
+    "en"
+  ],
+  "default_language": "en",
+  "translations": {}
+}

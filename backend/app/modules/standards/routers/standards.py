@@ -15,6 +15,9 @@ router = APIRouter(prefix="/api/standards", tags=["standards"])
 
 class EnrichRequest(BaseModel):
     form_json: Dict[str, Any]
+    # Read only for crop context — "maize phenotyping" should reach the maize
+    # ontology even when the form's title does not repeat the word.
+    prompt: str = ""
 
 
 @router.get("")
@@ -56,7 +59,7 @@ def options(variable_id: int, user: Dict[str, Any] = Depends(needs(STANDARDS_VIE
 @router.post("/enrich")
 def enrich(req: EnrichRequest, user: Dict[str, Any] = Depends(needs(STANDARDS_VIEW))):
     """Attach standards to a draft where the match is confident. Nothing is saved."""
-    return enrichment.enrich_form(req.form_json)
+    return enrichment.enrich_form(req.form_json, req.prompt)
 
 
 @router.post("/match-field")

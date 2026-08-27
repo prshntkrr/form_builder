@@ -115,15 +115,21 @@ export default function FieldEditor({
         </label>
 
         {/* Which standards this question carries, without having to open it. */}
-        {(field.semantic_concept || field.data_standard) && (
+        {(field.semantic_concept || field.data_standard || field.crop_ontology) && (
           <span className="frow__std" title={[
             field.semantic_concept && `${field.semantic_concept.standard}: ${field.semantic_concept.label || field.semantic_concept.uri}`,
             field.data_standard && `${field.data_standard.standard}: ${field.data_standard.variable_name} (${field.data_standard.variable_code})`,
+            field.crop_ontology && `${field.crop_ontology.crop || 'Crop'}: ${field.crop_ontology.trait_name || field.crop_ontology.variable_name} (${field.crop_ontology.variable_id})`,
           ].filter(Boolean).join('  ·  ')}>
             {field.semantic_concept && <span className="pill">{field.semantic_concept.standard}</span>}
             {field.data_standard && (
               <span className="pill pill--std">
                 {field.data_standard.variable_code || field.data_standard.standard}
+              </span>
+            )}
+            {field.crop_ontology && (
+              <span className="pill pill--crop">
+                {field.crop_ontology.crop || field.crop_ontology.ontology_id}
               </span>
             )}
           </span>

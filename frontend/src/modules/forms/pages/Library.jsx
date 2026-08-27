@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../api.js'
+import ImportWorkbook from '../components/ImportWorkbook.jsx'
 import { typeName } from '../fieldTypes.js'
 
 /** Browse the standard form library and start a form from one. */
@@ -11,6 +12,7 @@ export default function Library() {
   const [category, setCategory] = useState('')
   const [preview, setPreview] = useState(null)
   const [error, setError] = useState('')
+  const [importing, setImporting] = useState(false)
 
   useEffect(() => {
     api.listStandards().then(setCatalogue).catch((e) => setError(e.message))
@@ -61,6 +63,12 @@ export default function Library() {
             the form it came from is deleted.
           </p>
         </div>
+
+        <div className="row">
+          <button className="btn" onClick={() => setImporting(true)}>
+            Import a form
+          </button>
+        </div>
       </div>
 
       <div className="row" style={{ marginBottom: 18 }}>
@@ -94,6 +102,7 @@ export default function Library() {
               ? 'Try a different search.'
               : 'Open a form and choose Add to library to offer it as a starting point.'}
           </p>
+          <button className="btn" onClick={() => setImporting(true)}>Import a form</button>
           <button className="btn btn--primary" onClick={() => navigate('/builder')}>New form</button>
         </div>
       )}
@@ -193,6 +202,16 @@ export default function Library() {
           </div>
         </div>
       )}
-    </main>
+    
+      {importing && (
+        <ImportWorkbook
+          onClose={() => setImporting(false)}
+          onSaved={async (entry) => {
+            setImporting(false)
+            setCatalogue(await api.listStandards())
+          }}
+        />
+      )}
+</main>
   )
 }

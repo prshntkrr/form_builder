@@ -153,11 +153,19 @@ def _normalize_options(raw: Any) -> List[Dict[str, str]]:
         seen.add(value)
 
         option = {"label": label, "value": value}
-        # An option pulled from an ontology carries the concept it came from, so
-        # a stored answer can be traced back to a URI without anything extra
-        # being written alongside the response.
-        if isinstance(item, dict) and item.get("ontology_uri"):
-            option["ontology_uri"] = str(item["ontology_uri"]).strip()
+        if isinstance(item, dict):
+            # An option pulled from an ontology carries the concept it came
+            # from, so a stored answer can be traced back to a URI without
+            # anything extra being written alongside the response.
+            if item.get("ontology_uri"):
+                option["ontology_uri"] = str(item["ontology_uri"]).strip()
+            # `parent_code` is how a client's catalog nests one list under
+            # another. Dropping it would lose a relationship this application
+            # has no way to re-derive.
+            if item.get("parent_code"):
+                option["parent_code"] = str(item["parent_code"]).strip()
+            if item.get("description"):
+                option["description"] = str(item["description"]).strip()
         options.append(option)
     return options
 
@@ -257,10 +265,16 @@ def _normalize_field(raw: Any, index: int, taken: set) -> Optional[Dict[str, Any
     label = label or name.replace("_", " ").title()
 
     options = _normalize_options(raw.get("options") or raw.get("choices") or raw.get("values"))
-    if spec.has_options and not options:
+    options_from = _normalize_options_from(raw.get("options_from"))
+
+    if spec.has_options and not options and not options_from:
         # A dropdown with no choices is unusable — degrade to free text rather
-        # than shipping a broken control.
-        ftype, spec = "text", get_type("text")
+        # than shipping a broken control. Two exceptions: a field that names a
+        # source, whose choices are read when the form is drawn; and one an
+        # import says is a controlled list, where a text box would be a wrong
+        # answer rather than a lesser one.
+        if not declares_controlled_list(raw):
+            ftype, spec = "text", get_type("text")
 
     default = raw.get("default") if raw.get("default") not in ("", None) else None
     if default is not None and options:
@@ -299,6 +313,27 @@ def _normalize_field(raw: Any, index: int, taken: set) -> Optional[Dict[str, Any
     if standard:
         field["data_standard"] = standard
 
+    crop = _normalize_crop_ontology(raw.get("crop_ontology"))
+    if crop:
+        field["crop_ontology"] = crop
+
+    if options_from:
+        field["options_from"] = options_from
+
+    # The unit answers are given in, when the form author says so outright.
+    # Only ever what somebody wrote: nothing here guesses a unit, and where this
+    # is absent the standardization step falls back to the Crop Ontology scale.
+    input_unit = str(raw.get("input_unit") or "").strip()
+    if input_unit:
+        field["input_unit"] = input_unit
+
+    # Where this field came from, when it was imported rather than written here.
+    # Carried through untouched: it records the client's own variable id, their
+    # catalog and their skip logic, and this application is not its author.
+    source = raw.get("source")
+    if isinstance(source, dict) and source:
+        field["source"] = source
+
     source = str(raw.get("option_source") or "").strip().lower()
     if source in ("ontology", "standard") and (concept or standard):
         field["option_source"] = source
@@ -332,6 +367,107 @@ def _normalize_semantic_concept(raw: Dict[str, Any]) -> Optional[Dict[str, str]]
         "uri": uri,
         "label": str(raw.get("ontology_concept_label") or "").strip(),
     }
+
+
+# Where a field's choices are read from, when the form does not carry them.
+CROP_ONTOLOGY_SOURCE = "crop_ontology"
+CLIENT_CATALOG_SOURCE = "client_catalog"
+OPTION_SOURCES = (CROP_ONTOLOGY_SOURCE, CLIENT_CATALOG_SOURCE)
+
+
+def _normalize_options_from(raw: Any) -> Optional[Dict[str, str]]:
+    """A field whose choices are read when the form is drawn.
+
+    Some answers are a list the application already holds — which crops exist,
+    which traits belong to one, which municipalities the client recognises — and
+    a form should not carry a stale copy of it.
+
+    Two sources, each naming what to read:
+
+        {"source": "crop_ontology",  "kind": "trait",  "depends_on": "crop"}
+        {"source": "client_catalog", "catalog": "Municipios_mx_list",
+                                     "depends_on": "rcl_estado_colaborador_c"}
+
+    `depends_on` names another field on the same form. Crop traits are only
+    meaningful once a crop is chosen, and a municipality only once a state is,
+    so the list is fetched again whenever that answer changes.
+    """
+    if not isinstance(raw, dict):
+        return None
+
+    source = str(raw.get("source") or "").strip()
+    if source not in OPTION_SOURCES:
+        return None
+
+    described: Dict[str, str] = {"source": source}
+
+    if source == CLIENT_CATALOG_SOURCE:
+        # The client's catalog id, exactly as their workbook spells it — it is
+        # the key into their own tables, so it is never slugified.
+        catalog = str(raw.get("catalog") or raw.get("catalog_id") or "").strip()
+        if not catalog:
+            return None
+        described["catalog"] = catalog
+    else:
+        kind = str(raw.get("kind") or "").strip()
+        if not kind:
+            return None
+        described["kind"] = kind
+
+    depends_on = slugify_identifier(raw.get("depends_on") or "", "")
+    if depends_on:
+        described["depends_on"] = depends_on
+    return described
+
+
+def declares_controlled_list(raw: Any) -> bool:
+    """Whether the field was imported as a controlled list we cannot yet see.
+
+    A workbook can declare a field a dropdown and keep its permitted values
+    somewhere this application has not been given — a catalog not imported yet.
+    The honest reading is still a dropdown: turning it into a text box would
+    silently accept anything, and inventing the missing values is worse.
+    """
+    if not isinstance(raw, dict):
+        return False
+    source = raw.get("source")
+    return isinstance(source, dict) and bool(source.get("controlled_list"))
+
+
+def _normalize_crop_ontology(raw: Any) -> Optional[Dict[str, str]]:
+    """Which crop-specific variable this field measures.
+
+    Crop Ontology's own identifiers throughout — `CO_322:0000996`, not a row id.
+    `ontology_id` and `variable_id` must both be present: without the crop the
+    variable is meaningless, since every crop has its own.
+    """
+    if not isinstance(raw, dict):
+        return None
+
+    ontology_id = str(raw.get("ontology_id") or "").strip()
+    variable_id = str(raw.get("variable_id") or "").strip()
+    if not ontology_id or not variable_id:
+        return None
+
+    def text(key: str) -> str:
+        return str(raw.get(key) or "").strip()
+
+    mapping = {
+        "standard": text("standard") or "CropOntology",
+        "ontology_id": ontology_id,
+        "ontology_version": text("ontology_version"),
+        "crop": text("crop"),
+        "variable_id": variable_id,
+        "variable_name": text("variable_name"),
+    }
+    # Trait, method and scale are the structure Crop Ontology is built on, but
+    # a hand-written mapping may name only the variable.
+    for key in ("trait_id", "trait_name", "method_id", "method_name",
+                "scale_id", "scale_name", "scale_data_type"):
+        value = text(key)
+        if value:
+            mapping[key] = value
+    return mapping
 
 
 def _normalize_data_standard(raw: Any) -> Optional[Dict[str, str]]:
@@ -418,8 +554,15 @@ def normalize_form(raw: Any, fallback_title: str = "Untitled Form") -> Dict[str,
 
     # The words this form can be shown in. The field names never change with the
     # language, so a translated form still writes to the same columns.
-    translated_words = normalize_translations(raw.get("translations"))
-    languages = _normalize_languages(raw.get("languages"), translated_words)
+    # An imported form is written in whatever language the client wrote it in,
+    # and that is never changed here.
+    declared = str(raw.get("default_language") or "").strip().lower()
+    default_language = declared if declared in SUPPORTED_LANGUAGES else DEFAULT_LANGUAGE
+
+    translated_words = normalize_translations(raw.get("translations"), default_language)
+    languages = _normalize_languages(
+        raw.get("languages"), translated_words, default_language
+    )
 
     # The model fills this in when the prompt names an author ("created by admin").
     # It is only a suggestion — an explicit created_by on the request wins.
@@ -433,7 +576,7 @@ def normalize_form(raw: Any, fallback_title: str = "Untitled Form") -> Dict[str,
     except (KeyError, TypeError, ValueError):
         standard_version = None
 
-    return {
+    form = {
         "title": title or fallback_title,
         "description": str(raw.get("description") or raw.get("form_description") or "").strip(),
         "table_name": derive_table_name(title, raw.get("table_name")),
@@ -447,18 +590,26 @@ def normalize_form(raw: Any, fallback_title: str = "Untitled Form") -> Dict[str,
         "sections": sections,
         "fields": fields,
         "languages": languages,
-        "default_language": DEFAULT_LANGUAGE,
+        "default_language": default_language,
         "translations": translated_words,
     }
 
+    imported = raw.get("import_source")
+    if isinstance(imported, dict) and imported:
+        # Which file and which profile this definition was read from.
+        form["import_source"] = imported
 
-def _normalize_languages(raw: Any, translations: Dict[str, Any]) -> List[str]:
+    return form
+
+
+def _normalize_languages(raw: Any, translations: Dict[str, Any],
+                         default: str = DEFAULT_LANGUAGE) -> List[str]:
     """The languages a form offers, default first and no duplicates.
 
     A language that has translations is always included, even if nobody listed
     it — otherwise a translation somebody added would be invisible.
     """
-    languages = [DEFAULT_LANGUAGE]
+    languages = [default]
 
     if isinstance(raw, list):
         for code in raw:

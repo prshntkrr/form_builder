@@ -85,6 +85,11 @@ Rules:
 - "created_by" is metadata about the form's author, not a field. If the request names one
   ("this form is created by admin", "owner: field_officer"), put just that name there and do
   NOT add a field for it. If no author is named, use null.
+- Never invent a list of crops, crop varieties, crop traits or crop features.
+  Those come from the ontologies this installation has imported, not from you.
+  Give the field an empty "options" list and let the application fill it.
+- Never write placeholder choices such as "Feature 1", "Option 2" or "Item 3".
+  A choice nobody can act on is worse than none: leave options empty instead.
 - Output raw JSON only. No markdown fences, no commentary."""
 
 REFINE_PROMPT = """You are editing an EXISTING form definition. Apply the requested change and

@@ -11,7 +11,15 @@ let authToken = null
 export const setAuthToken = (token) => { authToken = token || null }
 
 export async function request(path, options = {}) {
-  const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) }
+  // A FormData body carries its own multipart boundary, which only the browser
+  // can generate — setting Content-Type ourselves would strip it and the
+  // upload would arrive unreadable.
+  const isUpload = typeof FormData !== 'undefined' && options.body instanceof FormData
+
+  const headers = {
+    ...(isUpload ? {} : { 'Content-Type': 'application/json' }),
+    ...(options.headers || {}),
+  }
   if (authToken) headers.Authorization = `Bearer ${authToken}`
 
   const res = await fetch(`${BASE}${path}`, { ...options, headers })

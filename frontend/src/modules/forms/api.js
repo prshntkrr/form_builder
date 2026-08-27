@@ -38,6 +38,52 @@ export const api = {
   conceptChildren: (conceptId) => request(`/ontology/${conceptId}/children`),
   conceptOptions: (conceptId) => request(`/ontology/${conceptId}/options`),
 
+  // --- importing a workbook the client already has ---
+  // Returns draft definitions. Nothing is saved by this call.
+  importWorkbook: (file) => {
+    const body = new FormData()
+    body.append('file', file)
+    return request('/standard-forms/import', { method: 'POST', body })
+  },
+
+  // The only call that stores an import.
+  saveImportedForm: (payload) =>
+    request('/standard-forms/import/save', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  // Try answers against a definition that has not been saved.
+  testDefinition: (formJson, data) =>
+    request('/forms/test-definition', {
+      method: 'POST',
+      body: JSON.stringify({ form_json: formJson, data }),
+    }),
+
+  // --- crop ontology ---
+  // Choices for a field that reads them when the form is drawn.
+  cropOntologyOptions: (kind, dependsOn) =>
+    request(`/crop-ontology/options?kind=${encodeURIComponent(kind)}` +
+            (dependsOn ? `&depends_on=${encodeURIComponent(dependsOn)}` : '')),
+
+  loadedCropOntologies: () => request('/crop-ontology'),
+
+  // --- client catalogs ---
+  // The client's own controlled list. Their codes and their wording; nothing
+  // here supplies a value the client did not.
+  clientCatalogOptions: (catalog, parentCode) =>
+    request(`/client-catalogs/${encodeURIComponent(catalog)}/options` +
+            (parentCode ? `?parent_code=${encodeURIComponent(parentCode)}` : '')),
+
+  searchCropVariables: (q, crop) =>
+    request(`/crop-ontology/search?q=${encodeURIComponent(q)}${crop ? `&crop=${crop}` : ''}`),
+
+  cropVariable: (variableId) =>
+    request(`/crop-ontology/variables/${encodeURIComponent(variableId)}`),
+
+  cropVariableOptions: (variableId) =>
+    request(`/crop-ontology/variables/${encodeURIComponent(variableId)}/options`),
+
   // --- data standards (ICASA) ---
   loadedStandards: () => request('/standards'),
   loadedOntologies: () => request('/ontology'),

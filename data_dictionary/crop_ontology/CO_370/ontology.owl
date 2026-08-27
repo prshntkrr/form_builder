@@ -1,0 +1,2797 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rdf:RDF
+  xmlns:ns1="https://cropontology.org/rdf/"
+  xmlns:ns2="http://www.w3.org/2004/02/skos/core#"
+  xmlns:ns3="http://www.w3.org/2002/07/owl#"
+  xmlns:ns4="http://purl.org/dc/terms/"
+  xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+  xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000995">
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nc0481efa41e34517b4f73d5b487a6af3">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000902"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns4:contributor>Laimburg Research, EURAC</ns4:contributor>
+    <ns4:contributor>E. Chuprikova, W. Guerra</ns4:contributor>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:label xml:lang="en">HarvestN_Obser_count</rdfs:label>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nbc9ff0c8c25541b5bff738a215979f6a">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000996"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nfb97912760d341a488401bc2ee298182">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000997"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000968">
+    <rdfs:label xml:lang="en">MDecay_Obser_count</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <ns4:contributor>E. Chuprikova, W. Guerra</ns4:contributor>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nf3761f8792b7438b977cd105eb8ed2cc">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000969"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nca442821f0884235a4630adde6ee8ccd">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000902"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nf1f17e234d824333aa5c456d4160bca8">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000970"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns4:contributor>Laimburg Research, EURAC</ns4:contributor>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000953">
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N9c71b0f845ee44dda9924df004a8c548">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000955"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns4:contributor>E. Chuprikova, W. Guerra</ns4:contributor>
+    <ns4:contributor>Laimburg Research, EURAC</ns4:contributor>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nf0f364e3f397455a9ff8c7c4a34da396">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000902"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">Rots_Obser_count</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nc1d02d082acd420b924e9279b0f65827">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000954"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+  </ns3:Class>
+  <rdf:Description rdf:about="https://cropontology.org/rdf/CO_370:0001001/4">
+    <ns2:altLabel xml:lang="en">4</ns2:altLabel>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/CO_370:0001001"/>
+    <rdfs:label xml:lang="en">neutral, apparently ripe</rdfs:label>
+  </rdf:Description>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0001018">
+    <ns4:contributor>E. Chuprikova, W. Guerra</ns4:contributor>
+    <rdfs:label xml:lang="en">TreeYield_Obser_sum</rdfs:label>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nc27c7b969a9d4a93a28d79fbf1a33992">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0001020"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns4:contributor>Laimburg Research, EURAC</ns4:contributor>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Ne99c9d002779442ebb4df77f6a1784c9">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0001019"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Na0ef32845f87439b86100ac94b288856">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0001021"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0001022">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <ns4:contributor>E. Chuprikova, W. Guerra</ns4:contributor>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N29e0c9ced3b04e2dbf6df36b4eed274a">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0001023"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nff03deca744244209935a181e3e3a163">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0001024"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N817cd19af7524193bfccd0f453587981">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0001021"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">FruitSum_Obser_count</rdfs:label>
+    <ns4:contributor>Laimburg Research, EURAC</ns4:contributor>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000941">
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N39637e93e09d4f92965a721e1db41ff2">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000902"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N9cb6889214b5440a809340c0d00fd515">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000942"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">Stains_Obser_count</rdfs:label>
+    <ns4:contributor>E. Chuprikova, W. Guerra</ns4:contributor>
+    <ns4:contributor>Laimburg Research, EURAC</ns4:contributor>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N6e551ebae50b4b968a2bdc852c20a814">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000943"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000893">
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Ndd7ab77ce4ed4d3b9443ef02eff820d8">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000894"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Ne57843099d4e44bf9271639d3c5d61c6">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000895"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nf06f80a24028435eb066afda7921c5e4">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000871"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns4:contributor>Laimburg Research, EURAC</ns4:contributor>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <ns4:contributor>E. Chuprikova, W. Guerra</ns4:contributor>
+    <rdfs:label xml:lang="en">ColorR90_Obser_per</rdfs:label>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0001015">
+    <rdfs:label xml:lang="en">Juici_Obser_count</rdfs:label>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N461ceb133888453eb3b59a7f8d6ef424">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0001017"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N04eb204caa6e4550a731d9eee85eb0e4">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0001016"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N86f5ea544cef4cea84c54fba235896b6">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000871"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <ns4:contributor>Laimburg Research, EURAC</ns4:contributor>
+    <ns4:contributor>E. Chuprikova, W. Guerra</ns4:contributor>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0001002">
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nca87d815ed7d4c08a1481704442c3702">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0001004"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">Starch_Obser_count</rdfs:label>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N262d262fb0044b8dbd131a2caa7a077a">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000983"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns4:contributor>E. Chuprikova, W. Guerra</ns4:contributor>
+    <ns4:contributor>Laimburg Research, EURAC</ns4:contributor>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Ne0addf86b1a04313922b8f4cf698b29b">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0001003"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000988">
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N0e9337a28ff9418fb847f63fdc94082e">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000989"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <ns4:contributor>E. Chuprikova, W. Guerra</ns4:contributor>
+    <ns4:contributor>Laimburg Research, EURAC</ns4:contributor>
+    <rdfs:label xml:lang="en">Acidity_Measu_Ph</rdfs:label>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N8684a3aa5d784ecfbcb08bbcf8e49b5f">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000990"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N122e5865bffa460ca6fc4f54d5a42c9a">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000991"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0001025">
+    <rdfs:label xml:lang="en">PreharFruitDrop_Obser_count</rdfs:label>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Na0e07d8772a1489ab0eb1bf47d2a20ce">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000902"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns4:contributor>E. Chuprikova, W. Guerra</ns4:contributor>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N113ab9ad817b4882ab9d94b2bca38eb9">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0001026"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Ne003e4ea0dfc4d2eadcc401c865a62d7">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0001027"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns4:contributor>Laimburg Research, EURAC</ns4:contributor>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000947">
+    <rdfs:label xml:lang="en">PeelTan_Obser_count</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N1e9a1e89a8314ecfb89a53f46452eba7">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000949"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns4:contributor>E. Chuprikova, W. Guerra</ns4:contributor>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nd195d0682be042e7a15c629e12b2dd1f">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000948"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns4:contributor>Laimburg Research, EURAC</ns4:contributor>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nd4d36bcc6b044a19af6729d6c5c1b0b5">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000902"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000912">
+    <ns4:contributor>Laimburg Research, EURAC</ns4:contributor>
+    <ns4:contributor>E. Chuprikova, W. Guerra</ns4:contributor>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N170338f810ff4f2ca6a5ebe29d0cba09">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000902"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">Size80P_Obser_count</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N846d8f8228794529ab7077d42cefe979">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000913"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N88c3fbd51bb84322bec9128adf37c70f">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000914"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+  </ns3:Class>
+  <rdf:Description rdf:about="https://cropontology.org/rdf/CO_370:0001001/2">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/CO_370:0001001"/>
+    <rdfs:label xml:lang="en">dull, bland, dry</rdfs:label>
+    <ns2:altLabel xml:lang="en">2</ns2:altLabel>
+  </rdf:Description>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000868">
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Ne1b9c140e6924895a1f079abbe0476d8">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000870"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N182e7341076845a7b09c8f317743a263">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000869"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">ColorR10_Obser_per</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <ns4:contributor>E. Chuprikova, W. Guerra</ns4:contributor>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nd330183d68b04c58b14c604596c63396">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000871"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns4:contributor>Laimburg Research, EURAC</ns4:contributor>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000950">
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N62480be92ffd49c2bdde855d43af4de2">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000902"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">BitterPit_Obser_count</rdfs:label>
+    <ns4:contributor>E. Chuprikova, W. Guerra</ns4:contributor>
+    <ns4:contributor>Laimburg Research, EURAC</ns4:contributor>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Naedd42ec98df4145a09baa9c3611d542">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000951"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N5525996f49ce4e7eb7c447de7c65dfc7">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000952"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000875">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <ns4:contributor>Laimburg Research, EURAC</ns4:contributor>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N85889ba527514c5f8d15b21a52aecde5">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000877"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N173fff58a6bf4fd1ad308f00ef1495e9">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000876"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N308427e0598640e38149e3319ea71f6a">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000871"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns4:contributor>E. Chuprikova, W. Guerra</ns4:contributor>
+    <rdfs:label xml:lang="en">ColorR30_Obser_per</rdfs:label>
+  </ns3:Class>
+  <rdf:Description rdf:about="https://cropontology.org/rdf/CO_370:0000937/9">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/CO_370:0000937"/>
+    <ns2:altLabel xml:lang="en">9</ns2:altLabel>
+    <rdfs:label xml:lang="en">high greasiness</rdfs:label>
+  </rdf:Description>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000962">
+    <ns4:contributor>E. Chuprikova, W. Guerra</ns4:contributor>
+    <rdfs:label xml:lang="en">PinScab_Obser_count</rdfs:label>
+    <ns4:contributor>Laimburg Research, EURAC</ns4:contributor>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N0dd8e62077054922b54844d28db62829">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000963"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N8bc873df0a6746a6a55a0213c297577a">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000902"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N1cccb6d76cff4f91a219cc9a57172e71">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000964"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000896">
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N5a802b0d56ad46d4807f675533b10a1a">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000871"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:label xml:lang="en">ColorR100_Obser_per</rdfs:label>
+    <ns4:contributor>Laimburg Research, EURAC</ns4:contributor>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N2bc08751b34a4474b1add7a8c8fd297f">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000897"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N855e1273e67c4d17a507c6756c1b04e2">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000898"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns4:contributor>E. Chuprikova, W. Guerra</ns4:contributor>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000899">
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N83b893862cb44fdb8db03e8a57f7b6e5">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000901"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N0145f81486254d82b98a3b294cb0bb49">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000902"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N8ae8171c04ff44db84da34271c350bdb">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000900"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns4:contributor>E. Chuprikova, W. Guerra</ns4:contributor>
+    <rdfs:label xml:lang="en">Size65M_Obser_count</rdfs:label>
+    <ns4:contributor>Laimburg Research, EURAC</ns4:contributor>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000974">
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Ne6d90479eda44bd1b6236c5b967b4d8d">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000975"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">Mould_Obser_count</rdfs:label>
+    <ns4:contributor>E. Chuprikova, W. Guerra</ns4:contributor>
+    <ns4:contributor>Laimburg Research, EURAC</ns4:contributor>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Na66b29fc13ca44fb8bd8eebe0851ee71">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000902"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N164594adb49247b988044ec737bd1665">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000976"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+  </ns3:Class>
+  <rdf:Description rdf:about="https://cropontology.org/rdf/CO_370:0001001/8">
+    <rdfs:label xml:lang="en">delicious, ripe, flavorful, final</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/CO_370:0001001"/>
+    <ns2:altLabel xml:lang="en">8</ns2:altLabel>
+  </rdf:Description>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000924">
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nbec24c44298e422f9572e59eaa399d4a">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000925"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns4:contributor>Laimburg Research, EURAC</ns4:contributor>
+    <rdfs:label xml:lang="en">Blossom_Obser_date</rdfs:label>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N4cc9b2af6a314611bed51f5cbd2927de">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000926"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <ns4:contributor>E. Chuprikova, W. Guerra</ns4:contributor>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N4231f25e58f3463fb656f2ab2738c680">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000927"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000956">
+    <ns4:contributor>E. Chuprikova, W. Guerra</ns4:contributor>
+    <ns4:contributor>Laimburg Research, EURAC</ns4:contributor>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nb58e61c1d9574d779079d5775c3de016">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000958"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">Lenticel_Obser_count</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nd6339b41d37545a9bb687a83eefaeddd">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000957"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N992c4fedc64042b880b3ddeac5b82ea6">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000902"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000887">
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N403e9c3b62004b1fa4e5126e61ce53bb">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000871"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns4:contributor>E. Chuprikova, W. Guerra</ns4:contributor>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Ne76058f099a540d28802b1fbd2605fb1">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000889"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N3deaae92ebc4468782d9935acd168152">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000888"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">ColorR70_Obser_per</rdfs:label>
+    <ns4:contributor>Laimburg Research, EURAC</ns4:contributor>
+  </ns3:Class>
+  <rdf:Description rdf:about="https://cropontology.org/rdf/CO_370:0001001/1">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/CO_370:0001001"/>
+    <rdfs:label xml:lang="en">poor, distasteful</rdfs:label>
+    <ns2:altLabel xml:lang="en">1</ns2:altLabel>
+  </rdf:Description>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000906">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nd367de1a88d449e88eaa6b47bd05759e">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000907"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N0f4f0b4f045040119c4f6ec8b26da2a7">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000908"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns4:contributor>E. Chuprikova, W. Guerra</ns4:contributor>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N4716231dc1784274b0bfee06be549999">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000902"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">Size70P_Obser_count</rdfs:label>
+    <ns4:contributor>Laimburg Research, EURAC</ns4:contributor>
+  </ns3:Class>
+  <rdf:Description rdf:about="https://cropontology.org/rdf/CO_370:0000937/7">
+    <ns2:altLabel xml:lang="en">7</ns2:altLabel>
+    <rdfs:label xml:lang="en">greasy</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/CO_370:0000937"/>
+  </rdf:Description>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000878">
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N948689acfcbd445597d342d13188d507">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000879"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns4:contributor>E. Chuprikova, W. Guerra</ns4:contributor>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:label xml:lang="en">ColorR40_Obser_per</rdfs:label>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N1ec7c42de2b24e91b53196af18be978a">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000871"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N8dfe7e18c5684f30bcee52bf1bfddf44">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000880"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns4:contributor>Laimburg Research, EURAC</ns4:contributor>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000928">
+    <ns4:contributor>Laimburg Research, EURAC</ns4:contributor>
+    <ns4:contributor>E. Chuprikova, W. Guerra</ns4:contributor>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nf83530811e94433cbfa031c21df54189">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000929"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N466cf31c5ea64d51bf073ba7b5386cce">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000930"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">FlowerFull_Obser_date</rdfs:label>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nef9025fc0d3b474badbd665460ae7440">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000927"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000890">
+    <rdfs:label xml:lang="en">ColorR80_Obser_per</rdfs:label>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Ndb816531a3594ebfac956a1a2349baf2">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000892"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns4:contributor>Laimburg Research, EURAC</ns4:contributor>
+    <ns4:contributor>E. Chuprikova, W. Guerra</ns4:contributor>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N9dcb5b7dae5d41188fc44e79d012a9b9">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000891"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N07f86e900bb44173b92f8ff3ae049a0d">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000871"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000931">
+    <rdfs:label xml:lang="en">FlowerFade_Obser_date</rdfs:label>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N818bc99413b844bb9bce6b33b019da8d">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000933"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns4:contributor>Laimburg Research, EURAC</ns4:contributor>
+    <ns4:contributor>E. Chuprikova, W. Guerra</ns4:contributor>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nb3c0ceb414cb4b11b5347cdd6bf3d311">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000927"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nf32cfd025efc47b0951d441f35987186">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000932"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000872">
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N99b80a81a14448ef9e91f6a91eaca513">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000874"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N38e7f488baca466ebd762acd7db9968f">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000873"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns4:contributor>Laimburg Research, EURAC</ns4:contributor>
+    <ns4:contributor>E. Chuprikova, W. Guerra</ns4:contributor>
+    <rdfs:label xml:lang="en">ColorR20_Obser_per</rdfs:label>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Ne198de9c283549dc9ad7c5066d7356e6">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000871"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0001005">
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Ne8c9aa8b2fa2461eafd81c612134a36c">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0001006"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N352f2c577d07428aa652eb2342b1dd14">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000987"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns4:contributor>E. Chuprikova, W. Guerra</ns4:contributor>
+    <ns4:contributor>Laimburg Research, EURAC</ns4:contributor>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N67116fec93c44e4a94032e1b00053958">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0001007"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">Firmness_Obser_count</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+  </ns3:Class>
+  <rdf:Description rdf:about="https://cropontology.org/rdf/CO_370:0000937/4">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/CO_370:0000937"/>
+    <rdfs:label xml:lang="en">lustrous</rdfs:label>
+    <ns2:altLabel xml:lang="en">4</ns2:altLabel>
+  </rdf:Description>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000909">
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N214f1a47a31345f49c7d205f00db889e">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000911"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">Size75P_Obser_count</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N06bfe7dc48754ce29adfdac365680cd7">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000910"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N90fc00a4cb0540f29175b70e7dc89bfa">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000902"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns4:contributor>E. Chuprikova, W. Guerra</ns4:contributor>
+    <ns4:contributor>Laimburg Research, EURAC</ns4:contributor>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000934">
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N5ff6960db0694ac9b91e6bdd1612f518">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000937"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N3114475cf5704d1583435e2e7d711ef8">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000936"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N6f4a9a7a709e4b29ad7fa15b6c73159d">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000935"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns4:contributor>E. Chuprikova, W. Guerra</ns4:contributor>
+    <rdfs:label xml:lang="en">GDD_WS_N</rdfs:label>
+    <ns4:contributor>Laimburg Research, EURAC</ns4:contributor>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000971">
+    <rdfs:label xml:lang="en">Browning_Obser_count</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <ns4:contributor>E. Chuprikova, W. Guerra</ns4:contributor>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N1ff06a7caba642c78a13a70c8b2bac54">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000902"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns4:contributor>Laimburg Research, EURAC</ns4:contributor>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nd63dcc2240424aa9b9271f32dfc69f0a">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000972"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Na8e9dcff88f5415b9380ea173942efd0">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000973"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000992">
+    <rdfs:label xml:lang="en">HarvestDate_Obser_date</rdfs:label>
+    <ns4:contributor>Laimburg Research, EURAC</ns4:contributor>
+    <ns4:contributor>E. Chuprikova, W. Guerra</ns4:contributor>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Ne9d3415673064820aa0c576451dc8fef">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000927"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N4c9f2759932e4a008d4a78c75c479bd0">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000993"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N03eaa87406a9473291f3bb52af6506a0">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000994"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0001028">
+    <ns4:contributor>Laimburg Research, EURAC</ns4:contributor>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nc31512788d734e04bffb09944e8bb46b">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0001030"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">PreharFruitDrop_Obser_kg</rdfs:label>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N4709c27543864d89874057e0c860b3d4">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0001021"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N48af3f0dbeaa4eeea7a10c3d1213322a">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0001029"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns4:contributor>E. Chuprikova, W. Guerra</ns4:contributor>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000915">
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N16e775712833458bbfe4de4eb66ffadb">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000916"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns4:contributor>Laimburg Research, EURAC</ns4:contributor>
+    <ns4:contributor>E. Chuprikova, W. Guerra</ns4:contributor>
+    <rdfs:label xml:lang="en">Size85P_Obser_count</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N2255212a1d474ead937b333f21896fba">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000902"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Ne5359d0e140842b3b93c2725d8e4e2a0">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000917"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0001034">
+    <ns4:contributor>Laimburg Research, EURAC</ns4:contributor>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N9e82b6649afe45749bbfd8f97a2fa1a8">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0001035"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nf79e1cb82ccc48fabba218599ff49a15">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0001037"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">Durability_Obser_count</rdfs:label>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Ndf9dcbb677414fa6a1d293fc983ff4c1">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0001036"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns4:contributor>E. Chuprikova, W. Guerra</ns4:contributor>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000977">
+    <rdfs:label xml:lang="en">Glass_Obser_count</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Ncce203251134408ab19044bc834281cc">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000902"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns4:contributor>E. Chuprikova, W. Guerra</ns4:contributor>
+    <ns4:contributor>Laimburg Research, EURAC</ns4:contributor>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Ncdefc27040354e73bbfdd397c2ae658c">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000979"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nbe7d26780dd24703983e3ace37a38865">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000978"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000984">
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nf1e3d668688f4a91ac798d423fb8285b">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000987"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns4:contributor>Laimburg Research, EURAC</ns4:contributor>
+    <ns4:contributor>E. Chuprikova, W. Guerra</ns4:contributor>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N8cccab84bd974651ae8b2fb8ebf9de3c">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000986"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">FirmnessAv_Measu_kg/cm2</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N4c4a4c52b8cc4318917f4359e1c9d281">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000985"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000881">
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nacb97a595fca46c5a6abd2dd7ab68537">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000871"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns4:contributor>E. Chuprikova, W. Guerra</ns4:contributor>
+    <rdfs:label xml:lang="en">ColorR50_Obser_per</rdfs:label>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N799703b19a424e37a5fcf5201996d0c3">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000882"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nd9aba88ba34148e5a876520898c41222">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000883"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <ns4:contributor>Laimburg Research, EURAC</ns4:contributor>
+  </ns3:Class>
+  <ns3:AnnotationProperty rdf:about="https://cropontology.org/rdf/acronym">
+    <rdfs:label>acronym</rdfs:label>
+  </ns3:AnnotationProperty>
+  <rdf:Description rdf:about="https://cropontology.org/rdf/CO_370:0001001/6">
+    <ns2:altLabel xml:lang="en">6</ns2:altLabel>
+    <rdfs:label xml:lang="en">highly flavored, pleasant taste, proper firmness</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/CO_370:0001001"/>
+  </rdf:Description>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000884">
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N2e337725d3264e62b564eb99b03e7e00">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000871"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N1d22b461d2fb4d279304f183bd1182b1">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000886"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns4:contributor>Laimburg Research, EURAC</ns4:contributor>
+    <ns4:contributor>E. Chuprikova, W. Guerra</ns4:contributor>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:label xml:lang="en">ColorR60_Obser_per</rdfs:label>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N58bc2b5d18d74bd6bbdf53a5a867ce6f">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000885"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000944">
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N90f4c962cb0e40daba54882673b6e418">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000946"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N1ebd00416c4a45ef89b0dde786c7cda8">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000945"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">Greasiness_Obser_count</rdfs:label>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Na8180f4962db4391bc5bbd2d87246873">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000937"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <ns4:contributor>E. Chuprikova, W. Guerra</ns4:contributor>
+    <ns4:contributor>Laimburg Research, EURAC</ns4:contributor>
+  </ns3:Class>
+  <ns3:Ontology rdf:about="https://cropontology.org/rdf/">
+    <rdfs:label>Apple (Malus domestica) ontology</rdfs:label>
+    <ns4:license rdf:resource="https://creativecommons.org/licenses/by/4.0/"/>
+  </ns3:Ontology>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000921">
+    <ns4:contributor>E. Chuprikova, W. Guerra</ns4:contributor>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N420049a0ed27430389c9ee407f031385">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000923"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">Russeting_Obser_score</rdfs:label>
+    <ns4:contributor>Laimburg Research, EURAC</ns4:contributor>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Ndda9b00f5ebe458da3b0446ab05dba9f">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000922"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nf34cb7d069d84dc4a85062856c109740">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000871"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000903">
+    <rdfs:label xml:lang="en">Size65P_Obser_count</rdfs:label>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Ncc061ac0ae404a0c8c5e8b0049700ee1">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000902"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns4:contributor>E. Chuprikova, W. Guerra</ns4:contributor>
+    <ns4:contributor>Laimburg Research, EURAC</ns4:contributor>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N909f40cd16ed467089e5196b32609e2d">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000905"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N5b83d2184ad148e185e827d1477c4ef2">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000904"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000980">
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N05a754e181154bd7a08a3aecff3dd716">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000982"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N6685a52ab4fb42549999df216f86f491">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000983"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns4:contributor>E. Chuprikova, W. Guerra</ns4:contributor>
+    <ns4:contributor>Laimburg Research, EURAC</ns4:contributor>
+    <rdfs:label xml:lang="en">Starch_Avr_Measur_const</rdfs:label>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Na31c497bfe554cafb7dec36cc1a47d8e">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000981"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0001031">
+    <rdfs:label xml:lang="en">TreeNHarvest_Obser_photo</rdfs:label>
+    <ns4:contributor>E. Chuprikova, W. Guerra</ns4:contributor>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N951990799ed940bb845af0593ba6d409">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000902"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns4:contributor>Laimburg Research, EURAC</ns4:contributor>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N61285a1b82a745c6b78787e42f470a6b">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0001032"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N90ac09e07d844a45bbfac78f4d2e3968">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0001033"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000965">
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N108cb6db1613475db26135df013ca9dd">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000902"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns4:contributor>Laimburg Research, EURAC</ns4:contributor>
+    <rdfs:label xml:lang="en">Mildew_Obser_count</rdfs:label>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N6a2ae1c4b2bb488fb916e20d0d402d25">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000966"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Na4dcce910f8d4cb6a6b19940d78dca39">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000967"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <ns4:contributor>E. Chuprikova, W. Guerra</ns4:contributor>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0001008">
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N97d48454f27e4c0782e2192b231048ba">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0001009"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns4:contributor>E. Chuprikova, W. Guerra</ns4:contributor>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N802dae814a834379bf9f92fd2bdc79b9">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0001010"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:label xml:lang="en">Acidity_Obser_count</rdfs:label>
+    <ns4:contributor>Laimburg Research, EURAC</ns4:contributor>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N542f1009c3a6466595bb3928112238bd">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000991"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+  </ns3:Class>
+  <rdf:Description rdf:about="https://cropontology.org/rdf/CO_370:0001001/5">
+    <rdfs:label xml:lang="en">substantially flavorful, tasteful</rdfs:label>
+    <ns2:altLabel xml:lang="en">5</ns2:altLabel>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/CO_370:0001001"/>
+  </rdf:Description>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000998">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N3f68d8d65f4e48168f43e59093ba8957">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0001000"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nc8eef794d00e440197c1abedc8f84e21">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000999"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">Taste_Obser_count</rdfs:label>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nd092b6085b434f7ca8ab1c803a3b76d1">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0001001"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns4:contributor>E. Chuprikova, W. Guerra</ns4:contributor>
+    <ns4:contributor>Laimburg Research, EURAC</ns4:contributor>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000918">
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Ne9662dd3f25048668402a7383ed16dad">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000902"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">Size90P_Obser_count</rdfs:label>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nd989ccac4c6a41488a70acee7391dbfc">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000920"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N562bb3d245f04c2da012a0020b88e097">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000919"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns4:contributor>E. Chuprikova, W. Guerra</ns4:contributor>
+    <ns4:contributor>Laimburg Research, EURAC</ns4:contributor>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+  </ns3:Class>
+  <rdf:Description rdf:about="https://cropontology.org/rdf/CO_370:0000937/3">
+    <ns2:altLabel xml:lang="en">3</ns2:altLabel>
+    <rdfs:label xml:lang="en">smooth</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/CO_370:0000937"/>
+  </rdf:Description>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000938">
+    <ns4:contributor>E. Chuprikova, W. Guerra</ns4:contributor>
+    <ns4:contributor>Laimburg Research, EURAC</ns4:contributor>
+    <rdfs:label xml:lang="en">Shrivel_Obser_count</rdfs:label>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N0df93a0bbc9944dabcf696add1666cd7">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000940"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N282d3e4bc0564ac89bf4f6945d47ebdd">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000902"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N6ccda55c370b4d81b278c870008ef0ca">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000939"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+  </ns3:Class>
+  <rdf:Description rdf:about="https://cropontology.org/rdf/CO_370:0000937/1">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/CO_370:0000937"/>
+    <rdfs:label xml:lang="en">mate</rdfs:label>
+    <ns2:altLabel xml:lang="en">1</ns2:altLabel>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://cropontology.org/rdf/CO_370:0000937/6">
+    <ns2:altLabel xml:lang="en">6</ns2:altLabel>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/CO_370:0000937"/>
+    <rdfs:label xml:lang="en">waxy surface</rdfs:label>
+  </rdf:Description>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0001011">
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N884cad45a51e427caff325d243b19130">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0001013"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns4:contributor>Laimburg Research, EURAC</ns4:contributor>
+    <rdfs:label xml:lang="en">Sugar_Obser_count</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Naeea3de9d3dc4726acd72165bf7a6fe4">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0001014"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N2e14627aaefa48f98b13a01829e3d9fa">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0001012"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns4:contributor>E. Chuprikova, W. Guerra</ns4:contributor>
+  </ns3:Class>
+  <rdf:Description rdf:about="https://cropontology.org/rdf/CO_370:0000937/5">
+    <ns2:altLabel xml:lang="en">5</ns2:altLabel>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/CO_370:0000937"/>
+    <rdfs:label xml:lang="en">glossy</rdfs:label>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://cropontology.org/rdf/CO_370:0001001/3">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/CO_370:0001001"/>
+    <ns2:altLabel xml:lang="en">3</ns2:altLabel>
+    <rdfs:label xml:lang="en">bland and insipid</rdfs:label>
+  </rdf:Description>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000959">
+    <ns4:contributor>E. Chuprikova, W. Guerra</ns4:contributor>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N97410e66afd24a2486fefc6638de51cd">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000961"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns4:contributor>Laimburg Research, EURAC</ns4:contributor>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nee90c6c7f680430eb2548782608413a9">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000902"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Variable"/>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Ne786e6120fd1400a9e314efd53c1f0e7">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000960"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/variable_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">FrostDamage_Obser_count</rdfs:label>
+  </ns3:Class>
+  <ns3:AnnotationProperty rdf:about="https://cropontology.org/rdf/attribute">
+    <rdfs:label>attribute</rdfs:label>
+  </ns3:AnnotationProperty>
+  <rdf:Description rdf:about="https://cropontology.org/rdf/CO_370:0001001/7">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/CO_370:0001001"/>
+    <rdfs:label xml:lang="en">tasteful, matured, juicy</rdfs:label>
+    <ns2:altLabel xml:lang="en">7</ns2:altLabel>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://cropontology.org/rdf/CO_370:0000937/2">
+    <rdfs:label xml:lang="en">low greasiness</rdfs:label>
+    <ns2:altLabel xml:lang="en">2</ns2:altLabel>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/CO_370:0000937"/>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://cropontology.org/rdf/CO_370:0000937/8">
+    <ns2:altLabel xml:lang="en">8</ns2:altLabel>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/CO_370:0000937"/>
+    <rdfs:label xml:lang="en">significant greasiness</rdfs:label>
+  </rdf:Description>
+  <ns3:AnnotationProperty rdf:about="https://cropontology.org/rdf/entity">
+    <rdfs:label>entity</rdfs:label>
+  </ns3:AnnotationProperty>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000925">
+    <ns1:attribute>Flowering blossom</ns1:attribute>
+    <ns1:acronym xml:lang="en">BLOSSOM</ns1:acronym>
+    <rdfs:subClassOf>
+      <rdf:Description rdf:about="https://cropontology.org/rdf/Phenological">
+        <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Trait"/>
+      </rdf:Description>
+    </rdfs:subClassOf>
+    <ns2:definition xml:lang="en">Date of blossom</ns2:definition>
+    <ns1:entity>Tree</ns1:entity>
+    <rdfs:label xml:lang="en">Tree flowering</rdfs:label>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0001004">
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nca4d295d54ea420888917c91c276eb6f">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0001003"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <rdf:Description rdf:about="https://cropontology.org/rdf/Measurement">
+        <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Method"/>
+      </rdf:Description>
+    </rdfs:subClassOf>
+    <ns2:definition xml:lang="en">Pimprenelle, fruit-sorting laboratory</ns2:definition>
+    <rdfs:label xml:lang="en">Starch - measurement with electronic refractometer</rdfs:label>
+  </ns3:Class>
+  <rdf:Description rdf:about="https://cropontology.org/rdf/Morphological">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Trait"/>
+  </rdf:Description>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000993">
+    <ns1:attribute>Harvest date</ns1:attribute>
+    <ns1:entity>Tree</ns1:entity>
+    <rdfs:label xml:lang="en">Date of harvest</rdfs:label>
+    <rdfs:subClassOf>
+      <rdf:Description rdf:about="https://cropontology.org/rdf/Agronomic">
+        <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Trait"/>
+      </rdf:Description>
+    </rdfs:subClassOf>
+    <ns1:acronym xml:lang="en">HARVDATE</ns1:acronym>
+    <ns2:definition xml:lang="en">Date of harvest</ns2:definition>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000904">
+    <ns1:acronym xml:lang="en">FRUITP65</ns1:acronym>
+    <ns1:entity>Fruit</ns1:entity>
+    <ns2:definition xml:lang="en">Number of fruit of size class 65+ measured with sorter machine</ns2:definition>
+    <ns1:attribute>Size</ns1:attribute>
+    <rdfs:label xml:lang="en">Number of fruit (size class 65+)</rdfs:label>
+    <rdfs:subClassOf>
+      <rdf:Description rdf:about="https://cropontology.org/rdf/Quality">
+        <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Trait"/>
+      </rdf:Description>
+    </rdfs:subClassOf>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000927">
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N2e47d7dce35b4c93a785728d075a06ac">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000930"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nd87f9e5d07d14d7cb8ea5c4d519aecc2">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000994"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">date</rdfs:label>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Ne5beee016f124e23b9fb25b1268d676e">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000926"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nbb7d634fcac049e29831742c9c325421">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000933"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <rdf:Description rdf:about="https://cropontology.org/rdf/Interval">
+        <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Scale"/>
+      </rdf:Description>
+    </rdfs:subClassOf>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0001036">
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N6f885436c48246c5b01f882f85f20d5b">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0001035"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">Time for maximum storage - counting</rdfs:label>
+    <ns2:definition xml:lang="en">Maximum number of months fruit can be stored under standard conditions - counting</ns2:definition>
+    <rdfs:subClassOf>
+      <rdf:Description rdf:about="https://cropontology.org/rdf/Counting">
+        <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Method"/>
+      </rdf:Description>
+    </rdfs:subClassOf>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000933">
+    <rdfs:label xml:lang="en">Flowering fading- field observation</rdfs:label>
+    <ns2:definition xml:lang="en">Field observation</ns2:definition>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N8af846ad25b44d19a4bec00fc9f1ad68">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000932"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000997">
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N46aea929a5534358a3527680dc20fef5">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000996"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">Harvest number - field observation</rdfs:label>
+    <ns2:definition xml:lang="en">Field observation</ns2:definition>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0001010">
+    <ns2:definition xml:lang="en">Pimprenelle, fruit-sorting laboratory</ns2:definition>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N1cef6ce0edc1437f8e15cd19aaa6673f">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0001009"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">Acidity - measurement with electronic refractometer</rdfs:label>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000922">
+    <ns1:entity>Fruit</ns1:entity>
+    <ns1:attribute>Russeting</ns1:attribute>
+    <ns1:acronym xml:lang="en">RUSSAN</ns1:acronym>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Morphological"/>
+    <rdfs:label xml:lang="en">Fruit russeting</rdfs:label>
+    <ns2:definition xml:lang="en">Russeting</ns2:definition>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000951">
+    <ns2:definition xml:lang="en">Number of apples shown signs of bitter pit after the storage period</ns2:definition>
+    <ns1:entity>Fruit</ns1:entity>
+    <ns1:attribute>Bitter pit</ns1:attribute>
+    <rdfs:label xml:lang="en">Number of apples showing sign of bitter pit</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Quality"/>
+    <ns1:acronym xml:lang="en">NUMPEEL</ns1:acronym>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0001000">
+    <rdfs:label xml:lang="en">Eating quality - measurement, human sensory analysis - </rdfs:label>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Ndc34f8c228644ecc816019143bf86e95">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000999"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns2:definition xml:lang="en">Human sensory analysis</ns2:definition>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000923">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N2ef97f44be254f888e98a9d3cd21d7d2">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000922"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">Russeting - estimating % from total</rdfs:label>
+    <ns2:definition xml:lang="en">Counting % from the whole amount</ns2:definition>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000935">
+    <ns1:attribute>Time to fruit maternity</ns1:attribute>
+    <ns2:definition xml:lang="en">Length of time towards fruit maturity</ns2:definition>
+    <rdfs:label xml:lang="en">Time to fruit maternity</rdfs:label>
+    <ns1:entity>Tree</ns1:entity>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Phenological"/>
+    <ns1:acronym xml:lang="en">WSGDD</ns1:acronym>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000879">
+    <ns1:attribute>Fruit color red component</ns1:attribute>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Quality"/>
+    <ns2:definition xml:lang="en">Number of fruit of 30-40 % of red color component measured with sorter machine</ns2:definition>
+    <ns1:acronym xml:lang="en">PERRED40</ns1:acronym>
+    <rdfs:label xml:lang="en">Number of fruit, 30-40 % of red color component</rdfs:label>
+    <ns1:entity>Fruit</ns1:entity>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000981">
+    <ns1:acronym xml:lang="en">INTENSAV</ns1:acronym>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Agronomic"/>
+    <ns1:entity>Fruit</ns1:entity>
+    <ns1:attribute>Starch average</ns1:attribute>
+    <ns2:definition xml:lang="en">Starch standard</ns2:definition>
+    <rdfs:label xml:lang="en">Fruit starch average</rdfs:label>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000975">
+    <ns1:entity>Fruit</ns1:entity>
+    <ns2:definition xml:lang="en">Number of apples shown signs of core mould after the storage period</ns2:definition>
+    <ns1:acronym xml:lang="en">NUMMOU</ns1:acronym>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Quality"/>
+    <ns1:attribute>Core mould</ns1:attribute>
+    <rdfs:label xml:lang="en">Number of apples showing sign of core mould</rdfs:label>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000919">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Quality"/>
+    <ns2:definition xml:lang="en">Number of fruit of size class 90+ measured with sorter machine</ns2:definition>
+    <ns1:entity>Fruit</ns1:entity>
+    <ns1:attribute>Size</ns1:attribute>
+    <ns1:acronym xml:lang="en">FRUITP90</ns1:acronym>
+    <rdfs:label xml:lang="en">Number of fruit (size class 90+)</rdfs:label>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0001014">
+    <rdfs:label xml:lang="en">°Brix</rdfs:label>
+    <rdfs:subClassOf>
+      <rdf:Description rdf:about="https://cropontology.org/rdf/Numerical">
+        <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Scale"/>
+      </rdf:Description>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N65400a9ddbd248c98774396008019a49">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0001013"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000932">
+    <ns1:attribute>Flowering fading</ns1:attribute>
+    <ns1:entity>Tree</ns1:entity>
+    <ns1:acronym xml:lang="en">DATEFAD</ns1:acronym>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Phenological"/>
+    <ns2:definition xml:lang="en">Date of flower fading</ns2:definition>
+    <rdfs:label xml:lang="en">Date of flower fading</rdfs:label>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000940">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Counting"/>
+    <rdfs:label xml:lang="en">Shrivel - visual evaluation, counting</rdfs:label>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N05bb92fa1d8e4680ababff14d310daba">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000939"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns2:definition xml:lang="en">Counting number from the harvested amount</ns2:definition>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000939">
+    <rdfs:label xml:lang="en">Number of apples showing sign of shrivel</rdfs:label>
+    <ns2:definition xml:lang="en">Number of apples shown signs of shrivel after the storage period</ns2:definition>
+    <ns1:entity>Fruit</ns1:entity>
+    <ns1:acronym xml:lang="en">SHRSC</ns1:acronym>
+    <ns1:attribute>Shrivel</ns1:attribute>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Quality"/>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0001006">
+    <ns1:entity>Fruit</ns1:entity>
+    <ns1:attribute>Flesh firmness</ns1:attribute>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Quality"/>
+    <ns1:acronym xml:lang="en">FIRMFLES</ns1:acronym>
+    <ns2:definition xml:lang="en">Firmness of the flesh measured with pimprenelle</ns2:definition>
+    <rdfs:label xml:lang="en">Fruit flesh firmness</rdfs:label>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000963">
+    <ns2:definition xml:lang="en">Number of apples with pinpoint scab - gray to black spots that develop cracks as fruit grows</ns2:definition>
+    <ns1:attribute>Pinpoint scab</ns1:attribute>
+    <rdfs:label xml:lang="en">Number of apples showing sign of pinpoint scab</rdfs:label>
+    <ns1:entity>Fruit</ns1:entity>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Quality"/>
+    <ns1:acronym xml:lang="en">NUMPIN</ns1:acronym>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000987">
+    <rdfs:label xml:lang="en">kg/cm2</rdfs:label>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N75a6ce194b1546ebb5e5ea79634c38b6">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0001007"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Numerical"/>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N7bdb0f35218843a7b8a17133d1158e65">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000986"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000945">
+    <ns2:definition xml:lang="en">Greasiness of the apples shown stains after the storage period</ns2:definition>
+    <ns1:entity>Fruit</ns1:entity>
+    <ns1:acronym xml:lang="en">GRESCO</ns1:acronym>
+    <ns1:attribute>Greasiness</ns1:attribute>
+    <rdfs:label xml:lang="en">Number of apples showing sign ofgreasiness</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Quality"/>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000917">
+    <ns2:definition xml:lang="en">Apple sorting machine equipped with a camera sorts fruits by diameter and color</ns2:definition>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nafb46db0d137477283fab576e40ad435">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000916"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">Fruit size class 85+ counting</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+  </ns3:Class>
+  <ns3:ObjectProperty rdf:about="https://cropontology.org/rdf/variable_of">
+    <rdfs:label>variable_of</rdfs:label>
+  </ns3:ObjectProperty>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0001024">
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Ne022fa8a791f4143a471e16bc05d6ed4">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0001023"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns2:definition xml:lang="en">Weighting</ns2:definition>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+    <rdfs:label xml:lang="en">Yield total - measurement, weighting</rdfs:label>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0001016">
+    <ns2:definition xml:lang="en">Juiciness measured with pimprenelle</ns2:definition>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Quality"/>
+    <ns1:attribute>Juiciness</ns1:attribute>
+    <ns1:entity>Fruit</ns1:entity>
+    <rdfs:label xml:lang="en">Fruit juiciness</rdfs:label>
+    <ns1:acronym xml:lang="en">JUICAN</ns1:acronym>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000996">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Agronomic"/>
+    <ns1:attribute>Harvest numbers</ns1:attribute>
+    <ns1:entity>Tree</ns1:entity>
+    <rdfs:label xml:lang="en">Number of harvest</rdfs:label>
+    <ns1:acronym xml:lang="en">HARVNUM</ns1:acronym>
+    <ns2:definition xml:lang="en">Number of harvest</ns2:definition>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000942">
+    <ns1:acronym xml:lang="en">STSCO</ns1:acronym>
+    <rdfs:label xml:lang="en">Number of apples showing sign of stains</rdfs:label>
+    <ns1:entity>Fruit</ns1:entity>
+    <ns1:attribute>Stains</ns1:attribute>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Quality"/>
+    <ns2:definition xml:lang="en">Number of apples shown signs of stains after the storage period</ns2:definition>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000946">
+    <ns2:definition xml:lang="en">Visual evaluation of fruit greasiness</ns2:definition>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N272c17c1f9db4b76918c031af0827bba">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000945"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">Greasiness - visual evaluation, counting</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000983">
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nf830c43bcc354563b5e3f65a389ce92d">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000982"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N08cc31888e8d421a9ca02476584bbefe">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0001004"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Numerical"/>
+    <rdfs:label xml:lang="en">starch value</rdfs:label>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000986">
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N65906bfb4ead4b04a44341a05b52b573">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000985"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">Firmness average - estimation</rdfs:label>
+    <ns2:definition xml:lang="en">Average firmness value standard</ns2:definition>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0001037">
+    <rdfs:label xml:lang="en">month count</rdfs:label>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nad76da36b9f5462cb3b682f2dfa4ad08">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0001036"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Numerical"/>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000902">
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nf4dc58706da945459decf37bff33f523">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000917"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N25626b1954314091887749c35523e857">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000920"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N5a3f2153c6da4185a357a569437fd24c">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000961"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N7da2af12fc9c4a5cae9539c61618272f">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000967"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N05525b225aa14c3d8c87c54d2195e0c8">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000914"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Na8f09020171448aca48890c2ccf28ea0">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000964"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N1fccacd829644387a704f5b27f268adf">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000997"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N82b94eda622f470890d2aea13810f70e">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0001027"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Ne69b571f08ca40cf80a36b91256df5c4">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000952"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N58cee425dc6e4c12b5f35e4c163daf4b">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000911"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N50442767f82c4c07ac778e0320f99b3a">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0001033"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N218b161d4b34412aa85e96a2a835cbf2">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000973"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N2bbcdde1c52b42f7b8488ace991282ec">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000949"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N7359ace0ba61416dae0bdc17f88aa85e">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000970"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nda5520c84aef4bb0a22910a8bab00c85">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000979"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Numerical"/>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N40eaee1874f947569e580f7277fc1ab2">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000908"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nfebe2bfb0db64147aeebac749149652a">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000976"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N9d43f5be6d5c4e0d9755927c91d6ec54">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000940"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N1a4d8f85ead74d4cb2ebe29020937c1d">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000955"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N00dbdbc5d3b94c77be63cec2f18cd8b0">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000943"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N12e2e55269d3430b95aaac64953369c3">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000958"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">count</rdfs:label>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N0939aca0179e4c2dbbd97d75addc539c">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000901"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N3264c5e3d33349e0b5939722a99e129d">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000905"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000961">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Counting"/>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nbae59524be6a4ce3b0831b10e480fc10">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000960"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns2:definition xml:lang="en">Counting number from the harvested amount</ns2:definition>
+    <rdfs:label xml:lang="en">Frost damage - visual evaluation, counting</rdfs:label>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000869">
+    <ns1:acronym xml:lang="en">PERRED10</ns1:acronym>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Quality"/>
+    <ns2:definition xml:lang="en">Number of fruit of 0-10 % of red color component measured with sorter machine</ns2:definition>
+    <rdfs:label xml:lang="en">Number of fruit, 0-10 % of red color component</rdfs:label>
+    <ns1:attribute>Fruit color red component</ns1:attribute>
+    <ns1:entity>Fruit</ns1:entity>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000886">
+    <rdfs:label xml:lang="en">Fruit red color 50-60% - counting</rdfs:label>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N0b4c0412fc044e55b0267ba8e6eff7fb">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000885"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+    <ns2:definition xml:lang="en">Apple sorting machine equipped with a camera sorts fruits by diameter and color</ns2:definition>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000949">
+    <rdfs:label xml:lang="en">Peel tan - visual evaluation, counting</rdfs:label>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N197bf58b74084ed9a63cfd0861374e6e">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000948"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns2:definition xml:lang="en">Counting number from the harvested amount</ns2:definition>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Counting"/>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000920">
+    <ns2:definition xml:lang="en">Apple sorting machine equipped with a camera sorts fruits by diameter and color</ns2:definition>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N69deef405b334f6bba29952646f3af9c">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000919"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">Fruit size class 90+ counting</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000891">
+    <rdfs:label xml:lang="en">Number of fruit, 70-80 % of red color component</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Quality"/>
+    <ns1:attribute>Fruit color red component</ns1:attribute>
+    <ns1:acronym xml:lang="en">PERRED80</ns1:acronym>
+    <ns1:entity>Fruit</ns1:entity>
+    <ns2:definition xml:lang="en">Number of fruit of 70-80 % of red color component measured with sorter machine</ns2:definition>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000967">
+    <rdfs:label xml:lang="en">Mildew - visual evaluation, counting</rdfs:label>
+    <ns2:definition xml:lang="en">Counting number from the harvested amount</ns2:definition>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N5c3c6eef8ece475b8ee6c5fe99121f9e">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000966"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Counting"/>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000913">
+    <ns1:attribute>Size</ns1:attribute>
+    <rdfs:label xml:lang="en">Number of fruit (size class 80+)</rdfs:label>
+    <ns1:acronym xml:lang="en">FRUITP80</ns1:acronym>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Quality"/>
+    <ns2:definition xml:lang="en">Number of fruit of size class 80+ measured with sorter machine</ns2:definition>
+    <ns1:entity>Fruit</ns1:entity>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000982">
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N2f23cfa9e7484abf8cc439eaf55d29f8">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000981"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns2:definition xml:lang="en">Average starch value standard</ns2:definition>
+    <rdfs:label xml:lang="en">Starch average - estimation</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0001035">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Quality"/>
+    <rdfs:label xml:lang="en">Maximum storage life</rdfs:label>
+    <ns1:attribute>Maximum storage life</ns1:attribute>
+    <ns1:acronym xml:lang="en">DURABI</ns1:acronym>
+    <ns2:definition xml:lang="en">Maximum number of months of storage life</ns2:definition>
+    <ns1:entity>Fruit</ns1:entity>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000999">
+    <rdfs:label xml:lang="en">Eating quality</rdfs:label>
+    <ns2:definition xml:lang="en">Eating quality score</ns2:definition>
+    <ns1:entity>Fruit</ns1:entity>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Quality"/>
+    <ns1:attribute>Eating quality</ns1:attribute>
+    <ns1:acronym xml:lang="en">TASTSCO</ns1:acronym>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000877">
+    <ns2:definition xml:lang="en">Apple sorting machine equipped with a camera sorts fruits by diameter and color</ns2:definition>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+    <rdfs:label xml:lang="en">Fruit red color 20-30% - counting</rdfs:label>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nd7eff341afd14d6e964b153d134e6059">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000876"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000976">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Counting"/>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nbf810ac4b4ec4b96a884fc7fcb584885">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000975"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">Core mould - visual evaluation, counting</rdfs:label>
+    <ns2:definition xml:lang="en">Counting number from the harvested amount</ns2:definition>
+  </ns3:Class>
+  <ns3:ObjectProperty rdf:about="https://cropontology.org/rdf/method_of">
+    <rdfs:label>method_of</rdfs:label>
+  </ns3:ObjectProperty>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000985">
+    <ns1:attribute>Apple flesh firmness standard</ns1:attribute>
+    <ns1:entity>Fruit</ns1:entity>
+    <rdfs:label xml:lang="en">Apple flesh firmness standard</rdfs:label>
+    <ns2:definition xml:lang="en">Firmness standard</ns2:definition>
+    <ns1:acronym xml:lang="en">FIRMAVE</ns1:acronym>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Quality"/>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000972">
+    <ns1:entity>Fruit</ns1:entity>
+    <ns1:acronym xml:lang="en">NUMFLE</ns1:acronym>
+    <ns2:definition xml:lang="en">Number of apples shown signs of flesh browning after the storage period</ns2:definition>
+    <ns1:attribute>Flesh browning</ns1:attribute>
+    <rdfs:label xml:lang="en">Number of apples showing sign of flesh browning</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Quality"/>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000970">
+    <ns2:definition xml:lang="en">Counting number from the harvested amount</ns2:definition>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Counting"/>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N377c5febf07a4ca7b20a2fb72164998a">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000969"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">Mealy decay - visual evaluation, counting</rdfs:label>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000969">
+    <ns1:acronym xml:lang="en">NUMDEC</ns1:acronym>
+    <rdfs:label xml:lang="en">Number of apples showing sign of mealy decay</rdfs:label>
+    <ns1:attribute>Mealy decay</ns1:attribute>
+    <ns2:definition xml:lang="en">Number of apples shown signs of mealy decay after the storage period</ns2:definition>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Quality"/>
+    <ns1:entity>Fruit</ns1:entity>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000955">
+    <ns2:definition xml:lang="en">Counting number from the harvested amount</ns2:definition>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Counting"/>
+    <rdfs:label xml:lang="en">Rots - visual evaluation, counting</rdfs:label>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nb1783ab587b14bec91b6a0fac9c9b858">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000954"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0001033">
+    <rdfs:label xml:lang="en">Tree number - measurement, counting</rdfs:label>
+    <ns2:definition xml:lang="en">Field observation, counting</ns2:definition>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nf8704bb1346b4fd399bd2d4257cfd7f6">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0001032"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000957">
+    <ns1:attribute>Lenticel rot</ns1:attribute>
+    <ns1:acronym xml:lang="en">NUMLEN</ns1:acronym>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Quality"/>
+    <ns1:entity>Fruit</ns1:entity>
+    <rdfs:label xml:lang="en">Number of apples showing sign of lenticel rot</rdfs:label>
+    <ns2:definition xml:lang="en">Number of apples shown signs of lenticel rot after the storage period</ns2:definition>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000894">
+    <ns2:definition xml:lang="en">Number of fruit of 80-90 % of red color component measured with sorter machine</ns2:definition>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Quality"/>
+    <ns1:acronym xml:lang="en">PERRED90</ns1:acronym>
+    <ns1:entity>Fruit</ns1:entity>
+    <ns1:attribute>Fruit color red component</ns1:attribute>
+    <rdfs:label xml:lang="en">Number of fruit, 80-90 % of red color component</rdfs:label>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0001021">
+    <rdfs:label xml:lang="en">kg</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Numerical"/>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N637b7a01650f4523b1522dab3297767c">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0001024"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N69ace5a6f8c34761bfc4f998b26d1f2a">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0001020"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N5696a16461a74c7bb5c292c6933c468f">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0001030"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000937">
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N8a1f0aa5f8934503977ff5baa2172b7b">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000936"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <rdf:Description rdf:about="https://cropontology.org/rdf/Ordinal">
+        <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Scale"/>
+      </rdf:Description>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N27ba8090e7464c27982457a314833c9f">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000946"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">index</rdfs:label>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0001026">
+    <ns2:definition xml:lang="en">Number of fallen fruit per tree per plot</ns2:definition>
+    <ns1:entity>Planting</ns1:entity>
+    <ns1:acronym xml:lang="en">FALLNUM</ns1:acronym>
+    <ns1:attribute>Preharvest fruit drop</ns1:attribute>
+    <rdfs:label xml:lang="en">Number of fallen fruit per tree</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Agronomic"/>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0001032">
+    <ns2:definition xml:lang="en">Tree number at harvest per plot</ns2:definition>
+    <ns1:entity>Planting</ns1:entity>
+    <ns1:attribute>Tree number at harvest</ns1:attribute>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Agronomic"/>
+    <ns1:acronym xml:lang="en">TREENHAR</ns1:acronym>
+    <rdfs:label xml:lang="en">Tree number at harvest</rdfs:label>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000908">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N9707f5fdc9cd4d479379823d44d0d8c5">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000907"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns2:definition xml:lang="en">Apple sorting machine equipped with a camera sorts fruits by diameter and color</ns2:definition>
+    <rdfs:label xml:lang="en">Fruit size class 70+ counting</rdfs:label>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000958">
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nc3e6d0a985fd4a33aecdeef40da50ec2">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000957"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns2:definition xml:lang="en">Counting number from the harvested amount</ns2:definition>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Counting"/>
+    <rdfs:label xml:lang="en">Lenticel rot - visual evaluation, counting</rdfs:label>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000936">
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nd96ee05f56a146cd919eda83886c0e2d">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000935"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns2:definition xml:lang="en">Compute growing degree days required from planting (or 50% emergence) to 50% foliage senescence or maturity.  This averaging method and take any negativ record as zero. A base temp 10 °C.</ns2:definition>
+    <rdfs:label xml:lang="en">Growing degree days estimation</rdfs:label>
+    <rdfs:subClassOf>
+      <rdf:Description rdf:about="https://cropontology.org/rdf/Computation">
+        <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Method"/>
+      </rdf:Description>
+    </rdfs:subClassOf>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000973">
+    <rdfs:label xml:lang="en">Flesh browning - visual evaluation, counting</rdfs:label>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N5598e07cc8494dc6bd93d6f49700e049">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000972"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns2:definition xml:lang="en">Counting number from the harvested amount</ns2:definition>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Counting"/>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000990">
+    <ns2:definition xml:lang="en">Average acidity value standard</ns2:definition>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+    <rdfs:label xml:lang="en">Acidity average - estimation</rdfs:label>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N4e1905aca55e43e2b21e51c7903e2cdc">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000989"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000882">
+    <ns1:acronym xml:lang="en">PERRED50</ns1:acronym>
+    <ns1:entity>Fruit</ns1:entity>
+    <rdfs:label xml:lang="en">Number of fruit, 40-50 % of red color component</rdfs:label>
+    <ns1:attribute>Fruit color red component</ns1:attribute>
+    <ns2:definition xml:lang="en">Number of fruit of 40-50 % of red color component measured with sorter machine</ns2:definition>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Quality"/>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0001019">
+    <ns2:definition xml:lang="en">Yield in kg per tree per plot</ns2:definition>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Agronomic"/>
+    <rdfs:label xml:lang="en">Yield in kg per tree</rdfs:label>
+    <ns1:attribute>Tree yield</ns1:attribute>
+    <ns1:acronym xml:lang="en">YIELDKG</ns1:acronym>
+    <ns1:entity>Tree</ns1:entity>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000907">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Quality"/>
+    <rdfs:label xml:lang="en">Number of fruit (size class 70+)</rdfs:label>
+    <ns1:attribute>Size</ns1:attribute>
+    <ns2:definition xml:lang="en">Number of fruit of size class 70+ measured with sorter machine</ns2:definition>
+    <ns1:entity>Fruit</ns1:entity>
+    <ns1:acronym xml:lang="en">FRUITP70</ns1:acronym>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000895">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+    <rdfs:label xml:lang="en">Fruit red color 80-90% - counting</rdfs:label>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N027e4ed578fb484fbccbbc58affc0348">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000894"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns2:definition xml:lang="en">Apple sorting machine equipped with a camera sorts fruits by diameter and color</ns2:definition>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000914">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+    <ns2:definition xml:lang="en">Apple sorting machine equipped with a camera sorts fruits by diameter and color</ns2:definition>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N5f2141e854ce41bfae43714b2a92c924">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000913"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">Fruit size class 80+ counting</rdfs:label>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000954">
+    <ns2:definition xml:lang="en">Number of apples shown signs of rots after the storage period</ns2:definition>
+    <ns1:entity>Fruit</ns1:entity>
+    <ns1:attribute>Rots</ns1:attribute>
+    <rdfs:label xml:lang="en">Number of apples showing sign of rots</rdfs:label>
+    <ns1:acronym xml:lang="en">NUMROT</ns1:acronym>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Quality"/>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000897">
+    <ns2:definition xml:lang="en">Fruit color, 90-100 % of red color component measured with sorter machine</ns2:definition>
+    <ns1:attribute>Fruit color red component</ns1:attribute>
+    <rdfs:label xml:lang="en">Number of fruit, 90-100 % of red color component</rdfs:label>
+    <ns1:entity>Fruit</ns1:entity>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Quality"/>
+    <ns1:acronym xml:lang="en">PERRED100</ns1:acronym>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000898">
+    <rdfs:label xml:lang="en">Fruit red color 90-100% - counting</rdfs:label>
+    <ns2:definition xml:lang="en">Apple sorting machine equipped with a camera sorts fruits by diameter and color</ns2:definition>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N2095d44e3c4f43f9b74409b0d212410b">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000897"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000964">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Counting"/>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Ndb6dbba3abe04d98921bc396eb7abe52">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000963"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">Pinpoint scab - visual evaluation, counting</rdfs:label>
+    <ns2:definition xml:lang="en">Counting number from the harvested amount</ns2:definition>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000874">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N86827dee93024c7398e5097217593728">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000873"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns2:definition xml:lang="en">Apple sorting machine equipped with a camera sorts fruits by diameter and color</ns2:definition>
+    <rdfs:label xml:lang="en">Fruit red color 10-20% - counting</rdfs:label>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000929">
+    <ns1:acronym xml:lang="en">DATEFLO</ns1:acronym>
+    <ns1:attribute>Flowering full</ns1:attribute>
+    <ns2:definition xml:lang="en">Date of full flowering</ns2:definition>
+    <ns1:entity>Tree</ns1:entity>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Phenological"/>
+    <rdfs:label xml:lang="en">Date of full flowering</rdfs:label>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000960">
+    <ns1:attribute>Frost damage</ns1:attribute>
+    <rdfs:label xml:lang="en">Number of apples showing sign of frost damage</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Quality"/>
+    <ns1:acronym xml:lang="en">NUMFRO</ns1:acronym>
+    <ns1:entity>Fruit</ns1:entity>
+    <ns2:definition xml:lang="en">Number of apples shown signs of frost damage after the storage period</ns2:definition>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0001023">
+    <ns1:acronym xml:lang="en">FRUITNUM</ns1:acronym>
+    <ns2:definition xml:lang="en">Number of fruit per tree per plot</ns2:definition>
+    <ns1:entity>Tree</ns1:entity>
+    <rdfs:label xml:lang="en">Number of fruit per tree</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Agronomic"/>
+    <ns1:attribute>Amount of fruit</ns1:attribute>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0001012">
+    <ns1:attribute>Sugar content</ns1:attribute>
+    <ns1:acronym xml:lang="en">SUGAAN</ns1:acronym>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Quality"/>
+    <ns2:definition xml:lang="en">Sugar content measured with pimprenelle</ns2:definition>
+    <rdfs:label xml:lang="en">Fruit sugar content</rdfs:label>
+    <ns1:entity>Fruit</ns1:entity>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0001020">
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Na265f6c138774720b6775a59c5ecf36f">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0001019"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns2:definition xml:lang="en">Weighting</ns2:definition>
+    <rdfs:label xml:lang="en">Yield per tree - measurement, weighting</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000952">
+    <ns2:definition xml:lang="en">Counting number from the harvested amount</ns2:definition>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Counting"/>
+    <rdfs:label xml:lang="en">Bitter pit - visual evaluation, counting</rdfs:label>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N1de6d54eeefc4a8f9087316bf0fbdd61">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000951"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0001029">
+    <ns1:acronym xml:lang="en">SUMFALL</ns1:acronym>
+    <ns1:attribute>Preharvest fruit drop in kg</ns1:attribute>
+    <ns1:entity>Tree</ns1:entity>
+    <ns2:definition xml:lang="en">Number of fallen fruit per tree  per plot in kg</ns2:definition>
+    <rdfs:label xml:lang="en">Number of fallen fruit per tree in kg</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Agronomic"/>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0001017">
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N1b0292595cd146bea46b0acf3ba2d926">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0001016"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+    <rdfs:label xml:lang="en">Juiciness - measurement with electronic refractometer</rdfs:label>
+    <ns2:definition xml:lang="en">Pimprenelle, fruit-sorting laboratory</ns2:definition>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000871">
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nc2c81697d20b4e8d8de0851506fcf88c">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000874"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">%</rdfs:label>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Ne917d912e32d453b8177581f4ae4002e">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000898"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N5e2ac093820444ab87c142e78984335e">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000870"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Na8f23948e9054e6c9e8dd9e26447def5">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000880"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Numerical"/>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Neb73a013e0024c49804effcefb82e953">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000892"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N86aab242f702487d86c65caa63bfc241">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000895"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N0d8bbf15ff55494ca0c648d35a05a118">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000886"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N7c3e9347029747e08692c939bf21736f">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000889"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Neab7c6c4dc6341959b7359e88ebd622a">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000923"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N667c141323474a23b8cec1975cc557d2">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000883"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N95785121611b48b7991117c7d9668d47">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0001017"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N34efb68f50484d1697035461e1420e2b">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000877"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0001003">
+    <ns1:acronym xml:lang="en">STRSCO</ns1:acronym>
+    <ns1:attribute>Starch content</ns1:attribute>
+    <ns2:definition xml:lang="en">Strength score</ns2:definition>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Quality"/>
+    <rdfs:label xml:lang="en">Fruit starch content</rdfs:label>
+    <ns1:entity>Fruit</ns1:entity>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000873">
+    <ns1:entity>Fruit</ns1:entity>
+    <ns1:attribute>Fruit color red component</ns1:attribute>
+    <rdfs:label xml:lang="en">Number of fruit, 10-20 % of red color component</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Quality"/>
+    <ns1:acronym xml:lang="en">PERRED20</ns1:acronym>
+    <ns2:definition xml:lang="en">Number of fruit of 10-20 % of red color component measured with sorter machine</ns2:definition>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0001009">
+    <ns2:definition xml:lang="en">Acidity measured with pimprenelle</ns2:definition>
+    <ns1:entity>Fruit</ns1:entity>
+    <ns1:acronym xml:lang="en">ACIDAN</ns1:acronym>
+    <ns1:attribute>Acidity</ns1:attribute>
+    <rdfs:label xml:lang="en">Fruit acidity</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Quality"/>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000994">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nabf25556e174449daafa9509d57ad130">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000993"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns2:definition xml:lang="en">Field observation</ns2:definition>
+    <rdfs:label xml:lang="en">Harvest date - field observation</rdfs:label>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000876">
+    <ns1:attribute>Fruit color red component</ns1:attribute>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Quality"/>
+    <rdfs:label xml:lang="en">Number of fruit, 20-30 % of red color component</rdfs:label>
+    <ns1:acronym xml:lang="en">PERRED30</ns1:acronym>
+    <ns2:definition xml:lang="en">Number of fruit of 20-30 % of red color component measured with sorter machine</ns2:definition>
+    <ns1:entity>Fruit</ns1:entity>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000910">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Quality"/>
+    <ns1:acronym xml:lang="en">FRUITP75</ns1:acronym>
+    <ns1:entity>Fruit</ns1:entity>
+    <ns1:attribute>Size</ns1:attribute>
+    <rdfs:label xml:lang="en">Number of fruit (size class 75+)</rdfs:label>
+    <ns2:definition xml:lang="en">Number of fruit of size class 75+ measured with sorter machine</ns2:definition>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000989">
+    <ns1:acronym xml:lang="en">ACIDAVE</ns1:acronym>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Quality"/>
+    <ns2:definition xml:lang="en">Acidity standard</ns2:definition>
+    <ns1:entity>Fruit</ns1:entity>
+    <rdfs:label xml:lang="en">Apple acidity standard</rdfs:label>
+    <ns1:attribute>Apple acidity standard</ns1:attribute>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000888">
+    <rdfs:label xml:lang="en">Number of fruit, 60-70 % of red color component</rdfs:label>
+    <ns1:entity>Fruit</ns1:entity>
+    <ns1:attribute>Fruit color red component</ns1:attribute>
+    <ns2:definition xml:lang="en">Number of fruit of 60-70 % of red color component measured with sorter machine</ns2:definition>
+    <ns1:acronym xml:lang="en">PERRED70</ns1:acronym>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Quality"/>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0001030">
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N3dee6591c16d4d949c8405eef578e137">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0001029"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">Preharvest fruit drop - measurement, weighting</rdfs:label>
+    <ns2:definition xml:lang="en">Weighting</ns2:definition>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000930">
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N0f253066105041f38862fde64784ef09">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000929"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">Flowering full - field observation</rdfs:label>
+    <ns2:definition xml:lang="en">Field observation</ns2:definition>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000889">
+    <rdfs:label xml:lang="en">Fruit red color 60-70% - counting</rdfs:label>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Na7d68c159e334d39a4e9ee20e80cedb6">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000888"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+    <ns2:definition xml:lang="en">Apple sorting machine equipped with a camera sorts fruits by diameter and color</ns2:definition>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0001013">
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N6c19ffc7301246bba8575b6dd7898f18">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0001012"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+    <ns2:definition xml:lang="en">Pimprenelle, fruit-sorting laboratory</ns2:definition>
+    <rdfs:label xml:lang="en">Sugar - measurement with electronic refractometer</rdfs:label>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000892">
+    <rdfs:label xml:lang="en">Fruit red color 70-80% - counting</rdfs:label>
+    <ns2:definition xml:lang="en">Apple sorting machine equipped with a camera sorts fruits by diameter and color</ns2:definition>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N8c12dfed23de4fbcac7e6d327eba5b4c">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000891"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000900">
+    <ns1:entity>Fruit</ns1:entity>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Quality"/>
+    <ns1:acronym xml:lang="en">FRUITM65</ns1:acronym>
+    <ns1:attribute>Size</ns1:attribute>
+    <ns2:definition xml:lang="en">Number of fruit of size class 65- measured with sorter machine</ns2:definition>
+    <rdfs:label xml:lang="en">Number of fruit (size class 65-)</rdfs:label>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000948">
+    <ns1:entity>Fruit</ns1:entity>
+    <rdfs:label xml:lang="en">Number of apples showing sign of peel tan browning</rdfs:label>
+    <ns1:attribute>Peel tan</ns1:attribute>
+    <ns1:acronym xml:lang="en">NUMBR</ns1:acronym>
+    <ns2:definition xml:lang="en">Number of apples shown signs of peel tan browning after the storage period</ns2:definition>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Quality"/>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000943">
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nce0bc50c6fbe418aace324c66c1a7f98">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000942"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <ns2:definition xml:lang="en">Counting number from the harvested amount</ns2:definition>
+    <rdfs:label xml:lang="en">Stains - visual evaluation, counting</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Counting"/>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0001007">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+    <rdfs:label xml:lang="en">Firmness - measurement with electronic refractometer</rdfs:label>
+    <ns2:definition xml:lang="en">Pimprenelle, fruit-sorting laboratory</ns2:definition>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nca5ed5278e5d4f359cba623468191839">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0001006"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000885">
+    <rdfs:label xml:lang="en">Number of fruit, 50-60 % of red color component</rdfs:label>
+    <ns1:attribute>Fruit color red component</ns1:attribute>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Quality"/>
+    <ns1:entity>Fruit</ns1:entity>
+    <ns2:definition xml:lang="en">Number of fruit of 50-60 % of red color component measured with sorter machine</ns2:definition>
+    <ns1:acronym xml:lang="en">PERRED60</ns1:acronym>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000870">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+    <ns2:definition xml:lang="en">Apple sorting machine equipped with a camera sorts fruits by diameter and color</ns2:definition>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Ne7f145fe393548abbd7d28ec558ac55e">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000869"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">Fruit red color 0-10% - counting</rdfs:label>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0001027">
+    <ns2:definition xml:lang="en">Field observation, counting</ns2:definition>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+    <rdfs:label xml:lang="en">Preharvest fruit drop - measurement, counting</rdfs:label>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nbd8829714d1a4f83b105edc556ca337f">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0001026"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000991">
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Na74e95f1c6e44847abbd87ed00852b0f">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0001010"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">g/L MA</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Numerical"/>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N7c42d715e05545599c3708a104933b4b">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000990"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000880">
+    <ns2:definition xml:lang="en">Apple sorting machine equipped with a camera sorts fruits by diameter and color</ns2:definition>
+    <rdfs:label xml:lang="en">Fruit red color 30-40% - counting</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N1d73b5335cc545889e690c1fae61aef2">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000879"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000916">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Quality"/>
+    <ns2:definition xml:lang="en">Number of fruit of size class 85+ measured with sorter machine</ns2:definition>
+    <ns1:entity>Fruit</ns1:entity>
+    <rdfs:label xml:lang="en">Number of fruit (size class 85+)</rdfs:label>
+    <ns1:acronym xml:lang="en">FRUITP85</ns1:acronym>
+    <ns1:attribute>Size</ns1:attribute>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000883">
+    <rdfs:label xml:lang="en">Fruit red color 40-50% - counting</rdfs:label>
+    <ns2:definition xml:lang="en">Apple sorting machine equipped with a camera sorts fruits by diameter and color</ns2:definition>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Ndd13fddff6ce4921a0d85d91cef2fb7a">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000882"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000926">
+    <ns2:definition xml:lang="en">Field observation</ns2:definition>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N6d803841bdd24ab7b56c745e6afbf319">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000925"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+    <rdfs:label xml:lang="en">Flowering starting date - field observation</rdfs:label>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000911">
+    <rdfs:label xml:lang="en">Fruit size class 75+ counting</rdfs:label>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N021baf9654ff48d485a0b3ddd145ff48">
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000910"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+    <ns2:definition xml:lang="en">Apple sorting machine equipped with a camera sorts fruits by diameter and color</ns2:definition>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000979">
+    <ns2:definition xml:lang="en">Counting number from the harvested amount</ns2:definition>
+    <rdfs:label xml:lang="en">Vitrescence - visual evaluation, counting</rdfs:label>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N7de65765d5a1457e805403022ee15d82">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000978"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Counting"/>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0001001">
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Ndcf726c6576f40469d288b8e95d8088a">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0001000"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/scale_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Ordinal"/>
+    <rdfs:label xml:lang="en">1-8 taste scale</rdfs:label>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000966">
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Quality"/>
+    <ns1:acronym xml:lang="en">NUMMILD</ns1:acronym>
+    <ns1:entity>Fruit</ns1:entity>
+    <ns2:definition xml:lang="en">Number of apples shown signs of frost damage after the storage period</ns2:definition>
+    <ns1:attribute>Mildew</ns1:attribute>
+    <rdfs:label xml:lang="en">Number of apples showing sign of mildew</rdfs:label>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000901">
+    <ns2:definition xml:lang="en">Apple sorting machine equipped with a camera sorts fruits by diameter and color</ns2:definition>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="Nf22e35f312e5478bb6caed666997aa03">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000900"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+    <rdfs:label xml:lang="en">Fruit size class 65- counting</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000905">
+    <ns2:definition xml:lang="en">Apple sorting machine equipped with a camera sorts fruits by diameter and color</ns2:definition>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Measurement"/>
+    <rdfs:label xml:lang="en">Fruit size class 65+ counting</rdfs:label>
+    <rdfs:subClassOf>
+      <ns3:Restriction rdf:nodeID="N329dc346cc5f41358a32f963f4df8ad5">
+        <ns3:someValuesFrom rdf:resource="https://cropontology.org/rdf/CO_370:0000904"/>
+        <ns3:onProperty rdf:resource="https://cropontology.org/rdf/method_of"/>
+      </ns3:Restriction>
+    </rdfs:subClassOf>
+  </ns3:Class>
+  <ns3:Class rdf:about="https://cropontology.org/rdf/CO_370:0000978">
+    <ns1:acronym xml:lang="en">NUMGLAS</ns1:acronym>
+    <ns2:definition xml:lang="en">Number of apples shown signs of vitrescence after the storage period</ns2:definition>
+    <ns1:entity>Fruit</ns1:entity>
+    <ns1:attribute>Vitrescence</ns1:attribute>
+    <rdfs:label xml:lang="en">Number of apples showing sign of vitrescence</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://cropontology.org/rdf/Quality"/>
+  </ns3:Class>
+  <ns3:ObjectProperty rdf:about="https://cropontology.org/rdf/scale_of">
+    <rdfs:label>scale_of</rdfs:label>
+  </ns3:ObjectProperty>
+</rdf:RDF>

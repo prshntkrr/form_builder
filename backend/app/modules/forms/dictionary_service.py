@@ -277,8 +277,16 @@ def apply_to_form(form_json: Dict[str, Any]) -> Dict[str, Any]:
         updated = dict(field)
         changes = []
 
+        # A list the client controls is theirs, wherever it is held. The
+        # dictionary may describe the field, but it does not get to replace the
+        # permitted values, nor retype the field away from the list they live in.
+        client_controlled = bool(
+            updated.get("options_from")
+            or (updated.get("source") or {}).get("catalog_is_client_controlled")
+        )
+
         # The dictionary decides these — agreeing them once is the point.
-        if updated.get("type") != entry["field_type"]:
+        if updated.get("type") != entry["field_type"] and not client_controlled:
             changes.append(f"type {updated.get('type')} → {entry['field_type']}")
             updated["type"] = entry["field_type"]
 
@@ -286,7 +294,7 @@ def apply_to_form(form_json: Dict[str, Any]) -> Dict[str, Any]:
             changes.append(f"rules {_describe(entry['validation'])}")
             updated["validation"] = dict(entry["validation"])
 
-        if entry["options"] and not (updated.get("options") or []):
+        if entry["options"] and not client_controlled and not (updated.get("options") or []):
             changes.append(f"{len(entry['options'])} choices")
             updated["options"] = [dict(o) for o in entry["options"]]
 

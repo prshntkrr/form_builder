@@ -49,9 +49,19 @@ export default function Standards() {
             Concepts · SEOnt
           </button>
         )}
+        {can.use_crop_ontology && (
+          <button
+            className={`tab${tab === 'crops' ? ' on' : ''}`}
+            onClick={() => setTab('crops')}
+          >
+            Crop traits · Crop Ontology
+          </button>
+        )}
       </div>
 
-      {tab === 'variables' ? <Variables /> : <Concepts />}
+      {tab === 'variables' && <Variables />}
+      {tab === 'concepts' && <Concepts />}
+      {tab === 'crops' && <CropVariables />}
     </main>
   )
 }
@@ -71,6 +81,14 @@ function Loaded() {
         when: s.imported_on,
       }))).catch(() => []))
     }
+    if (can.use_crop_ontology) {
+      jobs.push(api.loadedCropOntologies().then((list) => list.map((o) => ({
+        name: o.crop_name || o.ontology_id,
+        count: `${o.variables} variables`,
+        note: `${o.traits} traits · ${o.ontology_id}`,
+        when: o.imported_on,
+      }))).catch(() => []))
+    }
     if (can.use_ontology) {
       jobs.push(api.loadedOntologies().then((list) => list.map((o) => ({
         name: o.ontology_name,
@@ -80,7 +98,7 @@ function Loaded() {
       }))).catch(() => []))
     }
     Promise.all(jobs).then((lists) => setRows(lists.flat()))
-  }, [can.use_standards, can.use_ontology])
+  }, [can.use_standards, can.use_ontology, can.use_crop_ontology])
 
   if (rows.length === 0) {
     return (
@@ -269,5 +287,90 @@ function Concepts() {
         </div>
       )}
     </Browser>
+  )
+}
+
+/**
+ * Crop Ontology variables: crop, trait, method, scale.
+ *
+ * A variable is named `PH_M_cm`, which nobody searches for — the trait behind
+ * it is "Plant height", so that is what the table leads with. The same trait
+ * exists in every crop under a different identifier, which is why the crop is
+ * always shown beside it.
+ */
+function CropVariables() {
+  const [crops, setCrops] = useState([])
+  const [crop, setCrop] = useState('')
+  const [open, setOpen] = useState(null)
+
+  useEffect(() => {
+    api.loadedCropOntologies().then(setCrops).catch(() => setCrops([]))
+  }, [])
+
+  return (
+    <>
+      {crops.length > 1 && (
+        <div className="row" style={{ marginBottom: 12 }}>
+          <label className="tiny muted">Crop</label>
+          <select className="control control--sm" value={crop}
+                  onChange={(e) => setCrop(e.target.value)}>
+            <option value="">Every crop</option>
+            {crops.map((c) => (
+              <option key={c.ontology_id} value={c.ontology_id}>
+                {c.crop_name || c.ontology_id}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      <Browser
+        placeholder="Search crop traits — plant height, grain yield…"
+        find={(term) => api.searchCropVariables(term, crop)}
+      >
+        {(hits) => (
+          <div className="dict">
+            {hits.map((v) => (
+              <div key={v.variable_id} className="std__row">
+                <div className="std__row-top">
+                  <div className="dict__id">
+                    <strong>{v.trait_name || v.name}</strong>
+                    <code>{v.variable_id} · {v.name}</code>
+                  </div>
+                  <span className="pill pill--crop">{v.crop_name}</span>
+                  <span className="tiny muted">{v.scale_name || '—'}</span>
+                  <button className="btn btn--sm btn--quiet"
+                          onClick={() => setOpen(open === v.variable_id ? null : v.variable_id)}>
+                    {open === v.variable_id ? 'Hide' : 'Details'}
+                  </button>
+                </div>
+
+                {(v.trait_definition || v.definition) && (
+                  <p className="tiny muted">{v.trait_definition || v.definition}</p>
+                )}
+
+                {open === v.variable_id && (
+                  <div className="std__codes co__meta">
+                    <div><b>Crop</b>{v.crop_name} · {v.ontology_id}</div>
+                    <div><b>Variable</b>{v.variable_id}</div>
+                    <div><b>Trait</b>{v.trait_name || '—'}<br /><code>{v.trait_id || '—'}</code></div>
+                    <div><b>Method</b>{v.method_name || '—'}<br /><code>{v.method_id || '—'}</code></div>
+                    <div><b>Scale</b>{v.scale_name || '—'}<br /><code>{v.scale_id || '—'}</code></div>
+                    <div><b>Data type</b>{v.scale_data_type || 'not published'}</div>
+                    <div>
+                      <b>Valid values</b>
+                      {(v.scale_categories || []).length
+                        ? (v.scale_categories || []).join(', ')
+                        : 'none published'}
+                    </div>
+                    <div><b>Version</b>{v.version || 'not published'}</div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </Browser>
+    </>
   )
 }

@@ -38,6 +38,13 @@ from typing import Any, Dict, List, Optional
 # nothing else in the code needs to change.
 SUPPORTED_LANGUAGES = {
     "en": "English",
+    # The languages client material actually arrives in. A workbook written in
+    # Spanish must import as a Spanish form; a language missing from this list
+    # would have its labels silently dropped, which is worse than not offering
+    # it at all.
+    "es": "Español",
+    "fr": "Français",
+    "pt": "Português",
     "hi": "हिन्दी",
     "mr": "मराठी",
     "bn": "বাংলা",
@@ -129,7 +136,7 @@ def word(language: Optional[str], key: str) -> str:
 # --------------------------------------------------------------------------- #
 # cleaning what arrives
 # --------------------------------------------------------------------------- #
-def normalize_translations(raw: Any) -> Dict[str, Any]:
+def normalize_translations(raw: Any, default: str = DEFAULT_LANGUAGE) -> Dict[str, Any]:
     """Keep only translations we can actually use.
 
     Called from `normalize_form`, so a model or a hand-edited row cannot store a
@@ -141,7 +148,7 @@ def normalize_translations(raw: Any) -> Dict[str, Any]:
 
     cleaned = {}
     for language, block in raw.items():
-        if not is_supported(language) or language == DEFAULT_LANGUAGE:
+        if not is_supported(language) or language == default:
             continue
         if not isinstance(block, dict):
             continue

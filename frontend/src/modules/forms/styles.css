@@ -159,3 +159,30 @@
 .std__code { display: flex; gap: 8px; align-items: baseline; font-size: 12.5px; }
 .std__code code { flex: none; color: var(--accent-deep); }
 .std__code span { color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.pill--crop { background: #eef3e8; color: #40621f; border-color: transparent; }
+.co__meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 6px; }
+.co__meta div { font-size: 12.5px; }
+.co__meta b { display: block; font-size: 10.5px; text-transform: uppercase;
+              letter-spacing: .05em; color: var(--ink-3); font-weight: 600; }
+
+/* Importing a workbook the client already wrote. */
+.import__drop {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding: 44px 20px; text-align: center;
+  border: 1px dashed var(--line-2); border-radius: var(--r);
+}
+.import__meta { align-items: center; margin-bottom: 12px; }
+.import__facts {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px; margin-bottom: 14px;
+}
+.import__facts div { font-size: 13px; }
+.import__facts b {
+  display: block; font-size: 10.5px; text-transform: uppercase;
+  letter-spacing: .05em; color: var(--ink-3); font-weight: 600;
+}
+.import__heading { margin: 20px 0 4px; font-size: 15px; }
+
+/* The import dialog's own view switch, below the profile tabs. */
+.import__views { margin: 18px 0 10px; }
