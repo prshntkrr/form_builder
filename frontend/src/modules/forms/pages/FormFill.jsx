@@ -15,13 +15,16 @@ export default function FormFill() {
   const [error, setError] = useState('')
   const [language, setLanguage] = useState(null)
 
-  // The server returns the form already in the chosen language, so there is
-  // nothing to translate here — just ask again when the reader picks one.
+  // Fetched once, in the form's own default language. Switching language after
+  // that is the renderer's business and touches only the words — asking the
+  // server again would mean rebuilding the form and losing everything typed
+  // into it, which is exactly what a language switch must not do.
   useEffect(() => {
     api
-      .renderForm(formId, language)
+      .renderForm(formId)
       .then((res) => {
         setForm(res)
+        setLanguage(res.language)
         const start = {}
         for (const f of res.form_json.fields || []) {
           if (f.default != null) start[f.name] = f.default
@@ -31,7 +34,7 @@ export default function FormFill() {
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false))
-  }, [formId, language])
+  }, [formId])
 
   const send = async () => {
     setSending(true); setErrors({}); setError('')
@@ -96,19 +99,6 @@ export default function FormFill() {
         <p className="tiny grow">
           <Link to={`/f/${formId}`}>← Back to records</Link>
         </p>
-
-        {(form.languages || []).length > 1 && (
-          <select
-            className="input input--sm"
-            value={language || form.language}
-            onChange={(e) => setLanguage(e.target.value)}
-            aria-label="Language"
-          >
-            {form.languages.map((l) => (
-              <option key={l.code} value={l.code}>{l.name}</option>
-            ))}
-          </select>
-        )}
       </div>
 
       {error && <div className="note note--bad" style={{ marginBottom: 18 }}>{error}</div>}
@@ -119,6 +109,9 @@ export default function FormFill() {
           values={values}
           errors={errors}
           submitting={sending}
+          language={language || form.language}
+          onLanguage={setLanguage}
+          languageNames={form.languages}
           onChange={(name, value) => setValues((v) => ({ ...v, [name]: value }))}
           onSubmit={send}
         />

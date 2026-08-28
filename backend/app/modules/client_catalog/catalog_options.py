@@ -44,6 +44,14 @@ def _is_offered(status: str) -> bool:
     return (status or "").strip().lower() not in WITHDRAWN
 
 
+# A value in a dependent catalogue that names no parent cannot be reached: every
+# list of districts is drawn for one state, so a district under no state would
+# never appear and could never be answered. Such rows still exist — imported, or
+# created before this was checked — and stay readable, but they are not offered
+# and not accepted. Which parent they belong to is the client's to say.
+_REACHABLE = "(c.parent_catalog_id IS NULL OR v.parent_code IS NOT NULL)"
+
+
 def options_for(
     catalog_id: str,
     parent_code: Optional[str] = None,
@@ -73,11 +81,12 @@ def options_for(
             )
         else:
             cur.execute(
-                """
-                SELECT code, label, status
-                FROM   client_catalog_value
-                WHERE  catalog_id = %s
-                ORDER BY display_order, code
+                f"""
+                SELECT v.code, v.label, v.status
+                FROM   client_catalog_value v
+                JOIN   client_catalog c ON c.catalog_id = v.catalog_id
+                WHERE  v.catalog_id = %s AND {_REACHABLE}
+                ORDER BY v.display_order, v.code
                 LIMIT  %s
                 """,
                 (catalog_id, limit),
@@ -122,7 +131,12 @@ def is_valid(
             )
         else:
             cur.execute(
-                "SELECT status FROM client_catalog_value WHERE catalog_id = %s AND code = %s",
+                f"""
+                SELECT v.status
+                FROM   client_catalog_value v
+                JOIN   client_catalog c ON c.catalog_id = v.catalog_id
+                WHERE  v.catalog_id = %s AND v.code = %s AND {_REACHABLE}
+                """,
                 (catalog_id, str(value)),
             )
         row = cur.fetchone()

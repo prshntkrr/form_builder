@@ -49,3 +49,16 @@ CREATE INDEX IF NOT EXISTS idx_client_catalog_value_parent
 
 CREATE INDEX IF NOT EXISTS idx_client_catalog_name
     ON client_catalog(lower(name));
+-- Added after the first release; app/modules/client_catalog/bootstrap.py adds
+-- them to databases that already had the table.
+
+-- Who made the catalogue, when it was built here rather than imported.
+ALTER TABLE client_catalog
+    ADD COLUMN IF NOT EXISTS created_by VARCHAR(200) NOT NULL DEFAULT '';
+
+-- The catalogue this one's values hang off, for a dependent list: a district
+-- catalogue names the state catalogue, and every district's parent_code must be
+-- a code in it. Stored, never inferred.
+ALTER TABLE client_catalog
+    ADD COLUMN IF NOT EXISTS parent_catalog_id VARCHAR(100)
+        REFERENCES client_catalog(catalog_id) ON DELETE SET NULL;

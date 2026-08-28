@@ -1,15 +1,128 @@
-import React, { useRef, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { DIGITS, NUMERIC, TEXTUAL, TYPES, WITH_OPTIONS } from '../fieldTypes.js'
 import ConceptPicker from './ConceptPicker.jsx'
+import { api } from '../api.js'
+import { useAuth } from '../../../core/auth.jsx'
 
 const slug = (t) =>
   String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '')
+
+/**
+ * Where this question's choices come from.
+ *
+ * Three answers. **On the form** is the ordinary case: the choices are written
+ * here and travel with the definition. **A client catalogue** and **the crop
+ * ontologies** both mean the list lives in the database and is read when the
+ * form is drawn — the form carries a reference, never a copy, so correcting the
+ * list corrects every form that uses it at once.
+ *
+ * A catalogue that depends on another one (districts within a state) offers the
+ * field it should follow, and the renderer refetches whenever that answer
+ * changes.
+ */
+function OptionSource({ field, fields, patch }) {
+  const { can } = useAuth()
+  const [catalogues, setCatalogues] = useState(null)
+
+  const from = field.options_from
+  const kind = !from ? 'form' : from.source
+
+  // Only when a catalogue is actually in play — most forms never open this.
+  useEffect(() => {
+    if (kind !== 'client_catalog' || catalogues || !can.use_client_catalogs) return
+    api.clientCatalogues().then((r) => setCatalogues(r.catalogs)).catch(() => setCatalogues([]))
+  }, [kind, catalogues, can.use_client_catalogs])
+
+  const choose = (next) => {
+    if (next === 'form') return patch({ options_from: null })
+    if (next === 'crop_ontology') {
+      return patch({ options: [], options_from: { source: 'crop_ontology', kind: 'crop' } })
+    }
+    // The choices are the catalogue's, so anything written on the form goes.
+    patch({ options: [], options_from: { source: 'client_catalog', catalog: '' } })
+  }
+
+  const chosen = catalogues?.find((c) => c.catalog_id === from?.catalog)
+
+  return (
+    <div className="opts">
+      <span className="minilabel">Choices come from</span>
+
+      <select className="control" value={kind} onChange={(e) => choose(e.target.value)}>
+        <option value="form">This form</option>
+        {can.use_client_catalogs && <option value="client_catalog">A client catalogue</option>}
+        {can.use_crop_ontology && <option value="crop_ontology">The crop ontologies</option>}
+      </select>
+
+      {kind === 'client_catalog' && (
+        <>
+          <select
+            className="control"
+            value={from.catalog || ''}
+            onChange={(e) => patch({ options_from: { ...from, catalog: e.target.value } })}
+          >
+            <option value="">Choose a catalogue…</option>
+            {(catalogues || []).map((c) => (
+              <option key={c.catalog_id} value={c.catalog_id}>
+                {c.name} ({c.catalog_id}) — {c.active_count} value
+                {c.active_count === 1 ? '' : 's'}
+              </option>
+            ))}
+          </select>
+
+          {chosen?.parent_catalog_id && (
+            <>
+              <span className="minilabel">
+                Narrowed by the answer to
+              </span>
+              <select
+                className="control"
+                value={from.depends_on || ''}
+                onChange={(e) => {
+                  const { depends_on, ...rest } = from
+                  patch({
+                    options_from: e.target.value
+                      ? { ...rest, depends_on: e.target.value }
+                      : rest,
+                  })
+                }}
+              >
+                <option value="">Nothing — offer the whole list</option>
+                {(fields || [])
+                  .filter((f) => f.name && f.name !== field.name)
+                  .map((f) => (
+                    <option key={f.name} value={f.name}>{f.label || f.name}</option>
+                  ))}
+              </select>
+              <p className="tiny muted">
+                {chosen.name} hangs off {chosen.parent_catalog_id}. Pick the question
+                holding that answer and this list narrows to match it.
+              </p>
+            </>
+          )}
+
+          <p className="tiny muted">
+            The catalogue's values are read when the form is drawn. Nothing is
+            copied here, so correcting the catalogue corrects this question too.
+          </p>
+        </>
+      )}
+
+      {kind === 'crop_ontology' && (
+        <p className="tiny muted">
+          The crops imported into this installation, read when the form is drawn.
+        </p>
+      )}
+    </div>
+  )
+}
 
 export default function FieldEditor({
   field,
   index,
   total,
   sections = [],
+  allFields = [],      // every field on the form, for a dependent catalogue
   renamedFrom,        // the key this field had when the form was last saved, if changed
   hasResponses,
   dragging,
@@ -234,6 +347,10 @@ export default function FieldEditor({
           />
 
           {WITH_OPTIONS.has(field.type) && (
+            <OptionSource field={field} fields={allFields} patch={patch} />
+          )}
+
+          {WITH_OPTIONS.has(field.type) && !field.options_from && (
             <div className="opts">
               <span className="minilabel">Choices</span>
               {(field.options || []).map((o, i) => (

@@ -473,6 +473,7 @@ export default function Builder() {
                         index={i}
                         total={form.fields.length}
                         sections={form.sections || []}
+                        allFields={form.fields}
                         renamedFrom={f._orig && f._orig !== f.name ? f._orig : null}
                         hasResponses={responses > 0}
                         dragging={lifted === i}

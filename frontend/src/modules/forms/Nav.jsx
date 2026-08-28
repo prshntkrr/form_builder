@@ -37,6 +37,12 @@ export default function FormsNav({ onNavigate }) {
             <span className="grow">Data dictionary</span>
           </NavLink>
         )}
+        {can.use_client_catalogs && (
+          <NavLink to="/catalogues" className={({ isActive }) => `side__form${isActive ? ' on' : ''}`}
+                   onClick={onNavigate}>
+            <span className="grow">Catalogues</span>
+          </NavLink>
+        )}
         {(can.use_standards || can.use_ontology || can.use_crop_ontology) && (
           <NavLink to="/standards" className={({ isActive }) => `side__form${isActive ? ' on' : ''}`}
                    onClick={onNavigate}>

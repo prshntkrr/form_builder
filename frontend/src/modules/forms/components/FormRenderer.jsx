@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import FieldInput from './FieldInput.jsx'
 import { api } from '../api.js'
+import { defaultLanguage, languageChoices, translateForm } from '../translate.js'
 
 const FULL_WIDTH = new Set(['textarea', 'multiselect', 'radio', 'location'])
 
@@ -81,6 +82,18 @@ function useDynamicOptions(fields, values) {
   return loaded
 }
 
+/**
+ * The form as somebody fills it in.
+ *
+ * A form written in more than one language is one form: the same fields, the
+ * same answers, the same table. Only the words change, and they change here —
+ * so switching language cannot touch what has been entered, and cannot touch
+ * what gets submitted. Field names and option values are never translated.
+ *
+ * `language`/`onLanguage` make the choice the caller's, for a page that wants
+ * to remember it or send it on. Left out, the renderer keeps it itself.
+ * `languageNames` is the server's own list of endonyms where the caller has one.
+ */
 export default function FormRenderer({
   formJson,
   values,
@@ -88,8 +101,21 @@ export default function FormRenderer({
   onChange,
   onSubmit,
   submitting = false,
+  language,
+  onLanguage,
+  languageNames,
 }) {
-  const dynamic = useDynamicOptions(formJson.fields, values)
+  const [ownLanguage, setOwnLanguage] = useState(() => defaultLanguage(formJson))
+  const chosen = language || ownLanguage
+  const setLanguage = onLanguage || setOwnLanguage
+
+  const languages = languageChoices(formJson, languageNames)
+
+  // The words swap; the definition underneath does not. Values, validation
+  // errors and the dynamic option sources all key off names, which never move.
+  const shown = translateForm(formJson, chosen)
+
+  const dynamic = useDynamicOptions(shown.fields, values)
 
   const submit = (e) => {
     e.preventDefault()
@@ -109,7 +135,7 @@ export default function FormRenderer({
    */
   const change = (name, value) => {
     onChange?.(name, value)
-    for (const field of formJson.fields || []) {
+    for (const field of shown.fields || []) {
       if (field.options_from?.depends_on === name && values?.[field.name]) {
         onChange?.(field.name, field.type === 'multiselect' ? [] : null)
       }
@@ -118,12 +144,28 @@ export default function FormRenderer({
 
   return (
     <form className="formview" onSubmit={submit}>
+      {languages.length > 1 && (
+        <div className="formview__lang">
+          <label htmlFor="formview-language">Language</label>
+          <select
+            id="formview-language"
+            className="control control--sm"
+            value={chosen}
+            onChange={(e) => setLanguage(e.target.value)}
+          >
+            {languages.map((l) => (
+              <option key={l.code} value={l.code}>{l.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
       <header className="formview__head">
-        <h2>{formJson.title}</h2>
-        {formJson.description && <p className="lede">{formJson.description}</p>}
+        <h2>{shown.title}</h2>
+        {shown.description && <p className="lede">{shown.description}</p>}
       </header>
 
-      {group(formJson).map((g) => (
+      {group(shown).map((g) => (
         <fieldset key={g.key} className="group">
           {g.title && <div className="group__name">{g.title}</div>}
           {g.description && <div className="group__note">{g.description}</div>}
@@ -147,7 +189,7 @@ export default function FormRenderer({
         <div className="formview__send">
           <button type="submit" className="btn btn--primary" disabled={submitting}>
             {submitting && <span className="spin" />}
-            {submitting ? 'Saving' : formJson.submit_label || 'Submit'}
+            {submitting ? 'Saving' : shown.submit_label || 'Submit'}
           </button>
         </div>
       )}

@@ -62,7 +62,7 @@ jobs:
             CROP_ONTOLOGIES="${CROP_ONTOLOGIES:-CO_322}"
 
             for CROP in $CROP_ONTOLOGIES; do
-                python import_crop_ontology.py --crop "$CROP" \
+                python import_crop_ontology.py --crop all \
                   || echo "WARNING: crop ontology $CROP failed, continuing"
             done
 

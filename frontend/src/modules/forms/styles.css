@@ -186,3 +186,41 @@
 
 /* The import dialog's own view switch, below the profile tabs. */
 .import__views { margin: 18px 0 10px; }
+
+/* The catalogue builder: the client's own controlled lists. */
+.cat__actions { text-align: right; white-space: nowrap; }
+.cat__actions .btn { margin-left: 4px; }
+
+/* A withdrawn value stays on screen — it is still readable on old answers —
+   but is visibly out of circulation. */
+.cat__gone td { opacity: .55; }
+
+.cat__field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+
+.cat__form {
+  margin-top: 12px; padding: 14px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--paper);
+}
+
+/* Managing values needs the width; the table has seven columns. */
+.sheet__panel--wide { max-width: 1040px; }
+
+.pill--approved { background: var(--accent-wash); color: var(--accent-deep); border-color: transparent; }
+.pill--candidate { background: #fdf4e3; color: #7a5510; border-color: transparent; }
+.pill--active { background: #eef3e8; color: #40621f; border-color: transparent; }
+
+/* A value that cannot be reached until it names its parent. */
+.pill--gap { background: #fdecec; color: #8a2d2d; border-color: transparent; }
+.cat__needs { color: #8a2d2d; margin-top: 10px; }
+
+/* One form, more than one language. Only the words change. */
+.formview__lang {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 18px; padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+.formview__lang label {
+  font-size: 11px; font-weight: 600; letter-spacing: .05em;
+  text-transform: uppercase; color: var(--ink-3);
+}
+.formview__lang .control { width: auto; min-width: 150px; }

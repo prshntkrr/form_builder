@@ -26,5 +26,9 @@ register(
     },
     capabilities={
         "use_client_catalogs": CATALOG_VIEW,
+        # What the Catalogue Builder shows read-only and what it lets somebody
+        # change. Declared here beside the permission, so the gate on the screen
+        # and the gate on the endpoint cannot drift apart.
+        "manage_client_catalogs": CATALOG_MANAGE,
     },
 )

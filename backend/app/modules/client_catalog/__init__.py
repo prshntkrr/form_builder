@@ -1,15 +1,19 @@
 """Client-controlled catalogs.
 
-These are controlled lists supplied by a client workbook.
-They are deliberately separate from SEOnt, ICASA and Crop Ontology.
+Controlled lists the client maintains — collaborator types, states and their
+districts, approved varieties. Built in the Catalogue Builder or imported from
+their workbook; the same two tables either way.
 
-The client owns these values, so standards and the LLM must never replace them.
+Deliberately separate from SEOnt, ICASA and Crop Ontology. Those are somebody
+else's authoritative vocabulary and are managed by their own modules; these
+values belong to the client, so no standard and no model may replace one.
 """
 
 from pathlib import Path
 
 from app.core.registry import Module
 
+from . import bootstrap
 from . import permissions  # noqa: F401
 from .routers import catalogs
 
@@ -19,5 +23,5 @@ MODULE = Module(
     routers=[catalogs.router],
     tables=["client_catalog", "client_catalog_value"],
     schema_file=Path(__file__).resolve().parent / "schema.sql",
-    migrations=[],
+    migrations=[bootstrap.ensure_catalog_columns],
 )

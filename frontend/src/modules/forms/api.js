@@ -69,11 +69,40 @@ export const api = {
   loadedCropOntologies: () => request('/crop-ontology'),
 
   // --- client catalogs ---
-  // The client's own controlled list. Their codes and their wording; nothing
+  // The client's own controlled lists. Their codes and their wording; nothing
   // here supplies a value the client did not.
   clientCatalogOptions: (catalog, parentCode) =>
     request(`/client-catalogs/${encodeURIComponent(catalog)}/options` +
             (parentCode ? `?parent_code=${encodeURIComponent(parentCode)}` : '')),
+
+  clientCatalogues: (search) =>
+    request(`/client-catalogs${search ? `?search=${encodeURIComponent(search)}` : ''}`),
+
+  clientCatalogue: (catalog) =>
+    request(`/client-catalogs/${encodeURIComponent(catalog)}`),
+
+  createClientCatalogue: (body) =>
+    request('/client-catalogs', { method: 'POST', body: JSON.stringify(body) }),
+
+  updateClientCatalogue: (catalog, changes) =>
+    request(`/client-catalogs/${encodeURIComponent(catalog)}`,
+            { method: 'PATCH', body: JSON.stringify(changes) }),
+
+  addCatalogueValue: (catalog, body) =>
+    request(`/client-catalogs/${encodeURIComponent(catalog)}/values`,
+            { method: 'POST', body: JSON.stringify(body) }),
+
+  // No delete: a code that has been answered has to stay readable, so a value
+  // leaves circulation by becoming Withdrawn.
+  updateCatalogueValue: (catalog, code, changes) =>
+    request(`/client-catalogs/${encodeURIComponent(catalog)}/values/${encodeURIComponent(code)}`,
+            { method: 'PATCH', body: JSON.stringify(changes) }),
+
+  importCatalogues: (file) => {
+    const body = new FormData()
+    body.append('file', file)
+    return request('/client-catalogs/import', { method: 'POST', body })
+  },
 
   searchCropVariables: (q, crop) =>
     request(`/crop-ontology/search?q=${encodeURIComponent(q)}${crop ? `&crop=${crop}` : ''}`),
