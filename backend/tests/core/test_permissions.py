@@ -5,7 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.core import auth_service
-from app.core.auth_service import ROLE_ADMIN, ROLE_EDITOR, ROLE_FIELD
+from app.core.auth_service import ROLE_ADMIN, ROLE_EDITOR, ROLE_FIELD, ROLE_STANDARD
 from app.core.database import ping, transaction
 from app.main import app
 
@@ -176,7 +176,10 @@ def test_an_admin_can_create_and_reassign(client, people):
         assert promoted.status_code == 200
         assert promoted.json()["role"] == ROLE_EDITOR
 
-        gone = client.delete(f"/api/users/{user_id}", headers=as_role(people, ROLE_ADMIN))
+        # Switching an account off is its own action now: DELETE removes it for
+        # good, and the two should not be one button.
+        gone = client.post(f"/api/users/{user_id}/deactivate",
+                           headers=as_role(people, ROLE_ADMIN))
         assert gone.status_code == 200
         assert gone.json()["is_active"] is False
     finally:
@@ -208,9 +211,29 @@ def test_an_admin_cannot_lock_themselves_out(client, people):
 
 
 def test_the_roles_endpoint_describes_each_one(client, people):
+    """The account-wide roles, and the ones a project membership can carry.
+
+    Both live in `app_role` and draw on one permission catalogue — but they are
+    offered separately, because they answer different questions. A system role
+    says what an account may do across the installation; a project role says
+    what somebody may do inside one project, and means nothing written on an
+    account.
+    """
     roles = client.get("/api/users/roles", headers=as_role(people, ROLE_ADMIN)).json()
-    assert [r["role"] for r in roles] == [ROLE_ADMIN, ROLE_EDITOR, ROLE_FIELD]
+    named = {r["role"] for r in roles}
+
+    # The two system roles an account can be given.
+    assert {ROLE_ADMIN, ROLE_STANDARD} <= named
     assert all(r["label"] for r in roles)
+
+    # A project role means something inside one project and nothing on an
+    # account, so it is never offered here. It is offered by
+    # `GET /api/projects/roles`, where a membership can carry it.
+    assert not {"project_manager", "surveyor", "reviewer"} & named
+
+    project_roles = client.get("/api/projects/roles",
+                               headers=as_role(people, ROLE_ADMIN)).json()["roles"]
+    assert {"project_manager", "surveyor", "reviewer"} <= {r["name"] for r in project_roles}
 
 
 # --- the session endpoints ------------------------------------------------- #

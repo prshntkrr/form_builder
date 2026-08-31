@@ -291,7 +291,7 @@ def test_a_withdrawn_value_is_not_offered(client_catalogs):
 
 def test_a_standard_cannot_restock_a_client_catalog():
     """ICASA describes the field. What may be answered stays the client's."""
-    from app.modules.standards import enrichment
+    from app.modules.standards.icasa import enrichment
 
     field = {
         "name": "irrigation_operation",
@@ -335,7 +335,7 @@ def test_the_dictionary_cannot_retype_a_catalog_field():
 
 
 def test_the_crop_ontology_cannot_replace_a_client_catalog():
-    from app.modules.crop_ontology import enrichment as crop_enrichment
+    from app.modules.standards.crop_ontology import enrichment as crop_enrichment
 
     form = {"title": "Maize phenotyping", "fields": [{
         "name": "crop",
@@ -549,7 +549,7 @@ def test_the_crop_question_keeps_its_seont_concept(english_workbook, admin_clien
 def test_the_crop_choices_come_from_the_database(admin_client):
     """Read at render time from the local ontologies. Maize is offered because
     CO_322 was imported, not because anything here knows the word."""
-    from app.modules.crop_ontology import dynamic_options
+    from app.modules.standards.crop_ontology import dynamic_options
 
     options = dynamic_options.options_for("crop")
     if not options:

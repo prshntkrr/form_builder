@@ -7,7 +7,6 @@ import Dictionary from './pages/Dictionary.jsx'
 import Standards from './pages/Standards.jsx'
 import FormFill from './pages/FormFill.jsx'
 import FormRecords from './pages/FormRecords.jsx'
-import FormsList from './pages/FormsList.jsx'
 import Library from './pages/Library.jsx'
 import LiveForms from './pages/LiveForms.jsx'
 import './styles.css'
@@ -24,6 +23,10 @@ function Moved({ to }) {
  * `requires` on a route names a capability flag from /api/auth/me. The backend
  * module declared that flag next to the permission behind it, so the gate on
  * the screen and the gate on the endpoint cannot drift apart.
+ *
+ * The builder asks for `build_any_forms` rather than `build_forms`: a Project
+ * Manager holds no account-level form permission at all, and gating on that one
+ * turned them away and sent them home — which for them is /fill.
  */
 export default {
   name: 'forms',
@@ -31,7 +34,9 @@ export default {
   order: 10,
   Nav: FormsNav,
   List: FormsPanel,
-  home: (can) => (can.build_forms ? '/forms' : '/fill'),
+  // /forms shows whichever context is active, so it is the right landing
+  // place for a project member as much as for a builder.
+  home: (can) => ((can.build_any_forms || can.use_projects) ? '/forms' : '/fill'),
   routes: [
     // Anyone signed in: filling forms in.
     { path: '/fill', element: <LiveForms /> },
@@ -39,15 +44,14 @@ export default {
     { path: '/f/:formId/new', element: <FormFill /> },
 
     // The builder.
-    { path: '/builder', element: <Builder />, requires: 'build_forms' },
+    { path: '/builder', element: <Builder />, requires: 'build_any_forms' },
     { path: '/library', element: <Library />, requires: 'build_forms' },
     { path: '/dictionary', element: <Dictionary />, requires: 'use_dictionary' },
     { path: '/catalogues', element: <Catalogues />, requires: 'use_client_catalogs' },
     { path: '/standards', element: <Standards />, requires: 'use_standards' },
-    { path: '/forms', element: <FormsList />, requires: 'build_forms' },
-    { path: '/forms/:formId', element: <Moved to="questions" />, requires: 'build_forms' },
-    { path: '/forms/:formId/edit', element: <Moved to="questions" />, requires: 'build_forms' },
-    { path: '/forms/:formId/data', element: <Moved to="responses" />, requires: 'build_forms' },
-    { path: '/forms/:formId/:section', element: <Builder />, requires: 'build_forms' },
+    { path: '/forms/:formId', element: <Moved to="questions" />, requires: 'build_any_forms' },
+    { path: '/forms/:formId/edit', element: <Moved to="questions" />, requires: 'build_any_forms' },
+    { path: '/forms/:formId/data', element: <Moved to="responses" />, requires: 'build_any_forms' },
+    { path: '/forms/:formId/:section', element: <Builder />, requires: 'build_any_forms' },
   ],
 }

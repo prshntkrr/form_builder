@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api.js'
 import FormRenderer from '../components/FormRenderer.jsx'
+import { applicable } from '../conditions.js'
 
 export default function FormFill() {
   const { formId } = useParams()
@@ -39,7 +40,12 @@ export default function FormFill() {
   const send = async () => {
     setSending(true); setErrors({}); setError('')
     try {
-      setDone(await api.submit(formId, values, undefined, language || form.language))
+      // Answers to questions the form is not asking are left out. They stay in
+      // the page's state, so changing the controlling answer back brings them
+      // straight back — but they are not submitted, and the server refuses
+      // them if they are sent anyway.
+      setDone(await api.submit(
+        formId, applicable(form.form_json, values), undefined, language || form.language))
     } catch (e) {
       if (e.fieldErrors) {
         setErrors(e.fieldErrors)

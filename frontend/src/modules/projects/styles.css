@@ -1,0 +1,78 @@
+/* ══ projects ═════════════════════════════════════════════════════════════ */
+
+/* The active project, at the top of the sidebar where it is always visible. */
+.side__project {
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 12px 12px 14px; margin-bottom: 4px;
+  border-bottom: 1px solid var(--line);
+}
+.side__project-label {
+  font-size: 10px; font-weight: 600; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--ink-3);
+}
+.side__project-name { font-size: 13.5px; font-weight: 550; }
+
+/* The project currently being worked in, in the projects table. */
+.row--on { background: var(--accent-wash); }
+
+/* Who a form is assigned to. */
+.asg__list { display: flex; flex-direction: column; gap: 6px; }
+.asg__row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 10px;
+  border: 1px solid var(--line); border-radius: var(--r-sm);
+  background: var(--paper);
+}
+
+/* Where a submission has got to. */
+.pill--submitted { background: #eef3f8; color: #24506e; border-color: transparent; }
+.pill--under_review { background: #fdf4e3; color: #7a5510; border-color: transparent; }
+.pill--approved { background: #eef3e8; color: #40621f; border-color: transparent; }
+.pill--rejected { background: #fdecec; color: #8a2d2d; border-color: transparent; }
+.pill--draft { background: var(--paper); color: var(--ink-3); }
+.pill--archived { background: var(--paper); color: var(--ink-3); }
+.pill--suspended { background: #fdecec; color: #8a2d2d; border-color: transparent; }
+
+/* Which context a page belongs to, said once at the top of it. */
+.context {
+  font-size: 12.5px; color: var(--ink-3);
+  margin: -6px 0 18px;
+}
+.context b { color: var(--ink-2); font-weight: 550; }
+
+/* The rule above the system section of the sidebar. */
+.side__label--rule {
+  margin-top: 14px; padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+/* One submission, read only.
+   A definition list rather than a table: it is question and answer, and there
+   is no second row to line a column up with. */
+.sheet__panel--wide { max-width: 820px; }
+
+.answers { margin-top: 6px; }
+.answers__section {
+  font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--ink-3); margin: 20px 0 6px; padding-bottom: 6px;
+  border-bottom: 1px solid var(--line);
+}
+.answers__section:first-child { margin-top: 8px; }
+.answers__row {
+  display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 8px 20px; padding: 9px 0; border-bottom: 1px solid var(--line-soft, var(--line));
+}
+.answers__row:last-child { border-bottom: none; }
+.answers__row dt { color: var(--ink-2); font-size: 13.5px; }
+.answers__row dd { font-weight: 550; overflow-wrap: anywhere; }
+
+@media (max-width: 620px) {
+  .answers__row { grid-template-columns: 1fr; gap: 2px; }
+}
+
+/* A heading that opens something. Reads as text, behaves as a control. */
+.linky {
+  background: none; border: 0; padding: 0; margin: 0; font: inherit;
+  color: inherit; text-align: left; cursor: pointer;
+}
+.linky:hover { text-decoration: underline; }

@@ -11,10 +11,22 @@ from app.modules.forms import submission_service
 from app.modules.forms import translations
 from app.modules.forms import view_service
 from app.core.deps import needs, viewer
+# One dependency, shared with the authoring routes: a form is judged by the
+# context it belongs to — the account permission for a system form, the project
+# permission for a project's own.
+from app.modules.forms.routers.forms import needs_on_form
+from app.core import auth_service
 from app.modules.forms.permissions import (
+    FORMS_SYSTEM_VIEW,
     FORMS_EDIT, RECORDS_CREATE, RECORDS_VIEW, RESPONSES_EXPORT, RESPONSES_VIEW,
     VIEW_CONFIGURE,
 )
+
+# The project permissions these routes answer to when the form belongs to one.
+# Named as strings rather than imported, so this module still loads with the
+# projects module switched off.
+PROJECT_FORMS_MANAGE = "project.forms.manage"
+PROJECT_SUBMISSIONS_VIEW_ALL = "project.submissions.view_all"
 from app.core.database import transaction
 from app.modules.forms.schemas import SubmitRequest, TestSubmissionRequest, ViewConfigRequest
 
@@ -22,7 +34,49 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/forms", tags=["submissions"])
 
 
-def _load(form_id: str):
+def _project_guard(form_id: str, user):
+    """Refuse a form belonging to a project this account cannot reach.
+
+    Every submission route loads its form through `_load`, so guarding here
+    covers reading records, filling the form in and exporting, in one place.
+    A form with no project keeps the rules it always had.
+    """
+    if user is None:
+        return
+    try:
+        from app.modules.projects import access
+    except Exception:
+        return
+
+    if not access.may_see_form(user, form_id):
+        raise HTTPException(status_code=404, detail=f"No form '{form_id}'")
+
+
+def _fill_guard(form_id: str, user):
+    """Refuse a form this account may read but has not been given to answer.
+
+    Filling is its own permission. Somebody who reviews a project's work sees
+    every form in it, and seeing a form is not being asked to fill it in — so
+    this asks `may_fill_form`, not `may_see_form`.
+
+    404 rather than 403, matching the rest of the project rules: a form that is
+    not this account's to answer should read the same as one that is not there.
+    """
+    if user is None:
+        return
+    try:
+        from app.modules.projects import access
+    except Exception:
+        return
+
+    if not access.may_fill_form(user, form_id):
+        raise HTTPException(status_code=404, detail=f"No form '{form_id}'")
+
+
+def _load(form_id: str, user=None, filling: bool = False):
+    if filling:
+        _fill_guard(form_id, user)
+    _project_guard(form_id, user)
     try:
         return form_service.get_form(form_id)
     except form_service.FormNotFound as exc:
@@ -30,13 +84,80 @@ def _load(form_id: str):
 
 
 @router.get("/live/list")
-def live_forms(user: Dict[str, Any] = Depends(needs(RECORDS_VIEW))):
-    """The forms anyone signed in may fill in right now.
+def live_forms(
+    project: Optional[str] = Query(
+        None, description="One project's forms, or 'none' for the system forms"),
+    user: Dict[str, Any] = Depends(needs(RECORDS_VIEW)),
+):
+    """The forms **this account** may fill in right now.
 
     Separate from `GET /api/forms` because that one is the builder's view — it
-    carries table names, versions and response counts, none of which a field
-    officer needs or should see. This returns Active forms and nothing else.
+    carries table names, versions and response counts, none of which somebody
+    filling a form in needs or should see.
+
+    Narrowed here, never by the caller. Two independent sources, and belonging
+    to one does not open the other:
+
+        system forms   forms belonging to no project. An account permission,
+                       `forms.system.view`. Being a manager of some project is
+                       not a way in.
+
+        project forms  for each project this account is actually a member of:
+                       the forms it was assigned — by name, through a group, or
+                       to everyone — *and* only if its role there carries
+                       `project.forms.fill`. Being able to read every form in a
+                       project, which reviewing needs, is not being able to
+                       answer them.
+
+    This used to list every Active form on the installation. `records.view` is
+    held by every Standard User, so a person added to one project received every
+    system form and every other project's forms with it. That is what this
+    narrowing fixes.
     """
+    allowed: set = set()
+
+    # The context asked about, if any. The application works in one context at a
+    # time and a list must not mix them, so `project=none` is the system forms
+    # and `project=PRJ1` is that project's.
+    wants_system = project in (None, "none")
+
+    if wants_system and auth_service.may(user, FORMS_SYSTEM_VIEW):
+        allowed.update(
+            f["form_id"] for f in form_service.list_forms(
+                status="Active", project="none", limit=500)
+        )
+
+    try:
+        from app.modules.projects import access
+    except Exception:
+        # The projects module is switched off, so there are no project forms and
+        # the system half above is the whole answer.
+        access = None
+
+    if access is not None and project != "none":
+        if project:
+            # A project this account is not in reads as one that is not there,
+            # the same as everywhere else in this module.
+            if not access.permissions_in(user, project):
+                raise HTTPException(status_code=404, detail=f"No project '{project}'")
+            reachable = [project]
+        else:
+            reachable = access.projects_for(user)
+
+        for project_id in reachable:
+            fillable = access.fillable_form_ids(user, project_id)
+            if fillable is None:
+                # This account may fill any of that project's forms.
+                allowed.update(
+                    f["form_id"] for f in form_service.list_forms(
+                        status="Active", project=project_id, limit=500)
+                )
+            else:
+                allowed.update(fillable)
+
+    if not allowed:
+        return []
+
     return [
         {
             "form_id": f["form_id"],
@@ -45,6 +166,7 @@ def live_forms(user: Dict[str, Any] = Depends(needs(RECORDS_VIEW))):
             "field_count": f["field_count"],
         }
         for f in form_service.list_forms(status="Active", limit=500)
+        if f["form_id"] in allowed
     ]
 
 
@@ -60,7 +182,7 @@ def render(
     page that draws the form needs no translation logic of its own. Field names
     are untouched, so the answers still land in the same columns.
     """
-    form = _load(form_id)
+    form = _load(form_id, user, filling=True)
     if form["form_status"] != "Active":
         raise HTTPException(
             status_code=403,
@@ -87,7 +209,7 @@ def render(
 
 @router.post("/{form_id}/submissions", status_code=201)
 def create_submission(form_id: str, req: SubmitRequest, user: Dict[str, Any] = Depends(needs(RECORDS_CREATE))):
-    form = _load(form_id)
+    form = _load(form_id, user, filling=True)
     try:
         return submission_service.submit(
             form, req.data,
@@ -107,7 +229,7 @@ def create_submission(form_id: str, req: SubmitRequest, user: Dict[str, Any] = D
 def test_submission(
     form_id: str,
     req: TestSubmissionRequest,
-    user: Dict[str, Any] = Depends(needs(FORMS_EDIT)),
+    user: Dict[str, Any] = Depends(needs_on_form(FORMS_EDIT, PROJECT_FORMS_MANAGE)),
 ):
     """Run a submission through validation and write nothing.
 
@@ -119,7 +241,7 @@ def test_submission(
     Pass `form_json` to test what is on screen rather than what is saved, so the
     builder can try a change before committing to it.
     """
-    form = _load(form_id)
+    form = _load(form_id, user)
     definition = req.form_json or form["form_json"] or {}
     result = submission_service.test_payload(definition, req.data, req.language)
     return {**result, "form_id": form_id, "form_status": form["form_status"]}
@@ -137,7 +259,7 @@ def records(
     An editor gets every column. Anyone else gets the ones an admin chose, and
     the hidden answers are stripped here rather than in the browser.
     """
-    form = _load(form_id)
+    form = _load(form_id, user)
     form_json = form["form_json"] or {}
     data = submission_service.list_submissions(form, limit=limit, offset=offset)
 
@@ -169,18 +291,26 @@ def records(
 
 
 @router.get("/{form_id}/view-config")
-def get_view_config(form_id: str, user: Dict[str, Any] = Depends(needs(RESPONSES_VIEW))):
+def get_view_config(
+    form_id: str,
+    user: Dict[str, Any] = Depends(needs_on_form(RESPONSES_VIEW, PROJECT_FORMS_MANAGE)),
+):
     """Every question, and whether it shows to people who cannot edit."""
-    form = _load(form_id)
+    form = _load(form_id, user)
     return view_service.describe(form_id, form["form_json"] or {})
 
 
 @router.put("/{form_id}/view-config")
 def set_view_config(
-    form_id: str, req: ViewConfigRequest, user: Dict[str, Any] = Depends(needs(VIEW_CONFIGURE))
+    form_id: str, req: ViewConfigRequest,
+    user: Dict[str, Any] = Depends(needs_on_form(VIEW_CONFIGURE, PROJECT_FORMS_MANAGE)),
 ):
-    """Choose which columns everyone else sees. Admin only."""
-    form = _load(form_id)
+    """Choose which columns everyone else sees.
+
+    For a system form that is an administrator's call; for a project's own form
+    it belongs to whoever builds that project's forms.
+    """
+    form = _load(form_id, user)
     form_json = form["form_json"] or {}
 
     if req.show_all:
@@ -198,15 +328,27 @@ def list_submissions(
     form_id: str,
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
-    user: Dict[str, Any] = Depends(needs(RESPONSES_VIEW)),
+    user: Dict[str, Any] = Depends(
+        needs_on_form(RESPONSES_VIEW, PROJECT_SUBMISSIONS_VIEW_ALL)),
 ):
-    form = _load(form_id)
+    """Every answer to this form, in full.
+
+    Reading other people's answers, so a project's own form asks the project
+    permission for exactly that — `project.submissions.view_all`, which a
+    manager and a reviewer hold and a surveyor does not. `/records` is the
+    narrower cousin: the columns an admin left visible.
+    """
+    form = _load(form_id, user)
     return submission_service.list_submissions(form, limit=limit, offset=offset)
 
 
 @router.get("/{form_id}/submissions/export")
-def export(form_id: str, user: Dict[str, Any] = Depends(needs(RESPONSES_EXPORT))):
-    form = _load(form_id)
+def export(
+    form_id: str,
+    user: Dict[str, Any] = Depends(
+        needs_on_form(RESPONSES_EXPORT, PROJECT_SUBMISSIONS_VIEW_ALL)),
+):
+    form = _load(form_id, user)
     csv_text = submission_service.export_csv(form)
     table = (form["form_json"] or {}).get("table_name") or form_id
     return Response(

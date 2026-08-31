@@ -275,7 +275,7 @@ def test_client_options_survive_normalization(imported):
 # --- the standards add, they do not replace ------------------------------------ #
 def test_a_client_catalog_is_never_replaced_by_a_standard(imported):
     """The workbook is the authority on its own permitted values."""
-    from app.modules.crop_ontology import enrichment as crop
+    from app.modules.standards.crop_ontology import enrichment as crop
 
     form = normalize_form(imported[0])
     # Name a field so the crop rewiring would take it if it were allowed to.

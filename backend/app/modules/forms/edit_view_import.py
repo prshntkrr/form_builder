@@ -427,6 +427,64 @@ def _first_value(
     return ""
 
 
+# The conditions a client's LOGIC column is written in, and what each means.
+#
+#     SHOW IF rcl_tipo_colaborador_c IS Persona_fisica
+#     HIDE IF estado_c IS NOT Activo
+#
+# Only these shapes are read. Anything else is kept verbatim in
+# `source.skip_logic`, exactly as before, and reported — guessing at a condition
+# would change what the client wrote, which is worse than leaving it unenforced.
+SKIP_LOGIC = re.compile(
+    r"^\s*(?P<action>SHOW|HIDE)\s+IF\s+"
+    r"(?P<field>[^\s]+)\s+"
+    r"(?P<operator>IS\s+NOT|IS|!=|<>|=|==)\s+"
+    r"(?P<value>.+?)\s*$",
+    re.IGNORECASE,
+)
+
+SKIP_OPERATORS = {
+    "is": "equals",
+    "=": "equals",
+    "==": "equals",
+    "is not": "not_equals",
+    "!=": "not_equals",
+    "<>": "not_equals",
+}
+
+
+def _rule_from_logic(logic: str, field_name: str) -> Optional[Dict[str, Any]]:
+    """The client's condition as a rule this application can act on.
+
+    None when it is not one of the shapes above. The original text is kept
+    either way; this only adds an enforceable reading of it where one is certain.
+    """
+    match = SKIP_LOGIC.match(_text(logic))
+
+    if not match:
+        return None
+
+    operator = SKIP_OPERATORS.get(
+        re.sub(r"\s+", " ", match.group("operator").strip().lower())
+    )
+
+    if not operator:
+        return None
+
+    return {
+        "conditions": [{
+            # The client's own variable name, slugified the same way the field
+            # it refers to was — so the rule names a question this form has.
+            "field": _slug(match.group("field")),
+            "operator": operator,
+            "value": _text(match.group("value")),
+        }],
+        "logic": "AND",
+        "action": match.group("action").lower(),
+        "target": {"type": "field", "name": field_name},
+    }
+
+
 def _make_section_key(value: str) -> str:
     return _slug(value) or "default_section"
 
@@ -555,6 +613,10 @@ def build_form(
     # language. Carried across as a translation they already wrote — nothing
     # here translates anything.
     english_labels: Dict[str, Dict[str, str]] = {}
+
+    # Conditions read from the LOGIC column, and the ones that could not be.
+    rules: List[Dict[str, Any]] = []
+    unread_logic: List[str] = []
 
     for index, row in enumerate(rows, start=1):
 
@@ -708,7 +770,15 @@ def build_form(
             source_meta["father_list"] = father_list
 
         if logic:
+            # Kept verbatim, as it always was. A reading of it is added beside
+            # it when the shape is one we are certain of.
             source_meta["skip_logic"] = logic
+
+            rule = _rule_from_logic(logic, name)
+            if rule:
+                rules.append(rule)
+            else:
+                unread_logic.append(f"{variable}: {logic}")
 
         # The client said this answer comes from a controlled list. Recorded
         # even when we cannot see the list, so the field stays a dropdown
@@ -798,17 +868,34 @@ def build_form(
         languages.append("en")
         translations["en"] = {"fields": english_labels}
 
+    # A rule naming a question this workbook did not define cannot be acted on.
+    # The text stays on the field either way.
+    known = {f["name"] for f in fields}
+    for rule in list(rules):
+        if rule["conditions"][0]["field"] not in known:
+            unread_logic.append(
+                f"{rule['target']['name']}: refers to '{rule['conditions'][0]['field']}', "
+                f"which is not a question in this workbook"
+            )
+            rules.remove(rule)
+
     definition: Dict[str, Any] = {
         "title": title or "Imported Standard Form",
         "description": "",
         "fields": fields,
         "sections": sections,
+        "rules": rules,
         "languages": languages,
         "default_language": default_language,
         "translations": translations,
         "import_source": {
             "kind": "edit_view_workbook",
             "file": source,
+            # Conditions written in a shape this reader does not recognise. They
+            # are still on their fields as the client wrote them; they are simply
+            # not enforced, and saying so is better than appearing to enforce
+            # something we guessed at.
+            **({"unread_logic": unread_logic} if unread_logic else {}),
         },
     }
 

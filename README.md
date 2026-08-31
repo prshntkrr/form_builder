@@ -1,512 +1,354 @@
-# e-Agrology AI Form Builder
+# e-Agrology
 
-Prompt → LLM → live form. A React frontend and a FastAPI (Python) backend that turn a
-natural-language prompt into a complete form definition using an OpenAI model, persist it in
-Postgres (`forms` + `form_version`), and **provision a dedicated data table per form** — every
-table shaped exactly like `survey_form_data`, with the whole response stored as JSONB in
-`form_data`.
+A platform for building agricultural data-collection forms and running them across projects.
+
+Forms are described once, as JSON, and everything else follows from that description: the
+Postgres table that holds the answers, the screens that draw the form, the rules that check a
+submission, and the standards that say what each question means. A form can be drafted from a
+prompt, built by hand, or imported from a spreadsheet the client already has.
+
+## What it does
+
+**Building forms**
+
+- **Form builder** — a two-pane workspace: the questions on the left, an element inspector on
+  the right with Field / Variable / Standards tabs.
+- **Dynamic forms** — each form gets its own Postgres table plus a flat mirror for reporting.
+- **Conditional logic** — show or hide a question, a section or the whole questionnaire based on
+  earlier answers. Evaluated in the browser as it is filled in, and again on the server.
+- **Multilingual forms** — one form, one data table, many languages. Field keys never change
+  with the language, so answers given in Spanish and English land in the same column.
+- **Standard forms** — a library to start from, and Excel import for the client's own workbooks
+  (CIMMYT Controlled Vocabulary and the client "Edit view" format).
+- **Data dictionary** — agree once what `age` or `plant_height` means, and every new form starts
+  that way.
+
+**Standards and reference data**
+
+- **SEOnt** — what a field *means* (`AGRO_00000325`).
+- **ICASA** — what it is officially *called* (`PHTD` · `935` · `m`).
+- **Crop Ontology** — which crop-specific variable it measures (`CO_322:0000996` · `cm`).
+- **Units** — deterministic conversion, so a height collected in centimetres is stored in the
+  metres its standard uses.
+- **Client catalogues** — the client's own controlled lists, including dependent lists
+  (districts within a state). Their codes, their wording, never replaced by a standard.
+
+**Running projects**
+
+- **Projects** with members, roles and groups.
+- **Project-level RBAC** — the same person can manage one project and enumerate in another.
+- **Form assignment** — a form goes to everyone in a project, to named people, or to groups.
+- **Submission workflow** — draft → submitted → under review → approved, or rejected and sent
+  back.
+- **Dashboards** — reporting over collected data.
+
+## Architecture
 
 ```
-e_agrology_new/
-├── backend/
-│   ├── app/
-│   │   ├── config.py          # env settings
-│   │   ├── database.py        # Postgres connection pool  <-- connection file
-│   │   ├── field_types.py     # field type registry: validation + JSON coercion
-│   │   ├── form_schema.py     # canonical form JSON schema + normalizer
-│   │   ├── llm.py             # OpenAI form generation / refinement
-│   │   ├── table_service.py   # dynamic CREATE TABLE per form
-│   │   ├── form_service.py    # forms + form_version CRUD
-│   │   ├── submission_service.py
-│   │   ├── routers/
-│   │   │   ├── forms.py
-│   │   │   └── submissions.py
-│   │   └── main.py
-│   ├── schema.sql             # reference DDL for the 3 base tables
-│   ├── requirements.txt
-│   └── .env.example
-└── frontend/                  # Vite + React
-    └── src/
-        ├── api.js
-        ├── components/
-        └── pages/
+React (Vite)
+     │  REST, /api/*
+     ▼
+FastAPI
+     ├── core/        database, auth, permissions, module registry
+     └── modules/     projects · forms · standards · client_catalog · dashboards
+     │
+     ▼
+PostgreSQL
 ```
 
-## 1. Backend setup
+A **module** is a directory under `app/modules/` with a `MODULE` manifest in its `__init__.py`
+naming its routers, tables, schema file and migrations. Nothing registers it — no list to append
+to, no import to add to `main.py`. Two people can add two modules in two branches without
+touching the same line of anything, and `DISABLED_MODULES` in `.env` switches one off entirely:
+its routes, permissions and tables never come into being.
 
-The virtualenv is already created at `backend/.venv` with dependencies installed.
+Business logic lives in services; routers are thin and do not make authorization decisions of
+their own.
+
+## Project structure
+
+```
+backend/
+├── app/
+│   ├── main.py
+│   ├── core/                    infrastructure every module may use
+│   │   ├── auth_service.py      accounts, sessions, passwords
+│   │   ├── permissions.py       the permission catalogue and built-in roles
+│   │   ├── role_service.py      roles and what they hold
+│   │   ├── registry.py          module discovery
+│   │   ├── deps.py              needs(PERMISSION) and friends
+│   │   ├── database.py          the connection pool
+│   │   └── schema.sql           app_user · app_role · role_permission · sessions
+│   │
+│   └── modules/
+│       ├── projects/            projects, membership, groups, assignment, review
+│       │   ├── access.py            the only place a project question is answered
+│       │   ├── project_service.py
+│       │   ├── submission_workflow.py
+│       │   └── routers/
+│       │
+│       ├── forms/               the builder, the renderer's contract, submissions
+│       │   ├── form_schema.py       normalize any definition into the canonical shape
+│       │   ├── config_validation.py two-stage validation
+│       │   ├── conditions.py        the conditional-logic engine
+│       │   ├── translations.py      multilingual wording
+│       │   ├── submission_service.py
+│       │   ├── standardization.py   unit conversion on submission
+│       │   ├── excel_import.py      CIMMYT Controlled Vocabulary workbooks
+│       │   ├── edit_view_import.py  the client "Edit view" workbook
+│       │   └── routers/
+│       │
+│       ├── standards/           a container package, not a module of its own
+│       │   ├── seont/               SEOnt concepts
+│       │   ├── icasa/               ICASA variables and coded values
+│       │   ├── crop_ontology/       crop traits, methods, scales, variables
+│       │   └── units/               unit conversion
+│       │
+│       ├── client_catalog/      the client's own controlled lists
+│       └── dashboards/
+│
+├── tests/                       mirrors app/modules/
+├── import_ontology.py           CLI: load SEOnt
+├── import_icasa.py              CLI: load ICASA
+├── import_crop_ontology.py      CLI: load a crop ontology
+├── import_client_catalog.py     CLI: load client catalogue workbooks
+└── requirements.txt
+
+frontend/
+└── src/
+    ├── core/                    shell, auth, routing, the module registry
+    └── modules/forms/           the builder, renderer, catalogues, standards screens
+
+data_dictionary/                 the standards themselves, as downloaded
+├── seont.owl
+├── icasa/
+├── crop_ontology/
+└── client_catalogs/             workbooks the deploy imports
+```
+
+## Backend setup
+
+Python 3.10+.
 
 ```bash
 cd backend
-copy .env.example .env          # then fill in DB password + OPENAI_API_KEY
-.venv\Scripts\python verify_setup.py     # end-to-end DB check (no OpenAI needed)
-.venv\Scripts\python -m uvicorn app.main:app --reload --port 8000
+python -m venv venv
+source venv/bin/activate          # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+
+cp .env.example .env              # then edit it
+python -m uvicorn app.main:app --reload --port 8000
 ```
 
-Docs: <http://localhost:8000/docs> · Health: <http://localhost:8000/api/health>
-
-`verify_setup.py` saves a throwaway form, provisions its table, submits a row, reads it back and
-adds a field — proving the whole persistence path before you touch the UI. Run it with
-`--cleanup` afterwards to drop the test form and table.
-
-`.env`:
-
-```
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=e_agrology
-DB_USER=postgres
-DB_PASSWORD=yourpassword
-OPENAI_API_KEY=sk-...
-OPENAI_MODEL=gpt-4o-mini
-```
-
-The three base tables (`forms`, `form_version`, `survey_form_data`) already exist in your DB.
-`backend/schema.sql` reproduces them with `IF NOT EXISTS` for a fresh environment.
-
-### Hiding a module
-
-A module still being built stays out of a client's hands with one line:
-
-```
-DISABLED_MODULES=dashboards
-```
-
-Comma-separated, in `backend/.env`. A module named there is not loaded at all —
-no routes, no permissions, no tables — and the UI hides its screens because the
-server tells it which modules are live. Restart to apply; no rebuild needed.
-
-### The first sign-in
-
-Startup creates an administrator if no account can hand out roles yet. Choose its
-password before that first run:
-
-```
-ADMIN_EMAIL=you@example.org
-ADMIN_PASSWORD=something-long-and-yours
-```
-
-Leave `ADMIN_PASSWORD` blank and one is generated and printed to the log once —
-the only time you will see it. Real environment variables win over `.env`, so a
-container or service unit can supply it without the value touching a file:
+On first run the admin password is generated and printed to the log unless `ADMIN_PASSWORD` is
+set. To change it later:
 
 ```bash
-ADMIN_PASSWORD='...' python -m uvicorn app.main:app          # Docker -e, systemd Environment=
+python set_admin_password.py --email admin@example.org
 ```
 
-This applies to the *first* run only. Afterwards the account exists and startup
-leaves it alone, so use the CLI:
+Loading the standards is optional — the application runs with none of them, and the pickers
+simply find nothing:
 
 ```bash
-cd backend
-python set_admin_password.py --from-env           # apply ADMIN_EMAIL / ADMIN_PASSWORD
-python set_admin_password.py                      # prompts; ADMIN_EMAIL by default
-python set_admin_password.py you@example.org
-python set_admin_password.py you@example.org --grant-admin
-echo 'new-password' | python set_admin_password.py --stdin
+python import_ontology.py                     # SEOnt
+python import_icasa.py                        # ICASA
+python import_crop_ontology.py --crop CO_322  # one crop ontology
+python import_client_catalog.py --directory   # every committed catalogue workbook
 ```
 
-Use the venv's interpreter — `.venv/bin/python` on Linux,
-`.venv/Scripts/python.exe` on Windows — so it reads the same `.env` as the server.
+## Frontend setup
 
-It creates the account if there is none, clears any lockout, and signs out every
-existing session and reset link. `--grant-admin` also moves the account onto the
-admin role, which is how you recover an installation where nobody can reach
-Roles and Users any more.
-
-## 2. Frontend setup
+Node 20+.
 
 ```bash
 cd frontend
-npm install            # already done
-npm run dev            # http://localhost:5173
+npm install
+npm run dev        # http://localhost:5173, proxying /api to port 8000
+npm run build      # production bundle into dist/
 ```
 
-The dev server proxies `/api` to `http://localhost:8000`.
+Set `API_PORT` if the backend is not on 8000.
 
-## 3. How it works
+## Environment variables
 
-1. **Describe** the form in plain language (`/builder`). The backend sends your prompt plus a
-   strict JSON contract to OpenAI and gets back a full form definition — sections, fields,
-   labels, types, options, validation, and a suggested Postgres table name.
-2. **Preview & refine.** Tweak fields inline, or send a follow-up prompt ("add a GPS field,
-   make phone required") to have the model revise the existing JSON.
-3. **Save.** The backend:
-   - inserts into `forms` (`form_id` like `FRM00001`, `form_json` = the definition),
-   - inserts version 1 into `form_version`,
-   - runs `CREATE TABLE IF NOT EXISTS <table_name>` with exactly the `survey_form_data` shape:
+Copy `backend/.env.example` to `backend/.env`. Never commit real values.
 
-     ```
-     survey_id    VARCHAR(50)  NOT NULL PRIMARY KEY
-     form_id      VARCHAR(20)  NOT NULL
-     form_data    JSONB        NOT NULL
-     created_on   TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
-     form_version INTEGER
-     created_by   VARCHAR(50)
-     ```
+| variable | what it is |
+|---|---|
+| `DB_HOST` `DB_PORT` `DB_NAME` `DB_USER` `DB_PASSWORD` `DB_SCHEMA` | Postgres connection |
+| `DB_POOL_MIN` `DB_POOL_MAX` | connection pool size |
+| `AUTO_CREATE_TABLES` | run the schema files at startup; set false if the app's user may not run DDL |
+| `OPENAI_API_KEY` `OPENAI_MODEL` `OPENAI_TIMEOUT` | drafting a form from a prompt |
+| `CORS_ORIGINS` | comma-separated origins the API accepts |
+| `DEFAULT_USER` | who a write is attributed to when nobody is signed in |
+| `APP_URL` `SESSION_HOURS` `RESET_MINUTES` | auth and password reset |
+| `ADMIN_EMAIL` `ADMIN_PASSWORD` | the first account; a blank password is generated and logged |
+| `AUTH_EXPOSE_RESET_LINK` | local development only |
+| `DISABLED_MODULES` | comma-separated modules to switch off entirely |
+| `SMTP_*` | optional; without `SMTP_HOST`, reset links go to the log |
 
-   - and a second table, `<table_name>_tabular`, with the same envelope minus `form_data` **plus
-     one typed column per question** — a normal table for reporting.
+## Database
 
-   A form titled *Survey Form Data* lands in `survey_form_data` + `survey_form_data_tabular`;
-   *Farmer Registration* in `farmer_registration` + `farmer_registration_tabular`.
-4. **Live.** The form is immediately fillable at `/f/<form_id>`. Each submission writes one row to
-   each table, in the same transaction — the whole response as JSONB, and the same answers spread
-   across typed columns.
-5. **Edit later.** Saving changes bumps `version_no` and appends a row to `form_version`. The
-   JSONB table is never altered, so nothing can be lost. The `_tabular` mirror follows the new
-   definition — columns added, dropped, renamed or retyped — and is rebuilt from `form_data`
-   where needed. Submissions made under older versions stay readable; `form_version` on each row
-   records which definition they match.
+PostgreSQL. **There is no migration tool** — no Alembic, no version table.
 
-## 4. Field types → what lands in `form_data`
+The schema is applied at startup: core's `schema.sql` first, then each module's, then each
+module's idempotent `ensure_*` migrations. Every one of them is safe to run repeatedly, so
+starting the application brings an existing database forward without a separate step. Set
+`AUTO_CREATE_TABLES=false` to apply the schema files by hand instead.
 
-`backend/app/field_types.py` is the single source of truth; the frontend reads it from
-`GET /api/field-types`. Answers are validated, coerced, then normalized into JSON — so a
-`decimal` field posted as the string `"12.5"` is stored as the number `12.5`.
+**Answers** live one table per form: a JSONB `form_data` column holding the whole validated
+answer set, plus a `<form>_tabular` mirror with one column per question for reporting. The JSONB
+is the record of truth; the mirror is rebuildable and its columns are never dropped.
 
-| Field types | Stored in `form_data` as |
-| --- | --- |
-| `text`, `textarea`, `email`, `phone`, `url`, `select`, `radio`, `file`, `signature` | string |
-| `number`, `decimal`, `rating` | number |
-| `boolean` | boolean |
-| `date` | string, `YYYY-MM-DD` |
-| `datetime` / `time` | string, ISO 8601 / `HH:MM:SS` |
-| `multiselect` | array of strings |
-| `location` | object `{lat, lng}` |
+Main tables:
 
-Example row:
+| area | tables |
+|---|---|
+| accounts | `app_user` `app_role` `role_permission` `user_session` |
+| projects | `project` `project_member` `project_group` `project_group_member` |
+| forms | `forms` `form_version` `standard_form_library` `data_dictionary` `form_view` |
+| access | `form_assignment` |
+| review | `submission_review` |
+| standards | `ontology_concept` `data_standard` `standard_variable` `crop_ontology` `crop_trait` `crop_variable` `unit` |
+| client data | `client_catalog` `client_catalog_value` |
 
-```json
-{
-  "farmer_name": "Ramesh Kumar",
-  "visit_date":  "2026-07-29",
-  "land_area":   12.5,
-  "irrigation":  ["Canal", "Borewell"],
-  "is_verified": true
-}
+## RBAC
+
+Authorization is **permission-based**. No code anywhere decides by role name — roles are data an
+administrator can rename or replace, so a check against one would stop being true the moment
+somebody did.
+
+**System role** — what an account may do across the installation:
+
+```
+user ──▶ app_user.role_id ──▶ app_role ──▶ role_permission ──▶ permissions
 ```
 
-Field names the model produces are slugified to snake_case, de-duplicated, and renamed if they
-collide with an envelope column (`created_on` becomes `created_on_value`) so a query never has to
-guess between the column and the JSON key. Table names reach Postgres only through
-`psycopg2.sql.Identifier` — no model output is ever concatenated into DDL.
+**Project role** — what it may do inside one project:
 
-Because `form_data` is JSONB with a GIN index, it stays queryable:
-
-```sql
-SELECT form_data ->> 'farmer_name', form_data -> 'land_area'
-FROM   farmer_registration
-WHERE  form_data @> '{"irrigation": ["Canal"]}';
+```
+user ──▶ project_member ──▶ role_id ──▶ app_role ──▶ role_permission ──▶ permissions
 ```
 
-## 5. Editing a form after it is live
+Both point at the **same** `app_role` table and draw on the same permission catalogue. There is
+one RBAC system; what differs is where the role was found. The same account can hold
+*Project manager* in one project and *Surveyor* in another.
 
-The table shape is fixed for the life of the form, so editing never runs a migration. Add a
-question, remove one, change a type — only `form_json` and `form_version` change.
+Routes ask one question:
 
-Two cases involve data that already exists:
+```python
+@router.get("/{project_id}/members")
+def members(project_id: str,
+            user = Depends(access.needs_in_project(PROJECT_VIEW))):
+```
 
-- **Renaming a field.** The key its answers are stored under changes, so the update carries a
-  `renames` map and the backend moves every stored answer across in the same transaction. A
-  rename that would overwrite another field's answers is rejected outright.
-- **Changing a type, options, or requiredness.** Existing answers may no longer fit. **Check
-  responses** in the editor (or `POST /api/forms/{id}/revalidate`) reports exactly which rows and
-  why, and can re-coerce the ones it safely can. It never deletes an answer.
+Seeded project roles: **Project manager**, **Surveyor**, **Reviewer**.
 
-Older submissions keep the shape they were captured in; `form_version` on each row records which
-definition to read it against.
+**Isolation.** `access.permissions_in(user, project)` is empty for a non-member, which is the
+whole of it. A project you are not in answers **404**, not 403 — a 403 would confirm the id is
+real. Inside a project the answers are ordinary 403s, because there the resource is known to
+exist. One deliberate bypass, `projects.view_all`, lets an administrator reach a project without
+joining it; it is a permission like any other.
 
-Because every revision stores a complete definition, the **History** tab compares any two of them —
-what was added, removed, retyped, renamed, or reordered — with no separate change log to maintain.
-A field renamed across several versions is followed through the chain, so it reads as one changed
-field rather than a removal plus an addition.
+Account-wide permissions are checked first and project membership second: reading a form you
+have no business reading gives 403 if your account cannot read forms at all, and 404 if it can
+but the form belongs to someone else's project.
 
-The same tab lists every version, marks which one is **Live**, and offers **Roll back** on the
-rest. Rolling back writes no new version — the form simply points at that version's stored
-definition, so the history is untouched and you can roll anywhere else afterwards. Answers already
-collected move to the keys that version uses. Editing while rolled back appends as normal.
+## Project hierarchy
 
-For the full picture — module map, request lifecycles, safety model — see
-[docs/BACKEND.md](docs/BACKEND.md). For what is built, what is missing, and the
-order the remaining features want to be done in, see
-[docs/ROADMAP.md](docs/ROADMAP.md). For how the code is split into modules and
-how two people work in it without conflicts, see [docs/MODULES.md](docs/MODULES.md).
+```
+Organization / System
+├── Users
+├── Global roles
+└── Projects
+      ├── Project members ──▶ project role
+      ├── Project groups  ──▶ group members
+      ├── Forms           ──▶ form assignments
+      └── Submissions     ──▶ review workflow
+```
 
-### Standards on a field
+## Form assignment
 
-Three separate things can be attached to a question, and they answer different
-questions. Any of them may be absent.
+```
+project ──▶ form ──▶ assignment
+```
 
-| | answers | comes from |
-|---|---|---|
-| Data dictionary | how must this behave? | your own entries — type, limits, required |
-| Semantic concept | what does this mean? | SEOnt, an ontology concept URI |
-| Data standard | what is it officially called? | ICASA, a variable id, unit and data type |
+Three kinds — **everyone** in the project, a named **user**, or a **group** — and an assignment
+is a relationship. The form is never copied, so correcting it corrects what everybody sees at
+once.
 
-Only the first changes how a form behaves. The other two are metadata, and
-neither ever replaces **Stored as** — that stays the key an answer is written
-under.
+A member sees a form when it was actually given to them. A form with **no** assignment is seen
+only by somebody holding `project.forms.view_all`: a form nobody was given is not a form
+everybody gets.
 
-Import the ICASA dictionary once:
+Forms with `project_id = NULL` predate projects. They are untouched and keep the system-wide
+form permissions they always had.
+
+## Submission workflow
+
+```
+draft ──▶ submitted ──▶ under_review ──▶ approved
+              │              │
+              └──────────────┴────────▶ rejected ──▶ submitted
+```
+
+The transitions are a table in `submission_workflow.py` and every move goes through `advance()`.
+There is deliberately **no** endpoint that accepts a status: the move is the URL
+(`POST /api/submissions/{form}/{survey}/approve`), so a surveyor cannot post
+`{"status": "approved"}` at their own work. Approving and rejecting need
+`project.submissions.review`; rejection requires a reason.
+
+Review state lives in `submission_review`, beside the response rather than inside it. Every form
+has its own dynamically created table, so workflow columns in that envelope would mean migrating
+each one and rebuilding its mirror.
+
+## Standards
+
+```
+modules/standards/
+├── seont/           what a field means
+├── icasa/           what it is officially called
+├── crop_ontology/   which crop-specific variable it measures
+└── units/           the arithmetic between units
+```
+
+`standards/` is a **container package**: it holds no module of its own, and the registry descends
+into it to find four independent modules, each with its own tables, permissions and routes. A
+field may carry any combination of the three mappings, and none overrules another — plant height
+is ICASA's `PHTD` in metres *and* Crop Ontology's `CO_322:0000996` in centimetres, and `units/`
+reconciles them on submission.
+
+**`client_catalog/` is deliberately outside `standards/`.** A client's controlled lists are their
+data, not a standard — the whole point of that module is that no standard and no model may
+replace one of its values. Filing it under `standards/` would blur the one distinction the code
+most depends on.
+
+## Testing
 
 ```bash
-cd backend
-python import_icasa.py --version 2026-01-29
-python import_icasa.py --list
+cd backend && pytest              # needs Postgres; tests skip cleanly without it
+cd frontend && npm test           # vitest, jsdom
+cd frontend && npm run build
 ```
 
-Safe to re-run: variables are matched on ICASA's own `var_uid`, the only
-identifier in the dictionary that is unique. A re-import with no `--version`
-keeps the one already recorded.
+## API documentation
 
-**Drafts are enriched automatically.** A form generated from a prompt is looked
-up in both standards before you see it — nobody has to write "use ICASA" in the
-prompt. The matcher is deliberately strict: it attaches only an exact name or
-code match, and where two variables fit equally well it attaches nothing and
-offers both instead. A wrong mapping is silently wrong in an exported dataset
-months later; a missing one is merely absent.
+With the backend running, FastAPI serves interactive documentation:
 
-`GET /api/standards/mapping/{form_id}` returns the standard identifiers behind
-a form's columns, so a downstream job can key on ICASA's `variable_id` rather
-than on your column names.
+- `http://localhost:8000/docs` — Swagger UI
+- `http://localhost:8000/redoc` — ReDoc
+- `http://localhost:8000/openapi.json` — the schema
+- `http://localhost:8000/api/health` — reachability, and which tables are missing
 
-### Ontology concepts
+## Development guidelines
 
-The data dictionary says how a field must **behave**. An ontology says what it
-**means** — and, where it has them, what its standardised answers are.
-
-Import one once:
-
-```bash
-cd backend
-python import_ontology.py                                # data_dictionary/seont.owl
-python import_ontology.py path/to/agro.owl --name AgrO   # another ontology
-python import_ontology.py --list                         # what is loaded
-```
-
-Safe to re-run: concepts are matched on their URI, so a second import updates
-labels and adds what is new rather than duplicating anything.
-
-In the builder, open a question's settings and search under **Semantic
-concept**. Picking one records what the field means. If the concept has named
-subclasses, **Load standardised values** turns them into the dropdown's choices;
-if it has none — which is true of about half of them — you are told so and type
-the choices yourself, exactly as before.
-
-Each loaded choice keeps the URI it came from:
-
-```json
-{ "label": "lake", "value": "lake",
-  "ontology_uri": "http://purl.obolibrary.org/obo/ENVO_00000020" }
-```
-
-so a stored answer of `lake` can always be traced back to the concept, without
-anything extra being written alongside the response. Nothing about this is
-required: a field with no concept behaves exactly as it always has.
-
-### The data dictionary
-
-What a field name means everywhere in the installation. Agree once that `age` is
-a whole number between 1 and 120, that `plant_height` is a decimal no greater
-than 25, that `first_name` is text of 2–60 characters — and every form drafted
-afterwards starts that way.
-
-Open **Data dictionary** in the sidebar and add a field. `Also known as` catches
-the other spellings people use, so one entry for `plant_height` also claims
-`height` and `plant ht`.
-
-It is applied automatically when AI drafts a form, and on demand from the
-builder with **Apply dictionary**. What it changed is always reported — never
-silent. The dictionary decides the **type, the limits and the choices**, because
-agreeing those once is the point; it only fills in the **label, hint and
-placeholder** when they were left empty, so the wording stays yours.
-
-Forms already built are untouched: the dictionary shapes a form while it is
-being drafted and holds nothing afterwards.
-
-### More than one language
-
-A form keeps **one definition and one data table** however many languages it is
-offered in. Only the words are translated — the field name is the key inside
-`form_data` and the column in the tabular mirror, so a Hindi answer and an
-English answer land in the same column and count together.
-
-Open a form's **Languages** section, add a language, and fill in the wording —
-or press *Translate with AI* and correct what comes back. Anything left empty
-falls back to English, so a half-finished translation still works.
-
-People filling the form get a language picker. The server returns the definition
-already translated, so the page that draws the form has no translation logic of
-its own. Validation messages come back in the same language.
-
-Languages live in one block on the definition:
-
-```json
-"languages": ["en", "hi"],
-"translations": {
-  "hi": {
-    "title": "किसान पंजीकरण",
-    "fields": { "farmer_name": { "label": "किसान का नाम" } }
-  }
-}
-```
-
-Field names, section keys and option values are identifiers, never words, and
-are never translated — an answer has to mean the same thing in every language.
-Add a language to `SUPPORTED_LANGUAGES` in
-`backend/app/modules/forms/translations.py` to offer another one.
-
-### Drafts
-
-A form does not have to go live the moment it is built. **Save as draft** keeps
-it out of circulation: it gets its tables and its version history as usual, but
-it stays out of every field officer's list and refuses real submissions.
-
-Test it from the **Preview** tab. *Test these answers* runs what you have typed
-through exactly the validation and coercion a real submission goes through, and
-shows the `form_data` that would be stored — without storing it. Nothing to clean
-up afterwards, and a failing answer is marked on the field that caused it.
-Preview tests what is on screen, so you can try a change before saving it.
-
-**Publish** when it is ready, and **Back to draft** takes a live form out of
-circulation again. Answers already collected are kept either way.
-
-## 6. Attribution (`created_by`)
-
-`forms.created_by` and each submission row's `created_by` are resolved in this order:
-
-1. what the request sends (`created_by` in the POST body — the **Created by** box in the builder,
-   **Submitting as** on the live form; both remembered in `localStorage`),
-2. an author the prompt named and the model picked up — *"a plot survey form created by admin"*
-   sets `created_by` to `admin` and prefills the box,
-3. `DEFAULT_USER` from `.env`, which ships as `system`.
-
-Editing a form never rewrites the original author; the editor is recorded as `updated_by` inside
-the versioned `form_json` instead, since the `forms` table has no such column.
-
-## 7. API
-
-| Method | Path | Purpose |
-| --- | --- | --- |
-| `POST` | `/api/forms/generate` | prompt → form JSON (not persisted) |
-| `POST` | `/api/forms/refine` | existing JSON + prompt → revised JSON |
-| `POST` | `/api/forms` | save form, create version 1, provision table |
-| `GET` | `/api/forms` | list forms |
-| `GET` | `/api/forms/{form_id}` | one form + version info |
-| `PUT` | `/api/forms/{form_id}` | update → new version, moving answers for renamed fields |
-| `POST` | `/api/forms/{form_id}/revalidate` | check stored responses against the current definition (`fix: true` re-coerces) |
-| `POST` | `/api/forms/{form_id}/rebuild-tabular` | repopulate the flat `<form>_tabular` mirror from the JSONB table |
-| `PATCH` | `/api/forms/{form_id}/status` | Active / Inactive |
-| `DELETE` | `/api/forms/{form_id}` | soft delete (status = Deleted) |
-| `GET` | `/api/forms/{form_id}/versions` | version history |
-| `GET` | `/api/forms/{form_id}/diff?from=1&to=3` | what changed between two versions (defaults to latest vs previous) |
-| `POST` | `/api/forms/{form_id}/rollback` | make an existing version live (writes no new version) |
-| `POST` | `/api/forms/{form_id}/submissions` | submit a filled form |
-| `GET` | `/api/forms/{form_id}/submissions` | paginated submissions |
-| `GET` | `/api/forms/{form_id}/submissions/export` | CSV export |
-
-## 8. Deploying to a server
-
-### Database
-
-Only two tables need to exist: `forms` and `form_version`. **Every form's own data table is
-created by the application**, so there is nothing per-form to prepare.
-
-```bash
-createdb -h <host> -U <user> e_agrology        # or CREATE DATABASE e_agrology;
-```
-
-That's usually all. On first start the app runs `backend/schema.sql` itself and creates anything
-missing — the file is idempotent, so it's a no-op on an existing database.
-
-If the app's database user isn't allowed to run DDL, apply it yourself and switch the automatic
-step off:
-
-```bash
-psql -h <host> -U <user> -d e_agrology -f backend/schema.sql
-# then in .env:
-AUTO_CREATE_TABLES=false
-```
-
-Note that the user still needs `CREATE` on the schema at runtime, because saving a form issues a
-`CREATE TABLE`. Grant it with:
-
-```sql
-GRANT CREATE, USAGE ON SCHEMA public TO <user>;
-```
-
-If your policy forbids that outright, this design won't fit without changes — per-form tables are
-the core of it.
-
-### Backend
-
-```bash
-cd backend
-python -m venv .venv && .venv/bin/pip install -r requirements.txt
-cp .env.example .env          # fill in DB_* and OPENAI_API_KEY
-.venv/bin/python verify_setup.py            # end-to-end check, then --cleanup
-.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
-```
-
-Drop `--reload` in production and run it under systemd (or a container). A minimal unit:
-
-```ini
-[Unit]
-Description=e-Agrology form builder API
-After=network.target postgresql.service
-
-[Service]
-WorkingDirectory=/srv/e_agrology/backend
-EnvironmentFile=/srv/e_agrology/backend/.env
-ExecStart=/srv/e_agrology/backend/.venv/bin/python -m uvicorn app.main:app \
-          --host 127.0.0.1 --port 8000 --workers 4
-Restart=always
-User=eagrology
-
-[Install]
-WantedBy=multi-user.target
-```
-
-`WorkingDirectory` matters — `.env` is read relative to it.
-
-### Frontend
-
-```bash
-cd frontend
-npm ci && npm run build       # outputs dist/
-```
-
-Serve `dist/` from nginx alongside the API. Because the app uses client-side routing, unknown
-paths must fall back to `index.html` or a refresh on `/f/FRM00001` returns 404:
-
-```nginx
-server {
-    listen 80;
-    server_name forms.example.org;
-    root /srv/e_agrology/frontend/dist;
-
-    location / {
-        try_files $uri $uri/ /index.html;    # required for client-side routes
-    }
-
-    location /api/ {
-        proxy_pass http://127.0.0.1:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    }
-}
-```
-
-Served this way the frontend and API share an origin, so no CORS setup is needed. If you put the
-API on a different host, build with `VITE_API_BASE=https://api.example.org` and add the frontend's
-origin to `CORS_ORIGINS` in `.env`.
-
-### Check it came up
-
-```bash
-curl https://forms.example.org/api/health
-```
-
-`status: ok` means the database is reachable, the base tables exist and an OpenAI key is loaded.
-`missing_tables` lists anything the app expected and could not find.
+- **Keep business logic in services.** Routers should read as a list of what a request is allowed
+  to do, not how it is done.
+- **Never decide by role name.** Ask for a permission.
+- **Never duplicate authorization.** Project questions go through `projects/access.py`.
+- **Preserve project isolation.** A resource in another project answers 404.
+- **The field array is the order.** Nothing sorts a form's fields — the builder writes the list,
+  `normalize_form` renumbers `order` from position, and every renderer reads the list.
+- **Don't duplicate a module.** Two implementations of the same idea will disagree eventually.
+- **Write tests for new behaviour**, including the case where somebody calls the API directly.

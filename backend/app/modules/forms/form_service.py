@@ -92,13 +92,31 @@ def list_forms(
     search: Optional[str] = None,
     limit: int = 100,
     offset: int = 0,
+    project: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
+    """Forms this installation holds.
+
+    `project` narrows the list to one context. `"none"` is the system context:
+    forms that belong to no project, which is every form built before projects
+    existed. Without it the list is unnarrowed, which is what it always was.
+
+    This is not project isolation — that is `projects/access.py`, which decides
+    whether somebody may open a form at all. This only says which context a
+    screen is showing, so a project's forms and the system's are never mixed on
+    one page.
+    """
     clauses = ["f.form_status <> 'Deleted'"]
     params: List[Any] = []
 
     if status:
         clauses = ["f.form_status = %s"]
         params.append(status)
+
+    if project == "none":
+        clauses.append("f.project_id IS NULL")
+    elif project:
+        clauses.append("f.project_id = %s")
+        params.append(project)
     if search:
         clauses.append("(f.form_title ILIKE %s OR f.form_description ILIKE %s)")
         params += [f"%{search}%", f"%{search}%"]

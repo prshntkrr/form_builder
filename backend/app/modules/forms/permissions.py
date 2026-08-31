@@ -8,6 +8,9 @@ from app.core.permissions import Permission, register
 
 # --- forms ------------------------------------------------------------------
 FORMS_VIEW = "forms.view"
+# The forms that belong to no project. Being in a project says nothing about
+# them, so reaching one takes a permission of its own.
+FORMS_SYSTEM_VIEW = "forms.system.view"
 FORMS_CREATE = "forms.create"
 FORMS_EDIT = "forms.edit"
 FORMS_DELETE = "forms.delete"
@@ -36,6 +39,8 @@ CATALOGUE = [
     Permission(RECORDS_CREATE, "Add records",
                "Fill in a live form and save a new record", "Records"),
 
+    Permission(FORMS_SYSTEM_VIEW, "Use system forms",
+               "Open, fill in and read the forms that belong to no project", "Forms"),
     Permission(FORMS_VIEW, "See all forms",
                "The builder's list, with versions, tables and response counts", "Forms"),
     Permission(FORMS_CREATE, "Create forms",
@@ -74,17 +79,21 @@ register(
     grants={
         "editor": [
             RECORDS_VIEW, RECORDS_CREATE,
+            FORMS_SYSTEM_VIEW,
             FORMS_VIEW, FORMS_CREATE, FORMS_EDIT, FORMS_DELETE,
             RESPONSES_VIEW, RESPONSES_EXPORT,
             LIBRARY_VIEW, LIBRARY_MANAGE,
             DICTIONARY_VIEW, DICTIONARY_MANAGE,
         ],
-        "field": [RECORDS_VIEW, RECORDS_CREATE],
+        "standard": [RECORDS_VIEW, RECORDS_CREATE],
     },
     # Flags for /api/auth/me, so the frontend can hide whole sections without
     # knowing which permission each one rests on.
     capabilities={
         "build_forms": FORMS_VIEW,
+        # Whether the System context is offered at all. Held on the account, so
+        # belonging to a project can never turn it on.
+        "use_system_forms": FORMS_SYSTEM_VIEW,
         "use_dictionary": DICTIONARY_VIEW,
         "manage_dictionary": DICTIONARY_MANAGE,
         "use_library": LIBRARY_VIEW,

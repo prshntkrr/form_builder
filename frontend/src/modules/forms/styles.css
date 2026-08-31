@@ -102,20 +102,6 @@
   background: var(--card); color: var(--accent-deep);
   border: 1px solid var(--line);
 }
-.std__hits {
-  display: flex; flex-direction: column;
-  max-height: 190px; overflow-y: auto;
-  border: 1px solid var(--line); border-radius: var(--r-sm);
-}
-.std__hit {
-  display: flex; align-items: baseline; gap: 10px;
-  padding: 7px 10px; text-align: left;
-  border-bottom: 1px solid var(--line);
-}
-.std__hit:last-child { border-bottom: 0; }
-.std__hit:hover { background: var(--paper); }
-.std__hit .ellipsis { display: inline-block; max-width: 300px; vertical-align: bottom; }
-
 /* Which standards a question carries, on its row. */
 .frow__std { display: inline-flex; gap: 4px; align-items: center; }
 .pill {
@@ -127,7 +113,41 @@
 }
 .pill--std { background: var(--accent-wash); color: var(--accent-deep); border-color: transparent; }
 
-/* Browsing the imported standards. */
+/* Browsing the imported standards.
+
+   The dropdown stack replaced a grid of one card per imported vocabulary. With
+   forty crop ontologies loaded, that grid put "Apple" beside "ICASA" as though
+   they were the same kind of thing, and left nothing to do but search. */
+.hier { display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px; }
+.hier__levels {
+  display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 14px;
+  padding: 14px 16px;
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--r);
+}
+.hier__level { display: flex; flex-direction: column; gap: 4px; min-width: 200px; flex: 1; }
+.hier__level .control { width: 100%; }
+.hier--compact .hier__levels { padding: 10px 12px; gap: 8px 10px; }
+.hier--compact .hier__level { min-width: 160px; }
+.hier__spin { align-self: center; margin-bottom: 8px; }
+
+.hier__crumbs {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px;
+  font-size: 13px; color: var(--ink-2); margin: 0;
+}
+.hier__arrow { color: var(--ink-3); }
+.hier__filter { align-items: center; gap: 8px; margin-bottom: 12px; }
+.hier__empty { padding: 18px 2px; }
+.hier__lede { margin-bottom: 10px; }
+
+/* The browser, inside a question's Standards tab. */
+.std__browser {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 10px; margin-top: 4px;
+  background: var(--paper); border: 1px solid var(--line); border-radius: var(--r);
+}
+.std__browser .dict { max-height: 320px; overflow-y: auto; }
+.std__row--head { background: var(--accent-wash); border-color: transparent; }
+
 .tabs { gap: 4px; margin-bottom: 16px; border-bottom: 1px solid var(--line); }
 .tab {
   padding: 8px 14px; font-size: 13.5px; font-weight: 500; color: var(--ink-3);
@@ -135,13 +155,6 @@
 }
 .tab:hover { color: var(--ink); }
 .tab.on { color: var(--accent-deep); border-bottom-color: var(--accent); }
-
-.loaded { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 18px; }
-.loaded__card {
-  display: flex; flex-direction: column; gap: 1px;
-  padding: 10px 14px; min-width: 150px;
-  background: var(--card); border: 1px solid var(--line); border-radius: var(--r);
-}
 
 .std__row {
   display: flex; flex-direction: column; gap: 5px;
@@ -224,3 +237,115 @@
   text-transform: uppercase; color: var(--ink-3);
 }
 .formview__lang .control { width: auto; min-width: 150px; }
+
+/* The questionnaire is waiting on an answer that decides whether it applies. */
+.formview__gate {
+  padding: 22px; text-align: center;
+  color: var(--ink-3); background: var(--paper);
+  border: 1px dashed var(--line); border-radius: var(--r-sm);
+}
+
+/* When a question, a section or the questionnaire applies. */
+.cond { display: flex; flex-direction: column; gap: 8px; }
+.cond__row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.cond__action { align-items: center; gap: 8px; }
+.cond__verb { flex: none; width: auto; min-width: 92px; }
+.cond__join { flex: none; width: auto; min-width: 74px; }
+.cond__op { flex: none; width: auto; min-width: 148px; }
+.cond__value { flex: none; width: auto; min-width: 150px; }
+
+.cond__wider { margin-top: 22px; border-top: 1px solid var(--line); padding-top: 16px; }
+.cond__wider summary {
+  cursor: pointer; font-size: 13px; font-weight: 500; color: var(--ink-2);
+  margin-bottom: 14px;
+}
+.cond__section { margin-top: 18px; display: flex; flex-direction: column; gap: 6px; }
+
+/* The inspector's three tabs: what somebody sees, how it is stored, what it
+   means. One long panel ran them together and buried the stored key. */
+.insp { display: flex; flex-direction: column; }
+.insp__tabs { margin-bottom: 4px; }
+.insp__check { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+.insp__check input { width: auto; }
+
+.insp__facts {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 8px; margin: 4px 0 10px;
+}
+.insp__facts div { font-size: 12.5px; word-break: break-word; }
+.insp__facts b {
+  display: block; font-size: 10.5px; text-transform: uppercase;
+  letter-spacing: .05em; color: var(--ink-3); font-weight: 600;
+}
+
+/* ══ the builder workspace ════════════════════════════════════════════════ */
+/* Three panes across the window: the application sidebar, the builder, and the
+   element inspector. The inspector is a sibling of the whole builder — not a
+   column inside the form card — so it keeps its own scrollbar and stays put
+   while the questions scroll.
+ *
+ * Doubled class on purpose. `.main` in core/styles.css caps the page at 1000px
+ * and pads 80px at the foot; this module's stylesheet is bundled *before* core,
+ * so a single `.main--builder` lost both to source order — which left the
+ * builder floating in a narrow column and pushed the foot of the inspector past
+ * a clipped 100vh, where Conditional Logic could not be reached. `.main.x` wins
+ * on specificity whatever order the bundler picks. */
+.main.main--builder {
+  max-width: none; width: 100%;
+  padding: 0; height: 100vh; min-height: 0; overflow: hidden;
+}
+
+.workspace {
+  display: grid;
+  /* The builder takes what is left; the inspector keeps a width its controls
+     are usable at. `minmax(0, 1fr)` rather than `1fr`, or a long question label
+     widens the column past the window. */
+  grid-template-columns: minmax(0, 1fr) minmax(380px, 460px);
+  height: 100%; min-height: 0; width: 100%;
+}
+
+/* Each pane scrolls on its own. `min-height: 0` on both, because a grid child
+   defaults to `min-height: auto` — it refuses to shrink below its content, and
+   `overflow-y: auto` on something that never shrinks never scrolls. */
+.workspace__main {
+  min-width: 0; min-height: 0; overflow-y: auto;
+  padding: 30px 28px 24px;
+}
+
+.inspector {
+  min-width: 0; min-height: 0;
+  display: flex; flex-direction: column;
+  background: var(--paper);
+  border-left: 1px solid var(--line);
+}
+
+.inspector__head {
+  flex: none;
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.inspector__title {
+  font-size: 10.5px; font-weight: 600; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--ink-3);
+}
+.inspector__name { font-size: 14px; }
+
+/* The scrolling half. The head stays; everything below it moves. */
+.inspector__body {
+  flex: 1; min-height: 0; overflow-y: auto;
+  padding: 16px 20px 48px;
+}
+
+/* The row being configured. */
+.frow--on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+
+/* Below a laptop there is no room for a third pane: the page goes back to
+   scrolling as one, with the inspector under the questions. */
+@media (max-width: 1180px) {
+  .main.main--builder { height: auto; overflow: visible; }
+  .workspace { grid-template-columns: 1fr; height: auto; }
+  .workspace__main { overflow: visible; padding: 24px 18px 20px; }
+  .inspector { border-left: 0; border-top: 1px solid var(--line); }
+  .inspector__body { overflow: visible; padding-bottom: 24px; }
+}

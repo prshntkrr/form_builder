@@ -48,7 +48,9 @@ export const api = {
   updateUser: (userId, body) =>
     request(`/users/${userId}`, { method: 'PATCH', body: JSON.stringify(body) }),
 
-  deactivateUser: (userId) => request(`/users/${userId}`, { method: 'DELETE' }),
+  // Switching an account off is a PATCH, above: it is reversible and keeps
+  // everything. Removing one is not, and is its own call and its own permission.
+  deleteUser: (userId) => request(`/users/${userId}`, { method: 'DELETE' }),
 
   userResetLink: (userId) => request(`/users/${userId}/reset-link`, { method: 'POST' }),
 }

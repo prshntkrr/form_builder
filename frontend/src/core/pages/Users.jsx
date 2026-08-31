@@ -89,9 +89,12 @@ function AddPerson({ roles, onAdded, onClose }) {
 }
 
 export default function Users() {
-  const { user: me } = useAuth()
+  const { user: me, can } = useAuth()
   const [people, setPeople] = useState(null)
   const [roles, setRoles] = useState([])
+  // The account a confirmation is open for. Deleting is not something to do by
+  // clicking once next to Deactivate.
+  const [removing, setRemoving] = useState(null)
   const [adding, setAdding] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState(null)
@@ -219,11 +222,27 @@ export default function Users() {
                     Reactivate
                   </button>
                 )}
+                {/* Only for an account that may actually remove one — and never
+                    for yourself, which the backend refuses anyway. */}
+                {can.delete_users && !isMe && (
+                  <button className="btn btn--sm btn--quiet btn--danger"
+                          onClick={() => setRemoving(person)}>
+                    Delete
+                  </button>
+                )}
               </div>
             </div>
           )
         })}
       </div>
+
+      {removing && (
+        <ConfirmDelete
+          person={removing}
+          onClose={() => setRemoving(null)}
+          onDeleted={() => { setRemoving(null); load() }}
+        />
+      )}
 
       {adding && (
         <AddPerson
@@ -233,5 +252,70 @@ export default function Users() {
         />
       )}
     </main>
+  )
+}
+
+
+/**
+ * Removing an account for good.
+ *
+ * Deliberately a confirmation rather than a second red button beside
+ * Deactivate: one of these can be undone and the other cannot, and they should
+ * not look alike. It says plainly what goes and what stays, because the answer
+ * is the thing somebody is actually deciding about.
+ */
+function ConfirmDelete({ person, onClose, onDeleted }) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  const remove = async () => {
+    setBusy(true)
+    setError('')
+    try {
+      await api.deleteUser(person.user_id)
+      onDeleted()
+    } catch (e) {
+      // The backend refuses the last way in, and an account deleting itself.
+      setError(e.message)
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="sheet" onMouseDown={onClose}>
+      <div className="sheet__panel" role="dialog" aria-modal="true"
+           onMouseDown={(e) => e.stopPropagation()}>
+        <div className="sheet__head">
+          <h2>Delete this user?</h2>
+          <p className="muted">{person.full_name || person.email}</p>
+        </div>
+
+        <div className="sheet__body">
+          {error && <div className="note note--bad">{error}</div>}
+
+          <p>
+            This permanently removes the account, its sessions and its project
+            memberships.
+          </p>
+          <p className="tiny muted">
+            What they collected stays. Forms they built and answers they submitted
+            keep their name on them, so the record still reads correctly
+            afterwards.
+          </p>
+          <p className="tiny muted">
+            To stop somebody signing in without removing anything, use
+            <b> Deactivate</b> instead — that can be undone.
+          </p>
+        </div>
+
+        <div className="sheet__foot">
+          <button className="btn btn--quiet" onClick={onClose}>Cancel</button>
+          <button className="btn btn--primary btn--danger" onClick={remove} disabled={busy}>
+            {busy && <span className="spin" />}
+            Delete user
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }

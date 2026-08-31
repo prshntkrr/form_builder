@@ -23,5 +23,5 @@ MODULE = Module(
     routers=[catalogs.router],
     tables=["client_catalog", "client_catalog_value"],
     schema_file=Path(__file__).resolve().parent / "schema.sql",
-    migrations=[bootstrap.ensure_catalog_columns],
+    migrations=[bootstrap.ensure_catalog_columns, bootstrap.ensure_value_labels],
 )

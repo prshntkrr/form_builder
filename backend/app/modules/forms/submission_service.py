@@ -16,6 +16,7 @@ from app.core.config import settings
 from app.core.database import transaction
 from app.modules.forms.field_types import FieldValueError, coerce_value, get_type, json_safe
 from app.modules.forms.form_schema import field_name
+from app.modules.forms import conditions
 from app.modules.forms import standardization
 from app.modules.forms import translations
 from app.modules.forms.form_service import FormNotFound
@@ -76,7 +77,7 @@ def _not_offered(field: Dict[str, Any], selected: Any, payload: Dict[str, Any]) 
 
     if kind_of_source == "crop_ontology":
         try:
-            from app.modules.crop_ontology import dynamic_options
+            from app.modules.standards.crop_ontology import dynamic_options
         except Exception:
             return []
 
@@ -124,6 +125,13 @@ def validate_payload(
     # the person filled the form in.
     form_json = translations.translate_form(form_json, language)
 
+    # Which questions this answer set does not apply to. Worked out here rather
+    # than trusted from the client, because a request can be sent without ever
+    # opening the form — the same rules the renderer used, evaluated again on
+    # arrival. Reading the payload, not `clean`: a condition is about what the
+    # person answered, and every answer arrives together.
+    not_applicable = set(conditions.hidden(form_json, payload)["fields"])
+
     for field in form_json.get("fields") or []:
         name = field_name(field)
         if not name:
@@ -131,6 +139,17 @@ def validate_payload(
         label = field.get("label") or name
         spec = get_type(field.get("type") or "text")
         raw = payload.get(name)
+
+        if name in not_applicable:
+            # The form did not ask this. An answer to it is refused rather than
+            # quietly dropped: silently discarding it would leave the sender
+            # believing it had been recorded, and a required question that does
+            # not apply is not a missing answer.
+            if not _is_empty(raw):
+                errors[name] = translations.message(
+                    language, "not_applicable", label=label)
+            clean[name] = None
+            continue
 
         if _is_empty(raw):
             if field.get("required"):
@@ -297,6 +316,15 @@ def submit(
             clean,
         )
 
+    # Where this submission has got to, recorded beside it. Defensive: the
+    # projects module can be switched off, and a response must still be stored.
+    try:
+        from app.modules.projects import submission_workflow
+        submission_workflow.record_submission(
+            form["form_id"], survey_id, created_by or settings.default_user)
+    except Exception:
+        logger.exception("Could not record the review state for %s", survey_id)
+
     logger.info("Stored submission %s in %s", survey_id, table_name)
     return {
         "survey_id": row["survey_id"],
@@ -371,6 +399,94 @@ def list_submissions(
         "offset": offset,
         "rows": rows,
     }
+
+
+
+def one_submission(form: Dict[str, Any], survey_id: str) -> Optional[Dict[str, Any]]:
+    """One stored response, or None if this form has no such row.
+
+    The single-row twin of `list_submissions`, for a screen that is reading one
+    answer set rather than a page of them — reviewing one submission should not
+    mean fetching fifty.
+    """
+    form_json = form["form_json"] or {}
+    table_name = form_json.get("table_name")
+    if not table_name:
+        return None
+
+    with transaction() as cur:
+        if not table_exists(cur, table_name):
+            return None
+
+        cur.execute(
+            sql.SQL(
+                """
+                SELECT survey_id, form_data, created_on, form_version, created_by
+                FROM {}.{} WHERE form_id = %s AND survey_id = %s
+                """
+            ).format(sql.Identifier(settings.db_schema), sql.Identifier(table_name)),
+            (form["form_id"], survey_id),
+        )
+        row = cur.fetchone()
+
+    return dict(row) if row else None
+
+
+def answers_for(form_json: Dict[str, Any], form_data: Dict[str, Any]) -> list:
+    """The answer set as questions and answers, in the order they were asked.
+
+    For reading, not for editing: a label, a type and the stored value, and no
+    validation rules, conditions or option lists. A screen showing somebody's
+    answers has no business receiving the machinery that collected them.
+
+    Every question the form asks is here, including the ones this person was
+    never shown. `answered` is False for those, so a reviewer can tell a
+    question skipped by a condition from one that was asked and left blank —
+    a conditional question that was never reached is stored as a null, which on
+    its own reads exactly like an empty answer.
+
+    Anything in the stored data that the form no longer asks is appended, so a
+    response collected under an older version still reads back in full.
+    """
+    fields = form_json.get("fields") or []
+    sections = {s.get("key"): s for s in (form_json.get("sections") or [])}
+    data = form_data or {}
+
+    answers = []
+    seen = set()
+
+    for field in fields:
+        name = field_name(field)
+        if not name or name in seen:
+            continue
+        seen.add(name)
+
+        section = sections.get(field.get("section")) or {}
+        answers.append({
+            "name": name,
+            "label": field.get("label") or name,
+            "type": field.get("type") or "text",
+            "section": section.get("title") or "",
+            "value": data.get(name),
+            "answered": name in data and not _is_empty(data.get(name)),
+        })
+
+    for name, value in data.items():
+        if name in seen or str(name).startswith("_"):
+            continue
+        # A question the form used to ask. Kept rather than dropped: the answer
+        # was given, and a reviewer judging it should see it.
+        answers.append({
+            "name": name,
+            "label": name,
+            "type": "text",
+            "section": "",
+            "value": value,
+            "answered": True,
+            "retired": True,
+        })
+
+    return answers
 
 
 def _cell(value: Any) -> str:

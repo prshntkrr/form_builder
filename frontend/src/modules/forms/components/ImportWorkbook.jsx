@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react'
 import { api } from '../api.js'
 import FormRenderer from './FormRenderer.jsx'
+import { applicable } from '../conditions.js'
 
 /**
  * Bringing a form the client already wrote into the library.
@@ -55,7 +56,7 @@ export default function ImportWorkbook({ onSaved, onClose }) {
     setBusy('test')
     setError('')
     try {
-      setTrialResult(await api.testDefinition(form, trial))
+      setTrialResult(await api.testDefinition(form, applicable(form, trial)))
     } catch (e) {
       setError(e.message)
     } finally {

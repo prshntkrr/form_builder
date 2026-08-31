@@ -1,8 +1,12 @@
 import React, { useEffect, useState } from 'react'
-import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api.js'
 import { formsChanged } from '../../../core/events.js'
 import FieldEditor from '../components/FieldEditor.jsx'
+import { defaultLanguage, languageChoices } from '../translate.js'
+import { applicable } from '../conditions.js'
+import { activeProjectId } from '../../projects/active.js'
+import ConditionEditor from '../components/ConditionEditor.jsx'
 import FormRenderer from '../components/FormRenderer.jsx'
 import ContributeToLibrary from '../components/ContributeToLibrary.jsx'
 import LibraryPicker from '../components/LibraryPicker.jsx'
@@ -92,6 +96,18 @@ export default function Builder() {
 
   const [prompt, setPrompt] = useState('')
   const [ask, setAsk] = useState('')
+  // Which language's wording the questions are being edited in.
+  const [wording, setWording] = useState(null)
+
+  // Which project a new form is being built in. `?project=` when the builder
+  // was opened from a project, otherwise whichever project is active. Only
+  // used when creating: an existing form already belongs where it belongs.
+  const [params] = useSearchParams()
+  const buildingIn = editing ? null : (params.get('project') || activeProjectId())
+  // Which question the panel beside the list is configuring. Held by name, not
+  // by index, so reordering or deleting cannot leave it pointing at a different
+  // question than the one that is highlighted.
+  const [chosen, setChosen] = useState(null)
   const [form, setForm] = useState(null)
   const [responses, setResponses] = useState(0)
   const [draftTab, setDraftTab] = useState('questions')  // only for an unsaved form
@@ -190,7 +206,7 @@ export default function Builder() {
 
       const result = editing
         ? await api.updateForm(formId, payload, undefined, renames)
-        : await api.createForm(payload, undefined, saveAs)
+        : await api.createForm(payload, undefined, saveAs, buildingIn)
 
       formsChanged()
 
@@ -225,7 +241,8 @@ export default function Builder() {
         setTrialResult({ unsaved: true })
         return
       }
-      setTrialResult(await api.testSubmission(formId, trial, untag(form)))
+      setTrialResult(await api.testSubmission(
+        formId, applicable(form, trial), untag(form)))
     })
 
   /** Bring what is on screen into line with the dictionary. Nothing is saved. */
@@ -255,10 +272,58 @@ export default function Builder() {
   }
 
   // ── field operations ──────────────────────────────────────────────────────
+  // The inspector always has a question in it: an empty panel beside a full
+  // list is a dead half of the screen, and the first question is the one
+  // somebody is most likely to want.
+  useEffect(() => {
+    const fields = form?.fields || []
+    if (!fields.length) return
+    if (!fields.some((f) => f.name === chosen)) setChosen(fields[0].name)
+  }, [form, chosen])
+
   const put = (i, next) => {
     const fields = [...form.fields]
+    // Editing the label of an unsaved question renames its key, so the panel
+    // follows it rather than losing its place.
+    if (form.fields[i]?.name === chosen && next.name !== chosen) setChosen(next.name)
     fields[i] = next
     setForm({ ...form, fields })
+  }
+
+  // Which language the questions are being worded in, and whether that is a
+  // translation rather than the form's own language.
+  const language = wording || defaultLanguage(form)
+  const translating = language !== defaultLanguage(form)
+
+  /**
+   * One field's wording in a language other than the form's own.
+   *
+   * Written into the form's translation block, never over the field — the
+   * workbook's original label is the form's, and a translation sits beside it.
+   * An entry emptied out is removed rather than stored blank, so a field falls
+   * back to its own wording instead of showing nothing.
+   */
+  const translate = (name, changes) => {
+    const translations = { ...(form.translations || {}) }
+    const block = { ...(translations[language] || {}) }
+    const fields = { ...(block.fields || {}) }
+    const words = { ...(fields[name] || {}), ...changes }
+
+    for (const key of Object.keys(words)) {
+      if (!String(words[key] ?? '').trim()) delete words[key]
+    }
+
+    if (Object.keys(words).length) fields[name] = words
+    else delete fields[name]
+
+    block.fields = fields
+    translations[language] = block
+
+    const languages = form.languages?.includes(language)
+      ? form.languages
+      : [...(form.languages || [defaultLanguage(form)]), language]
+
+    setForm({ ...form, translations, languages })
   }
   const move = (i, dir) => {
     const fields = [...form.fields]
@@ -267,19 +332,26 @@ export default function Builder() {
     ;[fields[i], fields[to]] = [fields[to], fields[i]]
     setForm({ ...form, fields: fields.map((f, n) => ({ ...f, order: n + 1 })) })
   }
-  const remove = (i) =>
-    setForm({ ...form, fields: form.fields.filter((_, n) => n !== i).map((f, n) => ({ ...f, order: n + 1 })) })
+  const remove = (i) => {
+    const fields = form.fields.filter((_, n) => n !== i).map((f, n) => ({ ...f, order: n + 1 }))
+    // Deleting the question being inspected moves to its neighbour rather than
+    // leaving the panel empty or jumping to the top of a long form.
+    if (form.fields[i]?.name === chosen) {
+      const near = fields[Math.min(i, fields.length - 1)]
+      setChosen(near ? near.name : null)
+    }
+    setForm({ ...form, fields })
+  }
 
   const add = () => {
     const n = form.fields.length + 1
-    setForm({
-      ...form,
-      fields: [...form.fields, {
-        _uid: uid(),
-        name: `question_${n}`, label: '', type: 'text', required: false,
-        placeholder: '', help_text: '', options: [], validation: {}, section: null, order: n,
-      }],
-    })
+    const made = {
+      _uid: uid(),
+      name: `question_${n}`, label: '', type: 'text', required: false,
+      placeholder: '', help_text: '', options: [], validation: {}, section: null, order: n,
+    }
+    setForm({ ...form, fields: [...form.fields, made] })
+    setChosen(made.name)
   }
 
   const [lifted, setLifted] = useState(null)
@@ -312,8 +384,18 @@ export default function Builder() {
 
   const renameCount = form ? form.fields.filter((f) => f._orig && f._orig !== f.name).length : 0
 
+  // The inspector is a panel of the workspace, not a column inside the form
+  // card: it sits beside the whole builder, keeps its own scrollbar, and stays
+  // put while the list scrolls. Only the questions view has anything to inspect,
+  // so every other view keeps the ordinary centred page.
+  const workspace = Boolean(form) && view === 'questions'
+  const chosenIndex = form ? form.fields.findIndex((f) => f.name === chosen) : -1
+  const chosenField = chosenIndex < 0 ? null : form.fields[chosenIndex]
+
   return (
-    <main className="main">
+    <main className={`main${workspace ? ' main--builder' : ''}`}>
+     <div className={workspace ? 'workspace' : undefined}>
+      <div className={workspace ? 'workspace__main' : undefined}>
       {!editing && (
         <div className="card card--pad compose">
           <h1>What do you need to collect?</h1>
@@ -439,6 +521,31 @@ export default function Builder() {
             <div className="editor__body">
               {view === 'questions' && (
                 <>
+                  {(() => {
+                    const languages = languageChoices(form)
+                    if (languages.length < 2) return null
+                    return (
+                      <div className="formview__lang" style={{ marginTop: 0 }}>
+                        <label htmlFor="questions-language">Language</label>
+                        <select
+                          id="questions-language"
+                          className="control control--sm"
+                          value={language}
+                          onChange={(e) => setWording(e.target.value)}
+                        >
+                          {languages.map((l) => (
+                            <option key={l.code} value={l.code}>{l.name}</option>
+                          ))}
+                        </select>
+                        <span className="tiny muted">
+                          {!translating
+                            ? 'The wording the form was written in.'
+                            : 'Editing this language only — the original wording is untouched.'}
+                        </span>
+                      </div>
+                    )
+                  })()}
+
                   <div className="tweak" style={{ margin: 0, padding: '0 0 20px', border: 'none' }}>
                     <input
                       className="control"
@@ -465,33 +572,65 @@ export default function Builder() {
                     </button>
                   </div>
 
-                  <div className="rows">
+                    <div className="rows">
                     {form.fields.map((f, i) => (
-                      <FieldEditor
-                        key={f._uid}
-                        field={f}
-                        index={i}
-                        total={form.fields.length}
-                        sections={form.sections || []}
-                        allFields={form.fields}
-                        renamedFrom={f._orig && f._orig !== f.name ? f._orig : null}
-                        hasResponses={responses > 0}
-                        dragging={lifted === i}
-                        dropEdge={over === i && lifted !== null && lifted !== i
-                          ? (lifted < i ? 'below' : 'above')
-                          : null}
-                        onChange={put}
-                        onMove={move}
-                        onRemove={remove}
-                        onDragStart={setLifted}
-                        onDragOver={setOver}
-                        onDragEnd={() => { setLifted(null); setOver(null) }}
-                        onDrop={settle}
-                      />
+                     <FieldEditor
+                       key={f._uid}
+                       field={f}
+                       index={i}
+                       total={form.fields.length}
+                       sections={form.sections || []}
+                       allFields={form.fields}
+                       selected={f.name === chosen}
+                       onSelect={() => setChosen(f.name)}
+                       translating={translating}
+                       words={translating
+                         ? (((form.translations || {})[language] || {}).fields || {})[f.name] || {}
+                         : undefined}
+                       onWords={translating ? (changes) => translate(f.name, changes) : undefined}
+                       renamedFrom={f._orig && f._orig !== f.name ? f._orig : null}
+                       hasResponses={responses > 0}
+                       dragging={lifted === i}
+                       dropEdge={over === i && lifted !== null && lifted !== i
+                         ? (lifted < i ? 'below' : 'above')
+                         : null}
+                       onChange={put}
+                       onMove={move}
+                       onRemove={remove}
+                       onDragStart={setLifted}
+                       onDragOver={setOver}
+                       onDragEnd={() => { setLifted(null); setOver(null) }}
+                       onDrop={settle}
+                     />
                     ))}
-                  </div>
+                    </div>
 
-                  <button className="btn btn--quiet addfield" onClick={add}>Add a question</button>
+                    <button className="btn btn--quiet addfield" onClick={add}>Add a question</button>
+
+                  {/* The same engine, one level up: a whole section, or the
+                      questionnaire itself, can wait on an earlier answer. */}
+                  <details className="cond__wider">
+                    <summary>Conditional logic for sections and the whole form</summary>
+
+                    <ConditionEditor
+                      target={{ type: 'form' }}
+                      fields={form.fields}
+                      rules={form.rules || []}
+                      onChange={(rules) => setForm({ ...form, rules })}
+                    />
+
+                    {(form.sections || []).map((section) => (
+                      <div key={section.key} className="cond__section">
+                        <span className="tiny muted">Section — {section.title}</span>
+                        <ConditionEditor
+                          target={{ type: 'section', key: section.key }}
+                          fields={form.fields}
+                          rules={form.rules || []}
+                          onChange={(rules) => setForm({ ...form, rules })}
+                        />
+                      </div>
+                    ))}
+                  </details>
                 </>
               )}
 
@@ -649,6 +788,60 @@ export default function Builder() {
           }}
         />
       )}
+      </div>
+
+      {workspace && (
+        <aside className="inspector" aria-label="Element configuration">
+          <div className="inspector__head">
+            <span className="inspector__title">Element configuration</span>
+            {chosenField ? (
+              <>
+                <b className="inspector__name">
+                  {chosenField.label || chosenField.name || 'Untitled question'}
+                </b>
+                <span className="tiny muted">
+                  Question {chosenIndex + 1} of {form.fields.length}
+                  {translating && ` · editing ${language}`}
+                </span>
+              </>
+            ) : (
+              <span className="tiny muted">Nothing selected</span>
+            )}
+          </div>
+
+          <div className="inspector__body">
+            {chosenField ? (
+              <FieldEditor
+              key={chosenField._uid}
+              mode="panel"
+              field={chosenField}
+              index={chosenIndex}
+              total={form.fields.length}
+              sections={form.sections || []}
+              allFields={form.fields}
+              formRules={form.rules || []}
+              onRules={(rules) => setForm({ ...form, rules })}
+              translating={translating}
+              words={translating
+              ? (((form.translations || {})[language] || {}).fields || {})[chosenField.name] || {}
+              : undefined}
+              onWords={translating ? (changes) => translate(chosenField.name, changes) : undefined}
+              renamedFrom={chosenField._orig && chosenField._orig !== chosenField.name
+                ? chosenField._orig : null}
+              hasResponses={responses > 0}
+              onChange={put}
+              onRemove={remove}
+              />
+            ) : (
+              <p className="tiny muted">
+                Choose a question on the left to set its wording, limits, choices,
+                standards and conditional logic.
+              </p>
+            )}
+          </div>
+        </aside>
+      )}
+     </div>
     </main>
   )
 }

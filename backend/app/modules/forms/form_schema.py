@@ -552,6 +552,12 @@ def normalize_form(raw: Any, fallback_title: str = "Untitled Form") -> Dict[str,
     title = str(raw.get("title") or raw.get("form_title") or fallback_title).strip()[:200]
     sections = _normalize_sections(raw.get("sections"), fields)
 
+    # Which questions apply, given the answers so far. Cleaned here so a
+    # definition can never carry a rule the renderer would choke on; a form with
+    # none — every form built before this existed — is unaffected.
+    from app.modules.forms import conditions
+    rules = conditions.normalize_rules(raw.get("rules"))
+
     # The words this form can be shown in. The field names never change with the
     # language, so a translated form still writes to the same columns.
     # An imported form is written in whatever language the client wrote it in,
@@ -589,6 +595,7 @@ def normalize_form(raw: Any, fallback_title: str = "Untitled Form") -> Dict[str,
         ).strip()[:200],
         "sections": sections,
         "fields": fields,
+        "rules": rules,
         "languages": languages,
         "default_language": default_language,
         "translations": translated_words,

@@ -141,6 +141,13 @@ def ensure_roles() -> List[str]:
                 return []
 
         made = ensure_built_in()
+
+        # Onto the two system roles, before anything reads them. Idempotent, and
+        # it never touches a project membership — see role_migration.py.
+        from app.core.role_migration import migrate_system_roles
+        migrate_system_roles()
+
+        ensure_built_in()          # `standard` may only now be missing
         ensure_admin_holds_everything()
 
         with transaction() as cur:

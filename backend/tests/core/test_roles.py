@@ -65,7 +65,12 @@ def test_admin_holds_every_permission():
 
 def test_a_field_officer_holds_only_records():
     field = role_service.get_by_name(ROLE_FIELD)
-    assert set(field["permissions"]) == {form_perms.RECORDS_VIEW, form_perms.RECORDS_CREATE}
+    # Filling forms in and reading the records shown to them, plus whatever a
+    # module grants a Standard User. It must not reach anything a project
+    # membership is supposed to grant.
+    assert {form_perms.RECORDS_VIEW, form_perms.RECORDS_CREATE} <= set(field["permissions"])
+    assert not [p for p in field["permissions"] if p.startswith("project.")]
+    assert form_perms.FORMS_CREATE not in field["permissions"]
 
 
 def test_seeding_again_changes_nothing():

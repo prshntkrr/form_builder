@@ -2,17 +2,53 @@ import React, { useEffect, useState } from 'react'
 import FieldInput from './FieldInput.jsx'
 import { api } from '../api.js'
 import { defaultLanguage, languageChoices, translateForm } from '../translate.js'
+import { hidden } from '../conditions.js'
 
 const FULL_WIDTH = new Set(['textarea', 'multiselect', 'radio', 'location'])
 
+/**
+ * The form's questions, in the order the builder shows them.
+ *
+ * The field list is the one authority on order — the builder writes it, the
+ * definition stores it, and `order` on each field mirrors its position. So the
+ * grouping is derived from that list rather than the other way round: a section
+ * appears where its first question sits, and questions inside it keep their
+ * places.
+ *
+ * This used to walk the sections and pull each one's fields out, which quietly
+ * re-sorted the form: everything with no section was collected and appended at
+ * the end, so a question moved to the top of the builder rendered last. The
+ * builder was right and the form was wrong.
+ */
 function group(formJson) {
   const sections = formJson.sections || []
   const fields = formJson.fields || []
   if (!sections.length) return [{ key: '_all', title: null, description: '', fields }]
 
-  const groups = sections.map((s) => ({ ...s, fields: fields.filter((f) => f.section === s.key) }))
-  const loose = fields.filter((f) => !f.section || !sections.some((s) => s.key === f.section))
-  if (loose.length) groups.push({ key: '_loose', title: null, description: '', fields: loose })
+  const known = new Map(sections.map((s) => [s.key, s]))
+  const groups = []
+  const byKey = new Map()
+
+  for (const field of fields) {
+    // A field naming a section this form does not have belongs with the
+    // unsectioned ones rather than vanishing.
+    const key = known.has(field.section) ? field.section : '_loose'
+
+    let bucket = byKey.get(key)
+    if (!bucket) {
+      const section = known.get(key)
+      bucket = {
+        key,
+        title: section ? section.title : null,
+        description: section ? section.description : '',
+        fields: [],
+      }
+      byKey.set(key, bucket)
+      groups.push(bucket)          // first field decides where the group sits
+    }
+    bucket.fields.push(field)
+  }
+
   return groups.filter((g) => g.fields.length)
 }
 
@@ -28,7 +64,7 @@ function group(formJson) {
  * Everything comes from this application's own API. Nothing reaches out to
  * cropontology.org, and nothing here makes up a value the source did not give.
  */
-function useDynamicOptions(fields, values) {
+function useDynamicOptions(fields, values, language) {
   const [loaded, setLoaded] = useState({})
 
   // What to fetch, as a string, so the effect only runs when it really changes.
@@ -50,6 +86,9 @@ function useDynamicOptions(fields, values) {
   useEffect(() => {
     if (!wanted) return
     let cancelled = false
+    // `language` is in the dependency list below, so switching language fetches
+    // the same choices worded differently. The codes do not move, so whatever
+    // was chosen stays chosen.
 
     const fetchAll = async () => {
       const next = {}
@@ -66,7 +105,7 @@ function useDynamicOptions(fields, values) {
 
         try {
           next[name] = source === 'client_catalog'
-            ? await api.clientCatalogOptions(what, dependsOnValue)
+            ? await api.clientCatalogOptions(what, dependsOnValue, language)
             : await api.cropOntologyOptions(what, dependsOnValue)
         } catch {
           next[name] = []
@@ -77,7 +116,7 @@ function useDynamicOptions(fields, values) {
 
     fetchAll()
     return () => { cancelled = true }
-  }, [wanted])
+  }, [wanted, language])
 
   return loaded
 }
@@ -115,7 +154,13 @@ export default function FormRenderer({
   // errors and the dynamic option sources all key off names, which never move.
   const shown = translateForm(formJson, chosen)
 
-  const dynamic = useDynamicOptions(shown.fields, values)
+  // Which questions the answers so far call for. Recomputed on every render, so
+  // a question appears or disappears as the answer it depends on is given — no
+  // reload, and nothing asked of the server. The same rules are evaluated again
+  // on submission, because a request can arrive without the form.
+  const off = hidden(shown, values)
+
+  const dynamic = useDynamicOptions(shown.fields, values, chosen)
 
   const submit = (e) => {
     e.preventDefault()
@@ -165,7 +210,17 @@ export default function FormRenderer({
         {shown.description && <p className="lede">{shown.description}</p>}
       </header>
 
-      {group(shown).map((g) => (
+      {off.form && (
+        <p className="formview__gate">
+          Please answer the question above to continue.
+        </p>
+      )}
+
+      {group(shown)
+        .filter((g) => !off.sections.has(g.key))
+        .map((g) => ({ ...g, fields: g.fields.filter((f) => !off.fields.has(f.name)) }))
+        .filter((g) => g.fields.length)
+        .map((g) => (
         <fieldset key={g.key} className="group">
           {g.title && <div className="group__name">{g.title}</div>}
           {g.description && <div className="group__note">{g.description}</div>}
@@ -185,7 +240,7 @@ export default function FormRenderer({
         </fieldset>
       ))}
 
-      {onSubmit && (
+      {onSubmit && !off.form && (
         <div className="formview__send">
           <button type="submit" className="btn btn--primary" disabled={submitting}>
             {submitting && <span className="spin" />}

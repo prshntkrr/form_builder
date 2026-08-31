@@ -2,15 +2,16 @@
 import logging
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from psycopg2 import IntegrityError
 
 from app.core import auth_service
 from app.modules.forms import form_service
 from app.modules.forms import llm
 from app.modules.forms import standard_library
-from app.core.deps import needs
+from app.core.deps import current_user, needs
 from app.modules.forms.permissions import (
+    FORMS_SYSTEM_VIEW,
     FORMS_CREATE, FORMS_DELETE, FORMS_EDIT, FORMS_VIEW, LIBRARY_MANAGE,
 )
 from app.modules.forms.config_validation import ConfigValidationError, validate_config
@@ -34,6 +35,199 @@ from app.modules.forms.schemas import (
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/forms", tags=["forms"])
 
+def may_build_somewhere(user: Dict[str, Any]) -> bool:
+    """Whether this account may build a form anywhere at all.
+
+    Either on the installation, or in some project it belongs to. Used for the
+    builder's aids — validating a definition, drafting one, listing the
+    languages — which touch no particular form and store nothing.
+    """
+    if auth_service.may(user, FORMS_CREATE):
+        return True
+
+    try:
+        from app.modules.projects import access
+        from app.modules.projects.permissions import FORMS_MANAGE
+    except Exception:
+        return False
+
+    return any(access.can(user, FORMS_MANAGE, project_id)
+               for project_id in access.projects_for(user))
+
+
+def needs_on_form(system_permission: str, project_permission: str):
+    """A dependency judging one form by the context that form belongs to.
+
+    The form id is in the path, so which context applies is known before the
+    handler runs:
+
+        no project    the account permission. A project role never reaches a
+                      system form.
+        a project     the permission held *in that project*. The account
+                      permission does not reach into somebody else's project,
+                      and a form belongs to its project rather than to whoever
+                      happened to create it — so a Project Manager edits a form
+                      an administrator made, and `created_by` is not consulted.
+
+    A project this account cannot reach answers 404, as everywhere else.
+    """
+
+    def dependency(
+        form_id: str = Path(...),
+        user: Dict[str, Any] = Depends(current_user),
+    ) -> Dict[str, Any]:
+        try:
+            from app.modules.projects import access, project_service
+        except Exception:
+            project_id = None
+            access = None
+        else:
+            project_id = project_service.project_of_form(form_id)
+
+        if project_id and access is not None:
+            access.require(user, project_permission, project_id)
+            return user
+
+        if auth_service.may(user, system_permission):
+            return user
+
+        from app.core import permissions as catalogue
+        entry = catalogue.BY_KEY.get(system_permission)
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                f"Your role ({user.get('role_label') or user.get('role')}) cannot do "
+                f"this — it needs the '{entry.label if entry else system_permission}' "
+                f"permission"
+            ),
+        )
+
+    return dependency
+
+
+def _could_build_somewhere(user: Dict[str, Any] = Depends(current_user)) -> Dict[str, Any]:
+    """Refuse an account that could not build a form anywhere.
+
+    A dependency, so a permission failure is answered as one rather than as a
+    complaint about the request body. It cannot decide *which* project — that
+    needs the body — so it only rules out the account that has no route to
+    creating a form at all: no account permission, and no project membership.
+    """
+    if may_build_somewhere(user):
+        return user
+
+    raise HTTPException(
+        status_code=403,
+        # Names the permission, not a role: roles are the installation's to
+        # define and rename, permissions are the application's.
+        detail=(
+            f"Your role ({user.get('role_label') or user.get('role')}) cannot do this — "
+            f"it needs the 'Create forms' permission, or a project role that allows "
+            f"building forms in that project"
+        ),
+    )
+
+
+def _may_build_in(project_id, user):
+    """Whether this request may create a form, and where.
+
+    The two halves of the system/project split meet here. A System Administrator
+    builds forms because their **account** may. A Project Manager builds forms in
+    their project because their **membership there** says so — and holds no
+    account permission at all. Either is enough; neither is required of the
+    other, and "Project manager" therefore never means anything outside the
+    project it was granted in.
+
+    Sending somebody else's `project_id` is the obvious way to try to reach into
+    another project, so the permission is checked against the project named in
+    the request. A project this account cannot reach answers 404, matching every
+    other project route.
+    """
+    if not project_id:
+        # No project named: this is a system form, and it takes the account
+        # permission, exactly as it always did.
+        if not auth_service.may(user, FORMS_CREATE):
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    f"Your role ({user.get('role_label') or user.get('role')}) cannot "
+                    f"create forms outside a project"
+                ),
+            )
+        return
+
+    try:
+        from app.modules.projects import access
+        from app.modules.projects.permissions import FORMS_MANAGE
+    except Exception:
+        # The projects module is switched off, so there are no projects to
+        # build into and naming one is a mistake rather than a way in.
+        raise HTTPException(status_code=404, detail=f"No project '{project_id}'")
+
+    # Inside a project the project decides, whatever the account may do
+    # elsewhere: being able to build forms on the installation is not being able
+    # to build them in somebody else's project. An administrator passes because
+    # `projects.view_all` gives them every project's permissions.
+    access.require(user, FORMS_MANAGE, project_id)
+
+
+def _may_read(form_id: str, user):
+    """Refuse a form this account has no standing to read, either way.
+
+    A System Administrator reads it because their account may. A project member
+    reads it because their membership of *that* project allows it. A form
+    belonging to no project takes the account permission, exactly as before.
+    """
+    if auth_service.may(user, FORMS_VIEW):
+        return
+
+    try:
+        from app.modules.projects import access, project_service
+    except Exception:
+        raise HTTPException(status_code=403, detail="Your role cannot read forms")
+
+    project_id = project_service.project_of_form(form_id)
+
+    if not project_id:
+        # A system form. It belongs to no project, so no membership has anything
+        # to say about it: it takes the system permission or nothing.
+        if auth_service.may(user, FORMS_SYSTEM_VIEW):
+            return
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                f"Your role ({user.get('role_label') or user.get('role')}) cannot do "
+                f"this — it needs the 'Use system forms' permission"
+            ),
+        )
+
+    if not access.permissions_in(user, project_id):
+        # A project this account is not in. 404, so it cannot be told from a
+        # form that does not exist.
+        raise HTTPException(status_code=404, detail=f"No form '{form_id}'")
+
+
+def _project_guard(form_id: str, user):
+    """Refuse a form that belongs to a project this account cannot reach.
+
+    The single choke point for project isolation on the existing form routes.
+    A form with no project keeps the system-wide rules it always had, so every
+    form built before projects existed behaves exactly as before.
+
+    404 rather than 403, matching `projects/access.py`: to somebody outside a
+    project, its forms should be indistinguishable from forms that do not exist.
+    """
+    try:
+        from app.modules.projects import access
+    except Exception:
+        # The projects module is switched off. Nothing is project-scoped, so
+        # there is nothing to refuse.
+        return
+
+    if not access.may_see_form(user, form_id):
+        raise HTTPException(status_code=404, detail=f"No form '{form_id}'")
+
+
 
 def _dynamic_options(form_json: Dict[str, Any]) -> Dict[str, Any]:
     """Point crop and feature fields at the imported ontologies.
@@ -42,7 +236,7 @@ def _dynamic_options(form_json: Dict[str, Any]) -> Dict[str, Any]:
     must still be generated when it is.
     """
     try:
-        from app.modules.crop_ontology import enrichment as crop
+        from app.modules.standards.crop_ontology import enrichment as crop
     except Exception:
         return {"form_json": form_json, "dynamic": []}
 
@@ -60,7 +254,7 @@ def _enrich(form_json: Dict[str, Any], prompt: str = "") -> Dict[str, Any]:
     form must still be generated when it is.
     """
     try:
-        from app.modules.standards import enrichment
+        from app.modules.standards.icasa import enrichment
     except Exception:
         return {"form_json": form_json, "attached": []}
 
@@ -94,7 +288,7 @@ def _constraint_message(exc: IntegrityError) -> str:
 # authoring (LLM) — nothing here touches the database
 # --------------------------------------------------------------------------- #
 @router.post("/generate")
-def generate(req: GenerateRequest, user: Dict[str, Any] = Depends(needs(FORMS_CREATE))):
+def generate(req: GenerateRequest, user: Dict[str, Any] = Depends(_could_build_somewhere)):
     """Prompt -> a complete, normalized form definition (not yet saved)."""
     try:
         raw = llm.generate_form(req.prompt, req.language)
@@ -130,7 +324,7 @@ def generate(req: GenerateRequest, user: Dict[str, Any] = Depends(needs(FORMS_CR
 
 
 @router.post("/refine")
-def refine(req: RefineRequest, user: Dict[str, Any] = Depends(needs(FORMS_CREATE))):
+def refine(req: RefineRequest, user: Dict[str, Any] = Depends(_could_build_somewhere)):
     """Existing definition + instruction -> revised definition (not yet saved)."""
     try:
         raw = llm.refine_form(req.form_json, req.instruction)
@@ -142,7 +336,7 @@ def refine(req: RefineRequest, user: Dict[str, Any] = Depends(needs(FORMS_CREATE
 
 
 @router.post("/validate")
-def validate(req: ValidateRequest, user: Dict[str, Any] = Depends(needs(FORMS_CREATE))):
+def validate(req: ValidateRequest, user: Dict[str, Any] = Depends(_could_build_somewhere)):
     """Run the validation pipeline over a config without saving it.
 
     Returns the normalized definition on success; on failure, the same
@@ -160,7 +354,7 @@ def validate(req: ValidateRequest, user: Dict[str, Any] = Depends(needs(FORMS_CR
 
 @router.post("/test-definition")
 def test_definition(req: TestDefinitionRequest,
-                    user: Dict[str, Any] = Depends(needs(FORMS_CREATE))):
+                    user: Dict[str, Any] = Depends(_could_build_somewhere)):
     """Try answers against a definition that has not been saved.
 
     The same validation and coercion a real submission goes through, and the
@@ -178,7 +372,7 @@ def test_definition(req: TestDefinitionRequest,
 
 
 @router.get("/languages")
-def languages(user: Dict[str, Any] = Depends(needs(FORMS_VIEW))):
+def languages(user: Dict[str, Any] = Depends(_could_build_somewhere)):
     """The languages a form can be offered in."""
     result = []
     for code, name in translations.SUPPORTED_LANGUAGES.items():
@@ -187,7 +381,7 @@ def languages(user: Dict[str, Any] = Depends(needs(FORMS_VIEW))):
 
 
 @router.post("/translate")
-def translate(req: TranslateRequest, user: Dict[str, Any] = Depends(needs(FORMS_EDIT))):
+def translate(req: TranslateRequest, user: Dict[str, Any] = Depends(_could_build_somewhere)):
     """Translate a form's wording with the model, and return the cleaned block.
 
     Only the words come back — the caller stores them under the language code.
@@ -222,10 +416,18 @@ def translate(req: TranslateRequest, user: Dict[str, Any] = Depends(needs(FORMS_
 # persistence
 # --------------------------------------------------------------------------- #
 @router.post("", status_code=201)
-def create(req: CreateFormRequest, user: Dict[str, Any] = Depends(needs(FORMS_CREATE))):
-    """Save the form, open version 1, and create its Postgres table."""
+def create(req: CreateFormRequest, user: Dict[str, Any] = Depends(_could_build_somewhere)):
+    """Save the form, open version 1, and create its Postgres table.
+
+    With `project_id`, the form is created inside that project — which takes a
+    project role that may build forms there, not merely an account that may
+    build forms at all. Without it, the form belongs to no project and behaves
+    exactly as forms did before projects existed.
+    """
+    _may_build_in(req.project_id, user)
+
     try:
-        return form_service.create_form(
+        made = form_service.create_form(
             req.form_json,
             created_by=auth_service.display_name(user),
             form_type=req.form_type,
@@ -244,6 +446,13 @@ def create(req: CreateFormRequest, user: Dict[str, Any] = Depends(needs(FORMS_CR
         logger.exception("Form creation failed")
         raise HTTPException(status_code=500, detail=f"Could not save form: {exc}")
 
+    if req.project_id:
+        from app.modules.projects import project_service
+        project_service.set_form_project(made["form_id"], req.project_id)
+        made["project_id"] = req.project_id
+
+    return made
+
 
 @router.get("")
 def index(
@@ -251,13 +460,46 @@ def index(
     search: Optional[str] = None,
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
+    project: Optional[str] = Query(
+        None, description="'none' for forms outside every project, or a project id"),
     user: Dict[str, Any] = Depends(needs(FORMS_VIEW)),
 ):
-    return form_service.list_forms(status=status, search=search, limit=limit, offset=offset)
+    """The forms this account may build.
+
+    `project=none` is the system context — forms belonging to no project, which
+    behave exactly as every form did before projects existed. A project's own
+    forms are better read from `/api/projects/{id}/forms`, which also applies
+    who each one was assigned to.
+    """
+    if project == "none" and not auth_service.may(user, FORMS_SYSTEM_VIEW):
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                f"Your role ({user.get('role_label') or user.get('role')}) cannot do "
+                f"this — it needs the 'Use system forms' permission"
+            ),
+        )
+
+    found = form_service.list_forms(
+        status=status, search=search, limit=limit, offset=offset, project=project)
+
+    if not auth_service.may(user, FORMS_SYSTEM_VIEW):
+        # The unnarrowed list still has to keep the two contexts apart: a form
+        # belonging to no project is not something a project membership opens.
+        found = [f for f in found if f.get("project_id")]
+
+    return found
 
 
 @router.get("/{form_id}")
-def detail(form_id: str, user: Dict[str, Any] = Depends(needs(FORMS_VIEW))):
+def detail(form_id: str, user: Dict[str, Any] = Depends(current_user)):
+    """One form, as this account may see it.
+
+    Reachable two ways, and the guard is the same either way: an account that
+    may read forms at all, or standing in the project this one belongs to.
+    """
+    _may_read(form_id, user)
+    _project_guard(form_id, user)
     try:
         return form_service.get_form(form_id)
     except form_service.FormNotFound as exc:
@@ -265,7 +507,8 @@ def detail(form_id: str, user: Dict[str, Any] = Depends(needs(FORMS_VIEW))):
 
 
 @router.put("/{form_id}")
-def update(form_id: str, req: UpdateFormRequest, user: Dict[str, Any] = Depends(needs(FORMS_EDIT))):
+def update(form_id: str, req: UpdateFormRequest,
+           user: Dict[str, Any] = Depends(needs_on_form(FORMS_EDIT, "project.forms.manage"))):
     """Save a revision, moving stored answers for any renamed field."""
     try:
         return form_service.update_form(
@@ -287,7 +530,8 @@ def update(form_id: str, req: UpdateFormRequest, user: Dict[str, Any] = Depends(
 
 
 @router.post("/{form_id}/revalidate")
-def revalidate(form_id: str, req: RevalidateRequest, user: Dict[str, Any] = Depends(needs(FORMS_EDIT))):
+def revalidate(form_id: str, req: RevalidateRequest,
+               user: Dict[str, Any] = Depends(needs_on_form(FORMS_EDIT, "project.forms.manage"))):
     """Check stored responses against the current definition after a hand edit.
 
     `fix: false` reports only; `fix: true` also re-coerces the values it can.
@@ -302,7 +546,8 @@ def revalidate(form_id: str, req: RevalidateRequest, user: Dict[str, Any] = Depe
 
 
 @router.patch("/{form_id}/status")
-def change_status(form_id: str, req: StatusRequest, user: Dict[str, Any] = Depends(needs(FORMS_EDIT))):
+def change_status(form_id: str, req: StatusRequest,
+                  user: Dict[str, Any] = Depends(needs_on_form(FORMS_EDIT, "project.forms.manage"))):
     try:
         return form_service.set_status(form_id, req.form_status)
     except form_service.FormNotFound as exc:
@@ -314,7 +559,8 @@ def change_status(form_id: str, req: StatusRequest, user: Dict[str, Any] = Depen
 
 
 @router.delete("/{form_id}")
-def soft_delete(form_id: str, user: Dict[str, Any] = Depends(needs(FORMS_DELETE))):
+def soft_delete(form_id: str,
+                user: Dict[str, Any] = Depends(needs_on_form(FORMS_DELETE, "project.forms.manage"))):
     """Marks the form Deleted. The data table and its rows are left untouched."""
     try:
         return form_service.set_status(form_id, "Deleted")
@@ -325,7 +571,8 @@ def soft_delete(form_id: str, user: Dict[str, Any] = Depends(needs(FORMS_DELETE)
 
 
 @router.post("/{form_id}/rollback")
-def rollback(form_id: str, req: RollbackRequest, user: Dict[str, Any] = Depends(needs(FORMS_EDIT))):
+def rollback(form_id: str, req: RollbackRequest,
+             user: Dict[str, Any] = Depends(needs_on_form(FORMS_EDIT, "project.forms.manage"))):
     """Make an existing version the live one.
 
     No new version is written — the form simply points at that version's stored
@@ -346,7 +593,8 @@ def rollback(form_id: str, req: RollbackRequest, user: Dict[str, Any] = Depends(
 
 
 @router.get("/{form_id}/standard-diff")
-def standard_diff(form_id: str, user: Dict[str, Any] = Depends(needs(FORMS_VIEW))):
+def standard_diff(form_id: str,
+                  user: Dict[str, Any] = Depends(needs_on_form(FORMS_VIEW, "project.forms.view_all"))):
     """How far this form has drifted from the standard it started from.
 
     404 if it did not come from one — the same shape as a version diff, so a
@@ -366,7 +614,8 @@ def standard_diff(form_id: str, user: Dict[str, Any] = Depends(needs(FORMS_VIEW)
 
 
 @router.post("/{form_id}/rebuild-tabular")
-def rebuild_tabular(form_id: str, user: Dict[str, Any] = Depends(needs(FORMS_EDIT))):
+def rebuild_tabular(form_id: str,
+                    user: Dict[str, Any] = Depends(needs_on_form(FORMS_EDIT, "project.forms.manage"))):
     """Rebuild the flat `<form>_tabular` mirror from the JSONB table.
 
     Happens automatically whenever columns change; call this for a form whose
@@ -382,7 +631,8 @@ def rebuild_tabular(form_id: str, user: Dict[str, Any] = Depends(needs(FORMS_EDI
 
 
 @router.get("/{form_id}/versions")
-def versions(form_id: str, include_json: bool = False, user: Dict[str, Any] = Depends(needs(FORMS_VIEW))):
+def versions(form_id: str, include_json: bool = False,
+             user: Dict[str, Any] = Depends(needs_on_form(FORMS_VIEW, "project.forms.view_all"))):
     try:
         form_service.get_form(form_id)
     except form_service.FormNotFound as exc:
@@ -395,13 +645,18 @@ def diff(
     form_id: str,
     from_version: Optional[int] = Query(None, alias="from"),
     to_version: Optional[int] = Query(None, alias="to"),
-    user: Dict[str, Any] = Depends(needs(FORMS_VIEW)),
+    user: Dict[str, Any] = Depends(needs_on_form(FORMS_VIEW, "project.forms.view_all")),
 ):
     """What changed between two saved versions.
 
     Defaults to the newest version against the one before it. Fields renamed
     along the way are followed, so a rename reads as a change rather than as one
     field removed and another added.
+
+    The same gate as `/versions`, and for the same reason: this is the History
+    tab reading its own form. Asking for the account permission here while
+    `/versions` asked the project's left the tab half open — the list of
+    versions arrived and comparing two of them was refused.
     """
     try:
         return form_service.diff_versions(form_id, from_version, to_version)

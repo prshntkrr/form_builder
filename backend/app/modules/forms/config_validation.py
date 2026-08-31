@@ -251,6 +251,10 @@ class FormConfig(_Config):
     standard_id: Optional[str] = Field(default=None, max_length=MAX_IDENTIFIER)
     standard_version: Optional[int] = Field(default=None, ge=1)
     sections: List[SectionConfig] = dc_field(default_factory=list)
+    # Which questions apply, given the answers so far. Kept as plain dicts: the
+    # engine in `conditions.py` owns their shape, and `normalize_rules` has
+    # already dropped anything it cannot evaluate.
+    rules: List[Dict[str, Any]] = dc_field(default_factory=list)
     fields: List[FieldConfig] = Field(
         min_length=1, validation_alias=AliasChoices("fields", "questions", "elements"))
 
@@ -528,6 +532,24 @@ def parent_reference_is_valid(config: FormConfig, ctx: BusinessContext) -> List[
 
 # Ordered so the most fundamental problems are reported first. Add a rule by
 # writing a function above and listing it here.
+def conditional_rules_are_answerable(config: FormConfig, _: BusinessContext) -> List[ValidationIssue]:
+    """A rule has to name questions this form has, and cannot loop.
+
+    A question whose visibility depends on its own answer could never be
+    answered, and a circle of rules would never settle. Both are configuration
+    mistakes rather than bad data, so they are caught before the form is saved.
+    """
+    from app.modules.forms import conditions
+
+    form_json = {
+        "rules": config.rules or [],
+        "fields": [{"name": f.name, "section": f.section} for f in config.fields],
+        "sections": [{"key": s.key} for s in config.sections],
+    }
+
+    return [_issue(found["path"], found["message"]) for found in conditions.problems(form_json)]
+
+
 BUSINESS_RULES: List[Rule] = [
     unique_field_names,
     field_names_are_not_reserved,
@@ -541,6 +563,7 @@ BUSINESS_RULES: List[Rule] = [
     table_name_is_usable,
     standard_reference_is_valid,
     parent_reference_is_valid,
+    conditional_rules_are_answerable,
 ]
 
 

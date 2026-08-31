@@ -567,7 +567,7 @@ def test_the_whole_thing_end_to_end(states, districts, forms_cleanup):
 # --- 22. the standards are a different authority ---------------------------------- #
 def test_a_crop_ontology_field_is_not_touched_by_the_catalogues(states):
     """Two authorities, side by side on one form. Neither is the other's."""
-    from app.modules.crop_ontology import enrichment as crop
+    from app.modules.standards.crop_ontology import enrichment as crop
 
     form = {"title": "Maize", "fields": [
         {"name": "crop", "label": "Crop", "type": "select", "options": [],

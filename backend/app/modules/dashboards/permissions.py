@@ -30,7 +30,7 @@ register(
     grants={
         "editor": [DASHBOARDS_VIEW, DASHBOARDS_CREATE, DASHBOARDS_EDIT,
                    DASHBOARDS_DELETE, DASHBOARDS_SHARE],
-        "field": [DASHBOARDS_VIEW],
+        "standard": [DASHBOARDS_VIEW],
     },
     # Flags for /api/auth/me. The frontend module gates its routes on these, so
     # the screen and the endpoint cannot disagree about what a role may do.

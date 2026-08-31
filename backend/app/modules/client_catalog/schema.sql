@@ -62,3 +62,14 @@ ALTER TABLE client_catalog
 ALTER TABLE client_catalog
     ADD COLUMN IF NOT EXISTS parent_catalog_id VARCHAR(100)
         REFERENCES client_catalog(catalog_id) ON DELETE SET NULL;
+
+-- One row per value, whatever languages it is shown in. A code is one value:
+-- splitting it per language would make the same answer two different values.
+--
+--     code   'Si'
+--     labels {"es": "Si", "en": "Yes"}
+--
+-- `label` stays the one shown when no language is asked for, so every existing
+-- reader keeps working untouched.
+ALTER TABLE client_catalog_value
+    ADD COLUMN IF NOT EXISTS labels JSONB NOT NULL DEFAULT '{}'::jsonb;

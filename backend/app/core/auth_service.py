@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
 from app.core.config import settings
-from app.core.database import transaction
+from app.core.database import table_exists, transaction
 from app.core.security import (
     WeakPassword,
     check_password_strength,
@@ -26,10 +26,22 @@ from app.core.security import (
 
 logger = logging.getLogger(__name__)
 
-# The roles an installation starts with. New ones are created by an admin.
-ROLE_FIELD = "field"
-ROLE_EDITOR = "editor"
+# Named here rather than imported: `permissions` imports modules while it
+# assembles its catalogue, and this module is one of the things they reach.
+USERS_MANAGE_KEY = "users.manage"
+
+# The system roles an installation starts with, and the default for a new
+# account. What somebody may do *inside a project* is not here — that comes from
+# the role their membership carries. See app/modules/projects/permissions.py.
+ROLE_STANDARD = "standard"
 ROLE_ADMIN = "admin"
+
+# `field` became `standard`. Kept so a script, a seed file or a caller written
+# against the old name still resolves rather than failing at "Unknown role".
+ROLE_FIELD = ROLE_STANDARD
+ROLE_EDITOR = "editor"
+
+LEGACY_ROLE_NAMES = {"field": ROLE_STANDARD}
 
 USER_ID_PREFIX = "USR"
 MAX_FAILED_LOGINS = 5
@@ -122,8 +134,13 @@ def _clean_email(email: str) -> str:
 
 
 def _resolve_role(cur, role):
-    """Accept a role id or a role name; return the id."""
-    wanted = str(role or ROLE_FIELD).strip()
+    """Accept a role id or a role name; return the id.
+
+    A name this installation has renamed still resolves — `field` finds
+    `standard` — so nothing written against the old name breaks.
+    """
+    wanted = str(role or ROLE_STANDARD).strip()
+    wanted = LEGACY_ROLE_NAMES.get(wanted.lower(), wanted)
     cur.execute(
         "SELECT role_id FROM app_role WHERE role_id = %s OR name = %s",
         (wanted, wanted.lower()),
@@ -206,6 +223,84 @@ def _can_still_manage_roles(cur, excluding_user: str) -> bool:
         (permissions.ROLES_MANAGE, excluding_user),
     )
     return int(cur.fetchone()["n"]) > 0
+
+
+def delete_user(user_id: str) -> Dict[str, Any]:
+    """Remove an account for good, and everything that only describes it.
+
+    **What goes.** The row itself, and by cascade its sessions, its password
+    reset tokens, its project memberships, its project group memberships, and
+    any form assigned to it by name. All of those are statements *about* an
+    account and mean nothing once it is gone.
+
+    **What stays.** Everything it collected or decided. `created_by` on a form
+    and a response, and `submitted_by` / `reviewed_by` on a review, are display
+    names rather than foreign keys — they were written down at the time and are
+    still true afterwards. A submission keeps saying who filled it in and who
+    approved it, and no history is rewritten or lost.
+
+    That is the whole strategy: cascade the relationships, keep the record.
+
+    Deactivating is usually the better answer, and is what the Users page offers
+    first — an account that is switched off keeps its memberships and can be
+    turned back on. Deletion is for an account that should never have existed.
+
+    Two things it will not do. The last account that can manage access cannot be
+    deleted, or the installation locks itself out. And an account cannot delete
+    itself; that is refused by the route, so the check lives beside the session
+    that made the request.
+    """
+    with transaction() as cur:
+        cur.execute(
+            "SELECT u.user_id, u.email, u.full_name, r.name AS role "
+            "FROM app_user u LEFT JOIN app_role r ON r.role_id = u.role_id "
+            "WHERE u.user_id = %s",
+            (user_id,),
+        )
+        found = cur.fetchone()
+        if found is None:
+            raise UserNotFound(f"No account '{user_id}'")
+
+        # The last way in. Counted by permission, never by role name: an
+        # installation may rename its administrator role or invent another.
+        cur.execute(
+            """
+            SELECT COUNT(*) AS n
+            FROM   app_user u
+            JOIN   role_permission rp ON rp.role_id = u.role_id
+            WHERE  u.is_active AND rp.permission = %s AND u.user_id <> %s
+            """,
+            (USERS_MANAGE_KEY, user_id),
+        )
+        if int(cur.fetchone()["n"]) == 0:
+            raise AuthError(
+                "This is the last account that can manage access. Give another "
+                "account that permission before removing this one."
+            )
+
+        # Counted before the row goes, so the answer can say what was removed.
+        removed = {}
+        for table, column in (("project_member", "user_id"),
+                              ("project_group_member", "user_id"),
+                              ("form_assignment", "user_id")):
+            if not table_exists(cur, table):
+                continue
+            cur.execute(f"SELECT COUNT(*) AS n FROM {table} WHERE {column} = %s", (user_id,))
+            removed[table] = int(cur.fetchone()["n"])
+
+        # One statement, one transaction. Every relationship above is ON DELETE
+        # CASCADE, so nothing is left pointing at an account that is gone.
+        cur.execute("DELETE FROM app_user WHERE user_id = %s", (user_id,))
+
+    logger.info("Deleted account %s (%s)", user_id, found["email"])
+    return {
+        "user_id": user_id,
+        "email": found["email"],
+        "deleted": True,
+        "memberships_removed": removed.get("project_member", 0),
+        "group_memberships_removed": removed.get("project_group_member", 0),
+        "assignments_removed": removed.get("form_assignment", 0),
+    }
 
 
 def update_user(

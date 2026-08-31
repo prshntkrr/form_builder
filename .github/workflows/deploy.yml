@@ -5,6 +5,9 @@ on:
     branches:
       - master
 
+# The backend only. The frontend is built and published by something else, so
+# nothing here touches it — see the note at the end of the script.
+
 jobs:
   deploy:
     name: Deploy to Server
@@ -18,6 +21,10 @@ jobs:
           port: 22
           username: ${{ secrets.USER }}
           password: ${{ secrets.PASSWORD }}
+          # The health check waits, and an import of every crop ontology talks
+          # to cropontology.org. The default 10 minutes is not enough for a
+          # first run.
+          command_timeout: 30m
 
           script: |
             set -e
@@ -30,6 +37,7 @@ jobs:
 
             echo "Pulling latest code..."
             git pull origin master
+            echo "Now at: $(git rev-parse --short HEAD) — $(git log -1 --pretty=%s)"
 
             echo "Entering backend..."
             cd backend
@@ -48,7 +56,9 @@ jobs:
             #
             # None is fatal: the application runs perfectly well with nothing
             # loaded (the pickers simply find nothing), and a failed import is no
-            # reason to leave the service down.
+            # reason to leave the service down. The warnings are worth reading in
+            # the log, though — an empty vocabulary is a silent, confusing
+            # failure on the Standards screen.
             python import_ontology.py || echo "WARNING: ontology import failed, continuing"
             python import_icasa.py || echo "WARNING: ICASA import failed, continuing"
 
@@ -57,14 +67,28 @@ jobs:
             # Which crops this installation offers. A form's crop question is
             # answered from whatever is imported here, so adding a crop is a
             # one-word change — set the CROP_ONTOLOGIES repository variable to a
-            # space-separated list ("CO_322 CO_320 CO_323") and never touch a form.
+            # space-separated list ("CO_322 CO_320 CO_323"), or to the single
+            # word "all", and never touch a form.
+            #
+            # This used to run `--crop all` once per name in the list. The
+            # script's flag for everything is `--all`; `--crop all` looks for an
+            # ontology *called* "all", finds none, and says so — quietly, into a
+            # log nobody reads. So the deploy has never actually imported a crop
+            # ontology, and the ones in the database were loaded by hand.
             CROP_ONTOLOGIES="${{ vars.CROP_ONTOLOGIES }}"
-            CROP_ONTOLOGIES="${CROP_ONTOLOGIES:-CO_322}"
+            CROP_ONTOLOGIES="${CROP_ONTOLOGIES:-all}"
 
-            for CROP in $CROP_ONTOLOGIES; do
-                python import_crop_ontology.py --crop all \
-                  || echo "WARNING: crop ontology $CROP failed, continuing"
-            done
+            if [ "$CROP_ONTOLOGIES" = "all" ]; then
+                echo "  every published ontology"
+                python import_crop_ontology.py --all \
+                  || echo "WARNING: crop ontology import failed, continuing"
+            else
+                for CROP in $CROP_ONTOLOGIES; do
+                    echo "  $CROP"
+                    python import_crop_ontology.py --crop "$CROP" \
+                      || echo "WARNING: crop ontology $CROP failed, continuing"
+                done
+            fi
 
             echo "Importing client catalogs..."
 
@@ -93,30 +117,75 @@ jobs:
                     fi
                     sleep 1
                 done
+
+                # Still holding the port after ten seconds. Starting anyway would
+                # give a second uvicorn that cannot bind, and a health check that
+                # passes against the *old* build — a deploy that reports success
+                # and changes nothing.
+                if kill -0 "$BACKEND_PID" 2>/dev/null; then
+                    echo "Backend did not stop; forcing it."
+                    kill -9 "$BACKEND_PID" || true
+                    sleep 2
+                fi
             else
                 echo "No process listening on port 8021."
             fi
 
             echo "Starting backend..."
 
+            # Appended, not truncated. The log of the deploy that broke is the
+            # one worth having, and `>` threw it away at the start of the next.
+            {
+                echo ""
+                echo "===== started $(date --iso-8601=seconds) at $(git rev-parse --short HEAD)"
+            } >> backend.log
+
             nohup venv/bin/uvicorn app.main:app \
               --host 0.0.0.0 \
               --port 8021 \
-              > backend.log 2>&1 &
-
-            sleep 3
+              >> backend.log 2>&1 &
 
             echo "Checking backend..."
 
-            if pgrep -f "uvicorn app.main:app.*--port 8021" > /dev/null; then
-                echo "Backend is running successfully."
-            else
-                echo "Backend failed to start."
+            # Ask the application, not the process table. The backend deliberately
+            # stays up when Postgres is unreachable so that /api/health can say
+            # so — which means a running process proves nothing. Health reports
+            # the connection *and* any table a module's migration did not create,
+            # so this catches a bad migration as well as a bad start.
+            HEALTH=""
+            for i in {1..20}; do
+                HEALTH=$(curl -fsS --max-time 5 http://127.0.0.1:8021/api/health 2>/dev/null || true)
+                [ -n "$HEALTH" ] && break
+                sleep 2
+            done
+
+            if [ -z "$HEALTH" ]; then
+                echo "Backend did not answer on port 8021."
                 echo "Last backend logs:"
                 tail -50 backend.log
                 exit 1
             fi
 
+            echo "Health: $HEALTH"
+
+            case "$HEALTH" in
+                *'"status":"ok"'*)
+                    echo "Backend is running and the database is complete."
+                    ;;
+                *)
+                    # Up, and answering — but something is missing. Left running
+                    # on purpose: the screens explain themselves better than a
+                    # dead port does, and the deploy is marked failed so nobody
+                    # has to notice on their own.
+                    echo "Backend started but reports a problem — see missing_tables above."
+                    echo "Last backend logs:"
+                    tail -50 backend.log
+                    exit 1
+                    ;;
+            esac
+
             echo "================================="
             echo "Deployment completed successfully"
             echo "================================="
+            echo "Backend only. The frontend bundle is published separately —"
+            echo "a UI change is not live until that has run too."

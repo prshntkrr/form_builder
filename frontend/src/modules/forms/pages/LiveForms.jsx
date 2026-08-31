@@ -2,21 +2,30 @@ import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api.js'
 import { useAuth } from '../../../core/auth.jsx'
+import { useProjects } from '../../projects/active.js'
 
 /**
  * What a field officer sees: the forms they can fill in, and nothing else.
  *
  * Deliberately not the builder's list — no table names, versions or response
  * counts, because none of that is theirs to act on.
+ *
+ * The list is `/forms/live/list`, scoped to the context the application is
+ * working in and narrowed by the backend to Active forms this account was both
+ * assigned and given permission to fill. Nothing arrives here to be hidden.
  */
 export default function LiveForms() {
   const { user } = useAuth()
+  const { projectId, system, active } = useProjects()
   const [forms, setForms] = useState(null)
   const [error, setError] = useState('')
 
   useEffect(() => {
-    api.liveForms().then(setForms).catch((e) => setError(e.message))
-  }, [])
+    setForms(null)
+    api.liveForms(projectId || (system ? 'none' : undefined))
+      .then(setForms)
+      .catch((e) => setError(e.message))
+  }, [projectId, system])
 
   return (
     <main className="main main--narrow">
@@ -24,7 +33,8 @@ export default function LiveForms() {
         <div>
           <h1>Forms to fill in</h1>
           <p className="lede">
-            Signed in as {user?.full_name || user?.email}.
+            Signed in as {user?.full_name || user?.email}
+            {active ? ` · ${active.name}` : ''}.
           </p>
         </div>
       </div>
@@ -39,8 +49,12 @@ export default function LiveForms() {
 
       {forms?.length === 0 && (
         <div className="blank">
-          <h2>Nothing to fill in yet</h2>
-          <p>When someone publishes a form, it will appear here.</p>
+          <h2>No forms are currently assigned to you</h2>
+          <p>
+            A form appears here once it is published <em>and</em> assigned to you —
+            by name, through a group you are in, or to everyone in the project.
+            Ask whoever runs the project to assign it.
+          </p>
         </div>
       )}
 

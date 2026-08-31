@@ -33,3 +33,32 @@ export const NUMERIC = new Set(['number', 'decimal', 'rating'])
 export const DIGITS = new Set(['number', 'decimal', 'rating', 'phone'])
 
 export const TEXTUAL = new Set(['text', 'textarea', 'email', 'phone', 'url'])
+
+/**
+ * How each answer is represented once it is stored, and the column its value
+ * takes in the flat `<form>_tabular` mirror.
+ *
+ * Presentational only — the Variable tab shows it so a designer can see what a
+ * question actually becomes. `backend/app/modules/forms/field_types.py` is the
+ * authority; this mirrors it and nothing reads it to make a decision.
+ */
+export const STORAGE = {
+  text: ['string', 'VARCHAR(255)'],
+  textarea: ['string', 'TEXT'],
+  email: ['string', 'VARCHAR(255)'],
+  phone: ['string', 'VARCHAR(20)'],
+  url: ['string', 'TEXT'],
+  number: ['number', 'INTEGER'],
+  decimal: ['number', 'NUMERIC(18,4)'],
+  rating: ['number', 'INTEGER'],
+  date: ['string (YYYY-MM-DD)', 'DATE'],
+  datetime: ['string (ISO 8601)', 'TIMESTAMP'],
+  time: ['string (HH:MM:SS)', 'TIME'],
+  boolean: ['boolean', 'BOOLEAN'],
+  select: ['string', 'VARCHAR(255)'],
+  radio: ['string', 'VARCHAR(255)'],
+  multiselect: ['array', 'TEXT'],
+  file: ['string', 'TEXT'],
+  signature: ['string', 'TEXT'],
+  location: ['object {lat, lng}', 'TEXT'],
+}

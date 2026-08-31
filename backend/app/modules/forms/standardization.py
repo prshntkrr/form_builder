@@ -97,7 +97,7 @@ def standardize(
       interpret is worse than refusing it.
     """
     try:
-        from app.modules.units import service as units
+        from app.modules.standards.units import service as units
     except Exception:
         # The units module is switched off. A form that was collecting answers
         # before must go on collecting them.

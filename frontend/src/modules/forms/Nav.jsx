@@ -3,6 +3,8 @@ import { NavLink, useMatch, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../core/auth.jsx'
 import { useFormsRevision } from '../../core/events.js'
 import { api } from './api.js'
+import { api as projectApi } from '../projects/api.js'
+import { useProjects } from '../projects/active.js'
 
 export const SECTIONS = [
   ['questions', 'Questions'],
@@ -65,25 +67,49 @@ export function FormsPanel({ onNavigate }) {
   const { can } = useAuth()
   const revision = useFormsRevision()
 
-  const builder = can.build_forms
+  // Anyone who may build a form somewhere — on the account, or through a role
+  // in some project. A Project Manager holds no account form permission at all.
+  const builder = can.build_any_forms || can.build_forms
   const editing = useMatch('/forms/:formId/*')
   const filling = useMatch('/f/:formId')
   const activeId = editing?.params?.formId || filling?.params?.formId
 
+  const { projectId, active, system } = useProjects()
   const [forms, setForms] = useState(null)
 
-  // Two lists behind one section: the builder's forms, or the live ones a field
-  // officer may fill in. `GET /api/forms` is editor-only, so asking for it as a
-  // field officer would only ever be a 403.
+  // Switching context empties the list first, so nothing from the previous
+  // project is on screen while the new one loads.
+  useEffect(() => { setForms(null) }, [projectId, system])
+
+  // The list follows the context the application is working in, so a project's
+  // sidebar never shows another project's forms — or, while a project is
+  // selected, every form the account happens to be able to build.
+  //
+  //   building, in a project   the project's forms, narrowed by the backend
+  //   building, in the system  `?project=none`, the forms belonging to no project
+  //   filling                  `/forms/live/list`, scoped to the same context
+  //
+  // Narrowed by the backend in every case. "Forms to fill in" is the fillable
+  // endpoint and nothing else: the project's form list answers "what is here",
+  // which for a reviewer is every form in the project, and showing that as
+  // things to fill in is exactly the bug this replaced.
   useEffect(() => {
-    const load = builder ? api.listForms({ limit: 200 }) : api.liveForms()
-    load.then(setForms).catch(() => setForms([]))
-  }, [revision, builder])
+    let cancelled = false
+    const load = builder
+      ? (projectId
+          ? projectApi.projectForms(projectId).then((r) => r.forms)
+          : api.listForms({ project: 'none', limit: 200 }))
+      : api.liveForms(projectId || (system ? 'none' : undefined))
+
+    load.then((found) => { if (!cancelled) setForms(found) })
+        .catch(() => { if (!cancelled) setForms([]) })
+    return () => { cancelled = true }
+  }, [revision, builder, projectId, system])
 
   return (
     <>
       <div className="side__label">
-        {builder ? 'Forms' : 'Forms to fill in'}
+        {builder ? (system ? 'System forms' : active?.name || 'Forms') : 'Forms to fill in'}
         <NavLink to={builder ? '/forms' : '/fill'} className="side__all" onClick={onNavigate}>
           All
         </NavLink>
@@ -96,7 +122,11 @@ export function FormsPanel({ onNavigate }) {
 
         {forms?.length === 0 && (
           <p className="side__empty">
-            {builder ? 'Nothing yet — start with a new form.' : 'Nothing to fill in yet.'}
+            {!builder
+              ? 'No forms are currently assigned to you.'
+              : system
+                ? 'No forms outside a project.'
+                : 'No forms are currently assigned to you.'}
           </p>
         )}
 

@@ -267,7 +267,7 @@ def _enrich_imported(form_json: Dict[str, Any]) -> Dict[str, Any]:
         logger.exception("Data dictionary enrichment failed on an import")
 
     try:
-        from app.modules.standards import enrichment
+        from app.modules.standards.icasa import enrichment
         result = enrichment.enrich_form(form_json, form_json.get("title") or "")
         form_json = result["form_json"]
         attached.extend(result["attached"])
@@ -279,7 +279,7 @@ def _enrich_imported(form_json: Dict[str, Any]) -> Dict[str, Any]:
     # goes through — an imported form must not be the one place where the crop
     # question comes out as free text.
     try:
-        from app.modules.crop_ontology import enrichment as crop
+        from app.modules.standards.crop_ontology import enrichment as crop
         wired = crop.apply_dynamic_options(form_json)
         form_json = wired["form_json"]
         for change in wired["dynamic"]:

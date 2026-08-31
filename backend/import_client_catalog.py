@@ -20,6 +20,7 @@ from pathlib import Path
 
 from app.core.bootstrap import ensure_base_tables
 from app.core.database import ping
+from app.modules.client_catalog import eagrology_import
 from app.modules.client_catalog.importer import (
     CatalogImportError,
     import_catalog_workbook,
@@ -38,14 +39,19 @@ def load(path: Path) -> bool:
     print()
     print(f"File: {path.name}")
 
+    data = path.read_bytes()
+
     try:
 
-        result = import_catalog_workbook(
-            path.read_bytes(),
-            source=path.name,
-        )
+        # Two workbook shapes, one set of tables. The client's own "Catalogs"
+        # sheet is asked about first, so it is never handed to the CIMMYT reader
+        # and told it is missing sheets it was never meant to have.
+        if eagrology_import.is_eagrology_workbook(data):
+            result = eagrology_import.import_workbook(data, source=path.name)
+        else:
+            result = import_catalog_workbook(data, source=path.name)
 
-    except CatalogImportError as exc:
+    except (CatalogImportError, eagrology_import.EagrologyCatalogError) as exc:
 
         print(f"  SKIPPED: {exc}")
         return False
@@ -59,6 +65,16 @@ def load(path: Path) -> bool:
         f"{result['values_added']} added, {result['values_updated']} updated, "
         f"{result['values_skipped']} skipped"
     )
+
+    if result.get("languages"):
+        print(f"  Languages: {', '.join(result['languages'])}")
+
+    if result.get("conflict_count"):
+        print(f"  Conflicts: {result['conflict_count']} (approved values left as they were)")
+
+    if result.get("duplicate_count"):
+        print(f"  Duplicates in the workbook: {result['duplicate_count']} (first kept)")
+
     return True
 
 

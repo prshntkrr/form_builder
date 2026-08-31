@@ -16,7 +16,7 @@ from pathlib import Path
 
 from app.core.bootstrap import ensure_base_tables
 from app.core.database import ping
-from app.modules.ontology import importer
+from app.modules.standards.seont import importer
 
 # The repository's own copy, so the common case needs no arguments.
 DEFAULT_FILE = Path(__file__).resolve().parent.parent / "data_dictionary" / "seont.owl"

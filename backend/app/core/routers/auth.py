@@ -37,6 +37,47 @@ def logout(request: Request, user: Dict[str, Any] = Depends(current_user)):
     return {"signed_out": True}
 
 
+def _project_flags(user: Dict[str, Any], flags: Dict[str, Any]) -> Dict[str, bool]:
+    """What this account can do *somewhere*, from its project memberships.
+
+    The account's own role cannot answer any of this. A Standard User holds no
+    project permission at all — they hold them through the projects they are a
+    member of — so a flag read off the account role is false for every real
+    project member, which is what sent them to an empty "forms to fill in" page
+    instead of into their project.
+
+    These are navigation flags, nothing more. Which project each one is true in
+    is a separate question, asked per project by `your_permissions`, and every
+    endpoint checks the permission again for the project it is acting on. None
+    of this widens what the account itself may do: a flag being true here never
+    makes a project permission into a system one.
+    """
+    try:
+        from app.modules.projects import access
+        from app.modules.projects import permissions as project_permissions
+    except Exception:
+        # The projects module is switched off; the account's own flags stand.
+        return {}
+
+    try:
+        joined = access.projects_for(user)
+        found = {
+            # Offer the project side of the application at all.
+            "use_projects": bool(flags.get("use_projects")) or bool(joined),
+            # Somebody has forms to fill in somewhere.
+            "fill_forms": bool(access.projects_where(
+                user, project_permissions.FORMS_FILL)),
+            # Somebody has submissions to judge somewhere.
+            "review_submissions": bool(access.projects_where(
+                user, project_permissions.SUBMISSIONS_REVIEW)),
+        }
+    except Exception:
+        logger.exception("Could not work out this account's project navigation")
+        return {}
+
+    return found
+
+
 @router.get("/me")
 def me(user: Dict[str, Any] = Depends(current_user)):
     """Who the caller is, and what their role lets them do."""
@@ -45,10 +86,25 @@ def me(user: Dict[str, Any] = Depends(current_user)):
     # Only what this deployment can act on: a module switched off in .env has no
     # routes, so reporting its permissions would promise something that 404s.
     held = permissions.clean(user.get("permissions") or [])
+    flags = permissions.capabilities(held)
+
+    # Whether the builder is reachable at all. `build_forms` is an account
+    # permission; this one is also true for somebody who may build forms in a
+    # project they belong to, which the account alone cannot say. Without it the
+    # builder route would turn a Project Manager away and send them home.
+    try:
+        from app.modules.forms.routers.forms import may_build_somewhere
+        flags["build_any_forms"] = bool(flags.get("build_forms")) or may_build_somewhere(user)
+    except Exception:
+        logger.exception("Could not work out whether the builder is reachable")
+        flags["build_any_forms"] = bool(flags.get("build_forms"))
+
+    flags.update(_project_flags(user, flags))
+
     return {
         "user": user,
         "permissions": held,
-        "can": permissions.capabilities(held),
+        "can": flags,
         # Which modules this deployment is running. A module switched off in
         # .env is absent here, so the frontend hides its screens without needing
         # a rebuild or a second setting to keep in step.

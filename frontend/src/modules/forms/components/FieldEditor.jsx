@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { DIGITS, NUMERIC, TEXTUAL, TYPES, WITH_OPTIONS } from '../fieldTypes.js'
-import ConceptPicker from './ConceptPicker.jsx'
+import { DIGITS, NUMERIC, STORAGE, TEXTUAL, TYPES, WITH_OPTIONS } from '../fieldTypes.js'
+import StandardPicker from './StandardPicker.jsx'
+import ConditionEditor from './ConditionEditor.jsx'
 import { api } from '../api.js'
 import { useAuth } from '../../../core/auth.jsx'
 
@@ -123,6 +124,20 @@ export default function FieldEditor({
   total,
   sections = [],
   allFields = [],      // every field on the form, for a dependent catalogue
+  formRules = [],      // the form's conditional logic, and how to change it
+  onRules,
+  // The wording being edited, and where to write it. For a form in one
+  // language these are the field itself; for a translation they are that
+  // language's block, so editing English cannot touch the Spanish underneath.
+  words,
+  onWords,
+  translating = false,
+  // The settings live beside the list rather than under the row. A row says
+  // whether it is the one being configured and asks to become it; the panel is
+  // this same component in `panel` mode, so there is only ever one editor.
+  selected = false,
+  onSelect,
+  mode = 'row',
   renamedFrom,        // the key this field had when the form was last saved, if changed
   hasResponses,
   dragging,
@@ -135,9 +150,12 @@ export default function FieldEditor({
   onDragEnd,
   onDrop,
 }) {
-  const [open, setOpen] = useState(false)
   const row = useRef(null)
+  const [tab, setTab] = useState('field')
   const patch = (changes) => onChange(index, { ...field, ...changes })
+
+  const shown = words || field
+  const setWords = onWords || patch
   const rules = field.validation || {}
 
   // A phone number is measured in digits, like a number is — so "10" on a mobile
@@ -173,15 +191,277 @@ export default function FieldEditor({
 
   const classes = [
     'frow',
-    open && 'frow--open',
+    selected && 'frow--on',
     dragging && 'frow--lifted',
     dropEdge && `frow--drop-${dropEdge}`,
   ].filter(Boolean).join(' ')
+
+  // `panel` is the settings alone, for the column beside the list; `row` is
+  // the compact line in that list. One component either way, so the two can
+  // never hold different state or drift apart.
+  if (mode === 'panel') {
+    return (
+      <div className="insp">
+        <div className="row tabs insp__tabs">
+          {[['field', 'Field'], ['variable', 'Variable'], ['standards', 'Standards']]
+            .map(([key, name]) => (
+              <button
+                key={key}
+                className={`tab${tab === key ? ' on' : ''}`}
+                onClick={() => setTab(key)}
+              >
+                {name}
+              </button>
+            ))}
+        </div>
+
+        {tab === 'field' && (
+        <div className="frow__more">
+        <div className="frow__grid">
+          <label className="col">
+            <span className="minilabel">Label</span>
+            <input
+              className="control"
+              value={shown.label || ''}
+              placeholder={translating ? field.label : 'Question'}
+              onChange={(e) => {
+                const label = e.target.value
+                // A translation is wording and nothing else — the stored key is
+                // where answers live and must not move with the language.
+                if (translating) return setWords({ label })
+                patch(field._orig ? { label } : { label, name: slug(label) || field.name })
+              }}
+            />
+          </label>
+
+          <label className="col">
+            <span className="minilabel">Type</span>
+            <select className="control" value={field.type}
+                    onChange={(e) => setType(e.target.value)}>
+              {TYPES.map(([value, name]) => (
+                <option key={value} value={value}>{name}</option>
+              ))}
+            </select>
+          </label>
+
+          <label className="col">
+            <span className="minilabel">Placeholder</span>
+            <input className="control" value={shown.placeholder || ''}
+                   placeholder={translating ? field.placeholder : ''}
+                   onChange={(e) => setWords({ placeholder: e.target.value })} />
+          </label>
+
+          <label className="col">
+            <span className="minilabel">Hint below the field</span>
+            <input className="control" value={shown.help_text || ''}
+                   placeholder={translating ? field.help_text : ''}
+                   onChange={(e) => setWords({ help_text: e.target.value })} />
+          </label>
+
+          {sections.length > 0 && (
+            <label className="col">
+              <span className="minilabel">Section</span>
+              <select className="control" value={field.section || ''} onChange={(e) => patch({ section: e.target.value || null })}>
+                <option value="">No section</option>
+                {sections.map((s) => (
+                  <option key={s.key} value={s.key}>{s.title}</option>
+                ))}
+              </select>
+            </label>
+          )}
+
+          {NUMERIC.has(field.type) && (
+            <>
+              <label className="col">
+                <span className="minilabel">Smallest allowed</span>
+                <input className="control" type="number" placeholder="any"
+                       value={rules.min ?? ''} onChange={(e) => setRule('min', e.target.value)} />
+              </label>
+              <label className="col">
+                <span className="minilabel">Largest allowed</span>
+                <input className="control" type="number" placeholder="any"
+                       value={rules.max ?? ''} onChange={(e) => setRule('max', e.target.value)} />
+              </label>
+            </>
+          )}
+
+          {hasLength && (
+            <>
+              <label className="col">
+                <span className="minilabel">{digits ? 'Fewest digits' : 'Shortest answer'}</span>
+                <input className="control" type="number" min="1" placeholder="any"
+                       value={rules.min_length ?? ''} onChange={(e) => setRule('min_length', e.target.value)} />
+              </label>
+              <label className="col">
+                <span className="minilabel">{digits ? 'Most digits' : 'Longest answer'}</span>
+                <input className="control" type="number" min="1" placeholder="any"
+                       value={rules.max_length ?? ''} onChange={(e) => setRule('max_length', e.target.value)} />
+              </label>
+            </>
+          )}
+
+          {TEXTUAL.has(field.type) && (
+            <label className="col">
+              <span className="minilabel">Must match pattern</span>
+              <input className="control" placeholder="^[0-9]{10}$"
+                     value={rules.pattern ?? ''} onChange={(e) => setRule('pattern', e.target.value)} />
+            </label>
+          )}
+
+          <label className="col">
+            <span className="minilabel">Answer</span>
+            <label className="insp__check">
+              <input type="checkbox" checked={!!field.required}
+                     onChange={(e) => patch({ required: e.target.checked })} />
+              Required
+            </label>
+          </label>
+        </div>
+
+        {WITH_OPTIONS.has(field.type) && (
+          <OptionSource field={field} fields={allFields} patch={patch} />
+        )}
+
+        {WITH_OPTIONS.has(field.type) && !field.options_from && (
+          <div className="opts">
+            <span className="minilabel">Choices</span>
+            {(field.options || []).map((o, i) => (
+              <div key={i} className="row">
+                <input className="control grow" value={o.label} onChange={(e) => editOption(i, e.target.value)} />
+                <button
+                  className="iconbtn iconbtn--danger"
+                  onClick={() => patch({ options: field.options.filter((_, j) => j !== i) })}
+                  title="Remove choice"
+                >✕</button>
+              </div>
+            ))}
+            <button
+              className="btn btn--quiet btn--sm"
+              style={{ alignSelf: 'flex-start' }}
+              onClick={() => {
+                const n = (field.options || []).length + 1
+                patch({ options: [...(field.options || []), { label: `Option ${n}`, value: `option_${n}` }] })
+              }}
+            >Add choice</button>
+          </div>
+        )}
+
+        {onRules && (
+          <ConditionEditor
+            target={{ type: 'field', name: field.name }}
+            fields={allFields}
+            rules={formRules}
+            onChange={onRules}
+          />
+        )}
+        </div>
+        )}
+
+        {tab === 'variable' && (
+        <div className="frow__more">
+          <p className="tiny muted">
+            How this answer is named and stored. What somebody reads on the form
+            is the Field tab; this is what the data becomes.
+          </p>
+
+          <div className="frow__grid">
+            <label className="col">
+              <span className="minilabel">Variable name</span>
+              <input
+                className="control"
+                value={field.name}
+                onChange={(e) => patch({ name: slug(e.target.value) })}
+              />
+            </label>
+          </div>
+
+          <p className="tiny muted">
+            The key inside <code>form_data</code> and the column in the flat
+            mirror. It never changes with the language, so an answer given in one
+            language and one given in another land in the same place.
+          </p>
+
+          {renamedFrom && (
+            <p className="tiny muted">
+              Renaming from <code>{renamedFrom}</code>
+              {hasResponses ? ' — existing answers move across when you save.' : '.'}
+            </p>
+          )}
+
+          <div className="insp__facts">
+            <div><b>Stored as</b>{STORAGE[field.type]?.[0] || 'string'}</div>
+            <div><b>Mirror column</b>{STORAGE[field.type]?.[1] || 'TEXT'}</div>
+            <div><b>Answers land in</b>form_data.{field.name}</div>
+          </div>
+
+          {field.options_from && (
+            <div className="insp__facts">
+              <div><b>Answered from</b>{field.options_from.source === 'client_catalog'
+                ? `client catalogue ${field.options_from.catalog}`
+                : `the imported ${field.options_from.kind}s`}</div>
+              {field.options_from.depends_on && (
+                <div><b>Narrowed by</b>{field.options_from.depends_on}</div>
+              )}
+              <div><b>Stored value</b>the source's own code</div>
+            </div>
+          )}
+
+          {field.input_unit && (
+            <div className="insp__facts">
+              <div><b>Collected in</b>{field.input_unit}</div>
+            </div>
+          )}
+
+          {field.source && (
+            <>
+              <span className="minilabel">Where this question came from</span>
+              <div className="insp__facts">
+                {field.source.source_variable && (
+                  <div><b>Workbook variable</b>{field.source.source_variable}</div>
+                )}
+                {field.source.field_type && (
+                  <div><b>Workbook type</b>{field.source.field_type}</div>
+                )}
+                {field.source.catalog_id && (
+                  <div><b>Catalogue</b>{field.source.catalog_id}</div>
+                )}
+                {field.source.father_list && (
+                  <div><b>Parent list</b>{field.source.father_list}</div>
+                )}
+                {field.source.skip_logic && (
+                  <div><b>Condition as written</b>{field.source.skip_logic}</div>
+                )}
+              </div>
+              <p className="tiny muted">
+                Read from the client's workbook and kept as they wrote it.
+              </p>
+            </>
+          )}
+        </div>
+        )}
+
+        {tab === 'standards' && (
+        <div className="frow__more">
+          <StandardPicker
+            field={field}
+            canLoadOptions={WITH_OPTIONS.has(field.type)}
+            onChange={patch}
+          />
+        </div>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div
       ref={row}
       className={classes}
+      // Anywhere on the row: clicking a question is how you inspect it, and
+      // hunting for a small button to do that is a tax on every edit. Selecting
+      // rather than toggling, so typing in the label cannot close the panel
+      // being typed into.
+      onClick={() => onSelect?.(index)}
       onDragOver={(e) => { e.preventDefault(); onDragOver?.(index) }}
       onDrop={(e) => { e.preventDefault(); onDrop?.(index) }}
     >
@@ -206,10 +486,14 @@ export default function FieldEditor({
 
         <input
           className="frow__name"
-          value={field.label}
-          placeholder="Question"
+          value={shown.label || ''}
+          placeholder={translating ? field.label : 'Question'}
           onChange={(e) => {
             const label = e.target.value
+            // A translation is wording and nothing else. The key stays what the
+            // form was built with, because it is where answers are stored — a
+            // Spanish answer and an English one land in the same column.
+            if (translating) return setWords({ label })
             // Before the form is saved the key just tracks the label; afterwards
             // it is a real stored key and only changes if you edit it directly.
             patch(field._orig ? { label } : { label, name: slug(label) || field.name })
@@ -251,130 +535,21 @@ export default function FieldEditor({
         <span className="frow__acts">
           {/* Not a chevron — the type dropdown next to it already has one. */}
           <button
-            className={`iconbtn${open ? ' iconbtn--on' : ''}`}
-            onClick={() => setOpen(!open)}
-            title={`${open ? 'Hide' : 'Show'} settings — placeholder, hint, limits, choices`}
-            aria-expanded={open}
+            className={`iconbtn${selected ? ' iconbtn--on' : ''}`}
+            title="Settings — placeholder, hint, limits, choices, standards, logic"
+            aria-pressed={selected}
           >⋯</button>
-          <button className="iconbtn iconbtn--danger" onClick={() => onRemove(index)} title="Delete question">✕</button>
+          <button
+            className="iconbtn iconbtn--danger"
+            // Not through the row's select handler: choosing a question and
+            // deleting it are different intents, and the click would otherwise
+            // select the row on its way out of existence.
+            onClick={(e) => { e.stopPropagation(); onRemove(index) }}
+            title="Delete question"
+          >✕</button>
         </span>
       </div>
 
-      {open && (
-        <div className="frow__more">
-          <div className="frow__grid">
-            <label className="col">
-              <span className="minilabel">Placeholder</span>
-              <input className="control" value={field.placeholder || ''} onChange={(e) => patch({ placeholder: e.target.value })} />
-            </label>
-
-            <label className="col">
-              <span className="minilabel">Hint below the field</span>
-              <input className="control" value={field.help_text || ''} onChange={(e) => patch({ help_text: e.target.value })} />
-            </label>
-
-            {sections.length > 0 && (
-              <label className="col">
-                <span className="minilabel">Section</span>
-                <select className="control" value={field.section || ''} onChange={(e) => patch({ section: e.target.value || null })}>
-                  <option value="">No section</option>
-                  {sections.map((s) => (
-                    <option key={s.key} value={s.key}>{s.title}</option>
-                  ))}
-                </select>
-              </label>
-            )}
-
-            {NUMERIC.has(field.type) && (
-              <>
-                <label className="col">
-                  <span className="minilabel">Smallest allowed</span>
-                  <input className="control" type="number" placeholder="any"
-                         value={rules.min ?? ''} onChange={(e) => setRule('min', e.target.value)} />
-                </label>
-                <label className="col">
-                  <span className="minilabel">Largest allowed</span>
-                  <input className="control" type="number" placeholder="any"
-                         value={rules.max ?? ''} onChange={(e) => setRule('max', e.target.value)} />
-                </label>
-              </>
-            )}
-
-            {hasLength && (
-              <>
-                <label className="col">
-                  <span className="minilabel">{digits ? 'Fewest digits' : 'Shortest answer'}</span>
-                  <input className="control" type="number" min="1" placeholder="any"
-                         value={rules.min_length ?? ''} onChange={(e) => setRule('min_length', e.target.value)} />
-                </label>
-                <label className="col">
-                  <span className="minilabel">{digits ? 'Most digits' : 'Longest answer'}</span>
-                  <input className="control" type="number" min="1" placeholder="any"
-                         value={rules.max_length ?? ''} onChange={(e) => setRule('max_length', e.target.value)} />
-                </label>
-              </>
-            )}
-
-            {TEXTUAL.has(field.type) && (
-              <label className="col">
-                <span className="minilabel">Must match pattern</span>
-                <input className="control" placeholder="^[0-9]{10}$"
-                       value={rules.pattern ?? ''} onChange={(e) => setRule('pattern', e.target.value)} />
-              </label>
-            )}
-
-            <label className="col">
-              <span className="minilabel">Stored as</span>
-              <input
-                className="control"
-                value={field.name}
-                onChange={(e) => patch({ name: slug(e.target.value) })}
-              />
-            </label>
-          </div>
-
-          {renamedFrom && (
-            <p className="tiny muted" style={{ paddingRight: 26 }}>
-              Renaming from <code>{renamedFrom}</code>
-              {hasResponses ? ' — existing answers move across when you save.' : '.'}
-            </p>
-          )}
-
-          <ConceptPicker
-            field={field}
-            canLoadOptions={WITH_OPTIONS.has(field.type)}
-            onChange={patch}
-          />
-
-          {WITH_OPTIONS.has(field.type) && (
-            <OptionSource field={field} fields={allFields} patch={patch} />
-          )}
-
-          {WITH_OPTIONS.has(field.type) && !field.options_from && (
-            <div className="opts">
-              <span className="minilabel">Choices</span>
-              {(field.options || []).map((o, i) => (
-                <div key={i} className="row">
-                  <input className="control grow" value={o.label} onChange={(e) => editOption(i, e.target.value)} />
-                  <button
-                    className="iconbtn iconbtn--danger"
-                    onClick={() => patch({ options: field.options.filter((_, j) => j !== i) })}
-                    title="Remove choice"
-                  >✕</button>
-                </div>
-              ))}
-              <button
-                className="btn btn--quiet btn--sm"
-                style={{ alignSelf: 'flex-start' }}
-                onClick={() => {
-                  const n = (field.options || []).length + 1
-                  patch({ options: [...(field.options || []), { label: `Option ${n}`, value: `option_${n}` }] })
-                }}
-              >Add choice</button>
-            </div>
-          )}
-        </div>
-      )}
     </div>
   )
 }

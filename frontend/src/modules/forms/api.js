@@ -3,7 +3,12 @@ import { BASE, request } from '../../core/http.js'
 
 export const api = {
   // --- forms a field officer may fill ---
-  liveForms: () => request('/forms/live/list'),
+  // `project` narrows the answer to one context: a project id, or 'none' for
+  // the forms belonging to no project. The backend decides what is in it —
+  // being assigned a form *and* being able to fill in that project — so this
+  // list is never trimmed here.
+  liveForms: (project) =>
+    request(`/forms/live/list${project ? `?project=${encodeURIComponent(project)}` : ''}`),
 
   // Records as the caller is allowed to see them — hidden columns never arrive.
   records: (formId, limit = 50, offset = 0) =>
@@ -71,9 +76,16 @@ export const api = {
   // --- client catalogs ---
   // The client's own controlled lists. Their codes and their wording; nothing
   // here supplies a value the client did not.
-  clientCatalogOptions: (catalog, parentCode) =>
-    request(`/client-catalogs/${encodeURIComponent(catalog)}/options` +
-            (parentCode ? `?parent_code=${encodeURIComponent(parentCode)}` : '')),
+  // `language` changes the wording only — the value is the client's code in
+  // every language, because that is what an answer stores.
+  clientCatalogOptions: (catalog, parentCode, language) => {
+    const query = new URLSearchParams()
+    if (parentCode) query.set('parent_code', parentCode)
+    if (language) query.set('language', language)
+    const suffix = query.toString()
+    return request(`/client-catalogs/${encodeURIComponent(catalog)}/options` +
+                   (suffix ? `?${suffix}` : ''))
+  },
 
   clientCatalogues: (search) =>
     request(`/client-catalogs${search ? `?search=${encodeURIComponent(search)}` : ''}`),
@@ -112,6 +124,22 @@ export const api = {
 
   cropVariableOptions: (variableId) =>
     request(`/crop-ontology/variables/${encodeURIComponent(variableId)}/options`),
+
+  // --- browsing the standards, one level at a time ---
+  // The path is sent a segment at a time and the server decides what the next
+  // level is, so a screen walking this never has to know how deep a vocabulary
+  // goes or which one it is walking.
+  browseStandards: (path = []) => {
+    const qs = new URLSearchParams()
+    for (const segment of path) qs.append('p', segment)
+    return request(`/standards/browse${qs.toString() ? `?${qs}` : ''}`)
+  },
+
+  // Where a mapping already saved on a field sits in that tree. A field stores
+  // the identifier, never the path — so the path is worked out when a screen
+  // needs to show it.
+  locateStandard: (params) =>
+    request(`/standards/browse/locate?${new URLSearchParams(params)}`),
 
   // --- data standards (ICASA) ---
   loadedStandards: () => request('/standards'),
@@ -164,10 +192,20 @@ export const api = {
     }),
 
   // `status` is 'Draft' to build without publishing, 'Active' to go live.
-  createForm: (formJson, createdBy, status) =>
+  // `projectId` puts the form inside a project. Optional: without one the form
+  // belongs to no project and follows the account-wide form permissions, which
+  // is what every form did before projects existed. The backend checks that
+  // this account may build in that project, so sending somebody else's id
+  // fails there rather than succeeding here.
+  createForm: (formJson, createdBy, status, projectId) =>
     request('/forms', {
       method: 'POST',
-      body: JSON.stringify({ form_json: formJson, created_by: createdBy, form_status: status }),
+      body: JSON.stringify({
+        form_json: formJson,
+        created_by: createdBy,
+        form_status: status,
+        ...(projectId ? { project_id: projectId } : {}),
+      }),
     }),
 
   updateForm: (formId, formJson, updatedBy, renames) =>
@@ -225,6 +263,8 @@ export const api = {
       body: JSON.stringify({ version_no: versionNo, updated_by: updatedBy }),
     }),
 
+  // Any filter the endpoint takes, passed straight through — including
+  // `project: 'none'`, which is the forms belonging to no project.
   listForms: (params = {}) => {
     const qs = new URLSearchParams(
       Object.entries(params).filter(([, v]) => v !== '' && v != null),

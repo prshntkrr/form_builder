@@ -31,7 +31,7 @@ PLANT_HEIGHT = f"{MAIZE}:0000996"
 
 @pytest.fixture(scope="module", autouse=True)
 def units_loaded():
-    from app.modules.units import service
+    from app.modules.standards.units import service
     service.seed_units()
 
 

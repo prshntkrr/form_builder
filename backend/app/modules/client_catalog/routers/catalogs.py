@@ -14,6 +14,7 @@ from app.core import auth_service
 from app.core.deps import needs
 from app.modules.client_catalog import catalog_options as catalog_options_service
 from app.modules.client_catalog import catalog_service
+from app.modules.client_catalog import eagrology_import
 from app.modules.client_catalog.importer import (
     CatalogImportError,
     get_catalog,
@@ -144,6 +145,7 @@ def catalog_values(
 def catalog_options(
     catalog_id: str,
     parent_code: Optional[str] = None,
+    language: Optional[str] = Query(None, description="Label language, e.g. 'en'"),
     user: Dict[str, Any] = Depends(needs(CATALOG_VIEW)),
 ):
     """The catalogue's values shaped as form options.
@@ -151,6 +153,9 @@ def catalog_options(
     What a field with `options_from.source == "client_catalog"` is drawn from.
     `parent_code` narrows a dependent list to the chosen parent. Withdrawn
     values are not offered here, though they stay readable on old answers.
+
+    `language` changes the wording and nothing else: the value is the client's
+    code in every language, because that is what an answer stores.
     """
 
     if get_catalog(catalog_id) is None:
@@ -162,6 +167,7 @@ def catalog_options(
     return catalog_options_service.options_for(
         catalog_id,
         parent_code=parent_code,
+        language=language,
     )
 
 
@@ -259,14 +265,36 @@ async def import_catalogs(
 
     data = await file.read()
 
+    # ------------------------------------------------------------------
+    # Which reader this workbook needs.
+    #
+    #   Catalogs                        the client's own sheet:
+    #                                   List / Variable / Label Spanish / Label ENG
+    #
+    #   04_Value_Catalogs               CIMMYT Controlled Vocabulary
+    #   05_Catalog_Values
+    #
+    # Asked in that order, and asked before either reader runs, so a client
+    # workbook is never handed to the reader that would demand sheets it was
+    # never meant to have. The CIMMYT reader keeps its own requirements.
+    # ------------------------------------------------------------------
     try:
 
-        result = import_catalog_workbook(
-            data,
-            source=filename,
-        )
+        if eagrology_import.is_eagrology_workbook(data):
 
-    except CatalogImportError as exc:
+            result = eagrology_import.import_workbook(
+                data,
+                source=filename,
+            )
+
+        else:
+
+            result = import_catalog_workbook(
+                data,
+                source=filename,
+            )
+
+    except (CatalogImportError, eagrology_import.EagrologyCatalogError) as exc:
 
         raise HTTPException(
             status_code=422,

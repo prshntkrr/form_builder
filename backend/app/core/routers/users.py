@@ -6,7 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from app.core import auth_service
 from app.core.deps import needs
-from app.core.permissions import USERS_MANAGE
+from app.core.permissions import USERS_DELETE, USERS_MANAGE
+from app.core.role_migration import NOT_OFFERED
 from app.core.config import settings
 from app.core.security import WeakPassword
 from app.core.schemas import CreateUserRequest, UpdateUserRequest
@@ -17,8 +18,19 @@ router = APIRouter(prefix="/api/users", tags=["users"])
 
 @router.get("/roles")
 def assignable_roles(user: Dict[str, Any] = Depends(needs(USERS_MANAGE))):
-    """The roles that can be assigned, newest-defined last."""
+    """The roles that can be written on an **account**.
+
+    System roles only. A role that carries project permissions is something
+    somebody is *inside one project*, held through membership — writing it on an
+    account meant nothing, and reading it as though it did is what made
+    "Project manager" look like a kind of administrator. Those are offered by
+    `GET /api/projects/roles` instead, where they belong.
+
+    Derived rather than listed, so a role an administrator invents with only
+    system permissions is offered here without a code change.
+    """
     from app.core import role_service
+
     return [
         {
             "role_id": r["role_id"],
@@ -28,7 +40,22 @@ def assignable_roles(user: Dict[str, Any] = Depends(needs(USERS_MANAGE))):
             "permission_count": len(r["permissions"]),
         }
         for r in role_service.list_roles()
+        if not _is_project_role(r["permissions"]) and r["name"] not in NOT_OFFERED
     ]
+
+
+def _is_project_role(held) -> bool:
+    """Whether a role belongs to the project catalogue instead of this one.
+
+    The same predicate `GET /api/projects/roles` uses, so a role is offered on
+    exactly one of the two and never on both.
+    """
+    try:
+        from app.modules.projects import permissions as projects
+    except Exception:
+        # The projects module is switched off, so every role is a system role.
+        return False
+    return projects.is_project_role(held)
 
 
 @router.get("")
@@ -76,14 +103,37 @@ def update(user_id: str, req: UpdateUserRequest, user: Dict[str, Any] = Depends(
         raise HTTPException(status_code=400, detail=str(exc))
 
 
-@router.delete("/{user_id}")
+@router.post("/{user_id}/deactivate")
 def deactivate(user_id: str, user: Dict[str, Any] = Depends(needs(USERS_MANAGE))):
-    """Deactivate rather than delete — `created_by` on their forms and responses
-    should keep meaning something."""
+    """Switch an account off without removing it.
+
+    Usually the right answer: the account stops working immediately and
+    everything about it is still there to turn back on.
+    """
     if user_id == user["user_id"]:
         raise HTTPException(status_code=400, detail="You cannot deactivate your own account")
     try:
         return auth_service.update_user(user_id, is_active=False)
+    except auth_service.UserNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except auth_service.AuthError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.delete("/{user_id}")
+def delete(user_id: str, user: Dict[str, Any] = Depends(needs(USERS_DELETE))):
+    """Remove an account, its sessions and its project memberships.
+
+    What it collected stays. See `auth_service.delete_user` for why that is safe
+    and what it means for the records they left behind.
+    """
+    if user_id == user["user_id"]:
+        raise HTTPException(
+            status_code=400,
+            detail="You cannot delete your own account. Ask another administrator.",
+        )
+    try:
+        return auth_service.delete_user(user_id)
     except auth_service.UserNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     except auth_service.AuthError as exc:

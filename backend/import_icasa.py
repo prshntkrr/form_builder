@@ -17,7 +17,7 @@ from pathlib import Path
 
 from app.core.bootstrap import ensure_base_tables
 from app.core.database import ping
-from app.modules.standards import icasa_importer
+from app.modules.standards.icasa import icasa_importer
 
 DEFAULT_DIR = Path(__file__).resolve().parent.parent / "data_dictionary" / "icasa"
 

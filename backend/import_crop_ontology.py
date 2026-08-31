@@ -23,7 +23,7 @@ from pathlib import Path
 
 from app.core.bootstrap import ensure_base_tables
 from app.core.database import ping
-from app.modules.crop_ontology import importer
+from app.modules.standards.crop_ontology import importer
 
 DEFAULT_DIR = Path(__file__).resolve().parent.parent / "data_dictionary" / "crop_ontology"
 

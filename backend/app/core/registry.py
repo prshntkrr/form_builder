@@ -59,6 +59,68 @@ _running = False
 _complete = False
 
 
+def _candidates(package_dir: Path):
+    """Every package that might hold a manifest, and the names it answers to.
+
+    Most modules sit directly under `app/modules/`. A package marked
+    `CONTAINER = True` holds no manifest of its own and is descended into
+    instead — that is how `standards/` groups SEOnt, ICASA, Crop Ontology and
+    units without becoming one module itself.
+
+    `keys` are the names DISABLED_MODULES may switch a module off by. A
+    container may map a package to the name it used to be disabled by, so
+    moving a module never silently changes what an installation's .env means.
+    """
+    found = []
+
+    for info in sorted(pkgutil.iter_modules([str(package_dir)]), key=lambda i: i.name):
+        if not info.ispkg or info.name.startswith("_"):
+            continue
+
+        inner = package_dir / info.name
+        container = _is_container(inner)
+
+        if not container:
+            found.append((info, f"app.modules.{info.name}", {info.name.lower()}))
+            continue
+
+        legacy = container.get("LEGACY_NAMES") or {}
+        for child in sorted(pkgutil.iter_modules([str(inner)]), key=lambda i: i.name):
+            if not child.ispkg or child.name.startswith("_"):
+                continue
+            keys = {child.name.lower(), f"{info.name}.{child.name}".lower()}
+            if child.name in legacy:
+                keys.add(str(legacy[child.name]).lower())
+            found.append((child, f"app.modules.{info.name}.{child.name}", keys))
+
+    return found
+
+
+def _is_container(path: Path) -> Optional[dict]:
+    """A package that groups modules rather than being one.
+
+    Read from the source rather than imported: discovery has to know whether to
+    descend before it decides what to import, and importing to find out would
+    load a module this installation may have switched off.
+    """
+    init = path / "__init__.py"
+    if not init.exists():
+        return None
+
+    text = init.read_text(encoding="utf-8")
+    if "CONTAINER = True" not in text:
+        return None
+
+    scope: dict = {}
+    for line in text.splitlines():
+        if line.startswith("LEGACY_NAMES"):
+            try:
+                exec(line, {}, scope)  # a literal dict in the module's own header
+            except Exception:
+                logger.exception("Could not read LEGACY_NAMES from %s", init)
+    return {"LEGACY_NAMES": scope.get("LEGACY_NAMES", {})}
+
+
 def discover() -> List[Module]:
     """Import every package under app/modules/ and collect their manifests.
 
@@ -78,10 +140,10 @@ def discover() -> List[Module]:
         package_dir = Path(__file__).resolve().parent.parent / "modules"
         off = settings.disabled_module_list
         pending = False
-        for info in sorted(pkgutil.iter_modules([str(package_dir)]), key=lambda i: i.name):
-            if not info.ispkg or info.name.startswith("_") or info.name in _loaded:
+        for info, dotted, keys in _candidates(package_dir):
+            if info.name in _loaded:
                 continue
-            if info.name.lower() in off:
+            if any(key in off for key in keys):
                 # Not imported at all — its routes, permissions and tables never
                 # come into being, so a disabled module cannot be reached by
                 # guessing a URL.
@@ -90,7 +152,7 @@ def discover() -> List[Module]:
                     logger.info("Module %s is switched off (DISABLED_MODULES)", info.name)
                 continue
             try:
-                mod = importlib.import_module(f"app.modules.{info.name}")
+                mod = importlib.import_module(dotted)
             except Exception:
                 # One broken module must not take the application down with it —
                 # the rest still load, and the traceback says which one to fix.

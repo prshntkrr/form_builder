@@ -47,3 +47,32 @@ def ensure_catalog_columns() -> bool:
             logger.info("Added client_catalog.parent_catalog_id")
 
     return True
+
+
+def ensure_value_labels() -> bool:
+    """Let one value carry its label in more than one language.
+
+    `Si` is one code with a Spanish label and an English one, not two values.
+    `label` is untouched and stays the label shown when no language is asked
+    for, so nothing that reads it needs to change.
+    """
+    with transaction() as cur:
+        if not table_exists(cur, "client_catalog_value"):
+            return False
+
+        cur.execute(
+            """
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name = 'client_catalog_value' AND column_name = 'labels'
+            """
+        )
+        if cur.fetchone():
+            return True
+
+        cur.execute(
+            "ALTER TABLE client_catalog_value "
+            "ADD COLUMN labels JSONB NOT NULL DEFAULT '{}'::jsonb"
+        )
+        logger.info("Added client_catalog_value.labels")
+
+    return True

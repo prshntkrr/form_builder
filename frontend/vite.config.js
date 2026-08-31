@@ -8,6 +8,13 @@ const API_PORT = process.env.API_PORT || 8000
 
 export default defineConfig({
   plugins: [react()],
+  // Component tests run against jsdom, so a click and a re-render can be
+  // asserted the way somebody using the builder would experience them.
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    include: ['src/**/*.test.jsx'],
+  },
   server: {
     port: 5173,
     proxy: {

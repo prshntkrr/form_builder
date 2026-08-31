@@ -29,6 +29,10 @@ class CreateFormRequest(BaseModel):
     form_type: str = "parent"
     parent_id: Optional[str] = None
     form_status: str = "Active"
+    # Which project this form belongs to. Optional: a form created without one
+    # is a system-level form, reachable through the account-wide form
+    # permissions exactly as every form was before projects existed.
+    project_id: Optional[str] = None
 
 
 class UpdateFormRequest(BaseModel):

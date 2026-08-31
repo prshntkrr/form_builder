@@ -52,10 +52,24 @@ def _is_offered(status: str) -> bool:
 _REACHABLE = "(c.parent_catalog_id IS NULL OR v.parent_code IS NOT NULL)"
 
 
+def _labelled(row, language: Optional[str]) -> str:
+    """The label to show, in the reader's language where the client gave one.
+
+    Falls back to the value's own label rather than to the code, and never to
+    an empty string: a missing translation must not produce a blank choice.
+    """
+    if language:
+        translated = (row.get("labels") or {}).get(language)
+        if translated:
+            return translated
+    return row["label"] or row["code"]
+
+
 def options_for(
     catalog_id: str,
     parent_code: Optional[str] = None,
     limit: int = MAX_OPTIONS,
+    language: Optional[str] = None,
 ) -> List[Dict[str, str]]:
     """The client's values for one catalog, as form options.
 
@@ -71,7 +85,7 @@ def options_for(
         if parent_code:
             cur.execute(
                 """
-                SELECT code, label, status
+                SELECT code, label, labels, status
                 FROM   client_catalog_value
                 WHERE  catalog_id = %s AND parent_code = %s
                 ORDER BY display_order, code
@@ -82,7 +96,7 @@ def options_for(
         else:
             cur.execute(
                 f"""
-                SELECT v.code, v.label, v.status
+                SELECT v.code, v.label, v.labels, v.status
                 FROM   client_catalog_value v
                 JOIN   client_catalog c ON c.catalog_id = v.catalog_id
                 WHERE  v.catalog_id = %s AND {_REACHABLE}
@@ -93,8 +107,10 @@ def options_for(
             )
         rows = cur.fetchall()
 
+    # The value is the code, in every language. Translating it would make the
+    # same answer two different answers.
     return [
-        {"label": row["label"] or row["code"], "value": row["code"]}
+        {"label": _labelled(row, language), "value": row["code"]}
         for row in rows
         if _is_offered(row["status"])
     ]

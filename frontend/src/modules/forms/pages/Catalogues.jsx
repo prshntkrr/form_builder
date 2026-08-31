@@ -50,6 +50,7 @@ export default function Catalogues() {
 
   const [editing, setEditing] = useState(null)     // a catalogue, or NEW_CATALOGUE
   const [opened, setOpened] = useState(null)       // the catalogue whose values are open
+  const [imported, setImported] = useState(null)   // what the last upload did
 
   const load = () => {
     api.clientCatalogues(search)
@@ -72,7 +73,10 @@ export default function Catalogues() {
         </div>
         {mayEdit && (
           <div className="row">
-            <ImportCatalogues onDone={load} onError={setError} />
+            <ImportCatalogues
+              onDone={(summary) => { setImported(summary); load() }}
+              onError={(message) => { setError(message); setImported(null) }}
+            />
             <button className="btn btn--primary" onClick={() => setEditing({ ...NEW_CATALOGUE })}>
               Create catalogue
             </button>
@@ -81,6 +85,8 @@ export default function Catalogues() {
       </div>
 
       {error && <div className="note note--bad">{error}</div>}
+
+      {imported && <ImportSummary summary={imported} onClose={() => setImported(null)} />}
 
       <input
         className="control"
@@ -580,6 +586,62 @@ function ValueForm({ value, isNew, approved, parents, parentCatalogId,
   )
 }
 
+/**
+ * What the last upload actually did.
+ *
+ * A count of catalogues is not enough on its own: a workbook can hold codes an
+ * approved catalogue already means something else by, and those are reported
+ * rather than applied. Anything left out says so here.
+ */
+function ImportSummary({ summary, onClose }) {
+  const languages = summary.languages || []
+  const conflicts = summary.conflicts || []
+
+  return (
+    <div className="note note--good">
+      <strong>Imported {summary.source}</strong>
+
+      <div className="import__facts">
+        <div><b>Catalogues</b>{summary.catalogs_total}</div>
+        <div><b>Added</b>{summary.catalogs_added}</div>
+        <div><b>Values</b>{summary.values_total}</div>
+        <div><b>Added</b>{summary.values_added}</div>
+        <div><b>Updated</b>{summary.values_updated}</div>
+        {summary.values_skipped > 0 && <div><b>Skipped</b>{summary.values_skipped}</div>}
+        {languages.length > 0 && <div><b>Languages</b>{languages.join(', ')}</div>}
+      </div>
+
+      {summary.duplicate_count > 0 && (
+        <span className="tiny">
+          {summary.duplicate_count} code(s) appear twice in the workbook; the first of
+          each was kept.
+        </span>
+      )}
+
+      {conflicts.length > 0 && (
+        <>
+          <span className="tiny">
+            <b>{summary.conflict_count} value(s) were left as they are.</b> Their
+            catalogue is Approved, and answers already carry those codes — so the
+            workbook's wording was not applied to them.
+          </span>
+          {conflicts.slice(0, 8).map((c) => (
+            <span key={`${c.catalog_id}/${c.code}`} className="tiny">
+              <code>{c.catalog_id}/{c.code}</code> — held “{c.held}”, workbook says
+              “{c.workbook}”
+            </span>
+          ))}
+        </>
+      )}
+
+      <button className="btn btn--quiet btn--sm" style={{ alignSelf: 'flex-start' }}
+              onClick={onClose}>
+        Dismiss
+      </button>
+    </div>
+  )
+}
+
 /** The client's catalogue workbook, through the importer that already existed. */
 function ImportCatalogues({ onDone, onError }) {
   const input = useRef(null)
@@ -590,8 +652,7 @@ function ImportCatalogues({ onDone, onError }) {
     setBusy(true)
     onError('')
     try {
-      await api.importCatalogues(file)
-      onDone()
+      onDone(await api.importCatalogues(file))
     } catch (e) {
       onError(e.message)
     } finally {

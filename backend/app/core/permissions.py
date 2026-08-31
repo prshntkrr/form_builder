@@ -27,6 +27,7 @@ from typing import Dict, List, Mapping, Sequence, Set
 # --- administration ---------------------------------------------------------
 # The only permissions core owns. Everything else belongs to a module.
 USERS_MANAGE = "users.manage"
+USERS_DELETE = "users.delete"
 ROLES_MANAGE = "roles.manage"
 
 
@@ -41,6 +42,9 @@ class Permission:
 CORE_CATALOGUE: List[Permission] = [
     Permission(USERS_MANAGE, "Manage users",
                "Add people, assign their role, and reset their password", "Administration"),
+    Permission(USERS_DELETE, "Delete accounts",
+               "Remove an account and its project memberships. What it collected "
+               "stays.", "Administration"),
     Permission(ROLES_MANAGE, "Manage roles",
                "Create roles and choose what each one may do", "Administration"),
 ]
@@ -51,25 +55,43 @@ CORE_CATALOGUE: List[Permission] = [
 #
 # Core gives each role only its platform permissions; modules add theirs through
 # `grants`, so a role's meaning grows with what is installed.
+# There are two **system** roles, and that is the whole of what an account is.
+#
+# What somebody may do *inside a project* is not here: it comes from the role
+# their membership of that project carries, and an account with no membership
+# has no standing in any project at all. Keeping the two apart is the point —
+# "Project manager" is something you are in one project, never something you
+# are on the installation.
+#
+# See app/modules/projects/permissions.py for the project roles, and
+# projects/access.py for how the two are read.
 CORE_ROLES: Dict[str, Dict[str, object]] = {
     "admin": {
-        "label": "Admin",
-        "description": "Full access, including people and roles.",
-        "permissions": [USERS_MANAGE, ROLES_MANAGE],
+        "label": "System Administrator",
+        "description": "Runs the installation: accounts, roles, standards and "
+                       "every project.",
+        "permissions": [USERS_MANAGE, USERS_DELETE, ROLES_MANAGE],
         "system": True,
         "locked": [USERS_MANAGE, ROLES_MANAGE],
         "everything": True,          # admin holds whatever exists, module or not
     },
+    # Kept because installations run on it: it builds forms and reads the
+    # standards, and taking that away from the accounts already holding it would
+    # be a surprise rather than a migration. It is **not offered** for a new
+    # assignment — see role_migration.NOT_OFFERED — so the Users page shows the
+    # two roles above and nothing else.
     "editor": {
-        "label": "Editor",
-        "description": "Builds forms and reads every response.",
+        "label": "Editor (legacy)",
+        "description": "Builds forms and reads the standards. Superseded by a "
+                       "project role; kept for accounts already using it.",
         "permissions": [],
         "system": True,
         "locked": [],
     },
-    "field": {
-        "label": "Field officer",
-        "description": "Fills in live forms and reads the records shown to them.",
+    "standard": {
+        "label": "Standard User",
+        "description": "Signs in, and does whatever the projects they belong to "
+                       "allow. No project access on its own.",
         "permissions": [],
         "system": True,
         "locked": [],
@@ -205,6 +227,9 @@ def capabilities(held: Sequence[str]) -> Dict[str, bool]:
     have = set(held or [])
     flags = {
         "manage_users": USERS_MANAGE in have,
+        # Its own flag: editing an account and removing one are different
+        # things, and the Users page offers them separately.
+        "delete_users": USERS_DELETE in have,
         "manage_roles": ROLES_MANAGE in have,
     }
     flags.update({name: key in have for name, key in _capabilities.items()})
