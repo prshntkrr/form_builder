@@ -17,7 +17,7 @@ MODULE = Module(
     routers=[dashboards.router],
     # Add table names here as schema.sql grows. Listing one makes the schema file
     # run on a fresh database and reports it in /api/health when it is absent.
-    tables=[],
+    tables=["dashboard"],
     schema_file=Path(__file__).resolve().parent / "schema.sql",
     migrations=[],
 )
