@@ -72,8 +72,13 @@ for module_router in registry.routers():
 def health():
     db_ok = ping()
     absent = missing_tables() if db_ok else []
+    # A module that could not be imported is skipped so the rest of the
+    # application still serves — but it is still missing. Saying "ok" while
+    # every form screen is gone is the one answer this endpoint must not give.
+    broken = registry.failures()
     return {
-        "status": "ok" if db_ok and not absent else "degraded",
+        "status": "ok" if db_ok and not absent and not broken else "degraded",
+        "modules_failed": broken,
         "database": {
             "connected": db_ok,
             "host": settings.db_host,

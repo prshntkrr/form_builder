@@ -15,7 +15,7 @@ from psycopg2.extras import Json
 from app.core.config import settings
 from app.core.database import transaction
 from app.modules.forms.field_types import FieldValueError, coerce_value, get_type, json_safe
-from app.modules.forms.form_schema import field_name
+from app.modules.forms.form_schema import PARENT_COLUMN, field_name
 from app.modules.forms import conditions
 from app.modules.forms import standardization
 from app.modules.forms import translations
@@ -264,7 +264,15 @@ def submit(
     payload: Dict[str, Any],
     created_by: Optional[str] = None,
     language: Optional[str] = None,
+    parent_survey_id: Optional[str] = None,
 ) -> Dict[str, Any]:
+    """Store one response.
+
+    `parent_survey_id` is only ever a value the caller has already had checked
+    by `relationships.validate_parent` — this writes it, it does not judge it.
+    An independent form is passed None and its table is untouched, exactly as
+    before.
+    """
     form_json = form["form_json"] or {}
     table_name = form_json.get("table_name")
     if not table_name:
@@ -286,21 +294,25 @@ def submit(
 
         survey_id = next_survey_id(cur, form["form_id"], table_name)
 
+        columns = ["survey_id", "form_id", "form_data", "form_version", "created_by"]
+        values = [survey_id, form["form_id"], Json(clean), version,
+                  created_by or settings.default_user]
+
+        # Only a child form has the column, so an independent form's INSERT is
+        # the statement it always was.
+        if parent_survey_id:
+            columns.append(PARENT_COLUMN)
+            values.append(parent_survey_id)
+
         cur.execute(
-            sql.SQL(
-                """
-                INSERT INTO {}.{} (survey_id, form_id, form_data, form_version, created_by)
-                VALUES (%s, %s, %s, %s, %s)
-                RETURNING survey_id, created_on
-                """
-            ).format(sql.Identifier(settings.db_schema), sql.Identifier(table_name)),
-            (
-                survey_id,
-                form["form_id"],
-                Json(clean),
-                version,
-                created_by or settings.default_user,
+            sql.SQL("INSERT INTO {}.{} ({}) VALUES ({}) RETURNING survey_id, created_on")
+            .format(
+                sql.Identifier(settings.db_schema),
+                sql.Identifier(table_name),
+                sql.SQL(", ").join(sql.Identifier(c) for c in columns),
+                sql.SQL(", ").join(sql.Placeholder() * len(columns)),
             ),
+            values,
         )
         row = dict(cur.fetchone())
 
@@ -332,6 +344,7 @@ def submit(
         "form_id": form["form_id"],
         "form_version": version,
         "table_name": table_name,
+        "parent_survey_id": parent_survey_id,
     }
 
 
@@ -380,12 +393,12 @@ def list_submissions(
         cur.execute(
             sql.SQL(
                 """
-                SELECT survey_id, form_data, created_on, form_version, created_by
+                SELECT survey_id, form_data, created_on, form_version, created_by{}
                 FROM {} WHERE form_id = %s
                 ORDER BY created_on DESC, survey_id DESC
                 LIMIT %s OFFSET %s
                 """
-            ).format(qualified),
+            ).format(_parent_select(cur, table_name), qualified),
             (form["form_id"], limit, offset),
         )
         rows = [dict(r) for r in cur.fetchall()]
@@ -421,10 +434,11 @@ def one_submission(form: Dict[str, Any], survey_id: str) -> Optional[Dict[str, A
         cur.execute(
             sql.SQL(
                 """
-                SELECT survey_id, form_data, created_on, form_version, created_by
+                SELECT survey_id, form_data, created_on, form_version, created_by{}
                 FROM {}.{} WHERE form_id = %s AND survey_id = %s
                 """
-            ).format(sql.Identifier(settings.db_schema), sql.Identifier(table_name)),
+            ).format(_parent_select(cur, table_name),
+                     sql.Identifier(settings.db_schema), sql.Identifier(table_name)),
             (form["form_id"], survey_id),
         )
         row = cur.fetchone()
@@ -487,6 +501,23 @@ def answers_for(form_json: Dict[str, Any], form_data: Dict[str, Any]) -> list:
         })
 
     return answers
+
+
+def _parent_select(cur, table_name: str) -> sql.SQL:
+    """`, parent_survey_id` for a child form's table, nothing for any other.
+
+    Read from the table rather than from the definition: a form marked as a
+    child a moment ago and not yet saved would otherwise make every read of it
+    fail on a column that is not there.
+    """
+    from app.modules.forms.form_schema import PARENT_COLUMN
+
+    cur.execute(
+        "SELECT 1 FROM information_schema.columns "
+        "WHERE table_schema = %s AND table_name = %s AND column_name = %s",
+        (settings.db_schema, table_name, PARENT_COLUMN),
+    )
+    return sql.SQL(f", {PARENT_COLUMN}") if cur.fetchone() else sql.SQL("")
 
 
 def _cell(value: Any) -> str:

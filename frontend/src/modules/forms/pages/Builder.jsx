@@ -7,6 +7,7 @@ import { defaultLanguage, languageChoices } from '../translate.js'
 import { applicable } from '../conditions.js'
 import { activeProjectId } from '../../projects/active.js'
 import ConditionEditor from '../components/ConditionEditor.jsx'
+import FormRelationship from '../components/FormRelationship.jsx'
 import FormRenderer from '../components/FormRenderer.jsx'
 import ContributeToLibrary from '../components/ContributeToLibrary.jsx'
 import LibraryPicker from '../components/LibraryPicker.jsx'
@@ -507,6 +508,16 @@ export default function Builder() {
                 />
               </div>
             </div>
+
+            {view === 'questions' && (
+              <div className="editor__relationship">
+                <FormRelationship
+                  form={form}
+                  formId={formId}
+                  onChange={(change) => setForm({ ...form, ...change })}
+                />
+              </div>
+            )}
 
             {!editing && (
               <div className="tabs">

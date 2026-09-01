@@ -8,6 +8,7 @@ from psycopg2 import IntegrityError
 from app.core import auth_service
 from app.modules.forms import form_service
 from app.modules.forms import llm
+from app.modules.forms import relationships
 from app.modules.forms import standard_library
 from app.core.deps import current_user, needs
 from app.modules.forms.permissions import (
@@ -426,6 +427,13 @@ def create(req: CreateFormRequest, user: Dict[str, Any] = Depends(_could_build_s
     """
     _may_build_in(req.project_id, user)
 
+    # A relationship that cannot mean anything is refused before the form is
+    # written: a parent that is missing, in another project, or this form itself.
+    try:
+        relationships.check_configuration(None, req.form_json, req.project_id)
+    except relationships.RelationshipError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
     try:
         made = form_service.create_form(
             req.form_json,
@@ -510,6 +518,22 @@ def detail(form_id: str, user: Dict[str, Any] = Depends(current_user)):
 def update(form_id: str, req: UpdateFormRequest,
            user: Dict[str, Any] = Depends(needs_on_form(FORMS_EDIT, "project.forms.manage"))):
     """Save a revision, moving stored answers for any renamed field."""
+    # The same shape check as on creation, plus one only an existing form can
+    # fail: re-pointing a child form that already has submissions would leave
+    # every one of them pointing into the wrong form's rows.
+    try:
+        project_id = None
+        try:
+            from app.modules.projects import project_service
+            project_id = project_service.project_of_form(form_id)
+        except Exception:
+            project_id = None
+
+        relationships.check_configuration(form_id, req.form_json, project_id)
+        relationships.check_change_is_safe(form_id, req.form_json)
+    except relationships.RelationshipError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+
     try:
         return form_service.update_form(
             form_id,

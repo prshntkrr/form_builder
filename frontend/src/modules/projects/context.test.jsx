@@ -82,6 +82,13 @@ beforeEach(() => {
 afterEach(() => { window.localStorage.clear() })
 
 const draw = (element) => render(<MemoryRouter>{element}</MemoryRouter>)
+
+// The review queue now carries a Form filter, so a form's title appears both as
+// a dropdown option and in the rows. These mean the row.
+const rowWith = (text) =>
+  screen.queryAllByText(text).find((el) => el.closest('tbody'))
+const findRowWith = async (text) =>
+  waitFor(() => { const found = rowWith(text); expect(found).toBeTruthy(); return found })
 const asked = (path) => calls.filter((c) => c.path.startsWith(path))
 const working = (id) => window.localStorage.setItem('ea_active_project', id)
 
@@ -221,10 +228,10 @@ describe('switching context', () => {
     const { default: ProjectSelector } = await import('./components/ProjectSelector.jsx')
     draw(<><ProjectSelector /><Review /></>)
 
-    await screen.findByText('Maize Survey')
+    await findRowWith('Maize Survey')
     await user.selectOptions(screen.getByLabelText('Working in'), 'PRJ2')
 
-    await waitFor(() => expect(screen.queryByText('Maize Survey')).toBeNull())
+    await waitFor(() => expect(rowWith('Maize Survey')).toBeFalsy())
     expect(asked('/projects/PRJ2/submissions').length).toBeGreaterThan(0)
   })
 
@@ -592,7 +599,7 @@ describe('landing and empty states', () => {
     const { default: Review } = await import('./pages/Review.jsx')
     draw(<Review />)
 
-    expect(await screen.findByText('No submissions are currently waiting for review.'))
+    expect(await screen.findByText('No submissions are currently available.'))
       .toBeTruthy()
   })
 
@@ -620,7 +627,7 @@ describe('landing and empty states', () => {
     // Whatever else is on screen, the failure is on it — an empty state in
     // place of an error hides a broken backend behind a reassuring sentence.
     expect(await screen.findByText(/the server said no/)).toBeTruthy()
-    expect(screen.queryByText('No submissions are currently waiting for review.'))
+    expect(screen.queryByText('No submissions are currently available.'))
       .toBeNull()
   })
 
@@ -652,7 +659,7 @@ describe('landing and empty states', () => {
     const { default: Review } = await import('./pages/Review.jsx')
     draw(<Review />)
 
-    await screen.findByText('Maize Survey')
+    await findRowWith('Maize Survey')
     expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Start review' })).toBeNull()
     // She is told why it came back, and can send it again.
@@ -744,7 +751,7 @@ describe('viewing a submission', () => {
     const { default: Review } = await import('./pages/Review.jsx')
     draw(<Review />)
 
-    await screen.findByText('Maize Survey')
+    await findRowWith('Maize Survey')
     await user.click(screen.getByRole('button', { name: by }))
     const panel = await screen.findByRole('dialog', { name: 'Submission' })
     return { user, panel, dialog: within(panel) }
@@ -863,7 +870,7 @@ describe('viewing a submission', () => {
     const { default: Review } = await import('./pages/Review.jsx')
     draw(<Review />)
 
-    await screen.findByText('Maize Survey')
+    await findRowWith('Maize Survey')
     await user.click(screen.getByRole('button', { name: 'Approve' }))
 
     expect(calls.some((c) => c.path === '/submissions/F_A/S1/approve')).toBe(true)
@@ -892,5 +899,178 @@ describe('viewing a submission', () => {
     const { dialog } = await openIt()
 
     expect(await dialog.findByText(/No submission/)).toBeTruthy()
+  })
+})
+
+
+// --------------------------------------------------------------------------- #
+// narrowing the review queue
+//
+// The rule: a filter is a new request, never a pass over the array already on
+// screen. Filtering locally would show ten of sixty matching rows and call it
+// the answer, because the backend had already limited the page.
+// --------------------------------------------------------------------------- #
+describe('filtering the review queue', () => {
+  const REVIEWER = ['project.view', 'project.forms.view_all',
+                    'project.submissions.view_all', 'project.submissions.review']
+
+  const FARMERS = { form_id: 'F_FARM', form_title: '02 Farmers Register',
+                    form_status: 'Active', parent_form_id: null }
+  const PLOTS = { form_id: 'F_PLOT', form_title: '03 Plots Register',
+                  form_status: 'Active', parent_form_id: 'F_FARM' }
+
+  const ROW = (id, form, title, status) => ({
+    form_id: form, form_title: title, survey_id: id, created_by: 'Shrishti',
+    created_on: '2026-09-01', status, reviewed_by: '', rejection_reason: '',
+  })
+
+  beforeEach(() => {
+    responses['/projects/PRJ1'] = asProject(AGRI, REVIEWER)
+    responses['/projects/PRJ1/forms'] = { forms: [FARMERS, PLOTS], everything: true }
+    responses['/projects/PRJ1/submissions'] = {
+      submissions: [ROW('S1', 'F_FARM', '02 Farmers Register', 'submitted'),
+                    ROW('S2', 'F_PLOT', '03 Plots Register', 'approved')],
+      everything: true,
+    }
+    working('PRJ1')
+  })
+
+  async function drawQueue() {
+    const { default: Review } = await import('./pages/Review.jsx')
+    draw(<Review />)
+    return findRowWith('02 Farmers Register')
+  }
+
+  test('the form filter is the project\'s own forms, from the backend', async () => {
+    await drawQueue()
+
+    const chooser = screen.getByRole('combobox', { name: 'Form' })
+    const offered = within(chooser).getAllByRole('option').map((o) => o.textContent)
+
+    expect(offered[0]).toBe('All forms')
+    expect(offered).toContain('02 Farmers Register')
+    expect(asked('/projects/PRJ1/forms').length).toBe(1)
+  })
+
+  test('a child form says whose child it is', async () => {
+    await drawQueue()
+
+    const offered = within(screen.getByRole('combobox', { name: 'Form' }))
+      .getAllByRole('option').map((o) => o.textContent)
+
+    expect(offered).toContain('03 Plots Register (child of 02 Farmers Register)')
+  })
+
+  test('choosing a form asks the backend again, with the parameter', async () => {
+    const user = userEvent.setup()
+    await drawQueue()
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Form' }), 'F_FARM')
+
+    await waitFor(() => expect(
+      calls.some((c) => c.path.includes('form_id=F_FARM'))).toBe(true))
+  })
+
+  test('choosing a status asks the backend again, with the parameter', async () => {
+    const user = userEvent.setup()
+    await drawQueue()
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Status' }), 'approved')
+
+    await waitFor(() => expect(
+      calls.some((c) => c.path.includes('status=approved'))).toBe(true))
+  })
+
+  test('the two travel together', async () => {
+    const user = userEvent.setup()
+    await drawQueue()
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Form' }), 'F_PLOT')
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Status' }), 'submitted')
+
+    await waitFor(() => expect(calls.some(
+      (c) => c.path.includes('form_id=F_PLOT') && c.path.includes('status=submitted'),
+    )).toBe(true))
+  })
+
+  test('the list is whatever came back, not the old one filtered', async () => {
+    const user = userEvent.setup()
+    await drawQueue()
+
+    // The backend's answer for this filter has one row in it.
+    responses['/projects/PRJ1/submissions'] = {
+      submissions: [ROW('S1', 'F_FARM', '02 Farmers Register', 'submitted')],
+      everything: true,
+    }
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Form' }), 'F_FARM')
+
+    await waitFor(() => expect(rowWith('03 Plots Register')).toBeFalsy())
+    expect(rowWith('02 Farmers Register')).toBeTruthy()
+  })
+
+  test('nothing matching says so, and is not the same as nothing at all', async () => {
+    const user = userEvent.setup()
+    await drawQueue()
+
+    responses['/projects/PRJ1/submissions'] = { submissions: [], everything: true }
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Status' }), 'rejected')
+
+    expect(await screen.findByText('No submissions match the selected filters.'))
+      .toBeTruthy()
+  })
+
+  test('an empty project says something else', async () => {
+    responses['/projects/PRJ1/submissions'] = { submissions: [], everything: true }
+    const { default: Review } = await import('./pages/Review.jsx')
+    draw(<Review />)
+
+    expect(await screen.findByText('No submissions are currently available.')).toBeTruthy()
+  })
+
+  test('a failed request is still shown rather than read as empty', async () => {
+    responses['/projects/PRJ1/submissions'] = new Error('the server said no')
+    const { default: Review } = await import('./pages/Review.jsx')
+    draw(<Review />)
+
+    expect(await screen.findByText(/the server said no/)).toBeTruthy()
+    expect(screen.queryByText('No submissions match the selected filters.')).toBeNull()
+  })
+
+  test('switching project resets the form filter and reloads', async () => {
+    const user = userEvent.setup()
+    responses['/projects/PRJ2'] = asProject(HEALTH, REVIEWER)
+    responses['/projects/PRJ2/forms'] = { forms: [], everything: true }
+    responses['/projects/PRJ2/submissions'] = { submissions: [], everything: true }
+
+    const { default: Review } = await import('./pages/Review.jsx')
+    const { default: ProjectSelector } = await import('./components/ProjectSelector.jsx')
+    draw(<><ProjectSelector /><Review /></>)
+
+    await findRowWith('02 Farmers Register')
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Form' }), 'F_FARM')
+    await waitFor(() => expect(
+      calls.some((c) => c.path.includes('form_id=F_FARM'))).toBe(true))
+
+    await user.selectOptions(screen.getByLabelText('Working in'), 'PRJ2')
+
+    // A form id from the project just left must not travel to the new one.
+    await waitFor(() => expect(asked('/projects/PRJ2/submissions').length)
+      .toBeGreaterThan(0))
+    expect(asked('/projects/PRJ2/submissions')
+      .every((c) => !c.path.includes('form_id'))).toBe(true)
+    expect(screen.getByRole('combobox', { name: 'Form' }).value).toBe('')
+  })
+
+  test('the review actions survive a filter', async () => {
+    const user = userEvent.setup()
+    await drawQueue()
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Form' }), 'F_FARM')
+    await findRowWith('02 Farmers Register')
+
+    expect(screen.getAllByRole('button', { name: 'View submission' })[0]).toBeTruthy()
+    await user.click(screen.getAllByRole('button', { name: 'Start review' })[0])
+
+    expect(calls.some((c) => c.path === '/submissions/F_FARM/S1/start-review')).toBe(true)
   })
 })

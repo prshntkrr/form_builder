@@ -25,7 +25,7 @@ from psycopg2 import sql
 
 from app.core import auth_service
 from app.core.database import ping, transaction
-from app.modules.forms import form_service
+from app.modules.forms import form_service, submission_service
 from app.modules.forms.form_schema import normalize_form
 from app.modules.forms.tabular_service import tabular_name
 from app.modules.projects import access, project_service
@@ -914,3 +914,181 @@ def test_an_account_permission_does_not_reach_into_a_project(scene, people):
                  f"/api/forms/{form_id}/submissions",
                  f"/api/forms/{form_id}/versions"):
         assert builder.get(path).status_code == 404, path
+
+
+# --------------------------------------------------------------------------- #
+# narrowing the review queue
+#
+# Two optional filters, both applied in SQL before the row limit. They can only
+# take rows away from what `submission_scope` already allowed: there is no
+# combination of them that returns a submission this account could not have seen
+# without them.
+# --------------------------------------------------------------------------- #
+@pytest.fixture
+def queue(scene, forms):
+    """Two forms in Mexico-Maize, and a spread of statuses across them."""
+    farmers = _form(forms, scene["project"], "Farmers Register")
+    plots = _form(forms, scene["project"], "Plots Register")
+    for form_id in (farmers, plots):
+        project_service.assign_form(form_id, "everyone")
+
+    surveyor = client_for(scene["shrishti"])
+    made = {}
+    for form_id, names in ((farmers, ["A", "B", "C"]), (plots, ["D", "E"])):
+        for name in names:
+            made[name] = (form_id, surveyor.post(
+                f"/api/forms/{form_id}/submissions",
+                json={"data": {"answer": name}}).json()["survey_id"])
+
+    reviewer = client_for(scene["piyush"])
+    reviewer.post(f"/api/submissions/{made['B'][0]}/{made['B'][1]}/approve")
+    reviewer.post(f"/api/submissions/{made['D'][0]}/{made['D'][1]}/start-review")
+
+    return {**scene, "farmers": farmers, "plots": plots, "made": made}
+
+
+def _queue(person, project, **params):
+    answer = client_for(person).get(f"/api/projects/{project}/submissions",
+                                    params=params)
+    assert answer.status_code == 200, answer.text
+    return answer.json()
+
+
+def test_no_filter_returns_everything_the_account_may_read(queue):
+    body = _queue(queue["piyush"], queue["project"])
+
+    mine = [s for s in body["submissions"]
+            if s["form_id"] in (queue["farmers"], queue["plots"])]
+    assert len(mine) == 5
+    assert body["filters"] == {"form_id": None, "status": None}
+
+
+def test_the_form_filter_returns_only_that_form(queue):
+    body = _queue(queue["piyush"], queue["project"], form_id=queue["farmers"])
+
+    assert {s["form_id"] for s in body["submissions"]} == {queue["farmers"]}
+    assert len(body["submissions"]) == 3
+
+
+def test_the_status_filter_returns_only_that_status(queue):
+    for status, expected in (("submitted", 3), ("approved", 1), ("under_review", 1)):
+        body = _queue(queue["piyush"], queue["project"], status=status)
+        mine = [s for s in body["submissions"]
+                if s["form_id"] in (queue["farmers"], queue["plots"])]
+        assert len(mine) == expected, status
+        assert {s["status"] for s in mine} == {status}
+
+
+def test_a_submission_nobody_has_acted_on_counts_as_submitted(queue):
+    """`submission_review` holds a row only once something has happened. Those
+    read as submitted, and filtering on Submitted has to find them."""
+    body = _queue(queue["piyush"], queue["project"], status="submitted",
+                  form_id=queue["farmers"])
+
+    assert len(body["submissions"]) == 2
+
+
+def test_the_two_filters_work_together(queue):
+    body = _queue(queue["piyush"], queue["project"],
+                  form_id=queue["farmers"], status="submitted")
+    assert len(body["submissions"]) == 2
+
+    body = _queue(queue["piyush"], queue["project"],
+                  form_id=queue["farmers"], status="under_review")
+    assert body["submissions"] == []
+    assert body["filters"] == {"form_id": queue["farmers"], "status": "under_review"}
+
+
+def test_filtering_happens_before_the_limit(queue):
+    """The bug this replaces: the status filter used to run after each form's
+    LIMIT, so a queue of sixty submitted rows could show ten."""
+    body = _queue(queue["piyush"], queue["project"],
+                  form_id=queue["farmers"], status="submitted", limit=1)
+
+    assert len(body["submissions"]) == 1
+    assert body["submissions"][0]["status"] == "submitted"
+
+
+def test_a_surveyor_filtering_still_sees_only_their_own(queue, people):
+    """The filter narrows their scope; it does not reach around it."""
+    rekha = people("Rekha")
+    project_service.add_member(queue["project"], rekha["user_id"], _role_id("surveyor"))
+
+    hers = client_for(rekha).post(
+        f"/api/forms/{queue['farmers']}/submissions",
+        json={"data": {"answer": "Rekha's"}}).json()["survey_id"]
+
+    body = _queue(queue["shrishti"], queue["project"], form_id=queue["farmers"])
+
+    assert body["everything"] is False
+    assert hers not in [s["survey_id"] for s in body["submissions"]]
+    assert len(body["submissions"]) == 3          # her own three, and no more
+
+    # And the other way round: Rekha sees hers and none of Shrishti's.
+    body = _queue(rekha, queue["project"], form_id=queue["farmers"])
+    assert [s["survey_id"] for s in body["submissions"]] == [hers]
+
+
+def test_a_reviewer_reads_the_whole_project_filtered(queue):
+    """Unchanged: `submissions.view_all` still means the project's, and the
+    filter only chooses which of them."""
+    body = _queue(queue["piyush"], queue["project"], form_id=queue["plots"])
+
+    assert body["everything"] is True
+    assert len(body["submissions"]) == 2
+    assert {s["created_by"] for s in body["submissions"]} == {
+        auth_service.display_name(queue["shrishti"])}
+
+
+def test_another_projects_form_id_returns_nothing(queue, projects, forms):
+    elsewhere = _project(projects, "VACS")
+    theirs = _form(forms, elsewhere, "Secret Register")
+    submission_service.submit(form_service.get_form(theirs), {"answer": "secret"},
+                              created_by="Somebody")
+
+    body = _queue(queue["piyush"], queue["project"], form_id=theirs)
+
+    assert body["submissions"] == []
+
+
+def test_an_outsider_is_still_refused_whatever_they_filter_by(queue, people):
+    outsider = people("Nobody")
+    api = client_for(outsider)
+
+    for params in ({}, {"form_id": queue["farmers"]}, {"status": "submitted"},
+                   {"form_id": queue["farmers"], "status": "submitted"}):
+        answer = api.get(f"/api/projects/{queue['project']}/submissions", params=params)
+        assert answer.status_code == 404, params
+
+
+def test_the_review_actions_still_work_on_a_filtered_queue(queue):
+    body = _queue(queue["piyush"], queue["project"],
+                  form_id=queue["plots"], status="submitted")
+    row = body["submissions"][0]
+
+    reviewer = client_for(queue["piyush"])
+    base = f"/api/submissions/{row['form_id']}/{row['survey_id']}"
+
+    assert reviewer.post(f"{base}/start-review").json()["status"] == "under_review"
+    assert reviewer.post(f"{base}/approve").json()["status"] == "approved"
+
+    # And it has moved out of the Submitted filter and into Approved.
+    after = _queue(queue["piyush"], queue["project"],
+                   form_id=queue["plots"], status="submitted")
+    assert row["survey_id"] not in [s["survey_id"] for s in after["submissions"]]
+
+
+def test_a_child_form_is_named_as_one_in_the_form_list(queue, forms):
+    """So the filter can say "(child of …)" without asking anything else. The
+    relationship itself is untouched — this only reads what is stored."""
+    child = _form(forms, queue["project"], "Plot Detail")
+    definition = form_service.get_form(child)["form_json"]
+    form_service.update_form(child, {**definition, "relationship": {
+        "type": "child", "parent_form_id": queue["farmers"]}})
+
+    listed = client_for(queue["piyush"]).get(
+        f"/api/projects/{queue['project']}/forms").json()["forms"]
+    by_id = {f["form_id"]: f for f in listed}
+
+    assert by_id[child]["parent_form_id"] == queue["farmers"]
+    assert by_id[queue["farmers"]]["parent_form_id"] is None

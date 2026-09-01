@@ -78,6 +78,14 @@ ENVELOPE_COLUMNS: List[tuple] = [
 ]
 
 
+# A child form's table carries one more envelope column: which submission of
+# its parent form this row belongs to. It is not in ENVELOPE_COLUMNS because
+# only a child form has it — an independent form's table is exactly what it
+# always was — but it is reserved everywhere a field name is, so no answer can
+# ever be stored under it.
+PARENT_COLUMN = "parent_survey_id"
+
+
 class FormSchemaError(ValueError):
     """The definition is unusable even after normalization."""
 
@@ -606,7 +614,62 @@ def normalize_form(raw: Any, fallback_title: str = "Untitled Form") -> Dict[str,
         # Which file and which profile this definition was read from.
         form["import_source"] = imported
 
+    # Absent for an independent form, so a definition saved before this existed
+    # normalizes to exactly the bytes it had before.
+    relationship = _normalize_relationship(raw.get("relationship"))
+    if relationship:
+        form["relationship"] = relationship
+
     return form
+
+
+RELATIONSHIP_TYPES = ("independent", "child")
+
+
+def _normalize_relationship(raw: Any) -> Optional[Dict[str, str]]:
+    """Whether this form's submissions hang off another form's.
+
+        {"type": "child", "parent_form_id": "FRM00001"}
+
+    None for an independent form, which is every form built before this existed
+    and every form nobody has said otherwise about. Stored in the definition
+    beside `rules` and `standard_id` rather than in a table of its own: it is
+    part of what the form *is*, it is versioned with the rest of the definition,
+    and a rollback should take it with everything else.
+
+    Only the shape is checked here. Whether that parent exists, is reachable,
+    and does not close a loop is `forms/relationships.py` — those need the
+    database and the account asking, and normalization has neither.
+    """
+    if not isinstance(raw, dict):
+        return None
+
+    kind = str(raw.get("type") or raw.get("relationship") or "").strip().lower()
+    parent = str(raw.get("parent_form_id") or raw.get("parent") or "").strip()
+
+    if kind != "child" or not parent:
+        # "independent", nothing, or a child with no parent named — all of which
+        # mean the same thing: this form stands on its own.
+        return None
+
+    return {"type": "child", "parent_form_id": parent}
+
+
+def is_child(form_json: Any) -> bool:
+    """Whether this definition says its submissions belong to another form's."""
+    return bool(parent_form_id(form_json))
+
+
+def parent_form_id(form_json: Any) -> Optional[str]:
+    """The form this one's submissions hang off, or None."""
+    if not isinstance(form_json, dict):
+        return None
+    relationship = form_json.get("relationship")
+    if not isinstance(relationship, dict):
+        return None
+    if str(relationship.get("type") or "").lower() != "child":
+        return None
+    return str(relationship.get("parent_form_id") or "").strip() or None
 
 
 def _normalize_languages(raw: Any, translations: Dict[str, Any],

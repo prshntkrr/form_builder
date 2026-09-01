@@ -23,5 +23,6 @@ MODULE = Module(
         bootstrap.ensure_status_values,
         bootstrap.ensure_library_snapshots,
         bootstrap.ensure_relations,
+        bootstrap.ensure_relationship_columns,
     ],
 )

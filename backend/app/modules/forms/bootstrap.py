@@ -171,3 +171,54 @@ def ensure_relations() -> List[str]:
     if linked:
         logger.info("Declared %d missing relationship(s): %s", len(linked), ", ".join(linked))
     return linked
+
+def ensure_relationship_columns() -> int:
+    """Put `forms.form_type` and `forms.parent_id` in step with the definitions.
+
+    Both columns have been on this table since the beginning — the schema
+    constrains `form_type` to ('parent', 'child') and `config_validation`
+    already refuses a child form that names no parent — but nothing wrote them.
+    A form declared a child inside `form_json` left its row saying `parent` with
+    a NULL parent, so the row contradicted the definition and the rule never
+    fired.
+
+    `form_json.relationship` remains the source of truth. This only brings the
+    columns of forms configured before they were written into line, once, and
+    then keeps quiet: `form_service` writes them on every create and update.
+
+    Returns how many rows it corrected, so a startup that changes nothing says
+    nothing.
+    """
+    from app.core.database import transaction
+
+    with transaction() as cur:
+        cur.execute(
+            """
+            UPDATE forms
+               SET form_type = 'child',
+                   parent_id = form_json -> 'relationship' ->> 'parent_form_id'
+             WHERE form_json -> 'relationship' ->> 'type' = 'child'
+               AND form_json -> 'relationship' ->> 'parent_form_id' IN
+                   (SELECT form_id FROM forms)
+               AND (form_type <> 'child'
+                    OR parent_id IS DISTINCT FROM
+                       form_json -> 'relationship' ->> 'parent_form_id')
+            """
+        )
+        corrected = cur.rowcount
+
+        # And the other way: a form that is no longer a child must not keep a
+        # parent on its row.
+        cur.execute(
+            """
+            UPDATE forms
+               SET form_type = 'parent', parent_id = NULL
+             WHERE form_type = 'child'
+               AND COALESCE(form_json -> 'relationship' ->> 'type', '') <> 'child'
+            """
+        )
+        corrected += cur.rowcount
+
+    if corrected:
+        logger.info("Brought %s form row(s) into line with their relationship", corrected)
+    return corrected

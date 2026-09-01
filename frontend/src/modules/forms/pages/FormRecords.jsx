@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import { api } from '../api.js'
+import RelatedSubmissions from '../components/RelatedSubmissions.jsx'
 
 const PAGE = 25
 
@@ -55,12 +56,47 @@ export default function FormRecords() {
   const [data, setData] = useState(null)
   const [page, setPage] = useState(0)
   const [error, setError] = useState('')
+  // Which row's relationships are open. One at a time: the panel is a detail of
+  // a row, not a second table.
+  // `?related=<survey_id>` reopens the panel a child submission came back from,
+  // so adding a plot lands on the farmer it belongs to with the new plot in it.
+  const [related, setRelated] = useState(
+    () => new URLSearchParams(location.search).get('related'))
+  const [links, setLinks] = useState(null)
 
   const load = useCallback(() => {
     api.records(formId, PAGE, page * PAGE).then(setData).catch((e) => setError(e.message))
   }, [formId, page])
 
   useEffect(() => { setData(null); load() }, [load])
+
+  // Whether this form is in a relationship at all. Without this every row would
+  // carry a Related action that opens an empty panel.
+  useEffect(() => {
+    api.formRelationship(formId).then(setLinks).catch(() => setLinks(null))
+  }, [formId])
+
+  const inARelationship = Boolean(links?.is_child || links?.child_forms?.length)
+
+  // Which parent each row on this page belongs to, resolved to something
+  // readable. Only for a child form, and only for the rows on screen — the
+  // backend resolves each one through the configured parent form.
+  const [parents, setParents] = useState({})
+
+  useEffect(() => {
+    if (!links?.is_child || !data?.rows?.length) return setParents({})
+    let cancelled = false
+
+    Promise.all(data.rows.map((row) =>
+      api.parentSubmission(formId, row.survey_id)
+        .then(({ parent }) => [row.survey_id, parent])
+        .catch(() => [row.survey_id, null])))
+      .then((pairs) => {
+        if (!cancelled) setParents(Object.fromEntries(pairs.filter(([, p]) => p)))
+      })
+
+    return () => { cancelled = true }
+  }, [formId, links?.is_child, data?.rows])
 
   if (error) {
     return (
@@ -130,19 +166,40 @@ export default function FormRecords() {
                   <th>When</th>
                   <th>By</th>
                   {data.columns.map((c) => <th key={c.name}>{c.label}</th>)}
+                  {/* Only a child form has one. An independent form's table is
+                      the table it always was. */}
+                  {links?.is_child && <th>Parent</th>}
+                  {inARelationship && <th />}
                 </tr>
               </thead>
               <tbody>
                 {data.rows.map((row) => (
-                  <tr key={row.survey_id}>
-                    <td className="muted">{when(row.created_on)}</td>
-                    <td className="muted">{row.created_by || '—'}</td>
-                    {data.columns.map((c) => (
-                      <td key={c.name} title={String((row.form_data || {})[c.name] ?? '')}>
-                        {cell((row.form_data || {})[c.name])}
-                      </td>
-                    ))}
-                  </tr>
+                  <React.Fragment key={row.survey_id}>
+                    <tr>
+                      <td className="muted">{when(row.created_on)}</td>
+                      <td className="muted">{row.created_by || '—'}</td>
+                      {data.columns.map((c) => (
+                        <td key={c.name} title={String((row.form_data || {})[c.name] ?? '')}>
+                          {cell((row.form_data || {})[c.name])}
+                        </td>
+                      ))}
+                      {links?.is_child && (
+                        <td className="tiny muted">
+                          {parents[row.survey_id]
+                            ? `${parents[row.survey_id].summary || '—'} → ${parents[row.survey_id].survey_id}`
+                            : '—'}
+                        </td>
+                      )}
+                      {inARelationship && (
+                        <td className="cat__actions">
+                          <button className="btn btn--quiet btn--sm"
+                                  onClick={() => setRelated(row.survey_id)}>
+                            Related
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>
@@ -158,6 +215,13 @@ export default function FormRecords() {
             </div>
           )}
         </>
+      )}
+
+      {/* Scoped to one parent submission, and outside the table: the records
+          table stays a records table. */}
+      {related && (
+        <RelatedSubmissions formId={formId} surveyId={related}
+                            onClose={() => { setRelated(null); load() }} />
       )}
     </main>
   )

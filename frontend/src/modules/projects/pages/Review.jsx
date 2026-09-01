@@ -9,6 +9,13 @@ const REVIEW = 'project.submissions.review'
 // of the workflow, so the filter reads like the journey.
 const STATES = ['draft', 'submitted', 'under_review', 'approved', 'rejected']
 
+/** A form's name, saying whose child it is when it is one. */
+function label(form, forms) {
+  if (!form.parent_form_id) return form.form_title
+  const parent = forms.find((f) => f.form_id === form.parent_form_id)
+  return parent ? `${form.form_title} (child of ${parent.form_title})` : form.form_title
+}
+
 const when = (value) =>
   value ? new Date(value).toLocaleString(undefined, {
     day: 'numeric', month: 'short', year: 'numeric',
@@ -44,6 +51,11 @@ function Queue() {
 
   const [rows, setRows] = useState(null)
   const [status, setStatus] = useState('')
+  // Which form the queue is narrowed to, and the project's forms to choose
+  // from. Both live here rather than in the URL because the queue is remounted
+  // per project — see `Review` below — which is what resets them on a switch.
+  const [formId, setFormId] = useState('')
+  const [forms, setForms] = useState([])
   const [error, setError] = useState('')
   const [rejecting, setRejecting] = useState(null)
   const [viewing, setViewing] = useState(null)
@@ -54,7 +66,7 @@ function Queue() {
   const load = () => {
     if (!projectId) return
     setError('')
-    api.projectSubmissions(projectId, { status })
+    api.projectSubmissions(projectId, { status, formId })
       .then(({ submissions }) => setRows(submissions))
       .catch((e) => { setRows([]); setError(e.message) })
   }
@@ -67,7 +79,19 @@ function Queue() {
     setRejecting(null)
     setViewing(null)
     load()
-  }, [projectId, status])
+  }, [projectId, status, formId])
+
+  // The forms to filter by: this project's own, from the project's own
+  // endpoint, which already returns only what this account may see there.
+  useEffect(() => {
+    if (!projectId) return
+    api.projectForms(projectId)
+      // An answer without a forms list leaves the filter empty rather than
+      // taking the queue down with it: the submissions are the page, and the
+      // filter is a convenience over them.
+      .then(({ forms: found }) => setForms(found || []))
+      .catch(() => setForms([]))
+  }, [projectId])
 
   const mayReview = can(REVIEW)
 
@@ -109,6 +133,14 @@ function Queue() {
           </p>
         </div>
         <div className="row">
+          <select className="control control--sm" value={formId}
+                  onChange={(e) => setFormId(e.target.value)} aria-label="Form">
+            <option value="">All forms</option>
+            {forms.map((f) => (
+              <option key={f.form_id} value={f.form_id}>{label(f, forms)}</option>
+            ))}
+          </select>
+
           <select className="control control--sm" value={status}
                   onChange={(e) => setStatus(e.target.value)} aria-label="Status">
             <option value="">Every status</option>
@@ -126,10 +158,10 @@ function Queue() {
           error above says which. This only speaks when the request worked. */}
       {rows?.length === 0 && !error && (
         <p className="muted">
-          {status
-            ? `No submissions are ${WORDING[status].toLowerCase()}.`
+          {status || formId
+            ? 'No submissions match the selected filters.'
             : mayReview
-              ? 'No submissions are currently waiting for review.'
+              ? 'No submissions are currently available.'
               : 'You have not submitted anything in this project yet.'}
         </p>
       )}

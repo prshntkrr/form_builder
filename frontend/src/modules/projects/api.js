@@ -74,8 +74,12 @@ export const api = {
     request(`/forms/${formId}/assignments/${assignmentId}`, { method: 'DELETE' }),
 
   // --- submissions ---
-  projectSubmissions: (projectId, { status, limit } = {}) =>
-    request(`/projects/${projectId}/submissions${q({ status, limit })}`),
+  // `status` and `formId` narrow what the backend already decided this account
+  // may read. Sent as query parameters so the narrowing happens in SQL, before
+  // the row limit — filtering a page of fifty in the browser would show ten of
+  // sixty matching rows and call it the answer.
+  projectSubmissions: (projectId, { status, limit, formId } = {}) =>
+    request(`/projects/${projectId}/submissions${q({ status, limit, form_id: formId })}`),
 
   submissionStatus: (formId, surveyId) => request(`/submissions/${formId}/${surveyId}`),
 

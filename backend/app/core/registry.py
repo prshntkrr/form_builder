@@ -29,7 +29,7 @@ import logging
 import pkgutil
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, List, Optional, Sequence
+from typing import Callable, Dict, List, Optional, Sequence
 
 from app.core.config import settings
 
@@ -121,6 +121,21 @@ def _is_container(path: Path) -> Optional[dict]:
     return {"LEGACY_NAMES": scope.get("LEGACY_NAMES", {})}
 
 
+# Modules that were found on disk, were not switched off, and could not be
+# imported. Read by `failures()` — see the note in `discover`.
+_failed: Dict[str, str] = {}
+
+
+def failures() -> Dict[str, str]:
+    """Modules that should have loaded and did not, with the reason.
+
+    Empty on a healthy installation. Anything in here means part of the
+    application is missing while the rest of it serves.
+    """
+    discover()
+    return dict(_failed)
+
+
 def discover() -> List[Module]:
     """Import every package under app/modules/ and collect their manifests.
 
@@ -153,10 +168,17 @@ def discover() -> List[Module]:
                 continue
             try:
                 mod = importlib.import_module(dotted)
-            except Exception:
+            except Exception as exc:
                 # One broken module must not take the application down with it —
                 # the rest still load, and the traceback says which one to fix.
+                #
+                # But it must not be silent either. Skipping `forms` because one
+                # of its files is missing takes every form screen with it while
+                # the application still answers, and /api/health still said "ok".
+                # Recorded here so health can report it and a deploy can fail on
+                # it rather than leaving a half-application serving.
                 logger.exception("Module %s failed to load", info.name)
+                _failed[info.name] = f"{type(exc).__name__}: {exc}"
                 _loaded.add(info.name)
                 continue
             manifest = getattr(mod, "MODULE", None)

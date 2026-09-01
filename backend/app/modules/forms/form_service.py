@@ -439,6 +439,10 @@ def create_form(
 
     definition = normalize_form(form_json)
 
+    # A form created as a child of another says so on its own row, not only
+    # inside its definition. See `_relationship_columns`.
+    form_type, parent_id = _relationship_columns(definition, form_type, parent_id)
+
     # Precedence: what the request says, then an author the prompt named and the
     # model picked up, then the configured fallback.
     author = (created_by or definition.get("created_by") or settings.default_user)[:50]
@@ -495,6 +499,39 @@ def create_form(
     return result
 
 
+def _relationship_columns(definition: Dict[str, Any],
+                          form_type: str, parent_id: Optional[str],
+                          was: Optional[Dict[str, Any]] = None):
+    """The `forms` row's own view of a parent-child relationship.
+
+    `form_type` and `parent_id` have been on this table since the beginning, and
+    `config_validation` already refuses a child form that names no parent. They
+    were simply never written: a form declared a child in `form_json` left the
+    row saying `parent` with a NULL parent, so the database contradicted the
+    definition and that validation rule never fired.
+
+    `form_json.relationship` stays the source of truth — it is versioned, it
+    rolls back with the rest of the definition, and it is what every read uses.
+    These two columns are kept in step with it so the row can be read on its
+    own, and so the rule that was already written starts doing its job.
+    """
+    from app.modules.forms.form_schema import parent_form_id
+
+    parent = parent_form_id(definition)
+    if parent:
+        return "child", parent
+
+    # No relationship in the new definition. If the old one had one, this edit
+    # removed it and the columns have to be cleared with it — leaving them is
+    # exactly the state this function exists to prevent, in the other direction.
+    if was is not None and parent_form_id(was):
+        return "parent", None
+
+    # Otherwise nothing here is about a relationship at all: an explicit
+    # argument stands, so a caller deriving one form from another is untouched.
+    return form_type, parent_id
+
+
 def update_form(
     form_id: str,
     form_json: Dict[str, Any],
@@ -516,12 +553,19 @@ def update_form(
         if not existing:
             raise FormNotFound(f"Form {form_id} not found")
 
+        form_type, parent_id = _relationship_columns(
+            definition,
+            existing.get("form_type") or "parent",
+            existing.get("parent_id"),
+            was=existing["form_json"] or {},
+        )
+
         _validate_config(
             cur,
             form_json,
             form_id=form_id,
-            form_type=existing.get("form_type") or "parent",
-            parent_id=existing.get("parent_id"),
+            form_type=form_type,
+            parent_id=parent_id,
             status=status or existing.get("form_status") or "Active",
         )
 
@@ -555,6 +599,7 @@ def update_form(
             UPDATE forms
                SET form_title = %s, form_description = %s, form_json = %s,
                    form_status = COALESCE(%s, form_status),
+                   form_type = %s, parent_id = %s,
                    updated_on = CURRENT_TIMESTAMP
              WHERE form_id = %s
             RETURNING *
@@ -564,6 +609,8 @@ def update_form(
                 definition["description"],
                 Json(definition),
                 status,
+                form_type,
+                parent_id,
                 form_id,
             ),
         )

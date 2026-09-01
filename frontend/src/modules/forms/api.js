@@ -294,11 +294,32 @@ export const api = {
   renderForm: (formId, language) =>
     request(`/forms/${formId}/render${language ? `?language=${language}` : ''}`),
 
-  submit: (formId, data, createdBy, language) =>
+  // `parentSurveyId` is which submission of the parent form this one belongs
+  // to, for a child form. Sent as a claim: the backend checks it is a
+  // submission of the configured parent, in the same project, that this account
+  // may read — and refuses the whole submission if it is not.
+  submit: (formId, data, createdBy, language, parentSurveyId) =>
     request(`/forms/${formId}/submissions`, {
       method: 'POST',
-      body: JSON.stringify({ data, created_by: createdBy, language }),
+      body: JSON.stringify({
+        data, created_by: createdBy, language, parent_survey_id: parentSurveyId,
+      }),
     }),
+
+  // --- one form's submissions hanging off another's ---
+  // What this form is attached to, and what is attached to it.
+  formRelationship: (formId) => request(`/forms/${formId}/relationship`),
+
+  // The parent submissions this account may attach a new child to. Narrowed by
+  // the backend to what they could already open.
+  parentOptions: (formId, search = '') =>
+    request(`/forms/${formId}/parent-options${search ? `?q=${encodeURIComponent(search)}` : ''}`),
+
+  childSubmissions: (formId, surveyId) =>
+    request(`/forms/${formId}/records/${encodeURIComponent(surveyId)}/children`),
+
+  parentSubmission: (formId, surveyId) =>
+    request(`/forms/${formId}/records/${encodeURIComponent(surveyId)}/parent`),
 
   listSubmissions: (formId, limit = 50, offset = 0) =>
     request(`/forms/${formId}/submissions?limit=${limit}&offset=${offset}`),

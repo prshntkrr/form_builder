@@ -46,6 +46,42 @@ jobs:
             source venv/bin/activate
             pip install -r requirements.txt
 
+            echo "Checking the new code can actually start..."
+
+            # Before anything destructive. `git pull` can deliver a tree that
+            # does not import — a new module committed without its file is the
+            # usual way, since `git commit -am` stages modified files and not new
+            # ones. Without this the deploy kills a working backend, starts a
+            # broken one, and only then discovers the problem: the failure is
+            # reported correctly and the site is down anyway.
+            #
+            # Importing app.main is not enough on its own: a module that fails
+            # to import is skipped so the rest of the application still serves,
+            # so `import app.main` succeeds with the whole forms module missing.
+            # `registry.failures()` is what says so. It touches no data — the
+            # database work happens in the lifespan handler, which only runs
+            # when uvicorn serves.
+            if ! python - > /tmp/eagrology_import.log 2>&1 <<'PREFLIGHT'
+            import sys
+            import app.main  # noqa: F401  (registers every module)
+            from app.core import registry
+
+            broken = registry.failures()
+            if broken:
+                for name, why in broken.items():
+                    print(f"{name}: {why}")
+                sys.exit(1)
+            print("modules loaded:", ", ".join(m.name for m in registry.modules()))
+            PREFLIGHT
+            then
+                echo "The new code does not load cleanly. Nothing has been changed —"
+                echo "the running backend is untouched and still serving."
+                echo ""
+                tail -30 /tmp/eagrology_import.log
+                exit 1
+            fi
+            cat /tmp/eagrology_import.log
+
             echo "Importing standards (SEOnt, ICASA)..."
 
             # Every import below is idempotent — SEOnt matches concepts on their

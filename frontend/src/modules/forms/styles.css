@@ -349,3 +349,17 @@
   .inspector { border-left: 0; border-top: 1px solid var(--line); }
   .inspector__body { overflow: visible; padding-bottom: 24px; }
 }
+
+/* One form's submissions hanging off another's. */
+.rel { display: flex; flex-direction: column; gap: 6px; padding: 14px 0 4px; }
+.rel__choice { display: flex; align-items: baseline; gap: 8px; font-size: 13.5px; }
+.rel__choice input { margin: 0; flex: none; }
+.rel__parent { margin: 6px 0 0 24px; max-width: 420px; }
+.editor__relationship { padding: 0 22px 10px; border-bottom: 1px solid var(--line); }
+
+.related { display: flex; flex-direction: column; gap: 16px; padding: 12px 4px; }
+.related__parent, .related__child { display: flex; flex-direction: column; gap: 6px; }
+.related__parent {
+  padding: 10px 12px; background: var(--paper);
+  border: 1px solid var(--line); border-radius: var(--r);
+}

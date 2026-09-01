@@ -303,7 +303,11 @@ def forms(project_id: str,
         SELECT f.form_id, f.form_title, f.form_description, f.form_status,
                f.updated_on,
                (SELECT COUNT(*) FROM form_assignment a
-                WHERE a.form_id = f.form_id) AS assignment_count
+                WHERE a.form_id = f.form_id) AS assignment_count,
+               -- Read from the definition where the relationship already lives.
+               -- Nothing here configures one; a screen listing forms just needs
+               -- to be able to say which are children of which.
+               f.form_json -> 'relationship' ->> 'parent_form_id' AS parent_form_id
         FROM   forms f
     """
 

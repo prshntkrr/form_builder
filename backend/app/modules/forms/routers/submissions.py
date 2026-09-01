@@ -210,11 +210,23 @@ def render(
 @router.post("/{form_id}/submissions", status_code=201)
 def create_submission(form_id: str, req: SubmitRequest, user: Dict[str, Any] = Depends(needs(RECORDS_CREATE))):
     form = _load(form_id, user, filling=True)
+
+    # Whether this form is a child, and whether the submission named is one this
+    # account may attach to. Everything the caller sent is a claim until this
+    # returns.
+    from app.modules.forms import relationships
+    try:
+        parent = relationships.validate_parent(user, form, req.parent_survey_id)
+    except relationships.RelationshipError as exc:
+        raise HTTPException(status_code=422,
+                            detail={"errors": {"parent_survey_id": str(exc)}})
+
     try:
         return submission_service.submit(
             form, req.data,
             created_by=auth_service.display_name(user),
             language=req.language,
+            parent_survey_id=parent,
         )
     except submission_service.ValidationFailed as exc:
         raise HTTPException(status_code=422, detail={"errors": exc.errors})
@@ -356,3 +368,114 @@ def export(
         media_type="text/csv",
         headers={"Content-Disposition": f'attachment; filename="{table}.csv"'},
     )
+
+
+# --------------------------------------------------------------------------- #
+# one form's submissions hanging off another's
+#
+# Four reads, and not one of them is a way past anything. Each loads its form
+# through `_load`, which applies project isolation exactly as every other route
+# here does, and then narrows what it returns by the same submission scope the
+# review queue uses. A relationship never widens a permission.
+# --------------------------------------------------------------------------- #
+@router.get("/{form_id}/relationship")
+def relationship(form_id: str, user: Dict[str, Any] = Depends(needs(RECORDS_VIEW))):
+    """What this form is attached to, and what is attached to it.
+
+    What the builder and the record screens both need in order to show anything
+    about relationships: the parent form, if this is a child, and the child
+    forms configured beneath it.
+    """
+    from app.modules.forms import relationships as rel
+
+    form = _load(form_id, user)
+    parent_id = rel.parent_form_id(form["form_json"] or {})
+
+    parent = None
+    if parent_id:
+        try:
+            found = form_service.get_form(parent_id)
+            parent = {"form_id": parent_id, "form_title": found["form_title"]}
+        except form_service.FormNotFound:
+            parent = {"form_id": parent_id, "form_title": "(no longer available)"}
+
+    # Only the children this account can actually reach. A child form in a
+    # project they are not in is not theirs to know about.
+    children = [
+        child for child in rel.child_forms(form_id)
+        if _may_reach(user, child["form_id"])
+    ]
+
+    return {
+        "form_id": form_id,
+        "is_child": bool(parent_id),
+        "parent_form": parent,
+        "child_forms": children,
+    }
+
+
+def _may_reach(user: Dict[str, Any], form_id: str) -> bool:
+    """Whether this account may see one form at all — the existing check."""
+    try:
+        from app.modules.projects import access
+    except Exception:
+        return True
+    return access.may_see_form(user, form_id)
+
+
+@router.get("/{form_id}/parent-options")
+def parent_options(
+    form_id: str,
+    q: str = Query("", description="Narrow the list"),
+    limit: int = Query(50, ge=1, le=200),
+    user: Dict[str, Any] = Depends(needs(RECORDS_CREATE)),
+):
+    """The parent submissions this account may attach a new child to.
+
+    A person filling a child form never types a `parent_survey_id`; they pick
+    one from here, and the list is narrowed on this side. Somebody who may only
+    read their own submissions is offered only their own.
+    """
+    from app.modules.forms import relationships as rel
+
+    _load(form_id, user, filling=True)
+
+    try:
+        return rel.parents_for(user, form_id, search=q, limit=limit)
+    except rel.RelationshipError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.get("/{form_id}/records/{survey_id}/children")
+def child_submissions(form_id: str, survey_id: str,
+                      user: Dict[str, Any] = Depends(needs(RECORDS_VIEW))):
+    """What hangs off one submission, per child form.
+
+    The parent is loaded through the usual guard first; each child form's rows
+    are then filtered by that form's own scope, so a parent is not a way to read
+    a colleague's answers.
+    """
+    from app.modules.forms import relationships as rel
+
+    _load(form_id, user)
+    return {"survey_id": survey_id,
+            "children": rel.children_of(user, form_id, survey_id)}
+
+
+@router.get("/{form_id}/records/{survey_id}/parent")
+def parent_submission(form_id: str, survey_id: str,
+                      user: Dict[str, Any] = Depends(needs(RECORDS_VIEW))):
+    """Which submission this one belongs to, if any.
+
+    Says what the parent is; opening it goes through the parent form's own
+    routes, which authorize it the way they always have. Naming a parent is not
+    permission to read it.
+    """
+    from app.modules.forms import relationships as rel
+
+    _load(form_id, user)
+    found = rel.parent_of(form_id, survey_id)
+    if found is None:
+        return {"parent": None}
+
+    return {"parent": {**found, "may_open": _may_reach(user, found["form_id"])}}

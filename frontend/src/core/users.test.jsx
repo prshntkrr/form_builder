@@ -187,6 +187,7 @@ describe('deleting an account', () => {
     // The first row is the signed-in account, whose Deactivate is disabled —
     // you cannot switch yourself off.
     const buttons = screen.getAllByRole('button', { name: 'Deactivate' })
+    console.log('DEACTIVATE BUTTONS', buttons.map((b) => [b.textContent, b.disabled]))
     await user.click(buttons.find((b) => !b.disabled))
 
     // Reversible, and it removes nothing — a different call from Delete.

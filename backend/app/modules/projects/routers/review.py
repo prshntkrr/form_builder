@@ -216,6 +216,7 @@ queue_router = APIRouter(prefix="/api/projects", tags=["submission review"])
 def project_submissions(
     project_id: str,
     status: Optional[str] = Query(None, description="Only submissions in this state"),
+    form_id: Optional[str] = Query(None, description="Only submissions of this form"),
     limit: int = Query(50, ge=1, le=500),
     user: Dict[str, Any] = Depends(current_user),
 ):
@@ -224,6 +225,13 @@ def project_submissions(
     Somebody holding `submissions.view_all` sees the project's submissions;
     anybody else sees the ones they made themselves. `everything` says which of
     the two answers this is, so a screen can word itself honestly.
+
+    `form_id` and `status` narrow that answer and can never widen it. Both are
+    applied in SQL, before the row limit — a status filter applied afterwards
+    would take fifty rows and then throw most of them away, so a queue with
+    sixty submitted responses would show ten. And `form_id` is matched inside
+    this project's own forms, so an id from another project simply selects
+    nothing.
     """
     from app.modules.forms import form_service
     from app.modules.forms.table_service import table_exists
@@ -240,10 +248,14 @@ def project_submissions(
     author = auth_service.display_name(user)
 
     with transaction() as cur:
+        # The form filter is a WHERE on *this project's* forms. That is the whole
+        # of its cross-project isolation: another project's id matches no row
+        # here, so the answer is empty rather than somebody else's data.
         cur.execute(
             "SELECT form_id, form_title, form_json FROM forms "
-            "WHERE project_id = %s AND form_status <> 'Deleted'",
-            (project_id,),
+            "WHERE project_id = %s AND form_status <> 'Deleted'"
+            + (" AND form_id = %s" if form_id else ""),
+            (project_id, form_id) if form_id else (project_id,),
         )
         forms = [dict(row) for row in cur.fetchall()]
 
@@ -257,23 +269,44 @@ def project_submissions(
             if not table_exists(cur, table):
                 continue
 
+            # `submission_review` holds a row only once something has happened
+            # to a submission; one collected before that existed, or never acted
+            # on, reads as `submitted`. COALESCE says so in the query, so
+            # filtering on "Submitted" finds those too.
+            clauses = ["t.form_id = %s"]
+            values: list = [form["form_id"]]
+
+            if not everything:
+                clauses.append("t.created_by = %s")
+                values.append(author)
+
+            if status:
+                clauses.append("COALESCE(r.status, %s) = %s")
+                values.extend([submission_workflow.DEFAULT_STATUS, status])
+
+            values.append(limit)
+
             query = sql.SQL(
-                "SELECT survey_id, created_on, created_by FROM {} {} "
-                "ORDER BY created_on DESC LIMIT %s"
+                "SELECT t.survey_id, t.created_on, t.created_by "
+                "FROM {} t "
+                "LEFT JOIN submission_review r "
+                "       ON r.form_id = t.form_id AND r.survey_id = t.survey_id "
+                "WHERE {} "
+                "ORDER BY t.created_on DESC LIMIT %s"
             ).format(
                 sql.Identifier(table),
-                sql.SQL("" if everything else "WHERE created_by = %s"),
+                sql.SQL(" AND ").join(sql.SQL(c) for c in clauses),
             )
-            cur.execute(query, ((limit,) if everything else (author, limit)))
+            cur.execute(query, values)
             found = [dict(r) for r in cur.fetchall()]
 
         states = submission_workflow.statuses_for(
             form["form_id"], [r["survey_id"] for r in found])
 
         for row in found:
+            # The state is read for its reviewer and its rejection reason; the
+            # filtering already happened in SQL above.
             state = states.get(row["survey_id"]) or {}
-            if status and state.get("status") != status:
-                continue
             rows.append({
                 "form_id": form["form_id"],
                 "form_title": form["form_title"],
@@ -286,4 +319,10 @@ def project_submissions(
             })
 
     rows.sort(key=lambda r: r["created_on"] or "", reverse=True)
-    return {"submissions": rows[:limit], "everything": everything}
+    return {
+        "submissions": rows[:limit],
+        "everything": everything,
+        # What was actually applied, so a screen can tell "nothing here" from
+        # "nothing matches what you chose".
+        "filters": {"form_id": form_id or None, "status": status or None},
+    }

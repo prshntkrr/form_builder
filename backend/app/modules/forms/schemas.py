@@ -98,6 +98,11 @@ class SubmitRequest(BaseModel):
     created_by: Optional[str] = None
     # Which language the form was filled in, so errors come back in it.
     language: Optional[str] = None
+    # Which submission of the parent form this one belongs to, for a child form.
+    # A claim, not a fact: `relationships.validate_parent` decides whether it is
+    # a submission of the right form, in the right project, that this account may
+    # read. Ignored — and refused — on a form that is not a child.
+    parent_survey_id: Optional[str] = None
 
 
 class DictionaryEntryRequest(BaseModel):
