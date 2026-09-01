@@ -3,3 +3,331 @@
  * The shared design system — buttons, cards, layout, the sidebar frame — lives
  * in core/styles.css. Never edit that file for something only this module
  * needs; add it here and prefix the class with the module (`.dash__…`). */
+
+.dash__source-picker {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.dash__field-box {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 10px;
+  margin-top: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--card);
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.dash__field-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--accent-wash);
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.2;
+  font-family: monospace;
+  white-space: nowrap;
+}
+
+.dash__prompt {
+  width: 100%;
+  min-height: 140px;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+
+.dash__widget-card {
+  overflow: hidden;
+  height: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+.react-grid-item {
+  box-sizing: border-box;
+}
+
+.react-grid-item.react-grid-placeholder {
+  border-radius: var(--r);
+  opacity: 0.25;
+}
+
+.react-grid-item > .react-resizable-handle {
+  opacity: 0;
+}
+
+.react-grid-item:hover
+  > .react-resizable-handle {
+  opacity: 1;
+}
+
+.dash__widget {
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.dash__widget .recharts-responsive-container {
+  min-width: 0;
+}
+
+.dash__widget > .recharts-responsive-container {
+  width: 100% !important;
+}
+
+.dash__widget h3 {
+  margin: 0 0 12px;
+  font-size: 15px;
+  color: var(--ink);
+}
+
+.dash__table-wrap {
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+
+.dash__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.dash__table th,
+.dash__table td {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.dash__table th {
+  background: var(--accent-wash);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.dash__table tr:last-child td {
+  border-bottom: none;
+}
+
+.dash__kpi {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.dash__kpi-value {
+  margin-top: 8px;
+  font-size: 36px;
+  line-height: 1;
+  font-weight: 700;
+  color: var(--accent-deep);
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dash__widget-data {
+  margin-top: 12px;
+  padding: 12px;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--paper);
+  font-size: 12px;
+}
+
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.modal {
+  width: min(420px, calc(100vw - 32px));
+  padding: 24px;
+
+  background: #ffffff;
+  color: #111827;
+
+  border: 1px solid #d1d5db;
+  border-radius: 12px;
+
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
+}
+
+.modal h2 {
+  margin: 0 0 8px;
+}
+
+.modal input {
+  width: 100%;
+  box-sizing: border-box;
+
+  margin-top: 16px;
+  padding: 10px 12px;
+
+  background: #ffffff;
+  color: #111827;
+
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+
+  font: inherit;
+}
+
+.dash__edit-panel {
+  margin-top: 20px;
+  padding: 20px;
+
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+
+  background: var(--paper);
+}
+
+.dash__edit-panel h3 {
+  margin: 0 0 16px;
+
+  font-size: 16px;
+  color: var(--ink);
+}
+
+.dash__edit-label {
+  display: block;
+  margin-bottom: 8px;
+
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.dash__widget-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  width: 100%;
+}
+
+.dash__widget-header h3 {
+  min-width: 0;
+  flex: 1 1 auto;
+  margin: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.row1{
+  display: flex;
+  align-items: center; 
+  gap: 4px; 
+  flex-wrap: wrap;
+}
+
+.btn1{
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  padding: 7px 5px; border-radius: var(--r-sm);
+  border: 1px solid var(--line-2); background: var(--card); color: var(--ink);
+  font: inherit; font-weight: 550; font-size: 14px; cursor: pointer;
+  transition: background .12s, border-color .12s, transform .06s;
+  white-space: nowrap;
+}
+
+@media (max-width: 767px) {
+  .dash__widget-card {
+    min-width: 0;
+  }
+
+  .dash__widget {
+    min-width: 0;
+  }
+
+  .dash__widget-header {
+    align-items: flex-start;
+  }
+
+  .row1 {
+    flex-shrink: 0;
+  }
+}
+
+.dash__chart-area {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+  height: 0;
+  overflow: hidden;
+}
+
+.dash__chart-area .recharts-responsive-container {
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 0;
+  min-height: 0;
+}
+
+
+.dash__dashboard {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.dash__grid-wrapper {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  /* Prevent a horizontal scrollbar from appearing during drag-animation
+     frames when an item briefly exceeds the container bounds in pixels. */
+  overflow-x: hidden;
+}
+
+.dash__widget-grid {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.main--dashboard {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  box-sizing: border-box;
+}
