@@ -129,7 +129,7 @@ def catalog_values(
     if catalog is None:
         raise HTTPException(
             status_code=404,
-            detail=f"No client catalog '{catalog_id}'",
+            detail=f"No CIMMYT Catalogue '{catalog_id}'",
         )
 
     return {
@@ -163,7 +163,7 @@ def catalog_options(
     if get_catalog(catalog_id) is None:
         raise HTTPException(
             status_code=404,
-            detail=f"No client catalog '{catalog_id}'",
+            detail=f"No CIMMYT Catalogue '{catalog_id}'",
         )
 
     return catalog_options_service.options_for(

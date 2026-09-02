@@ -633,8 +633,12 @@ table.data td { max-width: 240px; overflow: hidden; text-overflow: ellipsis; whi
 .diff__version--live { font-weight: 550; }
 
 /* ══ sticky save bar ══════════════════════════════════════════════════════ */
+/* The foot of the form, in the flow with everything above it.
+   Deliberately not sticky: it is the end of the questions, not a toolbar, and
+   it appears when the form does. The blur stays because it still sits over the
+   page background. */
 .savebar {
-  position: sticky; bottom: 0; z-index: 5;
+  position: static;
   display: flex; align-items: center; gap: 14px;
   padding: 13px 26px; margin-top: 22px;
   background: rgba(250, 249, 246, .93); backdrop-filter: blur(10px);

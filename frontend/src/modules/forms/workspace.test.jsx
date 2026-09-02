@@ -152,8 +152,100 @@ describe('the two panes scroll on their own', () => {
 })
 
 describe('the bottom actions', () => {
-  test('the save bar sticks to the foot of whatever scrolls it', () => {
-    expect(winner(['savebar'], 'position')).toBe('sticky')
-    expect(winner(['savebar'], 'bottom')).toBe('0')
+  test('the save bar is the end of the form, not a fixture of the window', () => {
+    // It used to stick to the foot of the scroller. It is now in the flow: you
+    // reach it by reaching the end of the questions.
+    expect(winner(['savebar'], 'position')).toBe('static')
+    expect(winner(['savebar'], 'bottom')).toBe(null)
+  })
+})
+
+// --------------------------------------------------------------------------- #
+// the action bar at the foot of the form
+//
+// In the flow, not pinned: it is the end of the questions rather than a
+// toolbar, so a long form has to be scrolled to the bottom to reach it.
+// --------------------------------------------------------------------------- #
+describe('the builder action bar', () => {
+  const read = (path) => require('node:fs').readFileSync(path, 'utf8')
+
+  test('nothing holds it against the viewport', () => {
+    const core = read('src/core/styles.css')
+    const rule = core.slice(core.indexOf('.savebar {'))
+    const own = rule.slice(0, rule.indexOf('}'))
+
+    expect(own).toContain('position: static')
+    expect(own).not.toContain('sticky')
+    expect(own).not.toContain('fixed')
+    // Nothing to raise it above the page either — it is part of the page.
+    expect(own).not.toContain('z-index')
+  })
+
+  test('no other rule pins it back', () => {
+    for (const path of ['src/core/styles.css', 'src/modules/forms/styles.css']) {
+      const text = read(path)
+      for (const match of text.matchAll(/\.savebar[^{]*\{([^}]*)\}/g)) {
+        expect(match[1]).not.toMatch(/position:\s*(sticky|fixed)/)
+      }
+    }
+  })
+
+  test('there is exactly one of it', () => {
+    const builder = read('src/modules/forms/pages/Builder.jsx')
+    expect(builder.split('className="savebar"').length - 1).toBe(1)
+  })
+
+  test('it comes after every question and everything below them', () => {
+    const builder = read('src/modules/forms/pages/Builder.jsx')
+
+    const questions = builder.indexOf('view === \'questions\'')
+    const bar = builder.indexOf('className="savebar"')
+    const inspector = builder.indexOf('className="inspector"')
+
+    // Inside the form's own column, after its content, before the inspector.
+    expect(questions).toBeLessThan(bar)
+    expect(bar).toBeLessThan(inspector)
+  })
+
+  test('the column it lives in is the one that scrolls', () => {
+    const forms = read('src/modules/forms/styles.css')
+    const pane = forms.slice(forms.indexOf('.workspace__main {'))
+    const own = pane.slice(0, pane.indexOf('}'))
+
+    // One scroller: the bar scrolls with the questions because it is in here.
+    expect(own).toContain('overflow-y: auto')
+    expect(own).toContain('min-height: 0')
+  })
+
+  test('there is room under it at the end of a long form', () => {
+    const forms = read('src/modules/forms/styles.css')
+    const pane = forms.slice(forms.indexOf('.workspace__main {'))
+    const own = pane.slice(0, pane.indexOf('}'))
+
+    const padding = own.match(/padding:\s*([^;]+);/)[1].trim().split(/\s+/)
+    expect(Number(padding[2].replace('px', ''))).toBeGreaterThanOrEqual(32)
+  })
+
+  test('the inspector and the sidebar still scroll on their own', () => {
+    const forms = read('src/modules/forms/styles.css')
+    const body = forms.slice(forms.indexOf('.inspector__body {'))
+    expect(body.slice(0, body.indexOf('}'))).toContain('overflow-y: auto')
+
+    const core = read('src/core/styles.css')
+    const list = core.slice(core.indexOf('.side__forms {'))
+    expect(list.slice(0, list.indexOf('}'))).toContain('overflow-y: auto')
+  })
+
+  test('every button it had is still on it', () => {
+    const builder = read('src/modules/forms/pages/Builder.jsx')
+    const start = builder.indexOf('className="savebar"')
+    const bar = builder.slice(start, start + 4000)
+
+    for (const label of ['Add to library', 'Check responses', 'Back to draft',
+                         'Save changes']) {
+      expect(bar).toContain(label)
+    }
+    // And the count that leads it.
+    expect(bar).toContain('question{form.fields.length === 1')
   })
 })

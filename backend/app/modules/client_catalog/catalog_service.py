@@ -114,7 +114,7 @@ def get(catalog_id: str) -> Dict[str, Any]:
     """One catalogue with its values. Raises CatalogNotFound."""
     catalog = get_catalog(catalog_id)
     if catalog is None:
-        raise CatalogNotFound(f"No client catalog '{catalog_id}'")
+        raise CatalogNotFound(f"No CIMMYT Catalogue '{catalog_id}'")
 
     with transaction() as cur:
         cur.execute(
@@ -218,7 +218,7 @@ def update_catalog(catalog_id: str, changes: Dict[str, Any]) -> Dict[str, Any]:
     field that names this catalogue, silently, at render time.
     """
     if get_catalog(catalog_id) is None:
-        raise CatalogNotFound(f"No client catalog '{catalog_id}'")
+        raise CatalogNotFound(f"No CIMMYT Catalogue '{catalog_id}'")
 
     sets: list = []
     params: list = []
@@ -368,7 +368,7 @@ def add_value(
 
     with transaction() as cur:
         if get_catalog(catalog_id) is None:
-            raise CatalogNotFound(f"No client catalog '{catalog_id}'")
+            raise CatalogNotFound(f"No CIMMYT Catalogue '{catalog_id}'")
 
         cur.execute(
             "SELECT 1 FROM client_catalog_value WHERE catalog_id = %s AND code = %s",
@@ -425,7 +425,7 @@ def update_value(catalog_id: str, code: str, changes: Dict[str, Any]) -> Dict[st
     with transaction() as cur:
         catalog = get_catalog(catalog_id)
         if catalog is None:
-            raise CatalogNotFound(f"No client catalog '{catalog_id}'")
+            raise CatalogNotFound(f"No CIMMYT Catalogue '{catalog_id}'")
 
         cur.execute(
             "SELECT status, parent_code FROM client_catalog_value "

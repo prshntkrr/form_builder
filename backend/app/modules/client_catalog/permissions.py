@@ -9,18 +9,18 @@ register(
     permissions=[
         Permission(
             CATALOG_VIEW,
-            "Use client catalogs",
-            "View client-controlled catalog values",
-            "Client catalogs",
+            "Use CIMMYT Catalogue",
+            "View the values in the CIMMYT Catalogue",
+            "CIMMYT Catalogue",
         ),
         Permission(
             CATALOG_MANAGE,
-            "Manage client catalogs",
+            "Manage CIMMYT Catalogue",
             "Import and update client-controlled catalogs",
-            "Client catalogs",
+            "CIMMYT Catalogue",
         ),
     ],
-    groups=["Client catalogs"],
+    groups=["CIMMYT Catalogue"],
     grants={
         "editor": [CATALOG_VIEW],
     },

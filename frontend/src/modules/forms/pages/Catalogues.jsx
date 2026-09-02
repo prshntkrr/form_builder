@@ -64,10 +64,10 @@ export default function Catalogues() {
     <div className="page">
       <div className="page-head">
         <div>
-          <h1>Catalogue builder</h1>
+          <h1>Catalogue</h1>
           <p className="lede">
-            The controlled lists this client maintains. A form points at a
-            catalogue rather than copying it, so correcting a list here corrects
+            The controlled lists CIMMYT maintains. A form points at a CIMMYT
+            Catalogue rather than copying it, so correcting a list here corrects
             every form that uses it.
           </p>
         </div>
@@ -90,7 +90,7 @@ export default function Catalogues() {
 
       <input
         className="control"
-        placeholder="Search catalogues…"
+        placeholder="Search Catalogue…"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         style={{ maxWidth: 360, marginBottom: 16 }}
@@ -101,8 +101,8 @@ export default function Catalogues() {
       {catalogues?.length === 0 && (
         <p className="muted">
           {search
-            ? 'No catalogue matches that.'
-            : 'No catalogues yet. Create one, or import the client’s workbook.'}
+            ? 'No Catalogue matches that.'
+            : 'No Catalogue yet. Create one, or import CIMMYT’s workbook.'}
         </p>
       )}
 
@@ -219,7 +219,7 @@ function CatalogueForm({ catalogue, catalogues, onClose, onSaved }) {
       <div className="sheet__panel" role="dialog" aria-modal="true"
            onMouseDown={(e) => e.stopPropagation()}>
         <div className="sheet__head">
-          <h2>{existing ? 'Edit catalogue' : 'Create catalogue'}</h2>
+          <h2>{existing ? 'Edit Catalogue' : 'Create Catalogue'}</h2>
         </div>
 
         <div className="sheet__body">
@@ -270,7 +270,7 @@ function CatalogueForm({ catalogue, catalogues, onClose, onSaved }) {
           </div>
 
           <label className="cat__field">
-            <span className="minilabel">Parent catalogue</span>
+            <span className="minilabel">Parent Catalogue</span>
             <select
               className="control"
               value={draft.parent_catalog_id || ''}
@@ -304,7 +304,7 @@ function CatalogueForm({ catalogue, catalogues, onClose, onSaved }) {
           <button className="btn btn--quiet" onClick={onClose}>Cancel</button>
           <button className="btn btn--primary" onClick={save} disabled={busy}>
             {busy && <span className="spin" />}
-            {existing ? 'Save changes' : 'Create catalogue'}
+            {existing ? 'Save changes' : 'Create Catalogue'}
           </button>
         </div>
       </div>

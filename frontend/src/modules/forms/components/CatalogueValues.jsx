@@ -65,7 +65,7 @@ export default function CatalogueValues({ catalog, allowed, onChange }) {
       <label className="vals__choice">
         <input type="radio" name={`catalogue-values-${catalog}`}
                checked={!some} onChange={() => onChange([])} />
-        <span>All catalogue values</span>
+        <span>All CIMMYT Catalogue values</span>
       </label>
 
       <label className="vals__choice">
@@ -87,8 +87,8 @@ export default function CatalogueValues({ catalog, allowed, onChange }) {
             className="control control--sm"
             type="search"
             value={term}
-            placeholder="Search catalogue values…"
-            aria-label="Search catalogue values"
+            placeholder="Search CIMMYT Catalogue values…"
+            aria-label="Search CIMMYT Catalogue values"
             onChange={(e) => setTerm(e.target.value)}
           />
 

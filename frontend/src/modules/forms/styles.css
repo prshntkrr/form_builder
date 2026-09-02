@@ -309,7 +309,9 @@
    `overflow-y: auto` on something that never shrinks never scrolls. */
 .workspace__main {
   min-width: 0; min-height: 0; overflow-y: auto;
-  padding: 30px 28px 24px;
+  /* Room under the action bar, which is the last thing in this column: scrolled
+     to the end, it should sit clear of the pane's edge rather than against it. */
+  padding: 30px 28px 40px;
 }
 
 .inspector {
@@ -345,7 +347,7 @@
 @media (max-width: 1180px) {
   .main.main--builder { height: auto; overflow: visible; }
   .workspace { grid-template-columns: 1fr; height: auto; }
-  .workspace__main { overflow: visible; padding: 24px 18px 20px; }
+  .workspace__main { overflow: visible; padding: 24px 18px 36px; }
   .inspector { border-left: 0; border-top: 1px solid var(--line); }
   .inspector__body { overflow: visible; padding-bottom: 24px; }
 }

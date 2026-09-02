@@ -73,9 +73,11 @@ export const api = {
 
   loadedCropOntologies: () => request('/crop-ontology'),
 
-  // --- client catalogs ---
-  // The client's own controlled lists. Their codes and their wording; nothing
-  // here supplies a value the client did not.
+  // --- CIMMYT catalogues ---
+  // CIMMYT's own controlled lists. Their codes and their wording; nothing here
+  // supplies a value they did not.
+  // The route keeps its original path: renaming an API for a wording change
+  // would break every form already pointing at it.
   // `language` changes the wording only — the value is the client's code in
   // every language, because that is what an answer stores.
   // `allowed` narrows to the codes one field offers, for a form that uses part

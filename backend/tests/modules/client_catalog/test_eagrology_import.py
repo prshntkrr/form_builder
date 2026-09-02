@@ -252,15 +252,54 @@ def test_a_missing_translation_falls_back_to_the_label(imported):
     assert english["Otro"] == "Otro"
 
 
-def test_an_unknown_language_falls_back(imported):
+def test_an_unknown_language_falls_back_to_english(imported):
+    """German was never supplied, so the reader gets the default language rather
+    than a blank choice."""
     offered = catalog_options.options_for(imported["yes_no"], language="de")
 
-    assert [o["label"] for o in offered] == ["Si", "No"]
+    assert [o["label"] for o in offered] == ["Yes", "No"]
 
 
-def test_no_language_asked_for_gives_the_primary_label(imported):
-    """What every existing caller gets, unchanged."""
-    assert [o["label"] for o in catalog_options.options_for(imported["yes_no"])] == ["Si", "No"]
+def test_no_language_asked_for_reads_in_english(imported):
+    """The default when nobody has chosen.
+
+    The stored `label` is Spanish — this client's sheet leads with it, and that
+    is their data, untouched. Which language is *shown* is a reading decision,
+    and English is what it defaults to.
+    """
+    assert [o["label"] for o in catalog_options.options_for(imported["yes_no"])] == [
+        "Yes", "No"]
+
+
+def test_asking_for_a_language_still_wins(imported):
+    """English is the default, not an override: a form asking for Spanish gets
+    Spanish."""
+    assert [o["label"] for o in catalog_options.options_for(
+        imported["yes_no"], language="es")] == ["Si", "No"]
+
+
+def test_the_stored_labels_are_not_touched(imported):
+    """Nothing was migrated. The Spanish label is still what the row holds."""
+    from app.core.database import transaction
+
+    with transaction() as cur:
+        cur.execute(
+            "SELECT label, labels FROM client_catalog_value "
+            "WHERE catalog_id = %s AND code = 'Si'",
+            (imported["yes_no"],),
+        )
+        row = dict(cur.fetchone())
+
+    assert row["label"] == "Si"
+    assert row["labels"] == {"es": "Si", "en": "Yes"}
+
+
+def test_a_value_with_no_english_still_reads(imported):
+    """`Otro` was given no English in the workbook, and none is invented."""
+    offered = catalog_options.options_for(imported["school"])
+    labels = {o["value"]: o["label"] for o in offered}
+
+    assert labels["Otro"] == "Otro"
 
 
 def test_nothing_reaches_a_translation_service():
@@ -449,10 +488,13 @@ def test_the_options_endpoint_serves_the_chosen_language(admin_client, imported)
     assert english[0] == {"label": "Yes", "value": "Si"}
 
 
-def test_the_options_endpoint_is_unchanged_without_a_language(admin_client, imported):
+def test_the_options_endpoint_reads_in_english_without_a_language(admin_client, imported):
     plain = admin_client.get(f"/api/client-catalogs/{imported['yes_no']}/options").json()
 
-    assert plain == [{"label": "Si", "value": "Si"}, {"label": "No", "value": "No"}]
+    assert plain == [{"label": "Yes", "value": "Si"}, {"label": "No", "value": "No"}]
+    # The value is the client's code in every language — that is what an answer
+    # stores, and it has not moved.
+    assert [o["value"] for o in plain] == ["Si", "No"]
 
 
 # --- the client's actual workbook -------------------------------------------------- #

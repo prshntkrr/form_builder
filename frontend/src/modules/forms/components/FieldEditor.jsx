@@ -13,7 +13,7 @@ const slug = (t) =>
  * Where this question's choices come from.
  *
  * Three answers. **On the form** is the ordinary case: the choices are written
- * here and travel with the definition. **A client catalogue** and **the crop
+ * here and travel with the definition. **A CIMMYT Catalogue** and **the crop
  * ontologies** both mean the list lives in the database and is read when the
  * form is drawn — the form carries a reference, never a copy, so correcting the
  * list corrects every form that uses it at once.
@@ -52,7 +52,7 @@ function OptionSource({ field, fields, patch }) {
 
       <select className="control" value={kind} onChange={(e) => choose(e.target.value)}>
         <option value="form">This form</option>
-        {can.use_client_catalogs && <option value="client_catalog">A client catalogue</option>}
+        {can.use_client_catalogs && <option value="client_catalog">CIMMYT Catalogue</option>}
         {can.use_crop_ontology && <option value="crop_ontology">The crop ontologies</option>}
       </select>
 
@@ -63,7 +63,7 @@ function OptionSource({ field, fields, patch }) {
             value={from.catalog || ''}
             onChange={(e) => patch({ options_from: { ...from, catalog: e.target.value } })}
           >
-            <option value="">Choose a catalogue…</option>
+            <option value="">Choose a CIMMYT Catalogue…</option>
             {(catalogues || []).map((c) => (
               <option key={c.catalog_id} value={c.catalog_id}>
                 {c.name} ({c.catalog_id}) — {c.active_count} value
@@ -119,8 +119,9 @@ function OptionSource({ field, fields, patch }) {
           )}
 
           <p className="tiny muted">
-            The catalogue's values are read when the form is drawn. Nothing is
-            copied here, so correcting the catalogue corrects this question too.
+            The CIMMYT Catalogue's values are read when the form is drawn.
+            Nothing is copied here, so correcting the catalogue corrects this
+            question too.
           </p>
         </>
       )}
@@ -413,7 +414,7 @@ export default function FieldEditor({
           {field.options_from && (
             <div className="insp__facts">
               <div><b>Answered from</b>{field.options_from.source === 'client_catalog'
-                ? `client catalogue ${field.options_from.catalog}`
+                ? `CIMMYT Catalogue ${field.options_from.catalog}`
                   + (field.options_from.allowed_values?.length
                       ? ` (${field.options_from.allowed_values.length} of its values)` : '')
                 : `the imported ${field.options_from.kind}s`}</div>
@@ -441,7 +442,7 @@ export default function FieldEditor({
                   <div><b>Workbook type</b>{field.source.field_type}</div>
                 )}
                 {field.source.catalog_id && (
-                  <div><b>Catalogue</b>{field.source.catalog_id}</div>
+                  <div><b>CIMMYT Catalogue</b>{field.source.catalog_id}</div>
                 )}
                 {field.source.father_list && (
                   <div><b>Parent list</b>{field.source.father_list}</div>
@@ -451,7 +452,7 @@ export default function FieldEditor({
                 )}
               </div>
               <p className="tiny muted">
-                Read from the client's workbook and kept as they wrote it.
+                Read from CIMMYT's workbook and kept as they wrote it.
               </p>
             </>
           )}

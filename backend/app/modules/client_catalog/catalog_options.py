@@ -52,16 +52,33 @@ def _is_offered(status: str) -> bool:
 _REACHABLE = "(c.parent_catalog_id IS NULL OR v.parent_code IS NOT NULL)"
 
 
+# The language a catalogue reads in when nobody has asked for one.
+#
+# `client_catalog_value.label` holds whichever language the import happened to
+# write — for this client's workbook that is Spanish, because their sheet leads
+# with it. That is their data and it stays exactly as it is; which language is
+# *shown* is a reading decision, and it is made here.
+DEFAULT_LANGUAGE = "en"
+
+
 def _labelled(row, language: Optional[str]) -> str:
     """The label to show, in the reader's language where the client gave one.
 
-    Falls back to the value's own label rather than to the code, and never to
-    an empty string: a missing translation must not produce a blank choice.
+    In order: the language actually asked for, then English, then the value's
+    own stored label, then its code. So an explicit choice always wins, English
+    is what you get when nobody chose, and a value with neither translation
+    still reads as something rather than as an empty choice.
+
+    Nothing here writes: a catalogue imported in Spanish keeps its Spanish
+    labels, and adding an English one later changes what this returns without
+    anybody migrating anything.
     """
-    if language:
-        translated = (row.get("labels") or {}).get(language)
-        if translated:
-            return translated
+    labels = row.get("labels") or {}
+
+    for wanted in (language, DEFAULT_LANGUAGE):
+        if wanted and labels.get(wanted):
+            return labels[wanted]
+
     return row["label"] or row["code"]
 
 

@@ -73,7 +73,7 @@ describe('choosing which catalogue values a field offers', () => {
   test('a field offers the whole catalogue unless it says otherwise', async () => {
     await draw(undefined)
 
-    expect(screen.getByRole('radio', { name: 'All catalogue values' }).checked).toBe(true)
+    expect(screen.getByRole('radio', { name: 'All CIMMYT Catalogue values' }).checked).toBe(true)
     expect(screen.getByRole('radio', { name: 'Choose specific values' }).checked).toBe(false)
     // Nothing to pick from until somebody asks to pick.
     expect(screen.queryByLabelText('Search catalogue values')).toBeNull()
@@ -93,7 +93,7 @@ describe('choosing which catalogue values a field offers', () => {
     await draw(['RICE'])
 
     await screen.findByText('Maize')
-    await user.type(screen.getByLabelText('Search catalogue values'), 'whe')
+    await user.type(screen.getByLabelText('Search CIMMYT Catalogue values'), 'whe')
 
     expect(screen.getByText('Wheat')).toBeTruthy()
     expect(screen.queryByText('Maize')).toBeNull()
@@ -104,7 +104,7 @@ describe('choosing which catalogue values a field offers', () => {
     await draw(['RICE'])
 
     await screen.findByText('Maize')
-    await user.type(screen.getByLabelText('Search catalogue values'), 'SOYB')
+    await user.type(screen.getByLabelText('Search CIMMYT Catalogue values'), 'SOYB')
 
     expect(screen.getByText('Soybean')).toBeTruthy()
   })
@@ -141,7 +141,7 @@ describe('choosing which catalogue values a field offers', () => {
     const user = userEvent.setup()
     const changes = await draw(['RICE', 'WHEAT'])
 
-    await user.click(screen.getByRole('radio', { name: 'All catalogue values' }))
+    await user.click(screen.getByRole('radio', { name: 'All CIMMYT Catalogue values' }))
 
     expect(changes.at(-1)).toEqual([])
   })
