@@ -76,7 +76,23 @@ a:hover { text-decoration: underline; }
 .side__all { margin-left: auto; font-size: 11px; color: var(--ink-3); font-weight: 500; }
 .side__all:hover { color: var(--accent-deep); }
 
-.side__forms { flex: 1; overflow-y: auto; padding: 0 8px 12px; }
+.side {
+  /* Everything above and below the scrolling middle stays put: the brand, the
+     project selector, the fixed links, and the account at the foot. */
+}
+
+/* The one part that scrolls. `min-height: 0` is what makes it scroll at all:
+   a flex item defaults to `min-height: auto`, which refuses to shrink below its
+   content, so `overflow-y: auto` never engages and a long list — or an expanded
+   form's submenu — overflows the sidebar instead of scrolling inside it. */
+.side__forms {
+  flex: 1; min-height: 0; overflow-y: auto;
+  padding: 0 8px 12px;
+  overscroll-behavior: contain;
+}
+
+/* The foot stays at the bottom even when the list above is short. */
+.side__foot { margin-top: auto; }
 /* A draft is built but not published: hollow, not coloured in. */
 .dot--draft { background: transparent; box-shadow: inset 0 0 0 1.5px var(--ink-3); }
 .side__empty { padding: 4px 10px; font-size: 12.5px; color: var(--ink-3); }
@@ -90,10 +106,59 @@ a:hover { text-decoration: underline; }
 .side__form.on { background: var(--accent-wash); color: var(--accent-deep); font-weight: 600; }
 .ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.side__sections {
-  display: flex; flex-direction: column;
-  margin: 2px 0 8px 19px; padding-left: 11px;
-  border-left: 1px solid var(--line-2);
+/* One form, one row — the actions live in a menu that floats over the sidebar
+   rather than unfolding inside it. Six sections per open form used to push
+   every form below them out of view. */
+.side__row { display: flex; align-items: center; gap: 2px; }
+.side__row .side__form { min-width: 0; }
+
+.side__more {
+  flex: none; display: grid; place-items: center;
+  width: 22px; height: 24px; border-radius: var(--r-sm);
+  color: var(--ink-3); line-height: 1;
+  background: none; border: 0; cursor: pointer;
+  /* Always there, quietly. A control that appears only on hover is one nobody
+     finds; this says "there is more here" the way a file tree does. */
+  opacity: .55; transition: opacity .12s, background .12s;
+}
+.side__row:hover .side__more,
+.side__more:focus-visible,
+.side__more.on { opacity: 1; }
+.side__more:hover { background: rgba(0, 0, 0, .07); color: var(--ink); }
+.side__more svg { transition: transform .15s; }
+.side__more.on svg { transform: rotate(180deg); }
+.side__form.on + .side__more { color: var(--accent-deep); opacity: .8; }
+
+/* Which page of the open form is being looked at. */
+.side__where {
+  flex: none; font-size: 10.5px; font-weight: 600; letter-spacing: .03em;
+  text-transform: uppercase; color: var(--accent-deep);
+  background: rgba(47, 107, 69, .1);
+  padding: 1px 5px; border-radius: 999px;
+}
+
+/* In a portal on <body>, so nothing in the sidebar can clip it — below 860px
+   `.side` is transformed, and a transformed ancestor traps `fixed` descendants
+   inside itself. `Nav.jsx` measures it and places it above or below the
+   trigger, whichever fits.
+
+   Above everything it could meet: the mobile sidebar (30), the sheet overlay
+   (50) and the sticky save bar (5). */
+.side__menu {
+  position: fixed; z-index: 200;
+  min-width: 208px; max-width: 280px;
+  display: flex; flex-direction: column; gap: 1px;
+  padding: 5px; border-radius: var(--r);
+  background: var(--card); border: 1px solid var(--line);
+  box-shadow: var(--shadow-lg);
+}
+/* Labels decide the width; nothing wraps onto a second line. */
+.side__menu .side__section { white-space: nowrap; }
+.side__menu-head {
+  padding: 4px 9px 6px; margin-bottom: 2px;
+  font-size: 11.5px; font-weight: 650; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--ink-3);
+  border-bottom: 1px solid var(--line);
 }
 .side__section {
   padding: 4px 9px; border-radius: var(--r-sm);

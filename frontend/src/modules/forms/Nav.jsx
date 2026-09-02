@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { NavLink, useMatch, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../core/auth.jsx'
 import { useFormsRevision } from '../../core/events.js'
@@ -74,12 +75,117 @@ export function FormsPanel({ onNavigate }) {
   const filling = useMatch('/f/:formId')
   const activeId = editing?.params?.formId || filling?.params?.formId
 
+  // Which page of the active form is open, so the row can say so without
+  // anybody opening the menu to find out.
+  const section = editing?.params?.['*']?.split('/')[0] || ''
+  const sectionName = SECTIONS.find(([key]) => key === section)?.[1] || ''
+
   const { projectId, active, system } = useProjects()
   const [forms, setForms] = useState(null)
+
+  // The row whose actions are open, and where on screen to draw them.
+  //
+  // A menu rather than an expanded block: the sections used to unfold inside the
+  // list, six rows tall, pushing every form below them out of view. This floats
+  // over the sidebar instead, so a form is always one row and the list stays a
+  // list however many forms there are.
+  //
+  // Rendered into `document.body` through a portal, and placed from the
+  // button's own rectangle. Both are needed:
+  //
+  //   the list scrolls        an absolutely positioned child would be clipped
+  //                           by its `overflow-y: auto`
+  //   the sidebar transforms  below 860px `.side` is `transform: translateX()`,
+  //                           and a transformed ancestor makes `fixed`
+  //                           descendants position *and clip* against it — so a
+  //                           menu left inside the sidebar is trapped in it
+  //
+  // A portal has neither ancestor, so the menu is only ever bounded by the
+  // window, which is what `place` then keeps it inside.
+  const [menu, setMenu] = useState(null)
+  const card = useRef(null)
+
+  // Where the list has got to, so the open row can be kept in view.
+  const activeRow = useRef(null)
 
   // Switching context empties the list first, so nothing from the previous
   // project is on screen while the new one loads.
   useEffect(() => { setForms(null) }, [projectId, system])
+
+  // `block: 'nearest'` scrolls only as far as it has to, and not at all when
+  // the row is already in view — so opening a form at the top of the list does
+  // not jump the sidebar around.
+  useEffect(() => {
+    if (!activeId || !activeRow.current) return
+    activeRow.current.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' })
+  }, [activeId, forms])
+
+  // A menu positioned from a rectangle has to close when that rectangle moves.
+  useEffect(() => {
+    if (!menu) return
+
+    const shut = () => setMenu(null)
+    const key = (e) => e.key === 'Escape' && shut()
+
+    // `true` so a scroll inside the list closes it too, not only the page's.
+    window.addEventListener('scroll', shut, true)
+    window.addEventListener('resize', shut)
+    window.addEventListener('keydown', key)
+    document.addEventListener('mousedown', shut)
+
+    return () => {
+      window.removeEventListener('scroll', shut, true)
+      window.removeEventListener('resize', shut)
+      window.removeEventListener('keydown', key)
+      document.removeEventListener('mousedown', shut)
+    }
+  }, [menu])
+
+  const openMenu = (event, form) => {
+    event.preventDefault()
+    event.stopPropagation()
+    if (menu?.formId === form.form_id) return setMenu(null)
+
+    // The trigger's rectangle, kept so the menu can be measured against it once
+    // it exists. Placed off-screen until then, so the first paint is never in
+    // the wrong spot.
+    setMenu({
+      formId: form.form_id,
+      title: form.form_title,
+      anchor: event.currentTarget.getBoundingClientRect(),
+      top: -9999,
+      left: -9999,
+    })
+  }
+
+  // Measured, then placed — a menu cannot be fitted to the space it has until
+  // it has a size. `useLayoutEffect` so this happens before the browser paints.
+  //
+  //   below the trigger, unless there is not enough room, in which case above
+  //   beside it on the right, unless that would run off, in which case left
+  //   and never closer than a margin to any edge
+  useLayoutEffect(() => {
+    if (!menu || !card.current || menu.top !== -9999) return
+
+    const GAP = 6
+    const EDGE = 8
+    const box = card.current.getBoundingClientRect()
+    const { anchor } = menu
+
+    const below = window.innerHeight - anchor.bottom
+    const top = below >= box.height + EDGE
+      // Room underneath: hang from the trigger.
+      ? anchor.bottom + GAP
+      : Math.max(EDGE, Math.min(anchor.top - box.height - GAP,
+                                window.innerHeight - box.height - EDGE))
+
+    const right = anchor.right + GAP
+    const left = right + box.width + EDGE <= window.innerWidth
+      ? right
+      : Math.max(EDGE, anchor.left - box.width - GAP)
+
+    setMenu((current) => (current ? { ...current, top, left } : current))
+  }, [menu])
 
   // The list follows the context the application is working in, so a project's
   // sidebar never shows another project's forms — or, while a project is
@@ -149,42 +255,78 @@ export function FormsPanel({ onNavigate }) {
           }
 
           return (
-            <div key={f.form_id}>
+            <div className="side__row" key={f.form_id} ref={open ? activeRow : null}>
               <NavLink
                 to={`/forms/${f.form_id}/questions`}
-                className={`side__form${open ? ' on' : ''}`}
+                className={`side__form grow${open ? ' on' : ''}`}
                 onClick={onNavigate}
                 title={f.form_title}
               >
                 <span className={`dot dot--${(f.form_status || '').toLowerCase()}`} />
                 <span className="grow ellipsis">{f.form_title}</span>
+                {/* Which page of it is open. Only on the form being worked on,
+                    and only when it is not the default one — saying "Questions"
+                    on every active row would be noise. */}
+                {open && sectionName && section !== 'questions' && (
+                  <span className="side__where">{sectionName}</span>
+                )}
               </NavLink>
 
-              {open && editing && (
-                <div className="side__sections">
-                  {SECTIONS.map(([key, label]) => (
-                    <NavLink
-                      key={key}
-                      to={`/forms/${f.form_id}/${key}`}
-                      className={({ isActive }) => `side__section${isActive ? ' on' : ''}`}
-                      onClick={onNavigate}
-                    >
-                      {label}
-                    </NavLink>
-                  ))}
-                  <NavLink
-                    className="side__section side__section--out"
-                    to={`/f/${f.form_id}`}
-                    onClick={onNavigate}
-                  >
-                    Open live form
-                  </NavLink>
-                </div>
-              )}
+              {/* Always visible, never only on hover: a control nobody can see
+                  is a control nobody finds. The chevron says there is more here
+                  the way a file explorer does, and turns when it is open. */}
+              <button
+                type="button"
+                className={`side__more${menu?.formId === f.form_id ? ' on' : ''}`}
+                aria-label={`More pages of ${f.form_title}`}
+                aria-haspopup="menu"
+                aria-expanded={menu?.formId === f.form_id}
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={(e) => openMenu(e, f)}
+              >
+                <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true">
+                  <path d="M6 9l6 6 6-6" fill="none" stroke="currentColor"
+                        strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
             </div>
           )
         })}
       </nav>
+
+      {menu && createPortal(
+        <div
+          className="side__menu"
+          role="menu"
+          ref={card}
+          style={{ top: menu.top, left: menu.left }}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <div className="side__menu-head ellipsis">{menu.title}</div>
+
+          {SECTIONS.map(([key, label]) => (
+            <NavLink
+              key={key}
+              role="menuitem"
+              to={`/forms/${menu.formId}/${key}`}
+              className={({ isActive }) => `side__section${isActive ? ' on' : ''}`}
+              onClick={() => { setMenu(null); onNavigate?.() }}
+            >
+              {label}
+            </NavLink>
+          ))}
+
+          <NavLink
+            role="menuitem"
+            className="side__section side__section--out"
+            to={`/f/${menu.formId}`}
+            onClick={() => { setMenu(null); onNavigate?.() }}
+          >
+            Open live form
+          </NavLink>
+        </div>,
+        document.body,
+      )}
     </>
   )
 }

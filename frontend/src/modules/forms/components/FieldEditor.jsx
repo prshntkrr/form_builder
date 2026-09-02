@@ -3,6 +3,7 @@ import { DIGITS, NUMERIC, STORAGE, TEXTUAL, TYPES, WITH_OPTIONS } from '../field
 import StandardPicker from './StandardPicker.jsx'
 import ConditionEditor from './ConditionEditor.jsx'
 import { api } from '../api.js'
+import CatalogueValues from './CatalogueValues.jsx'
 import { useAuth } from '../../../core/auth.jsx'
 
 const slug = (t) =>
@@ -70,6 +71,21 @@ function OptionSource({ field, fields, patch }) {
               </option>
             ))}
           </select>
+
+          {/* A catalogue is often used whole and sometimes in part. Codes only
+              — see CatalogueValues. */}
+          {from.catalog && (
+            <CatalogueValues
+              catalog={from.catalog}
+              allowed={from.allowed_values}
+              onChange={(codes) => {
+                const { allowed_values, ...rest } = from
+                patch({
+                  options_from: codes.length ? { ...rest, allowed_values: codes } : rest,
+                })
+              }}
+            />
+          )}
 
           {chosen?.parent_catalog_id && (
             <>
@@ -398,6 +414,8 @@ export default function FieldEditor({
             <div className="insp__facts">
               <div><b>Answered from</b>{field.options_from.source === 'client_catalog'
                 ? `client catalogue ${field.options_from.catalog}`
+                  + (field.options_from.allowed_values?.length
+                      ? ` (${field.options_from.allowed_values.length} of its values)` : '')
                 : `the imported ${field.options_from.kind}s`}</div>
               {field.options_from.depends_on && (
                 <div><b>Narrowed by</b>{field.options_from.depends_on}</div>

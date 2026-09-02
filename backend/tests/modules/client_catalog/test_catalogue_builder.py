@@ -748,3 +748,179 @@ def test_the_search_finds_a_catalogue(admin_client, states):
     found = admin_client.get("/api/client-catalogs?search=states").json()["catalogs"]
 
     assert states in {c["catalog_id"] for c in found}
+
+
+# --------------------------------------------------------------------------- #
+# a field that offers part of a catalogue
+#
+# The form stores which values, never what they are called: `allowed_values` is
+# a list of the client's own codes, and the labels still come from the
+# catalogue every time the form is drawn. So a wording corrected tomorrow
+# reaches the form on its own, and the filter keeps working.
+# --------------------------------------------------------------------------- #
+@pytest.fixture
+def crops_of_many(catalogues):
+    """A catalogue with enough in it to be worth narrowing."""
+    made = catalog_service.create_catalog(
+        catalog_id=f"CAT-CROPS-{uuid.uuid4().hex[:6]}", name="Cultivos", version="1.0")
+    catalogues.append(made["catalog_id"])
+
+    for order, code in enumerate(
+            ["MAIZE", "RICE", "WHEAT", "BARLEY", "SOYBEAN", "SORGHUM"]):
+        catalog_service.add_value(made["catalog_id"], code=code,
+                                  label=code.title(), display_order=order,
+                                  status="Active")
+    return made["catalog_id"]
+
+
+def _field(catalog, allowed=None):
+    source = {"source": "client_catalog", "catalog": catalog}
+    if allowed is not None:
+        source["allowed_values"] = allowed
+    return normalize_form({
+        "title": "T", "table_name": f"t_{uuid.uuid4().hex[:8]}",
+        "fields": [{"name": "crop", "label": "Crop", "type": "select",
+                    "options_from": source}],
+    })
+
+
+def test_a_field_offering_everything_stores_no_list(crops_of_many):
+    """What every field written before this says, and what most say now."""
+    field = _field(crops_of_many)["fields"][0]
+
+    assert field["options_from"] == {"source": "client_catalog", "catalog": crops_of_many}
+    assert "allowed_values" not in field["options_from"]
+
+
+def test_choosing_some_values_stores_only_their_codes(crops_of_many):
+    field = _field(crops_of_many, ["RICE", "WHEAT"])["fields"][0]
+
+    assert field["options_from"]["allowed_values"] == ["RICE", "WHEAT"]
+    # Codes, and nothing else: no labels, no options, no copy of the catalogue.
+    assert field["options"] == []
+    assert "Rice" not in str(field)
+
+
+def test_an_empty_choice_means_the_whole_catalogue(crops_of_many):
+    """"Offer none of them" is not a thing anybody means."""
+    field = _field(crops_of_many, [])["fields"][0]
+
+    assert "allowed_values" not in field["options_from"]
+
+
+def test_duplicates_and_blanks_are_cleaned_but_order_is_the_authors(crops_of_many):
+    field = _field(crops_of_many, ["WHEAT", " WHEAT ", "", "RICE"])["fields"][0]
+
+    assert field["options_from"]["allowed_values"] == ["WHEAT", "RICE"]
+
+
+def test_only_the_chosen_values_are_offered(crops_of_many):
+    everything = catalog_options.options_for(crops_of_many)
+    some = catalog_options.options_for(crops_of_many, allowed=["RICE", "WHEAT"])
+
+    assert len(everything) == 6
+    assert [o["value"] for o in some] == ["RICE", "WHEAT"]
+
+
+def test_the_labels_still_come_from_the_catalogue(crops_of_many):
+    """The point of storing codes: the client corrects a wording and the form
+    shows it, without anybody reopening the form."""
+    catalog_service.update_value(crops_of_many, "RICE", {"label": "Arroz"})
+
+    some = catalog_options.options_for(crops_of_many, allowed=["RICE", "WHEAT"])
+
+    assert [o["label"] for o in some] == ["Arroz", "Wheat"]
+    assert [o["value"] for o in some] == ["RICE", "WHEAT"]
+
+
+def test_narrowing_by_nothing_is_the_whole_list(crops_of_many):
+    assert len(catalog_options.options_for(crops_of_many, allowed=[])) == 6
+    assert len(catalog_options.options_for(crops_of_many, allowed=None)) == 6
+
+
+def test_a_value_the_field_does_not_offer_is_refused(crops_of_many):
+    allowed = ["RICE", "WHEAT"]
+
+    assert catalog_options.is_valid(crops_of_many, "RICE", allowed=allowed) is True
+    # In the catalogue, but not on offer here.
+    assert catalog_options.is_valid(crops_of_many, "MAIZE", allowed=allowed) is False
+    # Not in the catalogue at all.
+    assert catalog_options.is_valid(crops_of_many, "NOPE", allowed=allowed) is False
+    # And without a narrowing, the catalogue alone decides, exactly as before.
+    assert catalog_options.is_valid(crops_of_many, "MAIZE") is True
+
+
+def test_submitting_a_value_the_field_does_not_offer_fails(crops_of_many):
+    definition = _field(crops_of_many, ["RICE", "WHEAT"])
+
+    assert validate_payload(definition, {"crop": "RICE"})["crop"] == "RICE"
+
+    with pytest.raises(ValidationFailed) as refused:
+        validate_payload(definition, {"crop": "MAIZE"})
+    assert "crop" in refused.value.errors
+
+
+def test_a_withdrawn_value_is_still_withdrawn_when_it_was_chosen(crops_of_many):
+    """Both rules hold: on offer here, and still offered by the catalogue."""
+    catalog_service.update_value(crops_of_many, "RICE", {"status": "Withdrawn"})
+
+    assert catalog_options.options_for(crops_of_many, allowed=["RICE", "WHEAT"]) == [
+        {"label": "Wheat", "value": "WHEAT"}]
+    assert catalog_options.is_valid(crops_of_many, "RICE",
+                                    allowed=["RICE", "WHEAT"]) is False
+
+
+def test_an_existing_catalogue_field_is_untouched(crops_of_many):
+    """Backward compatibility, stated directly: a field saved before this
+    normalizes to the bytes it had."""
+    before = {"source": "client_catalog", "catalog": crops_of_many}
+    after = _field(crops_of_many)["fields"][0]["options_from"]
+
+    assert after == before
+    assert [o["value"] for o in catalog_options.options_for(crops_of_many)] == [
+        "MAIZE", "RICE", "WHEAT", "BARLEY", "SOYBEAN", "SORGHUM"]
+
+
+def test_narrowing_works_on_a_dependent_catalogue(catalogues):
+    """A district list narrowed both by its state and by what the field offers."""
+    states = f"CAT-ST-{uuid.uuid4().hex[:6]}"
+    catalog_service.create_catalog(catalog_id=states, name="States", version="1.0")
+    catalogues.append(states)
+    catalog_service.add_value(states, "MH", "Maharashtra")
+
+    districts = f"CAT-DI-{uuid.uuid4().hex[:6]}"
+    catalog_service.create_catalog(catalog_id=districts, name="Districts",
+                                   version="1.0", parent_catalog_id=states)
+    catalogues.append(districts)
+    for code, label in (("PUN", "Pune"), ("NAG", "Nagpur"), ("SOL", "Solapur")):
+        catalog_service.add_value(districts, code, label, parent_code="MH")
+
+    offered = catalog_options.options_for(districts, parent_code="MH",
+                                          allowed=["PUN", "SOL"])
+    assert [o["value"] for o in offered] == ["PUN", "SOL"]
+    assert catalog_options.is_valid(districts, "NAG", parent_code="MH",
+                                    allowed=["PUN", "SOL"]) is False
+
+
+def test_the_options_endpoint_takes_the_narrowing(crops_of_many, editor_client):
+    everything = editor_client.get(
+        f"/api/client-catalogs/{crops_of_many}/options").json()
+    some = editor_client.get(
+        f"/api/client-catalogs/{crops_of_many}/options",
+        params={"allowed": ["RICE", "WHEAT"]}).json()
+
+    assert len(everything) == 6
+    assert [o["value"] for o in some] == ["RICE", "WHEAT"]
+
+
+def test_narrowing_a_large_catalogue(catalogues):
+    """The filter is a WHERE, not a pass over everything in Python."""
+    big = f"CAT-BIG-{uuid.uuid4().hex[:6]}"
+    catalog_service.create_catalog(catalog_id=big, name="Big", version="1.0")
+    catalogues.append(big)
+    for i in range(200):
+        catalog_service.add_value(big, f"C{i:03d}", f"Value {i}", display_order=i)
+
+    assert len(catalog_options.options_for(big)) == 200
+    assert [o["value"] for o in catalog_options.options_for(
+        big, allowed=["C007", "C042", "C199"])] == ["C007", "C042", "C199"]

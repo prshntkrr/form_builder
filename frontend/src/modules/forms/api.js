@@ -78,10 +78,14 @@ export const api = {
   // here supplies a value the client did not.
   // `language` changes the wording only — the value is the client's code in
   // every language, because that is what an answer stores.
-  clientCatalogOptions: (catalog, parentCode, language) => {
+  // `allowed` narrows to the codes one field offers, for a form that uses part
+  // of a catalogue. The labels still come from the catalogue, so a wording the
+  // client corrects reaches the form on its own.
+  clientCatalogOptions: (catalog, parentCode, language, allowed) => {
     const query = new URLSearchParams()
     if (parentCode) query.set('parent_code', parentCode)
     if (language) query.set('language', language)
+    for (const code of allowed || []) query.append('allowed', code)
     const suffix = query.toString()
     return request(`/client-catalogs/${encodeURIComponent(catalog)}/options` +
                    (suffix ? `?${suffix}` : ''))

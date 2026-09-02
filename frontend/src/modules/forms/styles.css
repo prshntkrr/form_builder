@@ -363,3 +363,23 @@
   padding: 10px 12px; background: var(--paper);
   border: 1px solid var(--line); border-radius: var(--r);
 }
+
+/* Choosing which of a catalogue's values a field offers. */
+.vals { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.vals__choice { display: flex; align-items: baseline; gap: 8px; font-size: 13px; }
+.vals__choice input { margin: 0; flex: none; }
+.vals__list {
+  display: flex; flex-direction: column;
+  max-height: 220px; overflow-y: auto;
+  border: 1px solid var(--line); border-radius: var(--r-sm);
+  background: var(--card);
+}
+.vals__row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 9px; font-size: 13px;
+  border-bottom: 1px solid var(--line);
+}
+.vals__row:last-child { border-bottom: 0; }
+.vals__row:hover { background: var(--paper); }
+.vals__row input { margin: 0; flex: none; }
+.vals__foot { align-items: center; }

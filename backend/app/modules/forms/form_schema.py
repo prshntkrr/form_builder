@@ -416,6 +416,15 @@ def _normalize_options_from(raw: Any) -> Optional[Dict[str, str]]:
         if not catalog:
             return None
         described["catalog"] = catalog
+
+        # Which of the catalogue's values this field offers, when it offers only
+        # some. Codes, never labels: a code is what an answer stores and what
+        # the client's systems recognise, so a label corrected tomorrow reaches
+        # this field on its own. Absent means the whole list — which is what
+        # every field written before this says, and what most say now.
+        allowed = _normalize_allowed_values(raw.get("allowed_values"))
+        if allowed:
+            described["allowed_values"] = allowed
     else:
         kind = str(raw.get("kind") or "").strip()
         if not kind:
@@ -426,6 +435,27 @@ def _normalize_options_from(raw: Any) -> Optional[Dict[str, str]]:
     if depends_on:
         described["depends_on"] = depends_on
     return described
+
+
+def _normalize_allowed_values(raw: Any) -> List[str]:
+    """The subset of a catalogue a field offers, as stable codes.
+
+    Order is the author's and is kept; duplicates are not, because a code twice
+    is one value. An empty list normalizes away entirely rather than being
+    stored — "offer none of them" is not a thing anybody means, and a field
+    carrying it would be a dropdown nobody could answer.
+    """
+    if not isinstance(raw, (list, tuple)):
+        return []
+
+    seen = set()
+    codes = []
+    for value in raw:
+        code = str(value if value is not None else "").strip()
+        if code and code not in seen:
+            seen.add(code)
+            codes.append(code)
+    return codes
 
 
 def declares_controlled_list(raw: Any) -> bool:

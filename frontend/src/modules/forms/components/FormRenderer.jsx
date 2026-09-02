@@ -79,6 +79,9 @@ function useDynamicOptions(fields, values, language) {
         from.kind || from.catalog || '',
         on ? values?.[on] ?? '' : '',
         on ? 'dependent' : '',
+        // Which of the catalogue's values this field offers, when it offers
+        // only some. Part of the key so changing it refetches.
+        (from.allowed_values || []).join(','),
       ].join('|')
     })
     .join(';')
@@ -93,7 +96,7 @@ function useDynamicOptions(fields, values, language) {
     const fetchAll = async () => {
       const next = {}
       for (const entry of wanted.split(';')) {
-        const [name, source, what, dependsOnValue, dependent] = entry.split('|')
+        const [name, source, what, dependsOnValue, dependent, allowed] = entry.split('|')
         if (!name || !what) continue
 
         // A dependent field has nothing to offer until its dependency is
@@ -105,7 +108,8 @@ function useDynamicOptions(fields, values, language) {
 
         try {
           next[name] = source === 'client_catalog'
-            ? await api.clientCatalogOptions(what, dependsOnValue, language)
+            ? await api.clientCatalogOptions(what, dependsOnValue, language,
+                                             allowed ? allowed.split(',') : [])
             : await api.cropOntologyOptions(what, dependsOnValue)
         } catch {
           next[name] = []

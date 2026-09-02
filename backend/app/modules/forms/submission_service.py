@@ -90,8 +90,11 @@ def _not_offered(field: Dict[str, Any], selected: Any, payload: Dict[str, Any]) 
         except Exception:
             return []
 
+        # A field may offer part of a catalogue. Both are checked: the code has
+        # to be in the catalogue *and* among the ones this field offers.
         check = lambda value: catalog_options.is_valid(  # noqa: E731
-            source.get("catalog"), value, depends_on_value)
+            source.get("catalog"), value, depends_on_value,
+            allowed=source.get("allowed_values"))
 
     else:
         return []

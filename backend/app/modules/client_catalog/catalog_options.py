@@ -70,6 +70,7 @@ def options_for(
     parent_code: Optional[str] = None,
     limit: int = MAX_OPTIONS,
     language: Optional[str] = None,
+    allowed: Optional[List[str]] = None,
 ) -> List[Dict[str, str]]:
     """The client's values for one catalog, as form options.
 
@@ -77,21 +78,29 @@ def options_for(
     the chosen state. Whether a field is dependent at all is the form's business,
     not the catalog's, so a caller with a dependent field and no parent answer
     yet asks for nothing rather than asking for everything.
+
+    `allowed` narrows to the codes one field offers, for a form that uses part
+    of a catalogue rather than all of it. The *labels* still come from here, so
+    a wording the client corrects tomorrow reaches every such field on its own —
+    the field stores which values, never what they are called.
     """
     if not catalog_id:
         return []
 
+    chosen = [str(code) for code in (allowed or []) if str(code).strip()]
+
     with transaction() as cur:
+        narrowed = " AND code = ANY(%s)" if chosen else ""
         if parent_code:
             cur.execute(
-                """
+                f"""
                 SELECT code, label, labels, status
                 FROM   client_catalog_value
-                WHERE  catalog_id = %s AND parent_code = %s
+                WHERE  catalog_id = %s AND parent_code = %s{narrowed}
                 ORDER BY display_order, code
                 LIMIT  %s
                 """,
-                (catalog_id, str(parent_code), limit),
+                (catalog_id, str(parent_code), *([chosen] if chosen else []), limit),
             )
         else:
             cur.execute(
@@ -100,10 +109,11 @@ def options_for(
                 FROM   client_catalog_value v
                 JOIN   client_catalog c ON c.catalog_id = v.catalog_id
                 WHERE  v.catalog_id = %s AND {_REACHABLE}
+                       {narrowed.replace("code", "v.code")}
                 ORDER BY v.display_order, v.code
                 LIMIT  %s
                 """,
-                (catalog_id, limit),
+                (catalog_id, *([chosen] if chosen else []), limit),
             )
         rows = cur.fetchall()
 
@@ -120,6 +130,7 @@ def is_valid(
     catalog_id: str,
     value: Any,
     parent_code: Optional[str] = None,
+    allowed: Optional[List[str]] = None,
 ) -> bool:
     """Whether an answer is one this catalog would have offered.
 
@@ -129,11 +140,20 @@ def is_valid(
     With a parent, the parent has to match: a municipality of one state is not
     an answer when a different state is selected, even though both codes exist
     in the same catalog.
+
+    With `allowed`, the field offers only part of the catalogue, and both have
+    to hold: a code the catalogue has but this field does not offer is refused
+    here, whatever a form posted. Being in the catalogue is not the same as
+    being on offer.
     """
     if value in (None, ""):
         return True
 
     if not catalog_id:
+        return False
+
+    chosen = [str(code) for code in (allowed or []) if str(code).strip()]
+    if chosen and str(value) not in chosen:
         return False
 
     with transaction() as cur:

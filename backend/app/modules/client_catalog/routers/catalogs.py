@@ -146,6 +146,8 @@ def catalog_options(
     catalog_id: str,
     parent_code: Optional[str] = None,
     language: Optional[str] = Query(None, description="Label language, e.g. 'en'"),
+    allowed: List[str] = Query(
+        default=[], description="Only these codes — a field offering part of a catalogue"),
     user: Dict[str, Any] = Depends(needs(CATALOG_VIEW)),
 ):
     """The catalogue's values shaped as form options.
@@ -168,6 +170,7 @@ def catalog_options(
         catalog_id,
         parent_code=parent_code,
         language=language,
+        allowed=allowed,
     )
 
 
