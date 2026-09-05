@@ -46,6 +46,12 @@ export default function FormsNav({ onNavigate }) {
             <span className="grow">Catalogue</span>
           </NavLink>
         )}
+        {can.manage_routing && (
+          <NavLink to="/routing" className={({ isActive }) => `side__form${isActive ? ' on' : ''}`}
+                   onClick={onNavigate}>
+            <span className="grow">Channel routing</span>
+          </NavLink>
+        )}
         {(can.use_standards || can.use_ontology || can.use_crop_ontology) && (
           <NavLink to="/standards" className={({ isActive }) => `side__form${isActive ? ' on' : ''}`}
                    onClick={onNavigate}>

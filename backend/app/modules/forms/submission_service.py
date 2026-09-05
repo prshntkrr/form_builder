@@ -15,7 +15,9 @@ from psycopg2.extras import Json
 from app.core.config import settings
 from app.core.database import transaction
 from app.modules.forms.field_types import FieldValueError, coerce_value, get_type, json_safe
-from app.modules.forms.form_schema import PARENT_COLUMN, field_name
+from app.modules.forms.form_schema import (
+    LOCATION_COLUMN, PARENT_COLUMN, field_name,
+)
 from app.modules.forms import conditions
 from app.modules.forms import standardization
 from app.modules.forms import translations
@@ -83,6 +85,20 @@ def _not_offered(field: Dict[str, Any], selected: Any, payload: Dict[str, Any]) 
 
         check = lambda value: dynamic_options.is_valid(  # noqa: E731
             source.get("kind"), value, depends_on_value)
+
+    elif kind_of_source == "data_standard":
+        # Only a field that says it is ISO 3166-1 is checked against it. Nothing
+        # is inferred from a label: a question called "Country" that names no
+        # standard is somebody's own list and is left alone.
+        if source.get("standard") != "ISO_3166_1":
+            return []
+        try:
+            from app.modules.standards.iso3166 import service as iso3166
+        except Exception:
+            return []
+
+        check = lambda value: iso3166.is_valid(  # noqa: E731
+            source.get("code_type") or "alpha_2", value)
 
     elif kind_of_source == "client_catalog":
         try:
@@ -262,20 +278,111 @@ def test_payload(
 # --------------------------------------------------------------------------- #
 # writes
 # --------------------------------------------------------------------------- #
+# --------------------------------------------------------------------------- #
+# starting one
+# --------------------------------------------------------------------------- #
+def start(form: Dict[str, Any], created_by: str = "") -> str:
+    """Hand out the next `survey_id` for this form and mark it IN_PROGRESS.
+
+    Called when somebody presses Submit, not when they open the form: an id is
+    only issued once there is something to store under it. What it buys is a
+    place to file uploads — the browser has to know where its photo goes before
+    it can send it, and the answers are not stored until they have all landed.
+
+    A row in `form_survey_progress` is what IN_PROGRESS means. `submit` moves it
+    into the form's own table, which is what SUBMITTED means. If submission
+    fails the row stays, and the browser retries with the same id rather than
+    burning a second one.
+    """
+    table_name = (form["form_json"] or {}).get("table_name")
+    if not table_name:
+        raise FormNotFound(f"Form {form['form_id']} has no data table")
+
+    with transaction() as cur:
+        if not table_exists(cur, table_name):
+            raise FormNotFound(f"Data table '{table_name}' does not exist")
+
+        survey_id = next_survey_id(cur, form["form_id"], table_name)
+        cur.execute(
+            "INSERT INTO form_survey_progress (form_id, survey_id, created_by) "
+            "VALUES (%s, %s, %s)",
+            (form["form_id"], survey_id, created_by or settings.default_user),
+        )
+
+    return survey_id
+
+
+def in_progress(form_id: str, survey_id: str) -> Optional[Dict[str, Any]]:
+    """The started-but-not-submitted survey, or None if there is no such thing."""
+    with transaction() as cur:
+        cur.execute(
+            "SELECT * FROM form_survey_progress WHERE form_id = %s AND survey_id = %s",
+            (form_id, survey_id),
+        )
+        row = cur.fetchone()
+    return dict(row) if row else None
+
+
+def _check_media(form_json: Dict[str, Any], form_id: str, survey_id: str,
+                 clean: Dict[str, Any]) -> None:
+    """Every media answer must be an upload that actually arrived, for this survey.
+
+    The answer stored for an image, audio or file question is a `media_id`. The
+    browser is the one that reports the upload finished, so the id is a claim
+    until this looks it up: it has to exist, belong to this form and this
+    survey, and have arrived. Required-but-missing is caught by the normal
+    validation before this; what this catches is an id that is somebody else's,
+    made up, or never finished uploading.
+    """
+    from app.modules.forms import media_service
+
+    wanted = {
+        name: clean[name]
+        for name in clean
+        if media_service.field_media_type(form_json, name) and clean[name]
+    }
+    if not wanted:
+        return
+
+    arrived = {m["media_id"] for m in media_service.for_submission(form_id, survey_id)}
+    bad = {name: "That upload did not finish. Choose the file again."
+           for name, media_id in wanted.items() if media_id not in arrived}
+    if bad:
+        raise ValidationFailed(bad)
+
+
 def submit(
     form: Dict[str, Any],
     payload: Dict[str, Any],
     created_by: Optional[str] = None,
     language: Optional[str] = None,
     parent_survey_id: Optional[str] = None,
+    location: Optional[Dict[str, Any]] = None,
+    survey_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Store one response.
+
+    `survey_id` is the id `start` handed out, for a submission whose uploads had
+    to be filed somewhere first. Passing one moves that survey from IN_PROGRESS
+    to SUBMITTED; passing none takes an id here and does both at once, which is
+    what a form with nothing to upload does.
 
     `parent_survey_id` is only ever a value the caller has already had checked
     by `relationships.validate_parent` — this writes it, it does not judge it.
     An independent form is passed None and its table is untouched, exactly as
     before.
+
+    `location` is checked here rather than by the caller, because a submission
+    is refused for a bad position the same way it is refused for a bad answer:
+    with the rest of the validation, before anything is written.
     """
+    from app.modules.forms import geolocation
+
+    form_json_for_location = form["form_json"] or {}
+    try:
+        location, _ = geolocation.check(form_json_for_location, location)
+    except geolocation.LocationError as exc:
+        raise ValidationFailed({"_location": str(exc)})
     form_json = form["form_json"] or {}
     table_name = form_json.get("table_name")
     if not table_name:
@@ -289,13 +396,29 @@ def submit(
         raise ValidationFailed({"_form": "This form is not accepting responses"})
 
     clean = validate_payload(form_json, payload, language)
+    if survey_id:
+        _check_media(form_json, form["form_id"], survey_id, clean)
     version = form.get("version_no") or form_json.get("version") or 1
 
     with transaction() as cur:
         if not table_exists(cur, table_name):
             raise FormNotFound(f"Data table '{table_name}' does not exist")
 
-        survey_id = next_survey_id(cur, form["form_id"], table_name)
+        if survey_id is None:
+            survey_id = next_survey_id(cur, form["form_id"], table_name)
+        else:
+            # Started earlier, so it has to still be in progress: an id that was
+            # never started, or has already been submitted, is not one to write
+            # under. Locked so two clicks of Submit cannot both get through.
+            cur.execute(
+                "SELECT 1 FROM form_survey_progress WHERE form_id = %s AND survey_id = %s "
+                "FOR UPDATE",
+                (form["form_id"], survey_id),
+            )
+            if cur.fetchone() is None:
+                raise ValidationFailed(
+                    {"_form": "This submission has already been sent, or was never "
+                              "started. Open the form again."})
 
         columns = ["survey_id", "form_id", "form_data", "form_version", "created_by"]
         values = [survey_id, form["form_id"], Json(clean), version,
@@ -306,6 +429,10 @@ def submit(
         if parent_survey_id:
             columns.append(PARENT_COLUMN)
             values.append(parent_survey_id)
+
+        if location:
+            columns.append(LOCATION_COLUMN)
+            values.append(Json(location))
 
         cur.execute(
             sql.SQL("INSERT INTO {}.{} ({}) VALUES ({}) RETURNING survey_id, created_on")
@@ -331,6 +458,14 @@ def submit(
             clean,
         )
 
+        # IN_PROGRESS becomes SUBMITTED: the row moves out of the progress table
+        # and into the form's own, in one transaction, so a survey is never both
+        # and never neither.
+        cur.execute(
+            "DELETE FROM form_survey_progress WHERE form_id = %s AND survey_id = %s",
+            (form["form_id"], survey_id),
+        )
+
     # Where this submission has got to, recorded beside it. Defensive: the
     # projects module can be switched off, and a response must still be stored.
     try:
@@ -348,6 +483,7 @@ def submit(
         "form_version": version,
         "table_name": table_name,
         "parent_survey_id": parent_survey_id,
+        "location": location,
     }
 
 
@@ -507,20 +643,28 @@ def answers_for(form_json: Dict[str, Any], form_data: Dict[str, Any]) -> list:
 
 
 def _parent_select(cur, table_name: str) -> sql.SQL:
-    """`, parent_survey_id` for a child form's table, nothing for any other.
+    """The optional envelope columns this table actually has.
+
+    `parent_survey_id` for a child form, `location` for a form that records
+    where it was filled in — neither is on a table that did not ask for it.
 
     Read from the table rather than from the definition: a form marked as a
     child a moment ago and not yet saved would otherwise make every read of it
     fail on a column that is not there.
     """
-    from app.modules.forms.form_schema import PARENT_COLUMN
+    from app.modules.forms.form_schema import LOCATION_COLUMN, PARENT_COLUMN
 
     cur.execute(
-        "SELECT 1 FROM information_schema.columns "
-        "WHERE table_schema = %s AND table_name = %s AND column_name = %s",
-        (settings.db_schema, table_name, PARENT_COLUMN),
+        "SELECT column_name FROM information_schema.columns "
+        "WHERE table_schema = %s AND table_name = %s AND column_name = ANY(%s)",
+        (settings.db_schema, table_name, [PARENT_COLUMN, LOCATION_COLUMN]),
     )
-    return sql.SQL(f", {PARENT_COLUMN}") if cur.fetchone() else sql.SQL("")
+    present = [row["column_name"] for row in cur.fetchall()]
+    if not present:
+        return sql.SQL("")
+
+    return sql.SQL(", ") + sql.SQL(", ").join(
+        sql.Identifier(name) for name in sorted(present))
 
 
 def _cell(value: Any) -> str:

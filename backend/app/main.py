@@ -20,6 +20,7 @@ from app.core.bootstrap import (
 )
 from app.core.config import settings
 from app.core.database import close_pool, init_pool, ping
+from app.core.gateway import GatewayMiddleware
 from app.core.routers import auth, roles, users
 
 logging.basicConfig(
@@ -49,6 +50,13 @@ app = FastAPI(
     version="2.0.0",
     lifespan=lifespan,
 )
+
+# The boundary channel traffic crosses, in front of the routes it reaches.
+# Added before CORS so that CORS wraps it: a browser must still be told about a
+# 429 or a 413, and a response the browser will not read is not a refusal
+# anybody can act on. Middleware runs outermost-last, so this ordering puts CORS
+# on the outside.
+app.add_middleware(GatewayMiddleware)
 
 app.add_middleware(
     CORSMiddleware,

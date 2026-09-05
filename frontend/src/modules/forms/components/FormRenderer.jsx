@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import FieldInput from './FieldInput.jsx'
+import { useLocation } from '../useLocation.js'
 import { api } from '../api.js'
 import { defaultLanguage, languageChoices, translateForm } from '../translate.js'
 import { hidden } from '../conditions.js'
@@ -64,6 +65,10 @@ function group(formJson) {
  * Everything comes from this application's own API. Nothing reaches out to
  * cropontology.org, and nothing here makes up a value the source did not give.
  */
+// Which endpoint serves each standard a field may draw from. A lookup, not a
+// path built from the field: what a form names cannot reach an address.
+const STANDARDS = { ISO_3166_1: 'iso3166' }
+
 function useDynamicOptions(fields, values, language) {
   const [loaded, setLoaded] = useState({})
 
@@ -76,12 +81,16 @@ function useDynamicOptions(fields, values, language) {
       return [
         f.name,
         from.source,
-        from.kind || from.catalog || '',
+        from.kind || from.catalog || from.standard || '',
         on ? values?.[on] ?? '' : '',
         on ? 'dependent' : '',
         // Which of the catalogue's values this field offers, when it offers
         // only some. Part of the key so changing it refetches.
         (from.allowed_values || []).join(','),
+        // Which of a standard's code sets the answer is stored as. Part of the
+        // key, so changing it refetches: the labels are the same countries and
+        // the values are not.
+        from.code_type || '',
       ].join('|')
     })
     .join(';')
@@ -96,7 +105,8 @@ function useDynamicOptions(fields, values, language) {
     const fetchAll = async () => {
       const next = {}
       for (const entry of wanted.split(';')) {
-        const [name, source, what, dependsOnValue, dependent, allowed] = entry.split('|')
+        const [name, source, what, dependsOnValue, dependent, allowed, codeType] =
+          entry.split('|')
         if (!name || !what) continue
 
         // A dependent field has nothing to offer until its dependency is
@@ -107,10 +117,18 @@ function useDynamicOptions(fields, values, language) {
         }
 
         try {
-          next[name] = source === 'client_catalog'
-            ? await api.clientCatalogOptions(what, dependsOnValue, language,
-                                             allowed ? allowed.split(',') : [])
-            : await api.cropOntologyOptions(what, dependsOnValue)
+          if (source === 'client_catalog') {
+            next[name] = await api.clientCatalogOptions(
+              what, dependsOnValue, language, allowed ? allowed.split(',') : [])
+          } else if (source === 'data_standard') {
+            // A published standard's own values — ISO 3166-1's countries and
+            // whatever is added beside them. The list lives in the standards
+            // database; there is no copy of it in this application.
+            next[name] = await api.standardOptions(STANDARDS[what] || what,
+                                                   codeType || 'alpha_2')
+          } else {
+            next[name] = await api.cropOntologyOptions(what, dependsOnValue)
+          }
         } catch {
           next[name] = []
         }
@@ -147,6 +165,11 @@ export default function FormRenderer({
   language,
   onLanguage,
   languageNames,
+  // What to do with a file somebody chooses: `{ onPick, uploading }`. Absent on
+  // a preview, where there is nothing to collect files for.
+  media,
+  // Told the position, so the page that submits can send it.
+  onLocation,
 }) {
   const [ownLanguage, setOwnLanguage] = useState(() => defaultLanguage(formJson))
   const chosen = language || ownLanguage
@@ -165,6 +188,10 @@ export default function FormRenderer({
   const off = hidden(shown, values)
 
   const dynamic = useDynamicOptions(shown.fields, values, chosen)
+
+  // A form that records where it was filled in asks once, when it opens.
+  const place = useLocation(formJson)
+  useEffect(() => { onLocation?.(place.position) }, [place.position])
 
   const submit = (e) => {
     e.preventDefault()
@@ -220,6 +247,31 @@ export default function FormRenderer({
         </p>
       )}
 
+      {/* Where this is being filled in. Said plainly, because a form that
+          cannot be sent without a position should say so before it is filled
+          in rather than after. */}
+      {place.wanted && (
+        <div className={`whereami whereami--${place.state}`}>
+          {place.state === 'asking' && 'Finding your location…'}
+          {place.state === 'ready' && (
+            <>
+              Location recorded
+              {place.position?.accuracy
+                && ` · accurate to about ${Math.round(place.position.accuracy)} m`}
+              {place.inside === false && (
+                <b> · this looks outside the area this form covers</b>
+              )}
+            </>
+          )}
+          {place.state === 'refused' && (place.required
+            ? 'This form records where it is filled in, and location access was refused. Allow it in your browser and reload to continue.'
+            : 'Location access was refused, so this answer will not record where it was filled in.')}
+          {place.state === 'failed' && (place.required
+            ? 'Your location could not be found, and this form needs it. Move somewhere with a clearer signal and reload.'
+            : 'Your location could not be found, so this answer will not record where it was filled in.')}
+        </div>
+      )}
+
       {group(shown)
         .filter((g) => !off.sections.has(g.key))
         .map((g) => ({ ...g, fields: g.fields.filter((f) => !off.fields.has(f.name)) }))
@@ -237,6 +289,7 @@ export default function FormRenderer({
                   value={values?.[field.name]}
                   error={errors[field.name]}
                   onChange={change}
+                  media={media}
                 />
               </div>
             ))}
@@ -244,7 +297,13 @@ export default function FormRenderer({
         </fieldset>
       ))}
 
-      {onSubmit && !off.form && (
+      {onSubmit && !off.form && place.blocked && (
+        <p className="tiny muted">
+          This form cannot be sent until your location is available.
+        </p>
+      )}
+
+      {onSubmit && !off.form && !place.blocked && (
         <div className="formview__send">
           <button type="submit" className="btn btn--primary" disabled={submitting}>
             {submitting && <span className="spin" />}

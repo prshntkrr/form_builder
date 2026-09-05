@@ -14,6 +14,18 @@ FORMS_SYSTEM_VIEW = "forms.system.view"
 FORMS_CREATE = "forms.create"
 FORMS_EDIT = "forms.edit"
 FORMS_DELETE = "forms.delete"
+# Sending a published form to another platform. Its own permission: being able
+# to see a form, or to fill one in, says nothing about whether this account may
+# hand its definition to something outside this application.
+FORMS_EXPORT = "forms.export"
+
+# --- channel routing --------------------------------------------------------
+# Deciding which keyword or menu option reaches which form.
+MCDC_MANAGE = "mcdc.manage"
+# What the collection platform itself holds: resolve a route for a caller, and
+# send in what that caller answered. Deliberately narrow — it is not an
+# administrator, and it reaches nothing its callers could not reach themselves.
+MCDC_INTEGRATE = "mcdc.integrate"
 
 # --- responses (every column, plus export) ----------------------------------
 RESPONSES_VIEW = "responses.view"
@@ -49,6 +61,15 @@ CATALOGUE = [
                "Change questions, pause or resume a form, and roll back a version", "Forms"),
     Permission(FORMS_DELETE, "Remove forms",
                "Take a form out of the list. Collected records are kept", "Forms"),
+    Permission(MCDC_MANAGE, "Manage channel routing",
+               "Decide which WhatsApp keyword or IVR option reaches which form",
+               "Forms"),
+    Permission(MCDC_INTEGRATE, "Act as the collection platform",
+               "Resolve a channel route for a caller, and submit what they "
+               "answered on their behalf", "Forms"),
+    Permission(FORMS_EXPORT, "Export forms",
+               "Send a published form's configuration to a collection platform such "
+               "as MCDC", "Forms"),
 
     Permission(RESPONSES_VIEW, "See every answer",
                "Read responses in full, including columns hidden from other roles",
@@ -80,7 +101,8 @@ register(
         "editor": [
             RECORDS_VIEW, RECORDS_CREATE,
             FORMS_SYSTEM_VIEW,
-            FORMS_VIEW, FORMS_CREATE, FORMS_EDIT, FORMS_DELETE,
+            FORMS_VIEW, FORMS_CREATE, FORMS_EDIT, FORMS_DELETE, FORMS_EXPORT,
+            MCDC_MANAGE,
             RESPONSES_VIEW, RESPONSES_EXPORT,
             LIBRARY_VIEW, LIBRARY_MANAGE,
             DICTIONARY_VIEW, DICTIONARY_MANAGE,
@@ -98,5 +120,7 @@ register(
         "manage_dictionary": DICTIONARY_MANAGE,
         "use_library": LIBRARY_VIEW,
         "see_responses": RESPONSES_VIEW,
+        "export_forms": FORMS_EXPORT,
+        "manage_routing": MCDC_MANAGE,
     },
 )

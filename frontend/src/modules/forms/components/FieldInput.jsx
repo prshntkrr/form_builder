@@ -1,7 +1,8 @@
+import MediaField from './MediaField.jsx'
 import React from 'react'
 
 /** One control for one field. Types match the backend registry. */
-export default function FieldInput({ field, value, onChange, error }) {
+export default function FieldInput({ field, value, onChange, error, media }) {
   const v = field.validation || {}
   const set = (val) => onChange(field.name, val)
 
@@ -173,12 +174,19 @@ export default function FieldInput({ field, value, onChange, error }) {
       break
     }
 
+    // A photo, a recording or a document. One control for all three — what
+    // differs is what it accepts and whether it opens a camera.
+    case 'image':
+    case 'audio':
     case 'file':
       control = (
-        <input
-          type="file"
-          className={base.className}
-          onChange={(e) => set(e.target.files?.[0]?.name ?? '')}
+        <MediaField
+          field={field}
+          value={value}
+          onChange={onChange}
+          error={error}
+          onPick={media?.onPick}
+          uploading={media?.uploading}
         />
       )
       break

@@ -40,6 +40,15 @@ function OptionSource({ field, fields, patch }) {
     if (next === 'crop_ontology') {
       return patch({ options: [], options_from: { source: 'crop_ontology', kind: 'crop' } })
     }
+    if (next === 'data_standard') {
+      // A published standard's own values. Alpha-2 by default, because that is
+      // what a country answer is normally stored as: choosing Mexico stores MX.
+      return patch({
+        options: [],
+        options_from: { source: 'data_standard', standard: 'ISO_3166_1',
+                        code_type: 'alpha_2' },
+      })
+    }
     // The choices are the catalogue's, so anything written on the form goes.
     patch({ options: [], options_from: { source: 'client_catalog', catalog: '' } })
   }
@@ -50,11 +59,44 @@ function OptionSource({ field, fields, patch }) {
     <div className="opts">
       <span className="minilabel">Choices come from</span>
 
-      <select className="control" value={kind} onChange={(e) => choose(e.target.value)}>
+      <select className="control" aria-label="Choices come from"
+              value={kind} onChange={(e) => choose(e.target.value)}>
         <option value="form">This form</option>
         {can.use_client_catalogs && <option value="client_catalog">CIMMYT Catalogue</option>}
         {can.use_crop_ontology && <option value="crop_ontology">The crop ontologies</option>}
+        <option value="data_standard">A published standard</option>
       </select>
+
+      {kind === 'data_standard' && (
+        <>
+          <select
+            className="control"
+            aria-label="Standard"
+            value={from.standard || 'ISO_3166_1'}
+            onChange={(e) => patch({ options_from: { ...from, standard: e.target.value } })}
+          >
+            <option value="ISO_3166_1">ISO 3166-1 (countries)</option>
+          </select>
+
+          <span className="minilabel">Answers are stored as</span>
+          <select
+            className="control"
+            aria-label="Code type"
+            value={from.code_type || 'alpha_2'}
+            onChange={(e) => patch({ options_from: { ...from, code_type: e.target.value } })}
+          >
+            <option value="alpha_2">Alpha-2 — MX</option>
+            <option value="alpha_3">Alpha-3 — MEX</option>
+            <option value="numeric">Numeric-3 — 484</option>
+          </select>
+
+          <span className="tiny muted">
+            The list comes from the Standards database, so it is the same
+            everywhere and stays current. The answer stored is the code; the
+            country's name is what people see.
+          </span>
+        </>
+      )}
 
       {kind === 'client_catalog' && (
         <>

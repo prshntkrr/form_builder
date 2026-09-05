@@ -2,16 +2,9 @@ import React, { useCallback, useEffect, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import { api } from '../api.js'
 import RelatedSubmissions from '../components/RelatedSubmissions.jsx'
+import RecordCell from '../components/RecordCell.jsx'
 
 const PAGE = 25
-
-const cell = (value) => {
-  if (value == null || value === '') return <span className="faint">—</span>
-  if (Array.isArray(value)) return value.join(', ')
-  if (typeof value === 'boolean') return value ? 'Yes' : 'No'
-  if (typeof value === 'object') return Object.entries(value).map(([k, v]) => `${k} ${v}`).join(', ')
-  return String(value)
-}
 
 const when = (value) =>
   value ? new Date(value).toLocaleString(undefined, {
@@ -180,7 +173,13 @@ export default function FormRecords() {
                       <td className="muted">{row.created_by || '—'}</td>
                       {data.columns.map((c) => (
                         <td key={c.name} title={String((row.form_data || {})[c.name] ?? '')}>
-                          {cell((row.form_data || {})[c.name])}
+                          <RecordCell
+                            column={c}
+                            value={(row.form_data || {})[c.name]}
+                            media={(row.media || {})[c.name]}
+                            formId={formId}
+                            surveyId={row.survey_id}
+                          />
                         </td>
                       ))}
                       {links?.is_child && (

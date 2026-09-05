@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
 
 from app.core import auth_service
-from app.core.deps import needs
+from app.core.deps import needs, needs_any
 from app.modules.client_catalog import catalog_options as catalog_options_service
 from app.modules.client_catalog import catalog_service
 from app.modules.client_catalog import eagrology_import
@@ -148,9 +148,15 @@ def catalog_options(
     language: Optional[str] = Query(None, description="Label language, e.g. 'en'"),
     allowed: List[str] = Query(
         default=[], description="Only these codes — a field offering part of a catalogue"),
-    user: Dict[str, Any] = Depends(needs(CATALOG_VIEW)),
+    user: Dict[str, Any] = Depends(needs_any(CATALOG_VIEW, "records.create")),
 ):
     """The catalogue's values shaped as form options.
+
+    Readable by anyone who may *fill a form in*, as well as by anyone who may
+    browse the catalogue: a catalogue-backed question is unanswerable without
+    its choices, and a Surveyor who could not read them met a select with no
+    options and no way to know why. Reading the list a question offers is part
+    of answering the question; managing the catalogue is still `client_catalog.manage`.
 
     What a field with `options_from.source == "client_catalog"` is drawn from.
     `parent_code` narrows a dependent list to the chosen parent. Withdrawn

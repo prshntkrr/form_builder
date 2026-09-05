@@ -85,6 +85,11 @@ ENVELOPE_COLUMNS: List[tuple] = [
 # ever be stored under it.
 PARENT_COLUMN = "parent_survey_id"
 
+# Where a submission's own position is stored, for a form that collects one.
+# Like PARENT_COLUMN: only forms that ask for it get the column, so every other
+# form's table is exactly the shape it has always been.
+LOCATION_COLUMN = "location"
+
 
 class FormSchemaError(ValueError):
     """The definition is unusable even after normalization."""
@@ -380,7 +385,18 @@ def _normalize_semantic_concept(raw: Dict[str, Any]) -> Optional[Dict[str, str]]
 # Where a field's choices are read from, when the form does not carry them.
 CROP_ONTOLOGY_SOURCE = "crop_ontology"
 CLIENT_CATALOG_SOURCE = "client_catalog"
-OPTION_SOURCES = (CROP_ONTOLOGY_SOURCE, CLIENT_CATALOG_SOURCE)
+DATA_STANDARD_SOURCE = "data_standard"
+
+# What a `data_standard` source may name. One entry per standard whose values a
+# field can be drawn from — a name the caller sends is looked up here and never
+# used to reach a module, so a field cannot ask for something arbitrary.
+STANDARD_SOURCES = {
+    "ISO_3166_1": {"label": "ISO 3166-1 (countries)",
+                   "code_types": ("alpha_2", "alpha_3", "numeric"),
+                   "default_code_type": "alpha_2"},
+}
+
+OPTION_SOURCES = (CROP_ONTOLOGY_SOURCE, CLIENT_CATALOG_SOURCE, DATA_STANDARD_SOURCE)
 
 
 def _normalize_options_from(raw: Any) -> Optional[Dict[str, str]]:
@@ -390,11 +406,20 @@ def _normalize_options_from(raw: Any) -> Optional[Dict[str, str]]:
     which traits belong to one, which municipalities the client recognises — and
     a form should not carry a stale copy of it.
 
-    Two sources, each naming what to read:
+    Three sources, each naming what to read:
 
         {"source": "crop_ontology",  "kind": "trait",  "depends_on": "crop"}
         {"source": "client_catalog", "catalog": "Municipios_mx_list",
                                      "depends_on": "rcl_estado_colaborador_c"}
+        {"source": "data_standard",  "standard": "ISO_3166_1",
+                                     "code_type": "alpha_2"}
+
+    A `data_standard` field draws its choices from a published standard rather
+    than from anybody's own list — ISO 3166-1's countries, for instance. Which
+    standards may be named is `STANDARD_SOURCES` above, so the name is looked up
+    rather than used to reach anything; `code_type` says which of the standard's
+    code sets the answer is stored as, and for ISO 3166-1 that defaults to
+    alpha-2, so choosing Mexico stores "MX".
 
     `depends_on` names another field on the same form. Crop traits are only
     meaningful once a crop is chosen, and a municipality only once a state is,
@@ -409,7 +434,19 @@ def _normalize_options_from(raw: Any) -> Optional[Dict[str, str]]:
 
     described: Dict[str, str] = {"source": source}
 
-    if source == CLIENT_CATALOG_SOURCE:
+    if source == DATA_STANDARD_SOURCE:
+        standard = str(raw.get("standard") or "").strip().upper()
+        described_standard = STANDARD_SOURCES.get(standard)
+        if described_standard is None:
+            return None
+        described["standard"] = standard
+
+        code_type = str(raw.get("code_type") or "").strip()
+        if code_type not in described_standard["code_types"]:
+            code_type = described_standard["default_code_type"]
+        described["code_type"] = code_type
+
+    elif source == CLIENT_CATALOG_SOURCE:
         # The client's catalog id, exactly as their workbook spells it — it is
         # the key into their own tables, so it is never slugified.
         catalog = str(raw.get("catalog") or raw.get("catalog_id") or "").strip()
@@ -650,10 +687,86 @@ def normalize_form(raw: Any, fallback_title: str = "Untitled Form") -> Dict[str,
     if relationship:
         form["relationship"] = relationship
 
+    # Same rule for both: a form that does not ask carries neither key.
+    location = _normalize_location(raw.get("location"))
+    if location:
+        form["location"] = location
+
+    geofence = _normalize_geofence(raw.get("geofence"))
+    if geofence:
+        form["geofence"] = geofence
+
     return form
 
 
 RELATIONSHIP_TYPES = ("independent", "child")
+
+
+def _normalize_location(raw: Any) -> Optional[Dict[str, bool]]:
+    """Whether this form asks where it was filled in.
+
+        {"enabled": true, "required": false}
+
+    Absent for a form that does not ask — which is every form built before this
+    existed. Collecting a position and *fencing* it are two different things and
+    are stored separately; see `_normalize_geofence`.
+    """
+    if not isinstance(raw, dict) or not raw.get("enabled"):
+        return None
+
+    return {"enabled": True, "required": bool(raw.get("required"))}
+
+
+def _normalize_geofence(raw: Any) -> Optional[Dict[str, Any]]:
+    """The area a submission has to be inside, if there is one.
+
+        {"enabled": true, "polygon": [[lng, lat], [lng, lat], [lng, lat]]}
+
+    `[longitude, latitude]`, the GeoJSON order, so the ring can be handed to
+    anything that reads GeoJSON without being flipped first.
+
+    A ring of fewer than three points encloses nothing, so it normalizes away:
+    a fence nobody can be inside would refuse every submission.
+    """
+    if not isinstance(raw, dict) or not raw.get("enabled"):
+        return None
+
+    ring = []
+    for point in raw.get("polygon") or []:
+        try:
+            lng, lat = float(point[0]), float(point[1])
+        except (TypeError, ValueError, IndexError):
+            continue
+        if -180 <= lng <= 180 and -90 <= lat <= 90:
+            ring.append([lng, lat])
+
+    if len(ring) < 3:
+        return None
+
+    return {"enabled": True, "polygon": ring}
+
+
+def collects_location(form_json: Any) -> bool:
+    """Whether this form asks where it was filled in."""
+    if not isinstance(form_json, dict):
+        return False
+    return bool((form_json.get("location") or {}).get("enabled"))
+
+
+def location_required(form_json: Any) -> bool:
+    if not isinstance(form_json, dict):
+        return False
+    return bool((form_json.get("location") or {}).get("required"))
+
+
+def geofence_of(form_json: Any) -> Optional[Dict[str, Any]]:
+    """The ring a submission has to be inside, or None."""
+    if not isinstance(form_json, dict):
+        return None
+    fence = form_json.get("geofence")
+    if isinstance(fence, dict) and fence.get("enabled") and fence.get("polygon"):
+        return fence
+    return None
 
 
 def _normalize_relationship(raw: Any) -> Optional[Dict[str, str]]:

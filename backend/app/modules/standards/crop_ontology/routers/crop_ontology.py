@@ -8,7 +8,7 @@ from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.core.deps import needs
+from app.core.deps import needs, needs_any
 from app.modules.standards.crop_ontology import dynamic_options, importer, variable_service
 from app.modules.standards.crop_ontology.permissions import CROP_ONTOLOGY_MANAGE, CROP_ONTOLOGY_VIEW
 
@@ -26,9 +26,13 @@ def loaded(user: Dict[str, Any] = Depends(needs(CROP_ONTOLOGY_VIEW))):
 def options_for_field(
     kind: str = Query(..., description="crop, trait or variable"),
     depends_on: Optional[str] = Query(None, description="the chosen crop's ontology id"),
-    user: Dict[str, Any] = Depends(needs(CROP_ONTOLOGY_VIEW)),
+    user: Dict[str, Any] = Depends(needs_any(CROP_ONTOLOGY_VIEW, "records.create")),
 ):
     """The choices for a field whose options are read when the form is drawn.
+
+    Readable by anyone who may fill a form in, as well as by anyone who may
+    browse the ontology: an ontology-backed question is unanswerable without its
+    choices. Browsing the ontology itself still takes `crop_ontology.view`.
 
     `kind=crop` lists the imported crops; `kind=trait` needs `depends_on` to be
     the chosen crop, because every crop has its own traits.

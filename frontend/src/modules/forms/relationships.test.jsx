@@ -49,20 +49,20 @@ beforeEach(() => {
   answers.parents = {
     parent_form_id: 'FRM00019',
     parent_form_title: 'Farmer Registration',
-    submissions: [{ survey_id: 'FRM00019-000001', summary: 'Prashant Kumar · ABC',
+    submissions: [{ survey_id: '000001', summary: 'Prashant Kumar · ABC',
                     created_by: 'Prashant', created_on: '2026-01-01' }],
   }
-  answers.children = { survey_id: 'FRM00019-000001', children: [{
+  answers.children = { survey_id: '000001', children: [{
     form_id: 'FRM00020', form_title: 'Plot Registration', form_status: 'Active',
     submissions: [
-      { survey_id: 'FRM00020-000001', created_by: 'Shrishti', created_on: '2026-01-02',
+      { survey_id: '000001', created_by: 'Shrishti', created_on: '2026-01-02',
         form_data: { plot_name: 'Plot A', area: 2 } },
-      { survey_id: 'FRM00020-000002', created_by: 'Shrishti', created_on: '2026-01-03',
+      { survey_id: '000002', created_by: 'Shrishti', created_on: '2026-01-03',
         form_data: { plot_name: 'Plot B', area: 1.5 } },
     ],
   }] }
   answers.parent = { parent: { form_id: 'FRM00019', form_title: 'Farmer Registration',
-                               survey_id: 'FRM00019-000001',
+                               survey_id: '000001',
                                summary: 'Prashant Kumar · ABC', may_open: true } }
   answers.render = {
     form_id: 'FRM00020', form_status: 'Active', version_no: 1, language: 'en', languages: [],
@@ -148,7 +148,7 @@ describe('choosing a relationship in the builder', () => {
 describe('what is related to a submission', () => {
   async function drawIt() {
     const { default: RelatedSubmissions } = await import('./components/RelatedSubmissions.jsx')
-    draw(<RelatedSubmissions formId="FRM00019" surveyId="FRM00019-000001" />)
+    draw(<RelatedSubmissions formId="FRM00019" surveyId="000001" />)
     // Each child form is a section headed by its name and how many records
     // belong to *this* parent.
     return screen.findByText('Plot Registration')
@@ -162,14 +162,14 @@ describe('what is related to a submission', () => {
     expect(screen.getByText(/Plot B/)).toBeTruthy()
     // Asked for this parent, not for everything.
     expect(calls.find(([k]) => k === 'children')).toEqual(
-      ['children', 'FRM00019', 'FRM00019-000001'])
+      ['children', 'FRM00019', '000001'])
   })
 
   test('adding one carries the parent it belongs to', async () => {
     await drawIt()
 
     const add = screen.getByRole('link', { name: /Add plot registration/i })
-    expect(add.getAttribute('href')).toBe('/f/FRM00020/new?parent=FRM00019-000001')
+    expect(add.getAttribute('href')).toBe('/f/FRM00020/new?parent=000001')
   })
 
   test('a draft child form is not offered to be filled in', async () => {
@@ -242,13 +242,13 @@ describe('filling a child form', () => {
 
     await user.selectOptions(
       await screen.findByRole('combobox', { name: 'Parent submission' }),
-      'FRM00019-000001')
+      '000001')
 
     expect(await screen.findByLabelText(/Plot name/)).toBeTruthy()
   })
 
   test('opened from a parent submission, it goes straight to the questions', async () => {
-    await drawFill('?parent=FRM00019-000001')
+    await drawFill('?parent=000001')
 
     expect(await screen.findByLabelText(/Plot name/)).toBeTruthy()
     expect(screen.queryByRole('combobox', { name: 'Parent submission' })).toBeNull()
@@ -256,7 +256,7 @@ describe('filling a child form', () => {
 
   test('the parent goes with the answers, for the backend to check', async () => {
     const user = userEvent.setup()
-    await drawFill('?parent=FRM00019-000001')
+    await drawFill('?parent=000001')
 
     await user.type(await screen.findByLabelText(/Plot name/), 'Plot A')
     await user.click(screen.getByRole('button', { name: /Submit/ }))
@@ -265,7 +265,7 @@ describe('filling a child form', () => {
     const [, formId, data, , , parent] = calls.find(([k]) => k === 'submit')
     expect(formId).toBe('FRM00020')
     expect(data).toMatchObject({ plot_name: 'Plot A' })
-    expect(parent).toBe('FRM00019-000001')
+    expect(parent).toBe('000001')
   })
 
   test('an independent form is unaffected', async () => {

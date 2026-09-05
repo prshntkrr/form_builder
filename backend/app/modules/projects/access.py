@@ -183,6 +183,13 @@ def _assigned_form_ids(user: Dict[str, Any], project_id: str) -> List[str]:
         assigned to everyone in the project
         assigned to them by name
         assigned to a group they are in
+
+    "Everyone in the project" means everyone **in the project**: the membership
+    is checked here rather than assumed by the caller. Every caller today asks
+    only after establishing membership, so this changes none of their answers —
+    but a caller that forgot would have been handed a form belonging to a
+    project the account has nothing to do with, which is exactly the kind of
+    hole a helper should not be able to open.
     """
     with transaction() as cur:
         cur.execute(
@@ -193,6 +200,9 @@ def _assigned_form_ids(user: Dict[str, Any], project_id: str) -> List[str]:
             LEFT   JOIN project_group_member gm
                    ON gm.group_id = a.group_id AND gm.user_id = %(user)s
             WHERE  f.project_id = %(project)s
+              AND  EXISTS (SELECT 1 FROM project_member pm
+                           WHERE pm.project_id = f.project_id
+                             AND pm.user_id = %(user)s)
               AND  (
                     a.kind = 'everyone'
                  OR (a.kind = 'user'  AND a.user_id = %(user)s)

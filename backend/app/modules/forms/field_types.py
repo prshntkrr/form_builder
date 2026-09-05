@@ -174,8 +174,17 @@ _TYPES: List[FieldType] = [
     FieldType("multiselect", _to_list, "array", "TEXT", has_options=True, multi=True,
               aliases=["checkboxgroup", "checkbox_group", "checkboxes",
                        "multi_select", "multiple"]),
+    # Three media types, one behaviour: the answer is the id of a `form_media`
+    # row, and the object itself lives in S3. `image` and `photo` used to be
+    # aliases of `file`; they are their own types now so a form can ask for a
+    # photo and get a camera rather than a file picker. A definition already
+    # saved says `file` and keeps working exactly as it did.
     FieldType("file", _to_str, "string", "TEXT",
-              aliases=["upload", "image", "photo", "attachment"]),
+              aliases=["upload", "attachment", "document"]),
+    FieldType("image", _to_str, "string", "TEXT",
+              aliases=["photo", "picture"]),
+    FieldType("audio", _to_str, "string", "TEXT",
+              aliases=["recording", "voice", "sound"]),
     FieldType("signature", _to_str, "string", "TEXT"),
     FieldType("location", _to_object, "object {lat, lng}", "TEXT",
               aliases=["gps", "geo", "coordinates", "geopoint"]),

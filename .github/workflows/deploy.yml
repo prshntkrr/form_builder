@@ -72,6 +72,29 @@ jobs:
                     print(f"{name}: {why}")
                 sys.exit(1)
             print("modules loaded:", ", ".join(m.name for m in registry.modules()))
+
+            # What this installation is set up to do, before it is asked to do
+            # it. Every one of these is optional and none is fatal — the
+            # application runs without them — but each fails at a distance when
+            # it is missing: uploads answer 503, an export refuses, and somebody
+            # spends an afternoon on it. Names and states only; no secret is
+            # printed, and `set -x` is never on in this script.
+            from app.core.config import settings
+
+            print("configuration:")
+            print("  S3 bucket        :", settings.aws_s3_bucket or "NOT SET — uploads will answer 503")
+            print("  AWS region       :", settings.aws_region,
+                  "(must be the bucket's own region, or a browser upload gets a 307 it cannot follow)")
+            print("  AWS credentials  :",
+                  "from settings" if settings.aws_access_key_id
+                  else "from the boto3 chain (instance role/profile/environment)")
+            print("  MCDC endpoint    :", settings.mcdc_base_url or "NOT SET — exporting will refuse")
+            print("  MCDC key         :", "set" if settings.mcdc_api_key else "NOT SET")
+            print("  Gateway          :",
+                  f"{'on' if settings.mcdc_gateway_enabled else 'OFF'}, "
+                  f"{settings.mcdc_gateway_rate_limit}/{settings.mcdc_gateway_rate_window_seconds}s "
+                  f"per caller, body <= {settings.mcdc_gateway_max_body_mb} MB")
+            print("  OpenAI key       :", "set" if settings.openai_api_key else "NOT SET — the AI builder is off")
             PREFLIGHT
             then
                 echo "The new code does not load cleanly. Nothing has been changed —"
@@ -97,6 +120,12 @@ jobs:
             # failure on the Standards screen.
             python import_ontology.py || echo "WARNING: ontology import failed, continuing"
             python import_icasa.py || echo "WARNING: ICASA import failed, continuing"
+
+            # ISO 3166-1 and the units table are not here on purpose. Both are
+            # datasets held in the repository rather than fetched from anywhere,
+            # so each is a seed in its module's manifest and runs when the
+            # backend starts. Adding a script for them would mean two places
+            # that import the same rows.
 
             echo "Importing crop ontologies..."
 
@@ -176,6 +205,11 @@ jobs:
                 echo "===== started $(date --iso-8601=seconds) at $(git rev-parse --short HEAD)"
             } >> backend.log
 
+            # One worker, and this is not an oversight. The gateway's rate
+            # limiter counts inside one process: two workers would each count to
+            # the limit and let twice as much through. Before adding `--workers`
+            # or a second instance, put a shared counter behind `RateLimiter` —
+            # see MCDC_GATEWAY.md, which says what that takes.
             nohup venv/bin/uvicorn app.main:app \
               --host 0.0.0.0 \
               --port 8021 \
@@ -203,6 +237,14 @@ jobs:
             fi
 
             echo "Health: $HEALTH"
+
+            # The startup migrations, as they reported themselves. They are
+            # idempotent and say nothing on a second run, so this is empty on
+            # every deploy but the one that changed something — which is the one
+            # worth being able to read afterwards.
+            echo "Schema and seed work on this start:"
+            grep -aE "Granted|form_export gained|ISO 3166-1|Created (form table|survey sequence)|Creating missing table" \
+              backend.log | tail -20 || echo "  (nothing to do — the database was already current)"
 
             case "$HEALTH" in
                 *'"status":"ok"'*)

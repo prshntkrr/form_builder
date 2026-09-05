@@ -8,12 +8,14 @@ from psycopg2 import IntegrityError
 from app.core import auth_service
 from app.modules.forms import form_service
 from app.modules.forms import llm
+from app.modules.forms import connectors
+from app.modules.forms import publishing
 from app.modules.forms import relationships
 from app.modules.forms import standard_library
 from app.core.deps import current_user, needs
 from app.modules.forms.permissions import (
     FORMS_SYSTEM_VIEW,
-    FORMS_CREATE, FORMS_DELETE, FORMS_EDIT, FORMS_VIEW, LIBRARY_MANAGE,
+    FORMS_CREATE, FORMS_DELETE, FORMS_EDIT, FORMS_EXPORT, FORMS_VIEW, LIBRARY_MANAGE,
 )
 from app.modules.forms.config_validation import ConfigValidationError, validate_config
 from app.modules.forms.form_schema import FormSchemaError, normalize_form
@@ -22,6 +24,7 @@ from app.modules.forms import dictionary_service
 from app.modules.forms import translations
 from app.modules.forms.schemas import (
     CreateFormRequest,
+    ExportRequest,
     GenerateRequest,
     RefineRequest,
     RevalidateRequest,
@@ -688,3 +691,139 @@ def diff(
         raise HTTPException(status_code=404, detail=str(exc))
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+
+
+# --------------------------------------------------------------------------- #
+# what leaves this application
+# --------------------------------------------------------------------------- #
+def _project_of(form_id: str) -> Optional[str]:
+    try:
+        from app.modules.projects import project_service
+    except Exception:
+        return None
+    return project_service.project_of_form(form_id)
+
+
+def _published(form_id: str):
+    """The immutable published configuration, or the reason there is none."""
+    try:
+        form = form_service.get_form(form_id)
+    except form_service.FormNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+    try:
+        return publishing.published(form, project_id=_project_of(form_id))
+    except publishing.NotPublished as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+
+
+def _may_read_published(form_id: str = Path(...),
+                        user: Dict[str, Any] = Depends(current_user)) -> Dict[str, Any]:
+    """Who may read a form's published configuration.
+
+    Anyone who may open the form — to manage it, or to answer it. A published
+    configuration is exactly what somebody filling the form in needs, and it is
+    the same definition `/render` already hands them; gating it on the
+    manager's permission alone would mean the collection platform could not
+    fetch the configuration for the very person it is collecting from.
+
+    Both answers come from the existing helpers, so a form stays as reachable
+    here as it is everywhere else, and no more.
+    """
+    try:
+        from app.modules.projects import access, project_service
+    except Exception:
+        project_id = None
+        access = None
+    else:
+        project_id = project_service.project_of_form(form_id)
+
+    if project_id and access is not None:
+        if access.may_see_form(user, form_id) or access.may_fill_form(user, form_id):
+            return user
+        # A project this account cannot reach reads as one that is not there.
+        raise HTTPException(status_code=404, detail=f"No form '{form_id}'")
+
+    if auth_service.may(user, FORMS_VIEW) or auth_service.may(user, FORMS_SYSTEM_VIEW):
+        return user
+
+    raise HTTPException(
+        status_code=403,
+        detail=(f"Your role ({user.get('role_label') or user.get('role')}) cannot "
+                "read this form"))
+
+
+@router.get("/{form_id}/published")
+def published_config(
+    form_id: str,
+    user: Dict[str, Any] = Depends(_may_read_published),
+):
+    """One form's published configuration: the version that is live, frozen.
+
+    Read from `form_version`, not from the form's current JSON — a definition
+    that has been handed out cannot change underneath whoever received it. A
+    draft has none, and says so rather than handing out something nobody is
+    collecting against.
+
+    Readable by anyone who may open the form — to manage it or to answer it.
+    A project this account cannot reach answers 404 like everywhere else.
+    """
+    return _published(form_id)
+
+
+@router.get("/{form_id}/exports")
+def export_history(
+    form_id: str,
+    user: Dict[str, Any] = Depends(needs_on_form(FORMS_EXPORT, "project.forms.manage")),
+):
+    """Which versions of this form have gone where, and what can be sent to."""
+    try:
+        form_service.get_form(form_id)
+    except form_service.FormNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+    return {"form_id": form_id, "connectors": connectors.available(),
+            "exports": connectors.history(form_id)}
+
+
+@router.post("/{form_id}/exports", status_code=201)
+def export_form(
+    form_id: str,
+    req: ExportRequest,
+    user: Dict[str, Any] = Depends(needs_on_form(FORMS_EXPORT, "project.forms.manage")),
+):
+    """Send this form's published configuration to a collection platform.
+
+    Its own permission, deliberately: reading a form, or filling one in, says
+    nothing about whether this account may hand its definition to something
+    outside this application.
+
+    Idempotent on form + version + connector — sending version 3 to MCDC twice
+    is one delivery, and the second call says so (`already_exported`). Publishing
+    an edit makes version 4, which is a new one.
+
+    An attempt that fails is recorded as FAILED with what went wrong, and the
+    same call retries it in place: no second row, no second id at the far end,
+    and the published form itself is untouched either way. What travels is the
+    configuration only — collected answers go the other way, through the
+    submission service.
+
+    201  exported, or already exported
+    400  no such connector
+    409  this form has no published version to send
+    422  the published configuration is not valid
+    502  the far end refused, timed out or could not be reached (FAILED, retry)
+    """
+    published = _published(form_id)
+
+    try:
+        return connectors.send(published, req.connector,
+                               exported_by=auth_service.display_name(user))
+    except connectors.UnknownConnector as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except connectors.ConfigurationRejected as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except connectors.ExportError as exc:
+        # Whatever went wrong at the far end, the caller gets a sentence about
+        # it and the log gets the rest. The attempt is already recorded.
+        raise HTTPException(status_code=502, detail=str(exc))

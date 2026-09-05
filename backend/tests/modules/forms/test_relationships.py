@@ -1,8 +1,11 @@
 """One form's submissions hanging off another's.
 
-    Farmer Registration   survey_id = F-000001
-            └── Plot Registration   survey_id        = P-000001
-                                    parent_survey_id = F-000001
+    Farmer Registration   survey_id = 000001
+            └── Plot Registration   survey_id        = 000001
+                                    parent_survey_id = 000001
+
+Both are `000001`: the sequence is per form, and which form a row belongs to is
+`form_id`, stored beside it.
 
 The child keeps its own id and records which parent it belongs to. Nothing is
 copied, and the relationship is never a way past anything: a parent has to be a
@@ -165,8 +168,10 @@ def test_a_child_submission_keeps_its_own_survey_id(pair):
     farmer = _submit(pair["farmer"], {"farmer_name": "Prashant Kumar", "village": "ABC"})
     plot = _submit(pair["plot"], {"plot_name": "Plot A", "area": 2}, parent=farmer["survey_id"])
 
-    assert plot["survey_id"] != farmer["survey_id"]
-    assert plot["survey_id"].startswith(pair["plot"])
+    # Both are 000001 — one per form — and the child still records which of the
+    # parent's rows it belongs to.
+    assert plot["survey_id"] == "000001"
+    assert farmer["survey_id"] == "000001"
     assert plot["parent_survey_id"] == farmer["survey_id"]
 
 

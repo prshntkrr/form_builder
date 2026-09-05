@@ -26,7 +26,8 @@ from psycopg2 import sql
 from app.core.config import settings
 from app.core.database import table_exists  # noqa: F401  (re-exported)
 from app.modules.forms.form_schema import (
-    ENVELOPE_COLUMNS, MAX_IDENTIFIER, PARENT_COLUMN, parent_form_id,
+    ENVELOPE_COLUMNS, LOCATION_COLUMN, MAX_IDENTIFIER, PARENT_COLUMN,
+    collects_location, parent_form_id,
 )
 
 logger = logging.getLogger(__name__)
@@ -207,15 +208,21 @@ def ensure_survey_sequence(cur, table_name: str) -> str:
 
 
 def next_survey_id(cur, form_id: str, table_name: str) -> str:
-    """`FRM00007-000001`, `FRM00007-000002`, …
+    """`000001`, `000002`, … — six digits, and nothing else.
+
+    Counted per form, because every form has its own table and its own
+    sequence: Farmer Register and Plot Register both start at `000001` and
+    neither can reach the other's rows. Which form a submission belongs to is
+    `form_id`, which is stored beside it; repeating it inside the id said the
+    same thing twice.
 
     Zero-padded because `survey_id` is a VARCHAR: unpadded numbers would sort
-    "10" before "2". The form id prefix keeps ids meaningful once they are
-    exported away from their table.
+    "10" before "2". Six digits is a million submissions per form; past that
+    the number simply grows and keeps sorting correctly against its own width.
     """
     qualified = ensure_survey_sequence(cur, table_name)
     cur.execute("SELECT nextval(%s) AS n", (qualified,))
-    return f"{form_id}-{int(cur.fetchone()['n']):06d}"[:50]
+    return f"{int(cur.fetchone()['n']):06d}"
 
 
 def _create_table(cur, table_name: str) -> None:
@@ -287,6 +294,34 @@ def ensure_parent_column(cur, table_name: str, form_json: Dict[str, Any]) -> boo
     return True
 
 
+def ensure_location_column(cur, table_name: str, form_json: Dict[str, Any]) -> bool:
+    """Give a form that records where it was filled in somewhere to put it.
+
+    The same rule as `ensure_parent_column`: only a form that asks gets the
+    column, so every other form's table is untouched. Nullable, because a form
+    can start collecting positions after it already holds answers, and those
+    rows have none.
+
+    JSONB rather than two numeric columns: what is stored is one reading —
+    where, how sure, and when — and splitting it across columns would invite
+    half of it being written.
+    """
+    if not collects_location(form_json):
+        return False
+
+    if LOCATION_COLUMN in existing_columns(cur, table_name):
+        return False
+
+    cur.execute(
+        sql.SQL("ALTER TABLE {} ADD COLUMN IF NOT EXISTS {} JSONB").format(
+            _qualified(table_name), sql.Identifier(LOCATION_COLUMN)
+        )
+    )
+    logger.info("Added %s.%s for a form that records its location",
+                table_name, LOCATION_COLUMN)
+    return True
+
+
 def _parent_table(cur, form_json: Dict[str, Any]) -> Optional[str]:
     """The table the parent form's submissions live in, if it has one yet."""
     parent = parent_form_id(form_json)
@@ -344,6 +379,9 @@ def sync_table(cur, form_json: Dict[str, Any]) -> Dict[str, Any]:
             parent_table = _parent_table(cur, form_json)
             if parent_table and link_to_parent_table(cur, table_name, parent_table):
                 report["linked_to_parent"] = parent_table
+        if ensure_location_column(cur, table_name, form_json):
+            report["added_columns"].append(LOCATION_COLUMN)
+            report["columns"].append(LOCATION_COLUMN)
         return report
 
     current = existing_columns(cur, table_name)
@@ -362,6 +400,9 @@ def sync_table(cur, form_json: Dict[str, Any]) -> Dict[str, Any]:
         parent_table = _parent_table(cur, form_json)
         if parent_table and link_to_parent_table(cur, table_name, parent_table):
             report["linked_to_parent"] = parent_table
+
+    if ensure_location_column(cur, table_name, form_json):
+        report["added_columns"].append(LOCATION_COLUMN)
 
     if ensure_foreign_key(cur, table_name, "form_id", "forms", "form_id"):
         report["linked"] = True

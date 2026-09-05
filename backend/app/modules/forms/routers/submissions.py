@@ -4,6 +4,7 @@ from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
+from pydantic import BaseModel
 
 from app.core import auth_service
 from app.modules.forms import form_service
@@ -28,7 +29,9 @@ from app.modules.forms.permissions import (
 PROJECT_FORMS_MANAGE = "project.forms.manage"
 PROJECT_SUBMISSIONS_VIEW_ALL = "project.submissions.view_all"
 from app.core.database import transaction
-from app.modules.forms.schemas import SubmitRequest, TestSubmissionRequest, ViewConfigRequest
+from app.modules.forms.schemas import (
+    IngestRequest, SubmitRequest, TestSubmissionRequest, ViewConfigRequest,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/forms", tags=["submissions"])
@@ -158,15 +161,40 @@ def live_forms(
     if not allowed:
         return []
 
+    forms = [f for f in form_service.list_forms(status="Active", limit=500)
+             if f["form_id"] in allowed]
+
+    # Which project each one belongs to, and what that project is called — a
+    # list on a phone shows more than a title. One lookup for the page, not one
+    # per form, and nothing here widens what is in `allowed`.
+    where: Dict[str, Any] = {}
+    named: Dict[str, str] = {}
+    if access is not None and forms:
+        try:
+            from app.modules.projects import project_service
+            where = {f["form_id"]: project_service.project_of_form(f["form_id"])
+                     for f in forms}
+            named = {p["project_id"]: p["name"]
+                     for p in project_service.list_projects(
+                         [p for p in where.values() if p])}
+        except Exception:
+            logger.exception("Could not name the projects for the fillable list")
+
     return [
         {
             "form_id": f["form_id"],
             "form_title": f["form_title"],
             "form_description": f["form_description"],
             "field_count": f["field_count"],
+            # What a client needs to fetch the right configuration and show a
+            # useful list. The version is the one that is live: what somebody
+            # opening this form now would be filling in.
+            "version": f["version_no"],
+            "form_status": f["form_status"],
+            "project_id": where.get(f["form_id"]),
+            "project_name": named.get(where.get(f["form_id"])),
         }
-        for f in form_service.list_forms(status="Active", limit=500)
-        if f["form_id"] in allowed
+        for f in forms
     ]
 
 
@@ -207,34 +235,127 @@ def render(
     }
 
 
-@router.post("/{form_id}/submissions", status_code=201)
-def create_submission(form_id: str, req: SubmitRequest, user: Dict[str, Any] = Depends(needs(RECORDS_CREATE))):
+@router.post("/{form_id}/submissions/start", status_code=201)
+def start_submission(form_id: str, user: Dict[str, Any] = Depends(needs(RECORDS_CREATE))):
+    """Take the next `survey_id` for this form, so uploads have somewhere to go.
+
+    Called when Submit is pressed, never when the form is opened — opening a
+    form and walking away leaves nothing behind. Guarded exactly like sending
+    one: the same account, the same form, the same permission.
+    """
     form = _load(form_id, user, filling=True)
-
-    # Whether this form is a child, and whether the submission named is one this
-    # account may attach to. Everything the caller sent is a claim until this
-    # returns.
-    from app.modules.forms import relationships
     try:
-        parent = relationships.validate_parent(user, form, req.parent_survey_id)
-    except relationships.RelationshipError as exc:
-        raise HTTPException(status_code=422,
-                            detail={"errors": {"parent_survey_id": str(exc)}})
+        return {"survey_id": submission_service.start(
+            form, created_by=auth_service.display_name(user))}
+    except form_service.FormNotFound as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+
+
+def _store(form, user, *, data, language=None, location=None,
+           parent_survey_id=None, survey_id=None, form_version=None,
+           channel="web"):
+    """The one way a submission is stored, whatever it arrived on.
+
+    Mobile, WhatsApp, IVR and this application's own form page all end up here:
+    the same version check, the same validation, the same survey id sequence,
+    the same media and location rules, the same row. A channel that had its own
+    copy of any of that would be a second product.
+    """
+    from app.modules.forms import ingestion, relationships
 
     try:
-        return submission_service.submit(
-            form, req.data,
+        # Collected against a version that is no longer live? Say so, rather
+        # than reinterpreting those answers with today's definition.
+        ingestion.check_version(form, form_version)
+
+        # Whether this form is a child, and whether the submission named is one
+        # this account may attach to. Everything the caller sent is a claim
+        # until this returns.
+        try:
+            parent = relationships.validate_parent(user, form, parent_survey_id)
+        except relationships.RelationshipError as exc:
+            raise HTTPException(status_code=422,
+                                detail={"errors": {"parent_survey_id": str(exc)}})
+
+        stored = submission_service.submit(
+            form, data,
             created_by=auth_service.display_name(user),
-            language=req.language,
+            language=language,
             parent_survey_id=parent,
+            location=location,
+            survey_id=survey_id,
         )
     except submission_service.ValidationFailed as exc:
         raise HTTPException(status_code=422, detail={"errors": exc.errors})
     except form_service.FormNotFound as exc:
         raise HTTPException(status_code=409, detail=str(exc))
+    except HTTPException:
+        raise
     except Exception as exc:
-        logger.exception("Submission failed for %s", form_id)
+        logger.exception("Submission failed for %s", form["form_id"])
         raise HTTPException(status_code=500, detail=f"Could not save submission: {exc}")
+
+    # How it arrived, noted beside it. Metadata: it changed nothing above.
+    ingestion.record_channel(form["form_id"], stored["survey_id"], channel)
+    return {**stored, "channel": channel}
+
+
+@router.post("/{form_id}/submissions", status_code=201)
+def create_submission(form_id: str, req: SubmitRequest, user: Dict[str, Any] = Depends(needs(RECORDS_CREATE))):
+    form = _load(form_id, user, filling=True)
+    return _store(form, user, data=req.data, language=req.language,
+                  location=req.location, parent_survey_id=req.parent_survey_id,
+                  survey_id=req.survey_id, form_version=req.form_version,
+                  channel=req.channel or "web")
+
+
+@router.post("/{form_id}/submissions/ingest", status_code=201)
+def ingest_submission(form_id: str, req: IngestRequest,
+                      user: Dict[str, Any] = Depends(needs(RECORDS_CREATE))):
+    """Answers collected on another channel.
+
+    One endpoint for every channel, not one per channel: the adapter for the
+    named channel turns whatever it sends into the answers the form asks for,
+    and from there this is the ordinary submission path — same permission, same
+    project isolation, same validation, same survey id, same table.
+
+        {"channel": "whatsapp", "payload": {"messages": ["Ramesh", "1"]}}
+        {"channel": "ivr",      "payload": {"digits":   ["1"]}}
+        {"channel": "mobile",   "payload": {"farmer_name": "Ramesh"}}
+
+    An adapter translates shape. It does not decide whether a field is required,
+    resolve a condition, check a catalogue or touch a table.
+    """
+    from app.modules.forms import ingestion, routing
+    from app.modules.forms.permissions import MCDC_INTEGRATE
+
+    # Whose submission this is. The platform authenticates as itself and names
+    # the person on the other end; that name is worth something only because
+    # `channel_identity` maps it to an account, and it is that account's
+    # membership, assignment and fill permission that decide — never the
+    # platform's, and never the fact that somebody knew a keyword.
+    if req.channel_identity:
+        if not auth_service.may(user, MCDC_INTEGRATE):
+            raise HTTPException(
+                status_code=403,
+                detail="Sending on somebody else's behalf needs the collection "
+                       "platform's permission")
+        on_behalf_of = routing.user_for_identity(req.channel, req.channel_identity)
+        if on_behalf_of is None:
+            raise HTTPException(status_code=404, detail="No such caller")
+        user = on_behalf_of
+
+    form = _load(form_id, user, filling=True)
+
+    try:
+        answers = ingestion.normalize(req.channel, form["form_json"] or {}, req.payload)
+    except ingestion.ChannelError as exc:
+        raise HTTPException(status_code=422, detail={"errors": {"_channel": str(exc)}})
+
+    return _store(form, user, data=answers, language=req.language,
+                  location=req.location, parent_survey_id=req.parent_survey_id,
+                  survey_id=req.survey_id, form_version=req.form_version,
+                  channel=ingestion.adapter(req.channel).channel)
 
 
 @router.post("/{form_id}/test-submission")
@@ -282,6 +403,15 @@ def records(
             allowed = view_service.visible_fields(cur, form_id, form_json)
 
     keep = set(allowed)
+
+    # What was uploaded against these records, so the table can show a photo and
+    # a filename instead of a media id. Metadata only — the bytes stay in S3 and
+    # are reached one at a time through the authorized `media/{id}/url`. Fields
+    # this account may not see are dropped here, exactly like their answers.
+    from app.modules.forms import media_service
+    found = media_service.for_submissions(
+        form_id, [r["survey_id"] for r in data["rows"]])
+
     return {
         "form_id": form_id,
         "form_title": form["form_title"],
@@ -296,6 +426,8 @@ def records(
                 "created_on": row["created_on"],
                 "created_by": row["created_by"],
                 "form_data": {k: v for k, v in (row["form_data"] or {}).items() if k in keep},
+                "media": {k: v for k, v in found.get(row["survey_id"], {}).items()
+                          if k in keep},
             }
             for row in data["rows"]
         ],
@@ -479,3 +611,140 @@ def parent_submission(form_id: str, survey_id: str,
         return {"parent": None}
 
     return {"parent": {**found, "may_open": _may_reach(user, found["form_id"])}}
+
+
+# --------------------------------------------------------------------------- #
+# the images, recordings and documents a form collects
+#
+# Nothing new is decided here. Uploading is part of filling a form in, so it
+# asks `_load(..., filling=True)` — the same guard the submission endpoint uses,
+# which for a project's form means membership, an assignment and the fill
+# permission. Reading one back is part of reading the submission, so it asks
+# `_load` — the same guard `/records` uses.
+#
+# The browser never sees a credential: it is handed a presigned URL good for one
+# object, one method, and a few minutes.
+# --------------------------------------------------------------------------- #
+class UploadUrlRequest(BaseModel):
+    field_name: str
+    filename: str
+    content_type: str
+    # What the browser says it is about to send, so an oversized object is
+    # refused before it is uploaded rather than after.
+    file_size: Optional[int] = None
+
+
+class UploadDoneRequest(BaseModel):
+    file_size: Optional[int] = None
+
+
+def _project_of(form_id: str) -> Optional[str]:
+    """The project a form belongs to, or None for a form outside every project."""
+    try:
+        from app.modules.projects import project_service
+        return project_service.project_of_form(form_id)
+    except Exception:
+        return None
+
+
+@router.post("/{form_id}/submissions/{survey_id}/media/upload-url")
+def media_upload_url(
+    form_id: str, survey_id: str, req: UploadUrlRequest,
+    user: Dict[str, Any] = Depends(needs(RECORDS_CREATE)),
+):
+    """Where to put one upload, and what to call it afterwards."""
+    from app.modules.forms import media_service
+
+    form = _load(form_id, user, filling=True)
+
+    try:
+        media_type = media_service.check_upload(
+            form["form_json"] or {}, req.field_name, req.content_type, req.file_size)
+    except media_service.MediaError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+    made = media_service.start_upload(
+        _project_of(form_id), form_id, survey_id, req.field_name, media_type,
+        req.filename, req.content_type,
+        created_by=auth_service.display_name(user),
+    )
+
+    try:
+        upload_url = media_service.presign_upload(made["s3_key"], req.content_type)
+    except media_service.StorageUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    except Exception:
+        # Whatever AWS said, the caller gets something it can act on — never a
+        # bucket name, a role or a key.
+        logger.exception("Could not sign an upload for %s", form_id)
+        raise HTTPException(status_code=502, detail="Could not start the upload.")
+
+    return {**made, "media_type": media_type, "upload_url": upload_url}
+
+
+@router.post("/{form_id}/submissions/{survey_id}/media/{media_id}/complete")
+def media_complete(
+    form_id: str, survey_id: str, media_id: str, req: UploadDoneRequest,
+    user: Dict[str, Any] = Depends(needs(RECORDS_CREATE)),
+):
+    """The browser reporting that the object arrived."""
+    from app.modules.forms import media_service
+
+    _load(form_id, user, filling=True)
+    record = media_service.get(media_id)
+
+    # The id in the path has to belong to the submission in the path — otherwise
+    # it is somebody else's upload being marked as this one's.
+    if record is None or record["form_id"] != form_id or record["survey_id"] != survey_id:
+        raise HTTPException(status_code=404, detail=f"No upload '{media_id}'.")
+
+    done = media_service.finish_upload(media_id, req.file_size)
+    return {"media_id": done["media_id"], "s3_key": done["s3_key"],
+            "field_name": done["field_name"], "media_type": done["media_type"],
+            "original_filename": done["original_filename"],
+            "file_size": done["file_size"]}
+
+
+@router.get("/{form_id}/submissions/{survey_id}/media")
+def media_list(form_id: str, survey_id: str,
+               user: Dict[str, Any] = Depends(needs(RECORDS_VIEW))):
+    """What arrived for one submission. Metadata only — no URLs are signed here."""
+    from app.modules.forms import media_service
+
+    _load(form_id, user)
+    return {"media": [
+        {"media_id": m["media_id"], "field_name": m["field_name"],
+         "media_type": m["media_type"], "original_filename": m["original_filename"],
+         "content_type": m["content_type"], "file_size": m["file_size"]}
+        for m in media_service.for_submission(form_id, survey_id)
+    ]}
+
+
+@router.get("/{form_id}/submissions/{survey_id}/media/{media_id}/url")
+def media_download_url(form_id: str, survey_id: str, media_id: str,
+                       user: Dict[str, Any] = Depends(needs(RECORDS_VIEW))):
+    """A link to read one object, good for a few minutes.
+
+    The object is never public: this is the only way to it, and it is behind the
+    same check as the submission it belongs to.
+    """
+    from app.modules.forms import media_service
+
+    _load(form_id, user)
+    record = media_service.get(media_id)
+
+    if (record is None or record["form_id"] != form_id
+            or record["survey_id"] != survey_id or record["uploaded_on"] is None):
+        raise HTTPException(status_code=404, detail=f"No upload '{media_id}'.")
+
+    try:
+        url = media_service.presign_download(record["s3_key"],
+                                             record["original_filename"])
+    except media_service.StorageUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    except Exception:
+        logger.exception("Could not sign a download for %s", media_id)
+        raise HTTPException(status_code=502, detail="Could not open that file.")
+
+    return {"url": url, "content_type": record["content_type"],
+            "original_filename": record["original_filename"]}

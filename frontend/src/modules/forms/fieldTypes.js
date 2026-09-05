@@ -15,6 +15,8 @@ export const TYPES = [
   ['select', 'Dropdown'],
   ['radio', 'Single choice'],
   ['multiselect', 'Multiple choice'],
+  ['image', 'Photo'],
+  ['audio', 'Audio recording'],
   ['file', 'File'],
   ['signature', 'Signature'],
   ['location', 'Location'],
@@ -58,7 +60,11 @@ export const STORAGE = {
   select: ['string', 'VARCHAR(255)'],
   radio: ['string', 'VARCHAR(255)'],
   multiselect: ['array', 'TEXT'],
-  file: ['string', 'TEXT'],
+  // Three media types, one behaviour: the answer is the id of the uploaded
+  // object's row. The object itself is in S3, never in form_data.
+  image: ['string (media id)', 'TEXT'],
+  audio: ['string (media id)', 'TEXT'],
+  file: ['string (media id)', 'TEXT'],
   signature: ['string', 'TEXT'],
   location: ['object {lat, lng}', 'TEXT'],
 }

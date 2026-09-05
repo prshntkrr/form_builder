@@ -304,13 +304,60 @@ export const api = {
   // to, for a child form. Sent as a claim: the backend checks it is a
   // submission of the configured parent, in the same project, that this account
   // may read — and refuses the whole submission if it is not.
-  submit: (formId, data, createdBy, language, parentSurveyId) =>
+  // `surveyId` is the id `startSubmission` handed out, for a form whose uploads
+  // had to be filed under it first. Left undefined for a form with nothing to
+  // upload, which is submitted in one call.
+  submit: (formId, data, createdBy, language, parentSurveyId, location, surveyId) =>
     request(`/forms/${formId}/submissions`, {
       method: 'POST',
       body: JSON.stringify({
         data, created_by: createdBy, language, parent_survey_id: parentSurveyId,
+        location, survey_id: surveyId,
       }),
     }),
+
+  // Takes the next survey_id for this form. Called when Submit is pressed, not
+  // when the form is opened: an id is only issued once there is something to
+  // store under it.
+  startSubmission: (formId) =>
+    request(`/forms/${formId}/submissions/start`, { method: 'POST' }),
+
+  // --- what leaves this application ---
+  // The published configuration: the version that is live, frozen. A draft has
+  // none and the backend says so.
+  publishedForm: (formId) => request(`/forms/${formId}/published`),
+
+  // Which platforms this installation can send to, and what has gone where.
+  exports: (formId) => request(`/forms/${formId}/exports`),
+
+  exportForm: (formId, connector = 'mcdc') =>
+    request(`/forms/${formId}/exports`,
+            { method: 'POST', body: JSON.stringify({ connector }) }),
+
+  // --- values published by a standard ---
+  // ISO 3166-1's countries, and whatever standard is added beside it. The
+  // shape is the same {value,label} every option source answers with.
+  standardOptions: (standard, codeType, search = '') =>
+    request(`/standards/${standard}/options?code_type=${encodeURIComponent(codeType)}`
+            + (search ? `&q=${encodeURIComponent(search)}` : '')),
+
+  isoCountries: (search = '') =>
+    request(`/standards/iso3166/countries${search ? `?q=${encodeURIComponent(search)}` : ''}`),
+
+  // --- how a channel reaches a form ---
+  // Signposts, not permissions: a route says where a keyword points, and who
+  // may go there is decided by the same checks as everywhere else.
+  routes: (project) =>
+    request(`/mcdc/routes${project ? `?project=${project}` : ''}`),
+
+  addRoute: (route) =>
+    request('/mcdc/routes', { method: 'POST', body: JSON.stringify(route) }),
+
+  updateRoute: (routeId, route) =>
+    request(`/mcdc/routes/${routeId}`,
+            { method: 'PUT', body: JSON.stringify(route) }),
+
+  deleteRoute: (routeId) => request(`/mcdc/routes/${routeId}`, { method: 'DELETE' }),
 
   // --- one form's submissions hanging off another's ---
   // What this form is attached to, and what is attached to it.
@@ -326,6 +373,23 @@ export const api = {
 
   parentSubmission: (formId, surveyId) =>
     request(`/forms/${formId}/records/${encodeURIComponent(surveyId)}/parent`),
+
+  // --- the media a form collects ---
+  // The browser is never given a credential: it asks where to put one object,
+  // PUTs it there, and says it landed. See backend media_service.
+  mediaUploadUrl: (formId, surveyId, body) =>
+    request(`/forms/${formId}/submissions/${encodeURIComponent(surveyId)}/media/upload-url`,
+            { method: 'POST', body: JSON.stringify(body) }),
+
+  mediaComplete: (formId, surveyId, mediaId, fileSize) =>
+    request(`/forms/${formId}/submissions/${encodeURIComponent(surveyId)}/media/${mediaId}/complete`,
+            { method: 'POST', body: JSON.stringify({ file_size: fileSize }) }),
+
+  submissionMedia: (formId, surveyId) =>
+    request(`/forms/${formId}/submissions/${encodeURIComponent(surveyId)}/media`),
+
+  mediaUrl: (formId, surveyId, mediaId) =>
+    request(`/forms/${formId}/submissions/${encodeURIComponent(surveyId)}/media/${mediaId}/url`),
 
   listSubmissions: (formId, limit = 50, offset = 0) =>
     request(`/forms/${formId}/submissions?limit=${limit}&offset=${offset}`),

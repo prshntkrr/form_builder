@@ -8,3 +8,8 @@ openai==1.59.6
 rdflib==7.6.0
 openpyxl==3.1.5
 python-multipart==0.0.32
+boto3==1.35.99
+# Runtime, not just tests: the MCDC export connector posts a published form with
+# it. It arrives transitively via openai today, which is not a dependency worth
+# relying on — an openai upgrade that drops it would break exporting.
+httpx==0.28.1

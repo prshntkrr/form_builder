@@ -385,3 +385,30 @@
 .vals__row:hover { background: var(--paper); }
 .vals__row input { margin: 0; flex: none; }
 .vals__foot { align-items: center; }
+
+/* Where the form is being filled in, said before it is filled in. */
+.whereami {
+  padding: 9px 12px; margin-bottom: 16px; border-radius: var(--r);
+  font-size: 13px; border: 1px solid var(--line); background: var(--paper);
+  color: var(--ink-2);
+}
+.whereami--ready { background: var(--accent-wash); border-color: transparent; }
+.whereami--refused, .whereami--failed { background: #fdecec; border-color: transparent; }
+
+/* A photo, a recording or a document. */
+.media { display: flex; flex-direction: column; gap: 6px; }
+.media__input { display: none; }
+.media__preview {
+  max-width: 220px; max-height: 160px; border-radius: var(--r-sm);
+  border: 1px solid var(--line);
+}
+
+.loc__row { display: flex; align-items: center; gap: 10px; font-size: 13.5px; }
+.loc__row > span { flex: 1; }
+.loc__row select { flex: none; width: 80px; }
+.loc__ring { display: block; margin-top: 6px; font-family: var(--mono, monospace); font-size: 12.5px; }
+
+/* --- records: an answer that is a file or a place --- */
+.rec__media { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.rec__place { display: flex; flex-direction: column; gap: 1px; }
+.rec__link { font-size: 12.5px; max-width: 220px; display: inline-block; }

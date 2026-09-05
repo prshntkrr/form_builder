@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api.js'
 import FormRenderer from '../components/FormRenderer.jsx'
 import { applicable } from '../conditions.js'
+import { uploadAll } from '../media.js'
 
 export default function FormFill() {
   const { formId } = useParams()
@@ -26,6 +27,18 @@ export default function FormFill() {
   const [relationship, setRelationship] = useState(null)
   const [parents, setParents] = useState(null)
   const [chosenParent, setChosenParent] = useState(parentSurveyId)
+  // Where the form is being filled in, reported by the renderer. Sent as a
+  // claim: the backend decides whether it is usable and whether it is inside
+  // the form's own area.
+  const [place, setPlace] = useState(null)
+  // Files chosen for the image/audio/file questions, held here until Submit.
+  // Nothing is uploaded while the form is being filled in, because there is no
+  // survey to file it under until then.
+  const [files, setFiles] = useState({})
+  // Set once Submit has started this survey. Kept if the submission fails, so a
+  // retry reuses the same id and the same uploads rather than burning another.
+  const [survey, setSurvey] = useState(null)
+  const [uploaded, setUploaded] = useState({})
 
   // Fetched once, in the form's own default language. Switching language after
   // that is the renderer's business and touches only the words — asking the
@@ -62,16 +75,40 @@ export default function FormFill() {
       .catch(() => setRelationship(null))
   }, [formId, parentSurveyId])
 
+  /**
+   * Submit, in the order the pieces need each other:
+   *
+   *     start    → the backend hands out this survey's id
+   *     upload   → the chosen files go to S3, filed under that id
+   *     submit   → the answers, with each file's media id in place of its name
+   *
+   * Nothing happens before the first line: opening a form and leaving it takes
+   * no id and leaves no record. If the last line fails the survey stays in
+   * progress, and pressing Submit again reuses `survey` and `uploaded` — the
+   * same id, and no photo sent twice.
+   */
   const send = async () => {
     setSending(true); setErrors({}); setError('')
     try {
+      let surveyId = survey
+      let ids = uploaded
+
+      if (Object.keys(files).length) {
+        if (!surveyId) {
+          surveyId = (await api.startSubmission(formId)).survey_id
+          setSurvey(surveyId)
+        }
+        ids = await uploadAll(formId, surveyId, files, uploaded)
+        setUploaded(ids)
+      }
+
       // Answers to questions the form is not asking are left out. They stay in
       // the page's state, so changing the controlling answer back brings them
       // straight back — but they are not submitted, and the server refuses
       // them if they are sent anyway.
       setDone(await api.submit(
-        formId, applicable(form.form_json, values), undefined,
-        language || form.language, chosenParent))
+        formId, { ...applicable(form.form_json, values), ...ids }, undefined,
+        language || form.language, chosenParent, place, surveyId))
     } catch (e) {
       if (e.fieldErrors) {
         setErrors(e.fieldErrors)
@@ -113,7 +150,12 @@ export default function FormFill() {
           <h2>{form.form_json.success_message || 'Thanks — that’s recorded.'}</h2>
           <p className="muted" style={{ marginBottom: 22 }}>Reference <code>{done.survey_id}</code></p>
           <div className="row row--tight center">
-            <button className="btn" onClick={() => { setDone(null); setValues({}); setErrors({}) }}>
+            <button className="btn" onClick={() => {
+              setDone(null); setValues({}); setErrors({})
+              // A fresh form: a new survey, and nothing carried over from the
+              // one just sent.
+              setFiles({}); setSurvey(null); setUploaded({})
+            }}>
               Add another
             </button>
             {/* Added from a parent submission, so going back means going back
@@ -190,6 +232,7 @@ export default function FormFill() {
 
       <div className="card card--pad">
         <FormRenderer
+          onLocation={setPlace}
           formJson={form.form_json}
           values={values}
           errors={errors}
@@ -199,6 +242,15 @@ export default function FormFill() {
           languageNames={form.languages}
           onChange={(name, value) => setValues((v) => ({ ...v, [name]: value }))}
           onSubmit={send}
+          media={{
+            onPick: (name, file) => {
+              setFiles((f) => ({ ...f, [name]: file }))
+              // Replacing a file after a failed submission means the one
+              // already in the bucket is not the answer any more.
+              setUploaded(({ [name]: _gone, ...rest }) => rest)
+            },
+            uploading: sending,
+          }}
         />
       </div>
     </main>

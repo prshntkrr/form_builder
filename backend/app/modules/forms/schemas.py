@@ -98,11 +98,79 @@ class SubmitRequest(BaseModel):
     created_by: Optional[str] = None
     # Which language the form was filled in, so errors come back in it.
     language: Optional[str] = None
+    # Where the form was filled in, for a form that records it. A claim like any
+    # other: `geolocation.check` decides whether it is usable and whether it is
+    # inside the form's own area.
+    location: Optional[Dict[str, Any]] = None
     # Which submission of the parent form this one belongs to, for a child form.
     # A claim, not a fact: `relationships.validate_parent` decides whether it is
     # a submission of the right form, in the right project, that this account may
     # read. Ignored — and refused — on a form that is not a child.
     parent_survey_id: Optional[str] = None
+    # How these answers were collected: mobile, whatsapp, ivr, or this
+    # application's own form page. Metadata — it is recorded beside the
+    # submission and changes nothing about what is validated or how it is
+    # stored.
+    channel: Optional[str] = None
+    # Which version of the form the answers were collected against, when the
+    # caller knows. A version that is no longer live is refused rather than
+    # quietly reinterpreted against the current definition.
+    form_version: Optional[int] = None
+    # The id `POST .../submissions/start` handed out, for a submission whose
+    # uploads had to be filed under it before the answers could be sent. Absent
+    # for a form with nothing to upload, which is submitted in one call.
+    survey_id: Optional[str] = None
+
+
+class ExportRequest(BaseModel):
+    """Where to send a published configuration. `connectors.CONNECTORS` says
+    which names exist; an unknown one is refused rather than guessed at."""
+    connector: str = "mcdc"
+
+
+class IngestRequest(BaseModel):
+    """Answers arriving from a collection channel.
+
+    `payload` is whatever that channel sends — a dict of answers from a phone, a
+    list of replies from a conversation, keypresses from a call. The adapter for
+    the channel turns it into answers; everything after that is the ordinary
+    submission path, with the same validation, the same survey id and the same
+    storage.
+    """
+    channel: str
+    payload: Any = None
+    # Whose answers these are, when the collection platform is sending them in
+    # for somebody: their WhatsApp number, phone number or channel id. Mapped
+    # to an application account by `channel_identity`, and the submission is
+    # then authorized *and attributed* as that account — never as the platform.
+    # Sending on somebody's behalf takes `mcdc.integrate`.
+    channel_identity: Optional[str] = None
+    form_version: Optional[int] = None
+    language: Optional[str] = None
+    location: Optional[Dict[str, Any]] = None
+    parent_survey_id: Optional[str] = None
+    survey_id: Optional[str] = None
+
+
+class RouteRequest(BaseModel):
+    """Which keyword or menu option reaches which form.
+
+    A reference and nothing else: no form definition, no catalogue values, no
+    version. Which version is live is the published-form service's business.
+    """
+    channel: str
+    route_key: str
+    form_id: str
+    project_id: Optional[str] = None
+    enabled: Optional[bool] = None
+    metadata: Optional[Dict[str, Any]] = None
+
+
+class IdentityRequest(BaseModel):
+    """Which application account a phone number or channel id belongs to."""
+    channel: str
+    identity: str
+    user_id: str
 
 
 class DictionaryEntryRequest(BaseModel):

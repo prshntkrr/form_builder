@@ -9,6 +9,7 @@ import FormFill from './pages/FormFill.jsx'
 import FormRecords from './pages/FormRecords.jsx'
 import Library from './pages/Library.jsx'
 import LiveForms from './pages/LiveForms.jsx'
+import Routing from './pages/Routing.jsx'
 import './styles.css'
 
 /** Old links that used to mean something else. */
@@ -49,6 +50,7 @@ export default {
     { path: '/dictionary', element: <Dictionary />, requires: 'use_dictionary' },
     { path: '/catalogues', element: <Catalogues />, requires: 'use_client_catalogs' },
     { path: '/standards', element: <Standards />, requires: 'use_standards' },
+    { path: '/routing', element: <Routing />, requires: 'manage_routing' },
     { path: '/forms/:formId', element: <Moved to="questions" />, requires: 'build_any_forms' },
     { path: '/forms/:formId/edit', element: <Moved to="questions" />, requires: 'build_any_forms' },
     { path: '/forms/:formId/data', element: <Moved to="responses" />, requires: 'build_any_forms' },

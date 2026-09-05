@@ -7,7 +7,9 @@ import { defaultLanguage, languageChoices } from '../translate.js'
 import { applicable } from '../conditions.js'
 import { activeProjectId } from '../../projects/active.js'
 import ConditionEditor from '../components/ConditionEditor.jsx'
+import ExportPanel from '../components/ExportPanel.jsx'
 import FormRelationship from '../components/FormRelationship.jsx'
+import LocationSettings from '../components/LocationSettings.jsx'
 import FormRenderer from '../components/FormRenderer.jsx'
 import ContributeToLibrary from '../components/ContributeToLibrary.jsx'
 import LibraryPicker from '../components/LibraryPicker.jsx'
@@ -516,6 +518,10 @@ export default function Builder() {
                   formId={formId}
                   onChange={(change) => setForm({ ...form, ...change })}
                 />
+                <LocationSettings
+                  form={form}
+                  onChange={(change) => setForm({ ...form, ...change })}
+                />
               </div>
             )}
 
@@ -692,6 +698,14 @@ export default function Builder() {
                     </div>
                   )}
                 </>
+              )}
+
+              {view === 'history' && editing && (
+                <ExportPanel
+                  formId={formId}
+                  version={saved?.version_no ?? form.version}
+                  isDraft={status === 'Draft'}
+                />
               )}
 
               {view === 'history' && editing && (

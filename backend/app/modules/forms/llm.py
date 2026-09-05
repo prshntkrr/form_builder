@@ -75,7 +75,19 @@ Rules:
 - Use "decimal" for quantities/areas/prices, "number" only for whole counts.
 - For fixed-width identifiers (National ID, Aadhaar, account number) set min_length and
   max_length. On a number field those count digits; on a text field, characters.
-- Use "location" for GPS coordinates, "file" for photos or documents.
+- "image" for a photo of something, "audio" for a recording or voice note,
+  "file" for a document. "Collect the farmer's photo" is an image field;
+  "voice recording" is audio; "identity document" or "upload the certificate"
+  is a file. Do not put any of them in "options" — the file itself is uploaded
+  when the form is filled in.
+- "location" is a question *asking* for a place. If the request says the form
+  should record where it was filled in — "capture the user's GPS location",
+  "record where the survey was taken" — that is not a field: set
+  "location": {{"enabled": true, "required": false}} at the top level of the
+  form, and required true if the request insists on it. The two are independent
+  and one request can ask for both: "collect the farm location" is a "location"
+  field, "collect the surveyor's GPS" is the top-level setting, and "collect the
+  farm location and the surveyor's GPS" is the field AND the setting.
 - Group related fields into 2-4 sections when the form has more than 6 fields;
   every field's "section" must match a declared section key.
 - Include the fields a domain expert would expect even if the prompt did not spell them out,
