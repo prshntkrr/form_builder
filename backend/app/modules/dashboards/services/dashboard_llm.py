@@ -21,6 +21,7 @@ SUPPORTED_WIDGET_TYPES = {
     "doughnut",
     "kpi",
     "table",
+    "map",
 }
 
 
@@ -91,6 +92,7 @@ SUPPORTED VISUALIZATION TYPES:
 - doughnut
 - kpi
 - table
+- map
 
 
 SUPPORTED AGGREGATIONS:
@@ -146,7 +148,39 @@ requested_visualizations:
   - doughnut
   - kpi
   - table
+  - map
 - Do not add visualizations that the user did not request.
+
+============================================================
+MAP VISUALIZATION RULES
+============================================================
+
+When the user explicitly requests a map:
+
+- Generate a widget with type "map".
+- A map requires two coordinate fields:
+  1. a field representing latitude
+  2. a field representing longitude
+- Both fields MUST come from available_fields.
+- Put the latitude field as the first item in data_binding.dimensions.
+- Put the longitude field as the second item in data_binding.dimensions.
+- A map does NOT require a measure.
+- For a map, data_binding.measures MUST be [].
+- Do not invent latitude or longitude fields.
+- If the user requests a map but the required coordinate fields
+  are not available, preserve the requested visualization as "map"
+  in intent.requested_visualizations and preserve any explicitly
+  requested coordinate fields in intent.requested_fields.
+- Do not substitute state, district, village, address, or another
+  field for latitude/longitude.
+- Interpret natural-language coordinate names semantically.
+- For example, "latitude" may correspond to an available field such as
+  "latitude", "lat", or another clearly equivalent field.
+- Likewise, "longitude" may correspond to "longitude", "lon", or another
+  clearly equivalent field.
+- Only use a field when its meaning can be reasonably established from
+  the supplied available_fields.
+- Never invent or assume a coordinate field that is not available.
 
 ============================================================
 NATURAL LANGUAGE FIELD AND METRIC INTERPRETATION
@@ -389,6 +423,25 @@ The correct property names are:
 - dimensions
 - measures
 
+MAP WIDGET EXCEPTION:
+
+Map widgets follow the same overall widget structure, but their
+data_binding is different:
+
+{
+  "dimensions": [
+    {
+      "field": "latitude_field"
+    },
+    {
+      "field": "longitude_field"
+    }
+  ],
+  "measures": [],
+  "filters": []
+}
+
+Map widgets MUST NOT contain a measure.
 
 ============================================================
 DATA SOURCE RULES
@@ -510,6 +563,7 @@ Do NOT add:
 - doughnut
 - line
 - table
+- map
 
 
 Example:

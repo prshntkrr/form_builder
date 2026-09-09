@@ -1,20 +1,7 @@
 import React, { useEffect, useState } from "react";
 
-import {
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  LineChart,
-  Line,
-  PieChart,
-  Pie,
-  Cell,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-} from "recharts";
+import { getRenderer } from "../renderers/registry.js";
+import { prepareChartData } from "../renderers/prepareChartData.js";
 
 import {
   ResponsiveGridLayout,
@@ -57,6 +44,7 @@ export default function Dashboards() {
   const [widgetData, setWidgetData] = useState({});
   const [dataLoading, setDataLoading] = useState(false);
   const [dataError, setDataError] = useState("");
+  const [dashboardFilters, setDashboardFilters] = useState([]);
 
   /* =========================================================
      DASHBOARD EDITING STATE
@@ -106,6 +94,24 @@ export default function Dashboards() {
     measure: "",
     aggregation: "COUNT",
   });
+
+  /* Version management state */
+  const [versions, setVersions] = useState([]);
+  const [currentVersionNo, setCurrentVersionNo] = useState(null);
+  const [publishedVersionNo, setPublishedVersionNo] = useState(null);
+  const [latestVersionNo, setLatestVersionNo] = useState(null);
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+
+  /* View-only mode: renders a historical version read-only. */
+  const [viewingVersionNo, setViewingVersionNo] = useState(null);
+  const [stashedDashboard, setStashedDashboard] = useState(null);
+  const [stashedVersionNo, setStashedVersionNo] = useState(null);
+
+  /* Delete modal */
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   /* =========================================================
      BUILD GRID LAYOUT
@@ -391,6 +397,7 @@ export default function Dashboards() {
   const loadDashboardData = async (
     generatedDashboard,
     sourceOverride = null,
+    filtersOverride = dashboardFilters,
   ) => {
     const source = sourceOverride || selectedSource;
 
@@ -405,9 +412,17 @@ export default function Dashboards() {
     try {
       const results = await Promise.all(
         generatedDashboard.widgets.map(async (widget) => {
+          const binding = {
+            ...widget.data_binding,
+            filters: [
+              ...(widget.data_binding?.filters || []),
+              ...filtersOverride,
+            ],
+          };
+
           const result = await api.getDashboardData(
             source.name,
-            widget.data_binding,
+            binding,
           );
 
           return {
@@ -425,11 +440,91 @@ export default function Dashboards() {
 
       setWidgetData(dataByWidget);
     } catch (e) {
-      setDataError(e.message || "Failed to load dashboard data.");
+      setDataError(
+        e.message || "Failed to load dashboard data.",
+      );
     } finally {
       setDataLoading(false);
     }
   };
+
+  const addDashboardFilter = async () => {
+  if (!dashboard || !selectedSource) {
+    return;
+  }
+
+  const defaultField = fields?.[0]?.name || "";
+
+  if (!defaultField) {
+    return;
+  }
+
+  const nextFilters = [
+    ...dashboardFilters,
+    {
+      field: defaultField,
+      operator: "EQUALS",
+      value: "",
+    },
+  ];
+
+  setDashboardFilters(nextFilters);
+};
+
+const updateDashboardFilter = async (index, changes) => {
+  const nextFilters = dashboardFilters.map((filter, filterIndex) =>
+    filterIndex === index
+      ? { ...filter, ...changes }
+      : filter,
+  );
+
+  setDashboardFilters(nextFilters);
+};
+
+const removeDashboardFilter = async (index) => {
+  const nextFilters = dashboardFilters.filter(
+    (_, filterIndex) => filterIndex !== index,
+  );
+
+  setDashboardFilters(nextFilters);
+
+  if (dashboard) {
+    await loadDashboardData(
+      dashboard,
+      null,
+      nextFilters,
+    );
+  }
+};
+
+const applyDashboardFilters = async () => {
+  if (!dashboard) {
+    return;
+  }
+
+  const validFilters = dashboardFilters.filter((filter) => {
+    if (!filter.field || !filter.operator) {
+      return false;
+    }
+
+    if (
+      filter.operator === "IS_NULL" ||
+      filter.operator === "IS_NOT_NULL"
+    ) {
+      return true;
+    }
+
+    return filter.value !== "";
+  });
+
+  setDashboardFilters(validFilters);
+
+  await loadDashboardData(
+    dashboard,
+    null,
+    validFilters,
+  );
+};
 
   /* =========================================================
      HANDLE DASHBOARD CHANGE LAYOUT
@@ -487,6 +582,11 @@ export default function Dashboards() {
       setDashboard(dashboardToSave);
       setSavedDashboardId(result.dashboard_id);
 
+      /* Version state — first save always creates version 1 as draft. */
+      setCurrentVersionNo(result.latest_version ?? 1);
+      setLatestVersionNo(result.latest_version ?? 1);
+      setPublishedVersionNo(result.publish_version ?? null);
+
       const finalLayout =
         buildGridLayout(
           dashboardToSave.widgets
@@ -499,6 +599,10 @@ export default function Dashboards() {
       setShowSaveModal(false);
 
       await loadSavedDashboards();
+
+      if (result.dashboard_id) {
+        await loadVersions(result.dashboard_id);
+      }
     } catch (e) {
       setSaveError(e.message || "Failed to save dashboard.");
     } finally {
@@ -517,24 +621,54 @@ export default function Dashboards() {
     setIsEditMode(false);
     setEditingWidgetId(null);
     setShowAddWidget(false);
+    setShowVersionHistory(false);
+    setViewingVersionNo(null);
+    setStashedDashboard(null);
+    setStashedVersionNo(null);
+    setShowDeleteModal(false);
 
     try {
       const result = await api.getDashboard(dashboardId);
 
-      const savedDashboard = result.dashboard_json || null;
-
-      setDashboard(savedDashboard);
       setSavedDashboardId(result.dashboard_id);
 
-      const initialLayout = buildGridLayout(savedDashboard?.widgets || []);
+      /* Track version metadata. */
+      const pubVer = result.publish_version ?? null;
+      const latVer = result.latest_version ?? null;
+      setPublishedVersionNo(pubVer);
+      setLatestVersionNo(latVer);
+
+      /* Decide which version to display:
+         - Published version exists → show it (live view).
+         - Otherwise → show the latest draft. */
+      const targetVersion = pubVer ?? latVer;
+
+      let openDashboard = result.dashboard_json || null;
+
+      if (targetVersion != null) {
+        try {
+          const versionResult = await api.getVersion(dashboardId, targetVersion);
+          openDashboard = versionResult.dashboard_json || openDashboard;
+        } catch (_e) {
+          /* Fall back to the main row's dashboard_json. */
+        }
+      }
+
+      setDashboard(openDashboard);
+      setCurrentVersionNo(targetVersion);
+
+      const initialLayout = buildGridLayout(openDashboard?.widgets || []);
 
       setGridLayout(initialLayout);
       setSavedGridLayout(initialLayout);
       setAllLayouts({ lg: initialLayout });
 
-      setEditDashboardName(savedDashboard?.dashboard?.name || "");
+      setEditDashboardName(openDashboard?.dashboard?.name || "");
 
-      const sourceName = savedDashboard?.data_sources?.[0]?.name;
+      /* Load version history in the background. */
+      loadVersions(dashboardId);
+
+      const sourceName = openDashboard?.data_sources?.[0]?.name;
 
       if (!sourceName) {
         return;
@@ -553,7 +687,7 @@ export default function Dashboards() {
 
         setFields(fieldResult.fields || []);
 
-        await loadDashboardData(savedDashboard, source);
+        await loadDashboardData(openDashboard, source);
       } catch (e) {
         setFieldsError(e.message || "Failed to load dashboard fields.");
       }
@@ -725,11 +859,9 @@ export default function Dashboards() {
      ========================================================= */
 
   const renderChart = (widget, rows) => {
-    const dimension = widget.data_binding?.dimensions?.[0];
+    const chartData = prepareChartData(widget, rows);
 
-    const measure = widget.data_binding?.measures?.[0];
-
-    if (!dimension || !measure) {
+    if (chartData === null) {
       return (
         <p className="muted">
           This widget does not have a valid dimension and measure.
@@ -737,141 +869,13 @@ export default function Dashboards() {
       );
     }
 
-    const dimensionField = dimension.field;
-
-    const measureField = `${measure.field}_${measure.aggregation.toLowerCase()}`;
-
-    const chartData = rows.map((row) => ({
-      name: row[dimensionField],
-      value: Number(row[measureField]) || 0,
-    }));
-
     if (chartData.length === 0) {
       return <p className="muted">No data available.</p>;
     }
 
-    if (widget.type === "bar") {
-      return (
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart
-            data={chartData}
-            margin={{
-              top: 20,
-              right: 20,
-              left: 10,
-              bottom: 40,
-            }}
-          >
-            <CartesianGrid strokeDasharray="3 3" />
+    const Renderer = getRenderer(widget.type);
 
-            <XAxis
-              dataKey="name"
-              tick={{
-                fontSize: 12,
-              }}
-              angle={-25}
-              textAnchor="end"
-              interval={0}
-            />
-
-            <YAxis
-              allowDecimals={false}
-              tick={{
-                fontSize: 12,
-              }}
-            />
-
-            <Tooltip />
-
-            <Bar
-              dataKey="value"
-              name={measure.label || "Value"}
-              fill="var(--accent)"
-              radius={[4, 4, 0, 0]}
-            />
-          </BarChart>
-        </ResponsiveContainer>
-      );
-    }
-
-    if (widget.type === "line") {
-      return (
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart
-            data={chartData}
-            margin={{
-              top: 20,
-              right: 20,
-              left: 10,
-              bottom: 40,
-            }}
-          >
-            <CartesianGrid strokeDasharray="3 3" />
-
-            <XAxis
-              dataKey="name"
-              tick={{
-                fontSize: 12,
-              }}
-              angle={-25}
-              textAnchor="end"
-              interval={0}
-            />
-
-            <YAxis
-              allowDecimals={false}
-              tick={{
-                fontSize: 12,
-              }}
-            />
-
-            <Tooltip />
-
-            <Line
-              type="monotone"
-              dataKey="value"
-              name={measure.label || "Value"}
-              stroke="var(--accent)"
-              strokeWidth={2}
-              dot={{ r: 4 }}
-              activeDot={{ r: 6 }}
-            />
-          </LineChart>
-        </ResponsiveContainer>
-      );
-    }
-
-    if (widget.type === "pie" || widget.type === "doughnut") {
-      return (
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              data={chartData}
-              dataKey="value"
-              nameKey="name"
-              cx="50%"
-              cy="50%"
-              outerRadius={100}
-              innerRadius={widget.type === "doughnut" ? 60 : 0}
-              paddingAngle={widget.type === "doughnut" ? 2 : 0}
-              label
-            >
-              {chartData.map((entry, index) => (
-                <Cell
-                  key={`cell-${index}`}
-                  fill={`hsl(${index * 55}, 55%, 45%)`}
-                />
-              ))}
-            </Pie>
-
-            <Tooltip />
-            <Legend />
-          </PieChart>
-        </ResponsiveContainer>
-      );
-    }
-
-    return null;
+    return <Renderer widget={widget} data={chartData} />;
   };
 
   /* =========================================================
@@ -971,6 +975,23 @@ export default function Dashboards() {
       );
     }
 
+    if (widget.type === "map") {
+      const Renderer = getRenderer(widget.type);
+
+      return (
+        <div className="dash__widget">
+          <div className="dash__widget-header">
+            <h3>{widget.title}</h3>
+            {editButton}
+          </div>
+
+          <div className="dash__chart-area">
+            <Renderer widget={widget} data={rows} />
+          </div>
+        </div>
+      );
+    }
+
     if (
       widget.type === "bar" ||
       widget.type === "line" ||
@@ -1039,9 +1060,13 @@ export default function Dashboards() {
   };
 
   const startEditWidget = (widget) => {
-    const dimension = widget.data_binding?.dimensions?.[0]?.field || "";
+    const dimension =
+      widget.data_binding?.dimensions?.[0]?.field || "";
 
-    const measure = widget.data_binding?.measures?.[0]?.field || "";
+    const measure =
+      widget.type === "map"
+        ? widget.data_binding?.dimensions?.[1]?.field || ""
+        : widget.data_binding?.measures?.[0]?.field || "";
 
     const aggregation =
       widget.data_binding?.measures?.[0]?.aggregation || "COUNT";
@@ -1068,6 +1093,28 @@ export default function Dashboards() {
      ========================================================= */
 
   const buildWidgetBinding = (form) => {
+    if (form.type === "map") {
+      const dimensions = [];
+
+      if (form.dimension) {
+        dimensions.push({
+          field: form.dimension,
+        });
+      }
+
+      if (form.measure) {
+        dimensions.push({
+          field: form.measure,
+        });
+      }
+
+      return {
+        dimensions,
+        measures: [],
+        filters: [],
+      };
+    }
+
     const dimensions = form.dimension
       ? [
           {
@@ -1115,14 +1162,26 @@ export default function Dashboards() {
       return;
     }
 
-    if (widgetForm.type !== "kpi" && !widgetForm.dimension) {
-      setEditError("Please select a dimension.");
-      return;
-    }
+    if (widgetForm.type === "map") {
+      if (!widgetForm.dimension) {
+        setEditError("Please select a latitude field.");
+        return;
+      }
 
-    if (!widgetForm.measure) {
-      setEditError("Please select a measure.");
-      return;
+      if (!widgetForm.measure) {
+        setEditError("Please select a longitude field.");
+        return;
+      }
+    } else {
+      if (widgetForm.type !== "kpi" && !widgetForm.dimension) {
+        setEditError("Please select a dimension.");
+        return;
+      }
+
+      if (!widgetForm.measure) {
+        setEditError("Please select a measure.");
+        return;
+      }
     }
 
     const updatedWidgets = dashboard.widgets.map((widget) => {
@@ -1169,14 +1228,26 @@ export default function Dashboards() {
       return;
     }
 
-    if (widgetForm.type !== "kpi" && !widgetForm.dimension) {
-      setEditError("Please select a dimension.");
-      return;
-    }
+    if (widgetForm.type === "map") {
+      if (!widgetForm.dimension) {
+        setEditError("Please select a latitude field.");
+        return;
+      }
 
-    if (!widgetForm.measure) {
-      setEditError("Please select a measure.");
-      return;
+      if (!widgetForm.measure) {
+        setEditError("Please select a longitude field.");
+        return;
+      }
+    } else {
+      if (widgetForm.type !== "kpi" && !widgetForm.dimension) {
+        setEditError("Please select a dimension.");
+        return;
+      }
+
+      if (!widgetForm.measure) {
+        setEditError("Please select a measure.");
+        return;
+      }
     }
 
     const sourceId = dashboard.data_sources?.[0]?.id;
@@ -1348,9 +1419,20 @@ export default function Dashboards() {
         },
       };
 
-      await api.updateDashboard(savedDashboardId, dashboardToUpdate);
+      const result = await api.updateDashboard(savedDashboardId, dashboardToUpdate);
 
       setDashboard(dashboardToUpdate);
+
+      /* Sync version state — update always creates a new draft. */
+      if (result?.latest_version) {
+        setCurrentVersionNo(result.latest_version);
+        setLatestVersionNo(result.latest_version);
+      }
+
+      /* Clear any stash — we are now on the freshly-saved draft. */
+      setStashedDashboard(null);
+      setStashedVersionNo(null);
+      setViewingVersionNo(null);
 
       const finalLayout = buildGridLayout(dashboardToUpdate.widgets);
 
@@ -1361,10 +1443,245 @@ export default function Dashboards() {
       setIsEditMode(false);
 
       await loadSavedDashboards();
+      await loadVersions(savedDashboardId);
     } catch (e) {
       setEditError(e.message || "Failed to update dashboard.");
     } finally {
       setUpdating(false);
+    }
+  };
+
+  /* =========================================================
+     VERSION MANAGEMENT
+     ========================================================= */
+
+  const loadVersions = async (dashboardId) => {
+    try {
+      const result = await api.listVersions(dashboardId);
+      setVersions(Array.isArray(result) ? result : []);
+    } catch (e) {
+      console.error("Failed to load versions:", e);
+    }
+  };
+
+  /* Derived version state for the header UI. */
+  const isCurrentVersionPublished =
+    publishedVersionNo != null &&
+    currentVersionNo != null &&
+    publishedVersionNo === currentVersionNo;
+
+  const hasLatestDraft =
+    publishedVersionNo != null &&
+    latestVersionNo != null &&
+    latestVersionNo > publishedVersionNo;
+
+  const isInViewMode = viewingVersionNo != null;
+
+  /* Publish any version — used from the header and from version history. */
+  const handlePublishVersion = async (versionNo) => {
+    if (!savedDashboardId || versionNo == null) return;
+
+    if (!window.confirm(
+      `Publish version ${versionNo}? This will make version ${versionNo} the live dashboard. The current published version will remain in version history.`
+    )) {
+      return;
+    }
+
+    setPublishing(true);
+
+    try {
+      const result = await api.publishVersion(savedDashboardId, versionNo);
+
+      setPublishedVersionNo(result.publish_version);
+
+      /* Reload the published version's content as the displayed dashboard. */
+      try {
+        const versionResult = await api.getVersion(savedDashboardId, versionNo);
+        setDashboard(versionResult.dashboard_json);
+        setCurrentVersionNo(versionNo);
+
+        const newLayout = buildGridLayout(versionResult.dashboard_json?.widgets || []);
+        setGridLayout(newLayout);
+        setSavedGridLayout(newLayout);
+        setAllLayouts({ lg: newLayout });
+        setEditDashboardName(versionResult.dashboard_json?.dashboard?.name || "");
+      } catch (_e) {
+        /* Version list update below will still keep UI consistent. */
+      }
+
+      /* Clear any view/stash state. */
+      setViewingVersionNo(null);
+      setStashedDashboard(null);
+      setStashedVersionNo(null);
+
+      await loadVersions(savedDashboardId);
+      await loadSavedDashboards();
+    } catch (e) {
+      setEditError(e.message || "Failed to publish version.");
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  const handleRestore = async (versionNo) => {
+    if (!savedDashboardId) return;
+
+    if (!window.confirm(
+      `Create a new draft from version ${versionNo}?`
+    )) {
+      return;
+    }
+
+    setRestoring(true);
+
+    try {
+      const result = await api.restoreVersion(savedDashboardId, versionNo);
+
+      const restoredDashboard = result.dashboard_json;
+
+      setDashboard(restoredDashboard);
+      setCurrentVersionNo(result.latest_version);
+      setLatestVersionNo(result.latest_version);
+      setPublishedVersionNo(result.publish_version);
+
+      const newLayout = buildGridLayout(restoredDashboard?.widgets || []);
+
+      setGridLayout(newLayout);
+      setSavedGridLayout(newLayout);
+      setAllLayouts({ lg: newLayout });
+      setEditDashboardName(restoredDashboard?.dashboard?.name || "");
+
+      setIsEditMode(false);
+      setEditingWidgetId(null);
+      setShowAddWidget(false);
+      setViewingVersionNo(null);
+      setStashedDashboard(null);
+      setStashedVersionNo(null);
+
+      await loadDashboardData(restoredDashboard);
+      await loadVersions(savedDashboardId);
+      await loadSavedDashboards();
+    } catch (e) {
+      setEditError(e.message || "Failed to restore version.");
+    } finally {
+      setRestoring(false);
+    }
+  };
+
+  /* View a historical version read-only — no database writes. */
+  const handleViewVersion = async (versionNo) => {
+    if (!savedDashboardId) return;
+
+    try {
+      const versionResult = await api.getVersion(savedDashboardId, versionNo);
+      const versionDashboard = versionResult.dashboard_json;
+
+      /* Stash the current dashboard so we can return to it. */
+      if (viewingVersionNo == null) {
+        setStashedDashboard(dashboard);
+        setStashedVersionNo(currentVersionNo);
+      }
+
+      setDashboard(versionDashboard);
+      setViewingVersionNo(versionNo);
+
+      const viewLayout = buildGridLayout(versionDashboard?.widgets || []);
+      setGridLayout(viewLayout);
+      setSavedGridLayout(viewLayout);
+      setAllLayouts({ lg: viewLayout });
+
+      setIsEditMode(false);
+      setEditingWidgetId(null);
+      setShowAddWidget(false);
+
+      await loadDashboardData(versionDashboard);
+    } catch (e) {
+      setEditError(e.message || "Failed to load version.");
+    }
+  };
+
+  /* Return from read-only view to the live/default dashboard. */
+  const handleBackToLive = () => {
+    if (stashedDashboard) {
+      setDashboard(stashedDashboard);
+      setCurrentVersionNo(stashedVersionNo);
+
+      const restoredLayout = buildGridLayout(stashedDashboard?.widgets || []);
+      setGridLayout(restoredLayout);
+      setSavedGridLayout(restoredLayout);
+      setAllLayouts({ lg: restoredLayout });
+      setEditDashboardName(stashedDashboard?.dashboard?.name || "");
+
+      loadDashboardData(stashedDashboard);
+    }
+
+    setViewingVersionNo(null);
+    setStashedDashboard(null);
+    setStashedVersionNo(null);
+  };
+
+  /* Load the latest draft and enter edit mode (Option B "Continue Editing"). */
+  const handleContinueEditing = async () => {
+    if (!savedDashboardId || latestVersionNo == null) return;
+
+    try {
+      const versionResult = await api.getVersion(savedDashboardId, latestVersionNo);
+      const draftDashboard = versionResult.dashboard_json;
+
+      /* Stash the published version so Cancel can return to it. */
+      setStashedDashboard(dashboard);
+      setStashedVersionNo(currentVersionNo);
+
+      setDashboard(draftDashboard);
+      setCurrentVersionNo(latestVersionNo);
+      setViewingVersionNo(null);
+
+      const draftLayout = buildGridLayout(draftDashboard?.widgets || []);
+      setGridLayout(draftLayout);
+      setSavedGridLayout(draftLayout);
+      setAllLayouts({ lg: draftLayout });
+      setEditDashboardName(draftDashboard?.dashboard?.name || "");
+
+      setEditError("");
+      setIsEditMode(true);
+
+      await loadDashboardData(draftDashboard);
+    } catch (e) {
+      setEditError(e.message || "Failed to load draft.");
+    }
+  };
+
+  /* Soft-delete the current dashboard. */
+  const handleDelete = async () => {
+    if (!savedDashboardId) return;
+
+    setDeleting(true);
+
+    try {
+      await api.deleteDashboard(savedDashboardId);
+
+      /* Reset all dashboard state. */
+      setDashboard(null);
+      setSavedDashboardId(null);
+      setCurrentVersionNo(null);
+      setLatestVersionNo(null);
+      setPublishedVersionNo(null);
+      setVersions([]);
+      setIsEditMode(false);
+      setEditingWidgetId(null);
+      setShowAddWidget(false);
+      setViewingVersionNo(null);
+      setStashedDashboard(null);
+      setStashedVersionNo(null);
+      setShowVersionHistory(false);
+      setShowDeleteModal(false);
+      setWidgetData({});
+
+      await loadSavedDashboards();
+    } catch (e) {
+      setEditError(e.message || "Failed to delete dashboard.");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -1461,6 +1778,16 @@ export default function Dashboards() {
                       {item.created_on
                         ? new Date(item.created_on).toLocaleString()
                         : ""}
+                      {item.publish_version != null && (
+                        <span className="dash__saved-status">
+                          {" · "}Published v{item.publish_version}
+                        </span>
+                      )}
+                      {item.latest_version != null && item.publish_version == null && (
+                        <span className="dash__saved-status">
+                          {" · "}Draft v{item.latest_version}
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -1632,7 +1959,31 @@ export default function Dashboards() {
               {/* Dashboard header */}
               <div className="row">
                 <div>
-                  <h2>{dashboard.dashboard?.name || "Generated Dashboard"}</h2>
+                  <h2>
+                    {dashboard.dashboard?.name || "Generated Dashboard"}
+
+                    {savedDashboardId && isInViewMode && (
+                      <span className="dash__status-pill dash__status-pill--viewing">
+                        Viewing v{viewingVersionNo}
+                      </span>
+                    )}
+
+                    {savedDashboardId && !isInViewMode && currentVersionNo != null && (
+                      <span
+                        className={`dash__status-pill ${
+                          isCurrentVersionPublished
+                            ? "dash__status-pill--published"
+                            : currentVersionNo === latestVersionNo
+                              ? "dash__status-pill--latest-draft"
+                              : "dash__status-pill--draft"
+                        }`}
+                      >
+                        {isCurrentVersionPublished ? "Published" : "Draft"}
+                        {" v"}
+                        {currentVersionNo}
+                      </span>
+                    )}
+                  </h2>
 
                   {dashboard.dashboard?.description && (
                     <p className="muted">{dashboard.dashboard.description}</p>
@@ -1641,29 +1992,295 @@ export default function Dashboards() {
 
                 <span className="spacer" />
 
-                {savedDashboardId && !isEditMode && (
+                {savedDashboardId && !isEditMode && !isInViewMode && (
+                  <div className="dash__version-bar">
+                    {/* Option B: if a latest draft exists, show Continue Editing.
+                        Otherwise show Edit Dashboard. */}
+                    {hasLatestDraft ? (
+                      <button
+                        className="btn"
+                        type="button"
+                        onClick={handleContinueEditing}
+                      >
+                        Continue Editing v{latestVersionNo}
+                      </button>
+                    ) : (
+                      <button
+                        className="btn"
+                        type="button"
+                        onClick={() => {
+                          const freshLayout = buildGridLayout(
+                            dashboard?.widgets || [],
+                          );
+
+                          setGridLayout(freshLayout);
+                          setSavedGridLayout(freshLayout);
+                          setAllLayouts({ lg: freshLayout });
+
+                          setEditDashboardName(dashboard.dashboard?.name || "");
+
+                          setEditError("");
+                          setIsEditMode(true);
+                        }}
+                      >
+                        Edit Dashboard
+                      </button>
+                    )}
+
+                    {currentVersionNo != null && !isCurrentVersionPublished && (
+                      <button
+                        className="btn btn--primary"
+                        type="button"
+                        disabled={publishing}
+                        onClick={() => handlePublishVersion(currentVersionNo)}
+                      >
+                        {publishing ? "Publishing..." : "Publish"}
+                      </button>
+                    )}
+
+                    <button
+                      className="btn"
+                      type="button"
+                      onClick={() => setShowVersionHistory((v) => !v)}
+                    >
+                      {showVersionHistory ? "Hide History" : "Version History"}
+                    </button>
+
+                    <button
+                      className="btn"
+                      type="button"
+                      onClick={() => setShowDeleteModal(true)}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Viewing-mode banner */}
+              {isInViewMode && (
+                <div className="dash__viewing-banner">
+                  <span>
+                    You are viewing a read-only snapshot of version {viewingVersionNo}.
+                    No changes can be made.
+                  </span>
+
                   <button
                     className="btn"
                     type="button"
-                    onClick={() => {
-                      const freshLayout = buildGridLayout(
-                        dashboard?.widgets || [],
-                      );
-
-                      setGridLayout(freshLayout);
-                      setSavedGridLayout(freshLayout);
-                      // Reset allLayouts so edit mode starts from a clean
-                      // lg baseline; derived breakpoints rebuild as needed.
-                      setAllLayouts({ lg: freshLayout });
-
-                      setEditDashboardName(dashboard.dashboard?.name || "");
-
-                      setEditError("");
-                      setIsEditMode(true);
-                    }}
+                    onClick={handleBackToLive}
                   >
-                    Edit Dashboard
+                    Back to Dashboard
                   </button>
+                </div>
+              )}
+
+              {/* Version History panel */}
+              {showVersionHistory && versions.length > 0 && (
+                <div className="dash__version-panel">
+                  <h3>Version History</h3>
+
+                  <table className="dash__version-table">
+                    <thead>
+                      <tr>
+                        <th>Version</th>
+                        <th>Status</th>
+                        <th>Created</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      {versions.map((v) => (
+                        <tr key={v.version_no}>
+                          <td>v{v.version_no}</td>
+
+                          <td>
+                            {v.status === "published" && (
+                              <span className="dash__status-pill dash__status-pill--published">
+                                Published
+                              </span>
+                            )}
+                            {v.status === "draft" && v.version_no === latestVersionNo && (
+                              <span className="dash__status-pill dash__status-pill--latest-draft">
+                                Latest Draft
+                              </span>
+                            )}
+                            {v.status === "draft" && v.version_no !== latestVersionNo && (
+                              <span className="dash__status-pill dash__status-pill--draft">
+                                Draft
+                              </span>
+                            )}
+                          </td>
+
+                          <td className="tiny muted">
+                            {v.created_on
+                              ? new Date(v.created_on).toLocaleString()
+                              : ""}
+                          </td>
+
+                          <td>
+                            <div className="dash__version-actions">
+                              <button
+                                className="btn"
+                                type="button"
+                                onClick={() => handleViewVersion(v.version_no)}
+                              >
+                                View
+                              </button>
+
+                              {v.status !== "published" && (
+                                <button
+                                  className="btn"
+                                  type="button"
+                                  disabled={publishing}
+                                  onClick={() => handlePublishVersion(v.version_no)}
+                                >
+                                  Publish
+                                </button>
+                              )}
+
+                              <button
+                                className="btn"
+                                type="button"
+                                disabled={restoring}
+                                onClick={() => handleRestore(v.version_no)}
+                              >
+                                Restore as Draft
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Dashboard Filters */}
+              <div className="dash__filters">
+                <div className="row">
+                  <div>
+                    <h3>Dashboard Filters</h3>
+                    <p className="muted">
+                      Filter all dashboard widgets by a field value.
+                    </p>
+                  </div>
+
+                  <span className="spacer" />
+
+                  <button
+                    className="btn"
+                    type="button"
+                    onClick={addDashboardFilter}
+                    disabled={!fields?.length}
+                  >
+                    + Add Filter
+                  </button>
+                </div>
+
+                {dashboardFilters.length > 0 && (
+                  <div className="dash__filter-list">
+                    {dashboardFilters.map((filter, index) => (
+                      <div
+                        key={index}
+                        className="dash__filter-row"
+                      >
+                        <select
+                          className="control"
+                          value={filter.field}
+                          onChange={(e) =>
+                            updateDashboardFilter(index, {
+                              field: e.target.value,
+                            })
+                          }
+                        >
+                          {fields?.map((field) => (
+                            <option
+                              key={field.name}
+                              value={field.name}
+                            >
+                              {field.name}
+                            </option>
+                          ))}
+                        </select>
+
+                        <select
+                          className="control"
+                          value={filter.operator}
+                          onChange={(e) =>
+                            updateDashboardFilter(index, {
+                              operator: e.target.value,
+                            })
+                          }
+                        >
+                          <option value="EQUALS">Equals</option>
+                          <option value="NOT_EQUALS">Not equals</option>
+                          <option value="GREATER_THAN">Greater than</option>
+                          <option value="GREATER_THAN_OR_EQUAL">
+                            Greater than or equal
+                          </option>
+                          <option value="LESS_THAN">Less than</option>
+                          <option value="LESS_THAN_OR_EQUAL">
+                            Less than or equal
+                          </option>
+                          <option value="IN">In</option>
+                          <option value="IS_NULL">Is null</option>
+                          <option value="IS_NOT_NULL">Is not null</option>
+                        </select>
+
+                        {!["IS_NULL", "IS_NOT_NULL"].includes(
+                          filter.operator,
+                        ) && (
+                          <input
+                            className="control"
+                            type="text"
+                            placeholder={
+                              filter.operator === "IN"
+                                ? "Delhi, Uttar Pradesh"
+                                : "Value"
+                            }
+                            value={
+                              Array.isArray(filter.value)
+                                ? filter.value.join(", ")
+                                : filter.value
+                            }
+                            onChange={(e) =>
+                              updateDashboardFilter(index, {
+                                value:
+                                  filter.operator === "IN"
+                                    ? e.target.value
+                                        .split(",")
+                                        .map((value) => value.trim())
+                                        .filter(Boolean)
+                                    : e.target.value,
+                              })
+                            }
+                          />
+                        )}
+
+                        <button
+                          className="btn"
+                          type="button"
+                          onClick={() => removeDashboardFilter(index)}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+
+                    <div className="row" style={{ marginTop: 12 }}>
+                      <span className="spacer" />
+
+                      <button
+                        className="btn btn--primary"
+                        type="button"
+                        onClick={applyDashboardFilters}
+                      >
+                        Apply Filters
+                      </button>
+                    </div>
+                  </div>
                 )}
               </div>
 
@@ -1705,10 +2322,40 @@ export default function Dashboards() {
                       className="btn"
                       type="button"
                       disabled={updating}
-                      onClick={() => {
+                      onClick={async () => {
+                        if (stashedDashboard) {
+                          // Restore the dashboard/version that was displayed
+                          // before entering "Continue Editing".
+                          const restoredDashboard = stashedDashboard;
+
+                          setDashboard(restoredDashboard);
+                          setCurrentVersionNo(stashedVersionNo);
+
+                          const restoredLayout = buildGridLayout(
+                            restoredDashboard?.widgets || []
+                          );
+
+                          setGridLayout(restoredLayout);
+                          setSavedGridLayout(restoredLayout);
+                          setAllLayouts({ lg: restoredLayout });
+                          setEditDashboardName(
+                            restoredDashboard?.dashboard?.name || ""
+                          );
+
+                          // Clear the temporary stash.
+                          setStashedDashboard(null);
+                          setStashedVersionNo(null);
+
+                          setIsEditMode(false);
+                          setEditError("");
+
+                          // Reload data for the restored dashboard version.
+                          await loadDashboardData(restoredDashboard);
+                          return;
+                        }
+
+                        // Normal edit flow: no stashed version exists.
                         setGridLayout(savedGridLayout);
-                        // Restore the pre-edit allLayouts baseline so that
-                        // cancelled changes are fully discarded.
                         setAllLayouts({ lg: savedGridLayout });
                         setIsEditMode(false);
                         setEditError("");
@@ -1978,6 +2625,79 @@ export default function Dashboards() {
       )}
 
       {/* =====================================================
+          DELETE DASHBOARD CONFIRMATION MODAL
+          ===================================================== */}
+
+      {showDeleteModal && (
+        <div
+          className="dash__modal-overlay"
+          role="presentation"
+          onClick={() => {
+            if (!deleting) {
+              setShowDeleteModal(false);
+              setEditError("");
+            }
+          }}
+        >
+          <div
+            className="dash__modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-dashboard-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="delete-dashboard-title">Delete Dashboard?</h3>
+
+            <p>
+              Are you sure you want to delete{" "}
+              <strong>
+                "{dashboard?.dashboard?.name || "this dashboard"}"
+              </strong>
+              ?
+            </p>
+
+            <p>
+              This will remove the dashboard from your saved dashboards.
+            </p>
+
+            {editError && (
+              <div
+                className="alert alert--bad"
+                style={{
+                  marginTop: 12,
+                }}
+              >
+                {editError}
+              </div>
+            )}
+
+            <div className="dash__modal-actions">
+              <button
+                className="btn"
+                type="button"
+                disabled={deleting}
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setEditError("");
+                }}
+              >
+                Cancel
+              </button>
+
+              <button
+                className="btn btn--danger"
+                type="button"
+                disabled={deleting}
+                onClick={handleDelete}
+              >
+                {deleting ? "Deleting..." : "Delete Dashboard"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =====================================================
           WIDGET EDITOR / ADD GRAPH MODAL
           ===================================================== */}
 
@@ -2042,9 +2762,11 @@ export default function Dashboards() {
               <option value="kpi">KPI</option>
 
               <option value="table">Table</option>
+
+              <option value="map">Map</option>
             </select>
 
-            {widgetForm.type !== "kpi" && (
+            {widgetForm.type === "map" ? (
               <>
                 <label
                   className="dash__edit-label"
@@ -2052,7 +2774,7 @@ export default function Dashboards() {
                     marginTop: 16,
                   }}
                 >
-                  Dimension
+                  Latitude
                 </label>
 
                 <select
@@ -2065,7 +2787,35 @@ export default function Dashboards() {
                     }))
                   }
                 >
-                  <option value="">Select dimension</option>
+                  <option value="">Select latitude field</option>
+
+                  {fields?.map((field) => (
+                    <option key={field.name} value={field.name}>
+                      {field.name}
+                    </option>
+                  ))}
+                </select>
+
+                <label
+                  className="dash__edit-label"
+                  style={{
+                    marginTop: 16,
+                  }}
+                >
+                  Longitude
+                </label>
+
+                <select
+                  className="control"
+                  value={widgetForm.measure}
+                  onChange={(e) =>
+                    setWidgetForm((current) => ({
+                      ...current,
+                      measure: e.target.value,
+                    }))
+                  }
+                >
+                  <option value="">Select longitude field</option>
 
                   {fields?.map((field) => (
                     <option key={field.name} value={field.name}>
@@ -2074,67 +2824,105 @@ export default function Dashboards() {
                   ))}
                 </select>
               </>
+            ) : (
+              widgetForm.type !== "kpi" && (
+                <>
+                  <label
+                    className="dash__edit-label"
+                    style={{
+                      marginTop: 16,
+                    }}
+                  >
+                    Dimension
+                  </label>
+
+                  <select
+                    className="control"
+                    value={widgetForm.dimension}
+                    onChange={(e) =>
+                      setWidgetForm((current) => ({
+                        ...current,
+                        dimension: e.target.value,
+                      }))
+                    }
+                  >
+                    <option value="">Select dimension</option>
+
+                    {fields?.map((field) => (
+                      <option key={field.name} value={field.name}>
+                        {field.name}
+                      </option>
+                    ))}
+                  </select>
+                </>
+              )
             )}
 
-            <label
-              className="dash__edit-label"
-              style={{
-                marginTop: 16,
-              }}
-            >
-              Measure
-            </label>
+            {widgetForm.type !== "map" && (
+              <>
+                <label
+                  className="dash__edit-label"
+                  style={{
+                    marginTop: 16,
+                  }}
+                >
+                  Measure
+                </label>
 
-            <select
-              className="control"
-              value={widgetForm.measure}
-              onChange={(e) =>
-                setWidgetForm((current) => ({
-                  ...current,
-                  measure: e.target.value,
-                }))
-              }
-            >
-              <option value="">Select measure</option>
+                <select
+                  className="control"
+                  value={widgetForm.measure}
+                  onChange={(e) =>
+                    setWidgetForm((current) => ({
+                      ...current,
+                      measure: e.target.value,
+                    }))
+                  }
+                >
+                  <option value="">Select measure</option>
 
-              {fields?.map((field) => (
-                <option key={field.name} value={field.name}>
-                  {field.name}
-                </option>
-              ))}
-            </select>
+                  {fields?.map((field) => (
+                    <option key={field.name} value={field.name}>
+                      {field.name}
+                    </option>
+                  ))}
+                </select>
 
-            <label
-              className="dash__edit-label"
-              style={{
-                marginTop: 16,
-              }}
-            >
-              Aggregation
-            </label>
+                <label
+                  className="dash__edit-label"
+                  style={{
+                    marginTop: 16,
+                  }}
+                >
+                  Aggregation
+                </label>
 
-            <select
-              className="control"
-              value={widgetForm.aggregation}
-              onChange={(e) =>
-                setWidgetForm((current) => ({
-                  ...current,
-                  aggregation: e.target.value,
-                }))
-              }
-            >
-              <option value="COUNT">COUNT</option>
+                <select
+                  className="control"
+                  value={widgetForm.aggregation}
+                  onChange={(e) =>
+                    setWidgetForm((current) => ({
+                      ...current,
+                      aggregation: e.target.value,
+                    }))
+                  }
+                >
+                  <option value="COUNT">COUNT</option>
 
-              <option value="COUNT_DISTINCT">COUNT DISTINCT</option>
+                  <option value="COUNT_DISTINCT">COUNT DISTINCT</option>
 
-              <option value="SUM">SUM</option>
+                  <option value="SUM">SUM</option>
 
-              <option value="AVG">AVG</option>
+                  <option value="AVG">AVG</option>
 
-              <option value="MIN">MIN</option>
+                  <option value="MIN">MIN</option>
 
-              <option value="MAX">MAX</option>
-            </select>
+                  <option value="MAX">MAX</option>
+                </select>
+              </>
+            )}
+
+
 
             {editError && (
               <div

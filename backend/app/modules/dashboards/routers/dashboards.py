@@ -12,7 +12,11 @@ from app.modules.forms.llm import LLMError
 from app.core.config import settings
 
 from app.core.deps import needs
-from app.modules.dashboards.permissions import DASHBOARDS_VIEW
+from app.modules.dashboards.permissions import (
+    DASHBOARDS_VIEW,
+    DASHBOARDS_EDIT,
+    DASHBOARDS_DELETE,
+)
 
 from app.modules.dashboards.schemas import (
     DashboardDataRequest,
@@ -28,6 +32,10 @@ from app.modules.dashboards.services.dashboard_service import (
     get_dashboard,
     update_dashboard,
     delete_dashboard,
+    list_versions,
+    get_version,
+    publish_version,
+    restore_version,
 )
 
 from app.modules.dashboards.services.data_source_service import (
@@ -121,6 +129,7 @@ def update_dashboard_route(
         dashboard_id=dashboard_id,
         title=title,
         dashboard_json=payload,
+        created_by=user.get("username"),
     )
 
     if updated is None:
@@ -134,7 +143,7 @@ def update_dashboard_route(
 @router.delete("/{dashboard_id}")
 def delete_dashboard_route(
     dashboard_id: str,
-    user: Dict[str, Any] = Depends(needs(DASHBOARDS_VIEW)),
+    user: Dict[str, Any] = Depends(needs(DASHBOARDS_DELETE)),
 ):
     """Soft-delete a saved dashboard."""
 
@@ -150,6 +159,81 @@ def delete_dashboard_route(
         "message": "Dashboard deleted successfully.",
         "dashboard_id": dashboard_id,
     }
+
+
+
+# ── Version endpoints ────────────────────────────────────────────
+
+
+@router.get("/{dashboard_id}/versions")
+def list_versions_route(
+    dashboard_id: str,
+    user: Dict[str, Any] = Depends(needs(DASHBOARDS_VIEW)),
+):
+    """Return all versions for a saved dashboard."""
+
+    return list_versions(dashboard_id)
+
+
+@router.get("/{dashboard_id}/versions/{version_no}")
+def get_version_route(
+    dashboard_id: str,
+    version_no: int,
+    user: Dict[str, Any] = Depends(needs(DASHBOARDS_VIEW)),
+):
+    """Return a specific version with full configuration."""
+
+    version = get_version(dashboard_id, version_no)
+
+    if version is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Version not found.",
+        )
+
+    return version
+
+
+@router.post("/{dashboard_id}/versions/{version_no}/publish")
+def publish_version_route(
+    dashboard_id: str,
+    version_no: int,
+    user: Dict[str, Any] = Depends(needs(DASHBOARDS_EDIT)),
+):
+    """Publish a version."""
+
+    result = publish_version(dashboard_id, version_no)
+
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Version not found.",
+        )
+
+    return result
+
+
+@router.post("/{dashboard_id}/versions/{version_no}/restore")
+def restore_version_route(
+    dashboard_id: str,
+    version_no: int,
+    user: Dict[str, Any] = Depends(needs(DASHBOARDS_EDIT)),
+):
+    """Create a new draft version from an existing version."""
+
+    result = restore_version(
+        dashboard_id,
+        version_no,
+        created_by=user.get("username"),
+    )
+
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Version not found.",
+        )
+
+    return result
 
 
 @router.post("/generate")
