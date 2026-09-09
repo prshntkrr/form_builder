@@ -29,6 +29,30 @@ export const api = {
     }),
 
   // -----------------------------
+  // Version management
+  // -----------------------------
+
+  listVersions: (dashboardId) =>
+    request(`/dashboards/${encodeURIComponent(dashboardId)}/versions`),
+
+  getVersion: (dashboardId, versionNo) =>
+    request(
+      `/dashboards/${encodeURIComponent(dashboardId)}/versions/${versionNo}`
+    ),
+
+  publishVersion: (dashboardId, versionNo) =>
+    request(
+      `/dashboards/${encodeURIComponent(dashboardId)}/versions/${versionNo}/publish`,
+      { method: 'POST' }
+    ),
+
+  restoreVersion: (dashboardId, versionNo) =>
+    request(
+      `/dashboards/${encodeURIComponent(dashboardId)}/versions/${versionNo}/restore`,
+      { method: 'POST' }
+    ),
+
+  // -----------------------------
   // Data sources
   // -----------------------------
 

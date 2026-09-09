@@ -9,6 +9,7 @@ from pathlib import Path
 from app.core.registry import Module
 
 from . import permissions  # noqa: F401  (importing registers the permissions)
+from . import bootstrap
 from .routers import dashboards
 
 MODULE = Module(
@@ -17,7 +18,10 @@ MODULE = Module(
     routers=[dashboards.router],
     # Add table names here as schema.sql grows. Listing one makes the schema file
     # run on a fresh database and reports it in /api/health when it is absent.
-    tables=["dashboard"],
+    tables=["dashboard", "dashboard_version"],
     schema_file=Path(__file__).resolve().parent / "schema.sql",
-    migrations=[],
+    migrations=[
+        bootstrap.ensure_version_columns,
+        bootstrap.ensure_dashboard_version_table,
+    ],
 )

@@ -199,8 +199,28 @@ def build_filter_expression(
         )
 
     if operator == "IN":
-        raise NotImplementedError(
-            "IN filters will be added with parameter handling"
+        values = filter_item.value
+
+        if not isinstance(values, (list, tuple)):
+            raise ValueError(
+                "IN filter value must be a list or tuple"
+            )
+
+        if not values:
+            raise ValueError(
+                "IN filter requires at least one value"
+            )
+
+        placeholders = sql.SQL(", ").join(
+            [sql.SQL("%s")] * len(values)
+        )
+
+        return (
+            sql.SQL("{} IN ({})").format(
+                field,
+                placeholders,
+            ),
+            list(values),
         )
 
     raise ValueError(

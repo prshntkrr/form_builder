@@ -14,6 +14,7 @@ WidgetType = Literal[
     "doughnut",
     "kpi",
     "table",
+    "map",
 ]
 
 AggregationType = Literal[
