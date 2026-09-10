@@ -72,6 +72,18 @@ export default function AmChartBarRenderer({ widget, data }) {
 
     xAxis.data.setAll(data);
 
+    if (widget.presentation?.x_axis?.title) {
+      xAxis.children.push(am5.Label.new(root, {
+        text: widget.presentation.x_axis.title,
+        textAlign: "center",
+        x: am5.p50,
+        centerX: am5.p50,
+        fontWeight: widget.presentation.x_axis.bold ? "bold" : "normal",
+        fontStyle: widget.presentation.x_axis.italic ? "italic" : "normal",
+        fontSize: widget.presentation.x_axis.font_size || undefined
+      }));
+    }
+
     // ── Value (Y) axis ─────────────────────────────────────────
     const yAxis = chart.yAxes.push(
       am5xy.ValueAxis.new(root, {
@@ -83,6 +95,19 @@ export default function AmChartBarRenderer({ widget, data }) {
     yAxis.get("renderer").labels.template.setAll({
       fontSize: 12,
     });
+
+    if (widget.presentation?.y_axis?.title) {
+      yAxis.children.unshift(am5.Label.new(root, {
+        text: widget.presentation.y_axis.title,
+        textAlign: "center",
+        y: am5.p50,
+        centerY: am5.p50,
+        rotation: -90,
+        fontWeight: widget.presentation.y_axis.bold ? "bold" : "normal",
+        fontStyle: widget.presentation.y_axis.italic ? "italic" : "normal",
+        fontSize: widget.presentation.y_axis.font_size || undefined
+      }));
+    }
 
     // ── Series ─────────────────────────────────────────────────
     const measure = widget.data_binding?.measures?.[0];
@@ -136,7 +161,7 @@ export default function AmChartBarRenderer({ widget, data }) {
   return (
     <div
       ref={chartRef}
-      style={{ width: "100%", height: "100%" }}
+      style={{ width: "100%", height: "100%", backgroundColor: widget.presentation?.background_color || undefined }}
     />
   );
 }
