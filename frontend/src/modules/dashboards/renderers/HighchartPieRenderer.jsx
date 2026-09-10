@@ -44,7 +44,7 @@ export default function HighchartPieRenderer({ widget, data }) {
     () => ({
       chart: {
         type: "pie",
-        backgroundColor: "transparent",
+        backgroundColor: widget.presentation?.background_color || "transparent",
         style: { fontFamily: "inherit" },
       },
 

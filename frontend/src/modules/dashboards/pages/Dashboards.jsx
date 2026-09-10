@@ -854,6 +854,22 @@ const applyDashboardFilters = async () => {
     return formatColumnLabel(column);
   };
 
+  const getIconSymbol = (iconId) => {
+    const icons = {
+      users: "👥",
+      user: "👤",
+      students: "🎓",
+      school: "🏫",
+      chart: "📊",
+      money: "💰",
+      location: "📍",
+      agriculture: "🌾",
+      farm: "🚜",
+      calendar: "📅"
+    };
+    return icons[iconId] || null;
+  };
+
   /* =========================================================
      CHART RENDERING
      ========================================================= */
@@ -905,14 +921,47 @@ const applyDashboardFilters = async () => {
       </div>
     );
 
+    const presentation = widget.presentation || {};
+    const titleStyle = presentation.title_style || {};
+    const subtitleStyle = presentation.subtitle_style || {};
+    const iconSymbol = presentation.title_icon ? getIconSymbol(presentation.title_icon) : null;
+
+    const widgetStyle = presentation.background_color ? { backgroundColor: presentation.background_color } : {};
+
+    const headerTitleStyle = {
+      ...(titleStyle.font_size ? { fontSize: `${titleStyle.font_size}px` } : {}),
+      ...(titleStyle.bold ? { fontWeight: "bold" } : {}),
+      ...(titleStyle.italic ? { fontStyle: "italic" } : {})
+    };
+
+    const headerSubtitleStyle = {
+      ...(subtitleStyle.font_size ? { fontSize: `${subtitleStyle.font_size}px` } : {}),
+      ...(subtitleStyle.bold ? { fontWeight: "bold" } : {}),
+      ...(subtitleStyle.italic ? { fontStyle: "italic" } : {})
+    };
+
+    const renderHeader = () => (
+      <div className="dash__widget-header">
+        <div>
+          <h3 style={{...headerTitleStyle, margin: 0}}>
+            {widget.title}
+            {iconSymbol && <span style={{ marginLeft: "8px" }}>{iconSymbol}</span>}
+          </h3>
+          {presentation.subtitle && (
+            <div className="dash__widget-subtitle" style={{...headerSubtitleStyle, marginTop: "4px", color: "var(--text-muted, #666)"}}>
+              {presentation.subtitle}
+            </div>
+          )}
+        </div>
+        {editButton}
+      </div>
+    );
+
     if (widget.type === "table") {
       return (
-        <div className="dash__widget">
-          <div className="dash__widget-header">
-            <h3>{widget.title}</h3>
+        <div className="dash__widget" style={widgetStyle}>
+          {renderHeader()}
 
-            {editButton}
-          </div>
 
           {rows.length === 0 ? (
             <p className="muted">No data available.</p>
@@ -948,7 +997,7 @@ const applyDashboardFilters = async () => {
 
       if (!firstRow) {
         return (
-          <div className="dash__widget">
+          <div className="dash__widget" style={widgetStyle}>
             <div className="dash__widget-header">
               <h3>{widget.title}</h3>
 
@@ -963,12 +1012,8 @@ const applyDashboardFilters = async () => {
       const value = Object.values(firstRow)[0];
 
       return (
-        <div className="dash__widget dash__kpi">
-          <div className="dash__widget-header">
-            <h3>{widget.title}</h3>
-
-            {editButton}
-          </div>
+        <div className="dash__widget dash__kpi" style={widgetStyle}>
+          {renderHeader()}
 
           <div className="dash__kpi-value">{String(value ?? "0")}</div>
         </div>
@@ -979,11 +1024,8 @@ const applyDashboardFilters = async () => {
       const Renderer = getRenderer(widget.type);
 
       return (
-        <div className="dash__widget">
-          <div className="dash__widget-header">
-            <h3>{widget.title}</h3>
-            {editButton}
-          </div>
+        <div className="dash__widget" style={widgetStyle}>
+          {renderHeader()}
 
           <div className="dash__chart-area">
             <Renderer widget={widget} data={rows} />
@@ -999,12 +1041,8 @@ const applyDashboardFilters = async () => {
       widget.type === "doughnut"
     ) {
       return (
-        <div className="dash__widget">
-          <div className="dash__widget-header">
-            <h3>{widget.title}</h3>
-
-            {editButton}
-          </div>
+        <div className="dash__widget" style={widgetStyle}>
+          {renderHeader()}
 
           <div className="dash__chart-area">
             {renderChart(widget, rows)}
@@ -1046,6 +1084,15 @@ const applyDashboardFilters = async () => {
       dimension: firstField,
       measure: firstNumericField,
       aggregation: "COUNT",
+      presentation: {
+        subtitle: "",
+        title_icon: "",
+        background_color: "",
+        title_style: { font_size: "", bold: false, italic: false },
+        subtitle_style: { font_size: "", bold: false, italic: false },
+        x_axis: { title: "", font_size: "", bold: false, italic: false },
+        y_axis: { title: "", font_size: "", bold: false, italic: false }
+      }
     };
   };
 
@@ -1071,14 +1118,40 @@ const applyDashboardFilters = async () => {
     const aggregation =
       widget.data_binding?.measures?.[0]?.aggregation || "COUNT";
 
+    const p = widget.presentation || {};
     setWidgetForm({
       title: widget.title || "",
-
       type: widget.type || "bar",
-
       dimension,
       measure,
       aggregation,
+      presentation: {
+        subtitle: p.subtitle || "",
+        title_icon: p.title_icon || "",
+        background_color: p.background_color || "",
+        title_style: {
+          font_size: p.title_style?.font_size || "",
+          bold: p.title_style?.bold || false,
+          italic: p.title_style?.italic || false
+        },
+        subtitle_style: {
+          font_size: p.subtitle_style?.font_size || "",
+          bold: p.subtitle_style?.bold || false,
+          italic: p.subtitle_style?.italic || false
+        },
+        x_axis: {
+          title: p.x_axis?.title || "",
+          font_size: p.x_axis?.font_size || "",
+          bold: p.x_axis?.bold || false,
+          italic: p.x_axis?.italic || false
+        },
+        y_axis: {
+          title: p.y_axis?.title || "",
+          font_size: p.y_axis?.font_size || "",
+          bold: p.y_axis?.bold || false,
+          italic: p.y_axis?.italic || false
+        }
+      }
     });
 
     setEditingWidgetId(widget.id);
@@ -1189,15 +1262,56 @@ const applyDashboardFilters = async () => {
         return widget;
       }
 
-      return {
+
+      const p = widgetForm.presentation || {};
+      const cleanPresentation = {};
+
+      if (p.subtitle) cleanPresentation.subtitle = p.subtitle;
+      if (p.title_icon) cleanPresentation.title_icon = p.title_icon;
+      if (p.background_color) cleanPresentation.background_color = p.background_color;
+
+      const cleanTitleStyle = {};
+      if (p.title_style?.font_size) cleanTitleStyle.font_size = Number(p.title_style.font_size);
+      if (p.title_style?.bold) cleanTitleStyle.bold = p.title_style.bold;
+      if (p.title_style?.italic) cleanTitleStyle.italic = p.title_style.italic;
+      if (Object.keys(cleanTitleStyle).length > 0) cleanPresentation.title_style = cleanTitleStyle;
+
+      const cleanSubtitleStyle = {};
+      if (p.subtitle_style?.font_size) cleanSubtitleStyle.font_size = Number(p.subtitle_style.font_size);
+      if (p.subtitle_style?.bold) cleanSubtitleStyle.bold = p.subtitle_style.bold;
+      if (p.subtitle_style?.italic) cleanSubtitleStyle.italic = p.subtitle_style.italic;
+      if (Object.keys(cleanSubtitleStyle).length > 0) cleanPresentation.subtitle_style = cleanSubtitleStyle;
+
+      if (widgetForm.type === 'bar' || widgetForm.type === 'line') {
+        const cleanXAxis = {};
+        if (p.x_axis?.title) cleanXAxis.title = p.x_axis.title;
+        if (p.x_axis?.font_size) cleanXAxis.font_size = Number(p.x_axis.font_size);
+        if (p.x_axis?.bold) cleanXAxis.bold = p.x_axis.bold;
+        if (p.x_axis?.italic) cleanXAxis.italic = p.x_axis.italic;
+        if (Object.keys(cleanXAxis).length > 0) cleanPresentation.x_axis = cleanXAxis;
+
+        const cleanYAxis = {};
+        if (p.y_axis?.title) cleanYAxis.title = p.y_axis.title;
+        if (p.y_axis?.font_size) cleanYAxis.font_size = Number(p.y_axis.font_size);
+        if (p.y_axis?.bold) cleanYAxis.bold = p.y_axis.bold;
+        if (p.y_axis?.italic) cleanYAxis.italic = p.y_axis.italic;
+        if (Object.keys(cleanYAxis).length > 0) cleanPresentation.y_axis = cleanYAxis;
+      }
+
+      const widgetUpdate = {
         ...widget,
-
         type: widgetForm.type,
-
         title: widgetForm.title.trim(),
-
-        data_binding: buildWidgetBinding(widgetForm),
+        data_binding: buildWidgetBinding(widgetForm)
       };
+
+      if (Object.keys(cleanPresentation).length > 0) {
+        widgetUpdate.presentation = cleanPresentation;
+      } else {
+        delete widgetUpdate.presentation;
+      }
+
+      return widgetUpdate;
     });
 
     const updatedDashboard = {
@@ -2450,6 +2564,7 @@ const applyDashboardFilters = async () => {
                             <div
                               key={widget.id}
                               className="card card--pad dash__widget-card"
+                              style={widget.presentation?.background_color ? { backgroundColor: widget.presentation.background_color } : {}}
                             >
                               {renderWidget(widget)}
                             </div>
@@ -2708,6 +2823,7 @@ const applyDashboardFilters = async () => {
             role="dialog"
             aria-modal="true"
             aria-labelledby="widget-editor-title"
+            style={{ maxHeight: "90vh", overflowY: "auto" }}
           >
             <h2 id="widget-editor-title">
               {editingWidgetId ? "Edit Graph" : "Add Graph"}
@@ -2922,7 +3038,288 @@ const applyDashboardFilters = async () => {
               </>
             )}
 
+            <hr style={{ margin: "24px 0", border: "none", borderTop: "1px solid var(--border-color, #eee)" }} />
 
+            <h3 style={{ marginBottom: 16 }}>Appearance</h3>
+            <label className="dash__edit-label">Background Color</label>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+              <input
+                className="control"
+                type="color"
+                value={widgetForm.presentation?.background_color || "#ffffff"}
+                onChange={(e) =>
+                  setWidgetForm((curr) => ({
+                    ...curr,
+                    presentation: { ...curr.presentation, background_color: e.target.value }
+                  }))
+                }
+                style={{ height: 40, width: 60, padding: "2px 4px" }}
+              />
+              <button
+                type="button"
+                className="btn1"
+                onClick={() => setWidgetForm((curr) => ({ ...curr, presentation: { ...curr.presentation, background_color: "" } }))}
+              >
+                Clear
+              </button>
+            </div>
+
+            <h3 style={{ marginBottom: 16, marginTop: 24 }}>Title</h3>
+
+            <label className="dash__edit-label">Title Icon</label>
+            <select
+              className="control"
+              value={widgetForm.presentation?.title_icon || ""}
+              onChange={(e) =>
+                setWidgetForm((curr) => ({
+                  ...curr,
+                  presentation: { ...curr.presentation, title_icon: e.target.value }
+                }))
+              }
+              style={{ marginBottom: 16 }}
+            >
+              <option value="">None</option>
+              <option value="users">👥 Users</option>
+              <option value="user">👤 User</option>
+              <option value="students">🎓 Students</option>
+              <option value="school">🏫 School</option>
+              <option value="chart">📊 Chart</option>
+              <option value="money">💰 Money</option>
+              <option value="location">📍 Location</option>
+              <option value="agriculture">🌾 Agriculture</option>
+              <option value="farm">🚜 Farm</option>
+              <option value="calendar">📅 Calendar</option>
+            </select>
+
+            <label className="dash__edit-label">Title Font Size (px)</label>
+            <input
+              className="control"
+              type="number"
+              min="1"
+              value={widgetForm.presentation?.title_style?.font_size || ""}
+              onChange={(e) =>
+                setWidgetForm((curr) => ({
+                  ...curr,
+                  presentation: {
+                    ...curr.presentation,
+                    title_style: { ...(curr.presentation?.title_style || {}), font_size: e.target.value }
+                  }
+                }))
+              }
+              placeholder="e.g. 18"
+            />
+            <div style={{ display: "flex", gap: 16, marginTop: 8, marginBottom: 16 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 14 }}>
+                <input
+                  type="checkbox"
+                  checked={widgetForm.presentation?.title_style?.bold || false}
+                  onChange={(e) =>
+                    setWidgetForm((curr) => ({
+                      ...curr,
+                      presentation: { ...curr.presentation, title_style: { ...(curr.presentation?.title_style || {}), bold: e.target.checked } }
+                    }))
+                  }
+                />{" "}
+                Bold
+              </label>
+              <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 14 }}>
+                <input
+                  type="checkbox"
+                  checked={widgetForm.presentation?.title_style?.italic || false}
+                  onChange={(e) =>
+                    setWidgetForm((curr) => ({
+                      ...curr,
+                      presentation: { ...curr.presentation, title_style: { ...(curr.presentation?.title_style || {}), italic: e.target.checked } }
+                    }))
+                  }
+                />{" "}
+                Italic
+              </label>
+            </div>
+
+            <h3 style={{ marginBottom: 16, marginTop: 24 }}>Subtitle</h3>
+            <label className="dash__edit-label">Subtitle Text</label>
+            <input
+              className="control"
+              type="text"
+              value={widgetForm.presentation?.subtitle || ""}
+              onChange={(e) =>
+                setWidgetForm((curr) => ({
+                  ...curr,
+                  presentation: { ...curr.presentation, subtitle: e.target.value }
+                }))
+              }
+              placeholder="Optional subtitle"
+              style={{ marginBottom: 16 }}
+            />
+
+            <label className="dash__edit-label">Subtitle Font Size (px)</label>
+            <input
+              className="control"
+              type="number"
+              min="1"
+              value={widgetForm.presentation?.subtitle_style?.font_size || ""}
+              onChange={(e) =>
+                setWidgetForm((curr) => ({
+                  ...curr,
+                  presentation: {
+                    ...curr.presentation,
+                    subtitle_style: { ...(curr.presentation?.subtitle_style || {}), font_size: e.target.value }
+                  }
+                }))
+              }
+              placeholder="e.g. 14"
+            />
+            <div style={{ display: "flex", gap: 16, marginTop: 8, marginBottom: 16 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 14 }}>
+                <input
+                  type="checkbox"
+                  checked={widgetForm.presentation?.subtitle_style?.bold || false}
+                  onChange={(e) =>
+                    setWidgetForm((curr) => ({
+                      ...curr,
+                      presentation: { ...curr.presentation, subtitle_style: { ...(curr.presentation?.subtitle_style || {}), bold: e.target.checked } }
+                    }))
+                  }
+                />{" "}
+                Bold
+              </label>
+              <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 14 }}>
+                <input
+                  type="checkbox"
+                  checked={widgetForm.presentation?.subtitle_style?.italic || false}
+                  onChange={(e) =>
+                    setWidgetForm((curr) => ({
+                      ...curr,
+                      presentation: { ...curr.presentation, subtitle_style: { ...(curr.presentation?.subtitle_style || {}), italic: e.target.checked } }
+                    }))
+                  }
+                />{" "}
+                Italic
+              </label>
+            </div>
+
+            {(widgetForm.type === "bar" || widgetForm.type === "line") && (
+              <>
+                <h3 style={{ marginBottom: 16, marginTop: 24 }}>X Axis</h3>
+                <label className="dash__edit-label">X-Axis Title</label>
+                <input
+                  className="control"
+                  type="text"
+                  value={widgetForm.presentation?.x_axis?.title || ""}
+                  onChange={(e) =>
+                    setWidgetForm((curr) => ({
+                      ...curr,
+                      presentation: { ...curr.presentation, x_axis: { ...(curr.presentation?.x_axis || {}), title: e.target.value } }
+                    }))
+                  }
+                  placeholder="X-Axis title"
+                  style={{ marginBottom: 16 }}
+                />
+
+                <label className="dash__edit-label">X-Axis Font Size (px)</label>
+                <input
+                  className="control"
+                  type="number"
+                  min="1"
+                  value={widgetForm.presentation?.x_axis?.font_size || ""}
+                  onChange={(e) =>
+                    setWidgetForm((curr) => ({
+                      ...curr,
+                      presentation: { ...curr.presentation, x_axis: { ...(curr.presentation?.x_axis || {}), font_size: e.target.value } }
+                    }))
+                  }
+                  placeholder="Size"
+                />
+                <div style={{ display: "flex", gap: 16, marginTop: 8, marginBottom: 16 }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 14 }}>
+                    <input
+                      type="checkbox"
+                      checked={widgetForm.presentation?.x_axis?.bold || false}
+                      onChange={(e) =>
+                        setWidgetForm((curr) => ({
+                          ...curr,
+                          presentation: { ...curr.presentation, x_axis: { ...(curr.presentation?.x_axis || {}), bold: e.target.checked } }
+                        }))
+                      }
+                    />{" "}
+                    Bold
+                  </label>
+                  <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 14 }}>
+                    <input
+                      type="checkbox"
+                      checked={widgetForm.presentation?.x_axis?.italic || false}
+                      onChange={(e) =>
+                        setWidgetForm((curr) => ({
+                          ...curr,
+                          presentation: { ...curr.presentation, x_axis: { ...(curr.presentation?.x_axis || {}), italic: e.target.checked } }
+                        }))
+                      }
+                    />{" "}
+                    Italic
+                  </label>
+                </div>
+
+                <h3 style={{ marginBottom: 16, marginTop: 24 }}>Y Axis</h3>
+                <label className="dash__edit-label">Y-Axis Title</label>
+                <input
+                  className="control"
+                  type="text"
+                  value={widgetForm.presentation?.y_axis?.title || ""}
+                  onChange={(e) =>
+                    setWidgetForm((curr) => ({
+                      ...curr,
+                      presentation: { ...curr.presentation, y_axis: { ...(curr.presentation?.y_axis || {}), title: e.target.value } }
+                    }))
+                  }
+                  placeholder="Y-Axis title"
+                  style={{ marginBottom: 16 }}
+                />
+
+                <label className="dash__edit-label">Y-Axis Font Size (px)</label>
+                <input
+                  className="control"
+                  type="number"
+                  min="1"
+                  value={widgetForm.presentation?.y_axis?.font_size || ""}
+                  onChange={(e) =>
+                    setWidgetForm((curr) => ({
+                      ...curr,
+                      presentation: { ...curr.presentation, y_axis: { ...(curr.presentation?.y_axis || {}), font_size: e.target.value } }
+                    }))
+                  }
+                  placeholder="Size"
+                />
+                <div style={{ display: "flex", gap: 16, marginTop: 8, marginBottom: 16 }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 14 }}>
+                    <input
+                      type="checkbox"
+                      checked={widgetForm.presentation?.y_axis?.bold || false}
+                      onChange={(e) =>
+                        setWidgetForm((curr) => ({
+                          ...curr,
+                          presentation: { ...curr.presentation, y_axis: { ...(curr.presentation?.y_axis || {}), bold: e.target.checked } }
+                        }))
+                      }
+                    />{" "}
+                    Bold
+                  </label>
+                  <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 14 }}>
+                    <input
+                      type="checkbox"
+                      checked={widgetForm.presentation?.y_axis?.italic || false}
+                      onChange={(e) =>
+                        setWidgetForm((curr) => ({
+                          ...curr,
+                          presentation: { ...curr.presentation, y_axis: { ...(curr.presentation?.y_axis || {}), italic: e.target.checked } }
+                        }))
+                      }
+                    />{" "}
+                    Italic
+                  </label>
+                </div>
+              </>
+            )}
 
             {editError && (
               <div
