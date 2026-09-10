@@ -401,8 +401,14 @@ Every widget MUST have exactly these properties:
     "y": 0,
     "w": 6,
     "h": 4
+  },
+
+  "presentation": {
+    "subtitle": "Optional string"
   }
 }
+
+NOTE: "presentation" is entirely optional.
 
 
 DO NOT use these alternative property names:

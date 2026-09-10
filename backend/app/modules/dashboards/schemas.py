@@ -115,6 +115,41 @@ class WidgetLayout(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Widget presentation
+# ---------------------------------------------------------------------------
+
+class WidgetTextStyle(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    font_size: Optional[int] = Field(default=None, gt=0)
+    bold: Optional[bool] = None
+    italic: Optional[bool] = None
+
+
+class AxisPresentation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: Optional[str] = None
+    font_size: Optional[int] = Field(default=None, gt=0)
+    bold: Optional[bool] = None
+    italic: Optional[bool] = None
+
+
+class WidgetPresentation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    subtitle: Optional[str] = None
+    title_icon: Optional[str] = None
+    background_color: Optional[str] = Field(default=None, min_length=1)
+
+    title_style: Optional[WidgetTextStyle] = None
+    subtitle_style: Optional[WidgetTextStyle] = None
+
+    x_axis: Optional[AxisPresentation] = None
+    y_axis: Optional[AxisPresentation] = None
+
+
+# ---------------------------------------------------------------------------
 # Widget
 # ---------------------------------------------------------------------------
 
@@ -132,6 +167,8 @@ class DashboardWidget(BaseModel):
     data_binding: DashboardDataBinding
 
     layout: WidgetLayout
+
+    presentation: Optional[WidgetPresentation] = None
 
 
 # ---------------------------------------------------------------------------
