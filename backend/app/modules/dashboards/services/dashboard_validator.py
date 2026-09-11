@@ -45,7 +45,9 @@ def validate_dashboard_spec(
 
     available_sources maps:
 
-        data_source_id -> allowed field names
+        data_source_id -> allowed field names (Set[str])
+        OR
+        data_source_id -> allowed fields with type mapping (Dict[str, str])
     """
 
     source_ids = {
@@ -85,11 +87,31 @@ def validate_dashboard_spec(
                 measure.field,
                 allowed_fields,
             )
+            # If allowed_fields is a type mapping, validate aggregation
+            if isinstance(allowed_fields, dict):
+                field_type = allowed_fields.get(measure.field, "").lower()
+                is_text = field_type == "text" or "char" in field_type or field_type == "string"
+                if is_text and measure.aggregation not in ("COUNT", "COUNT_DISTINCT"):
+                    raise DashboardValidationError(
+                        f"Widget '{widget.id}' cannot use aggregation '{measure.aggregation}' "
+                        f"on text field '{measure.field}'."
+                    )
 
         for filter_item in widget.data_binding.filters:
             _validate_field(
                 widget.id,
                 filter_item.field,
+                allowed_fields,
+            )
+
+        if widget.kpi and widget.kpi.format == "percentage":
+            if not widget.kpi.numerator:
+                raise DashboardValidationError(
+                    f"Widget '{widget.id}' is a percentage KPI but missing a numerator condition."
+                )
+            _validate_field(
+                widget.id,
+                widget.kpi.numerator.field,
                 allowed_fields,
             )
 
@@ -99,7 +121,7 @@ def validate_dashboard_spec(
 def _validate_field(
     widget_id: str,
     field: str,
-    allowed_fields: Set[str],
+    allowed_fields: set | dict,
 ) -> None:
     if field not in allowed_fields:
         raise DashboardValidationError(

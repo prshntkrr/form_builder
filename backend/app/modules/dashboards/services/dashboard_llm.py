@@ -152,6 +152,17 @@ requested_visualizations:
 - Do not add visualizations that the user did not request.
 
 ============================================================
+WIDGET TITLE RULE
+============================================================
+
+Every generated widget MUST contain a "title".
+The user does NOT need to explicitly specify a title in their prompt.
+If the user explicitly provides a title, use it (e.g. "Create a KPI called Total Students" => "Total Students").
+If the user does NOT provide a title, you MUST automatically generate a concise, meaningful title based on the requested visualization (e.g., "Total Students", "Male Students Percentage", "Students by Gender", "Average Age").
+Do NOT use generic meaningless titles like "Widget 1".
+
+
+============================================================
 MAP VISUALIZATION RULES
 ============================================================
 
@@ -271,6 +282,66 @@ Do not use:
 COUNT("number of students")
 
 and do not treat "number of students" as a field.
+
+
+============================================================
+PERCENTAGE KPI WIDGETS
+============================================================
+
+If the user explicitly asks for a percentage or proportion in a KPI, you MUST generate a percentage KPI configuration.
+
+Natural language examples that MUST generate percentage KPI:
+"percentage of male students"
+"percentage of female students"
+"percentage of students scoring more than 30% in twelve_grade_percentage"
+"what percentage of students scored above 60"
+"show student percentage where marks are greater than 50"
+
+These must become:
+kpi.format = "percentage"
+with a numerator condition represented structurally using the existing FilterBinding.
+
+Examples of extracting the condition into the numerator:
+"percentage of male students" => gender EQUALS Male
+"students scoring more than 30% in twelve_grade_percentage" => twelve_grade_percentage GREATER_THAN 30
+"students scoring above 60 in marks" => marks GREATER_THAN 60
+
+The intended calculation is row-count based: COUNT(condition) / COUNT(total) * 100.
+Do not interpret "30%" as the output formatting only. "more than 30%" is a CONDITION on the field. The AI must understand this distinction.
+Do NOT put the condition only into the normal data_binding and call it a percentage KPI.
+
+A percentage KPI must include the `kpi` object on the widget, defining the `numerator` condition. The denominator is implicitly the total eligible rows.
+For a percentage KPI, the measure aggregation MUST be "COUNT". Do NOT use SUM or AVG.
+
+Example:
+User: "percentage of students scoring more than 30% in twelve_grade_percentage"
+
+Widget MUST include:
+{
+  "type": "kpi",
+  "kpi": {
+    "format": "percentage",
+    "numerator": {
+      "field": "twelve_grade_percentage",
+      "operator": "GREATER_THAN",
+      "value": 30
+    }
+  },
+  "data_binding": {
+    "dimensions": [],
+    "measures": [
+      {
+        "field": "twelve_grade_percentage",
+        "aggregation": "COUNT",
+        "label": "Students > 30% (%)"
+      }
+    ],
+    "filters": []
+  }
+}
+
+Use operator "EQUALS", "GREATER_THAN", etc. as appropriate. Ensure the numerator field is in available_fields.
+Do NOT use percentage KPI for line charts, bar charts, or tables. Only use it when the widget type is "kpi".
 
 
 ============================================================
@@ -405,10 +476,19 @@ Every widget MUST have exactly these properties:
 
   "presentation": {
     "subtitle": "Optional string"
+  },
+
+  "kpi": {
+    "format": "percentage",
+    "numerator": {
+      "field": "field_name",
+      "operator": "EQUALS",
+      "value": "Some Value"
+    }
   }
 }
 
-NOTE: "presentation" is entirely optional.
+NOTE: "presentation" and "kpi" are entirely optional. "kpi" should only be used for "type": "kpi" when a percentage is requested.
 
 
 DO NOT use these alternative property names:
