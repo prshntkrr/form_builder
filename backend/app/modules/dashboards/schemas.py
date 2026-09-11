@@ -153,6 +153,13 @@ class WidgetPresentation(BaseModel):
 # Widget
 # ---------------------------------------------------------------------------
 
+class WidgetKpiConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    format: Literal["number", "percentage"]
+    numerator: Optional[FilterBinding] = None
+
+
 class DashboardWidget(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -169,6 +176,8 @@ class DashboardWidget(BaseModel):
     layout: WidgetLayout
 
     presentation: Optional[WidgetPresentation] = None
+
+    kpi: Optional[WidgetKpiConfig] = None
 
 
 # ---------------------------------------------------------------------------

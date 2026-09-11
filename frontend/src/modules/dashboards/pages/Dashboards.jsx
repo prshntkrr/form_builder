@@ -93,6 +93,10 @@ export default function Dashboards() {
     dimension: "",
     measure: "",
     aggregation: "COUNT",
+    kpiFormat: "number",
+    kpiNumeratorField: "",
+    kpiNumeratorOperator: "EQUALS",
+    kpiNumeratorValue: "",
   });
 
   /* Version management state */
@@ -412,13 +416,36 @@ export default function Dashboards() {
     try {
       const results = await Promise.all(
         generatedDashboard.widgets.map(async (widget) => {
-          const binding = {
+          let binding = {
             ...widget.data_binding,
             filters: [
               ...(widget.data_binding?.filters || []),
               ...filtersOverride,
             ],
           };
+
+          let numResult = null;
+
+          if (widget.type === "kpi" && widget.kpi?.format === "percentage") {
+            binding = {
+              ...binding,
+              measures: [
+                {
+                  field: binding.measures[0]?.field || "id",
+                  aggregation: "COUNT",
+                  label: binding.measures[0]?.label || "Count"
+                }
+              ]
+            };
+
+            if (widget.kpi.numerator) {
+              const numBinding = {
+                ...binding,
+                filters: [...binding.filters, widget.kpi.numerator]
+              };
+              numResult = await api.getDashboardData(source.name, numBinding);
+            }
+          }
 
           const result = await api.getDashboardData(
             source.name,
@@ -428,14 +455,15 @@ export default function Dashboards() {
           return {
             widgetId: widget.id,
             rows: result.rows || [],
+            numRows: numResult ? (numResult.rows || []) : null,
           };
         }),
       );
 
       const dataByWidget = {};
 
-      results.forEach(({ widgetId, rows }) => {
-        dataByWidget[widgetId] = rows;
+      results.forEach(({ widgetId, rows, numRows }) => {
+        dataByWidget[widgetId] = { rows, numRows };
       });
 
       setWidgetData(dataByWidget);
@@ -899,7 +927,7 @@ const applyDashboardFilters = async () => {
      ========================================================= */
 
   const renderWidget = (widget) => {
-    const rows = widgetData[widget.id] || [];
+    const { rows = [], numRows = null } = widgetData[widget.id] || {};
 
     const editButton = isEditMode && (
       <div className=" row1">
@@ -1009,13 +1037,31 @@ const applyDashboardFilters = async () => {
         );
       }
 
-      const value = Object.values(firstRow)[0];
+      let displayValue;
+      if (widget.kpi?.format === "percentage" && widget.kpi.numerator) {
+        const measure = widget.data_binding?.measures?.[0];
+        const denomAlias = measure ? `${measure.field}_count` : null;
+        const denomValue = denomAlias ? Number(firstRow[denomAlias] || 0) : Number(Object.values(firstRow)[0] || 0);
+
+        const numRow = numRows ? numRows[0] : null;
+        const numValue = (numRow && denomAlias) ? Number(numRow[denomAlias] || 0) : (numRow ? Number(Object.values(numRow)[0] || 0) : 0);
+
+        if (denomValue === 0) {
+          displayValue = "0%";
+        } else {
+          displayValue = Math.round((numValue / denomValue) * 100) + "%";
+        }
+      } else {
+        const measure = widget.data_binding?.measures?.[0];
+        const measureAlias = measure ? `${measure.field}_${measure.aggregation.toLowerCase()}` : null;
+        displayValue = measureAlias ? String(firstRow[measureAlias] ?? "0") : String(Object.values(firstRow)[0] ?? "0");
+      }
 
       return (
         <div className="dash__widget dash__kpi" style={widgetStyle}>
           {renderHeader()}
 
-          <div className="dash__kpi-value">{String(value ?? "0")}</div>
+          <div className="dash__kpi-value">{displayValue}</div>
         </div>
       );
     }
@@ -1125,6 +1171,10 @@ const applyDashboardFilters = async () => {
       dimension,
       measure,
       aggregation,
+      kpiFormat: widget.kpi?.format || "number",
+      kpiNumeratorField: widget.kpi?.numerator?.field || "",
+      kpiNumeratorOperator: widget.kpi?.numerator?.operator || "EQUALS",
+      kpiNumeratorValue: widget.kpi?.numerator?.value || "",
       presentation: {
         subtitle: p.subtitle || "",
         title_icon: p.title_icon || "",
@@ -1188,7 +1238,7 @@ const applyDashboardFilters = async () => {
       };
     }
 
-    const dimensions = form.dimension
+    const dimensions = (form.type !== "kpi" && form.dimension)
       ? [
           {
             field: form.dimension,
@@ -1200,7 +1250,7 @@ const applyDashboardFilters = async () => {
       ? [
           {
             field: form.measure,
-            aggregation: form.aggregation,
+            aggregation: form.type === "kpi" && form.kpiFormat === "percentage" ? "COUNT" : form.aggregation,
           },
         ]
       : [];
@@ -1257,6 +1307,13 @@ const applyDashboardFilters = async () => {
       }
     }
 
+    if (widgetForm.type === "kpi" && widgetForm.kpiFormat === "percentage") {
+      if (!widgetForm.kpiNumeratorField || !widgetForm.kpiNumeratorValue) {
+        setEditError("Please complete the numerator condition for the percentage KPI.");
+        return;
+      }
+    }
+
     const updatedWidgets = dashboard.widgets.map((widget) => {
       if (widget.id !== editingWidgetId) {
         return widget;
@@ -1304,6 +1361,19 @@ const applyDashboardFilters = async () => {
         title: widgetForm.title.trim(),
         data_binding: buildWidgetBinding(widgetForm)
       };
+
+      if (widgetForm.type === "kpi" && widgetForm.kpiFormat === "percentage") {
+        widgetUpdate.kpi = {
+          format: "percentage",
+          numerator: {
+            field: widgetForm.kpiNumeratorField,
+            operator: widgetForm.kpiNumeratorOperator,
+            value: widgetForm.kpiNumeratorValue
+          }
+        };
+      } else {
+        delete widgetUpdate.kpi;
+      }
 
       if (Object.keys(cleanPresentation).length > 0) {
         widgetUpdate.presentation = cleanPresentation;
@@ -1364,6 +1434,13 @@ const applyDashboardFilters = async () => {
       }
     }
 
+    if (widgetForm.type === "kpi" && widgetForm.kpiFormat === "percentage") {
+      if (!widgetForm.kpiNumeratorField || !widgetForm.kpiNumeratorValue) {
+        setEditError("Please complete the numerator condition for the percentage KPI.");
+        return;
+      }
+    }
+
     const sourceId = dashboard.data_sources?.[0]?.id;
 
     if (!sourceId) {
@@ -1405,6 +1482,17 @@ const applyDashboardFilters = async () => {
         h: defaultSize.h,
       },
     };
+
+    if (widgetForm.type === "kpi" && widgetForm.kpiFormat === "percentage") {
+      newWidget.kpi = {
+        format: "percentage",
+        numerator: {
+          field: widgetForm.kpiNumeratorField,
+          operator: widgetForm.kpiNumeratorOperator,
+          value: widgetForm.kpiNumeratorValue
+        }
+      };
+    }
 
     const updatedDashboard = {
       ...dashboard,
@@ -2924,12 +3012,21 @@ const applyDashboardFilters = async () => {
                 <select
                   className="control"
                   value={widgetForm.measure}
-                  onChange={(e) =>
-                    setWidgetForm((current) => ({
-                      ...current,
-                      measure: e.target.value,
-                    }))
-                  }
+                  onChange={(e) => {
+                    const newMeasure = e.target.value;
+                    const measureField = fields?.find(f => f.name === newMeasure);
+                    const type = measureField?.type?.toLowerCase() || "";
+                    const isText = type === "text" || type.includes("character") || type.includes("varchar") || type === "string";
+
+                    setWidgetForm((current) => {
+                      const newAgg = isText && ["SUM", "AVG", "MIN", "MAX"].includes(current.aggregation) ? "COUNT" : current.aggregation;
+                      return {
+                        ...current,
+                        measure: newMeasure,
+                        aggregation: newAgg,
+                      };
+                    });
+                  }}
                 >
                   <option value="">Select longitude field</option>
 
@@ -3016,6 +3113,7 @@ const applyDashboardFilters = async () => {
                 <select
                   className="control"
                   value={widgetForm.aggregation}
+                  disabled={widgetForm.type === "kpi" && widgetForm.kpiFormat === "percentage"}
                   onChange={(e) =>
                     setWidgetForm((current) => ({
                       ...current,
@@ -3024,17 +3122,82 @@ const applyDashboardFilters = async () => {
                   }
                 >
                   <option value="COUNT">COUNT</option>
-
                   <option value="COUNT_DISTINCT">COUNT DISTINCT</option>
-
-                  <option value="SUM">SUM</option>
-
-                  <option value="AVG">AVG</option>
-
-                  <option value="MIN">MIN</option>
-
-                  <option value="MAX">MAX</option>
+                  {(() => {
+                    const measureField = fields?.find(f => f.name === widgetForm.measure);
+                    const type = measureField?.type?.toLowerCase() || "";
+                    const isText = type === "text" || type.includes("character") || type.includes("varchar") || type === "string";
+                    if (!isText) {
+                      return (
+                        <>
+                          <option value="SUM">SUM</option>
+                          <option value="AVG">AVG</option>
+                          <option value="MIN">MIN</option>
+                          <option value="MAX">MAX</option>
+                        </>
+                      );
+                    }
+                    return null;
+                  })()}
                 </select>
+              </>
+            )}
+
+            {widgetForm.type === "kpi" && (
+              <>
+                <hr style={{ margin: "24px 0", border: "none", borderTop: "1px solid var(--border-color, #eee)" }} />
+                <h3 style={{ marginBottom: 16 }}>KPI Format</h3>
+
+                <label className="dash__edit-label">Format</label>
+                <select
+                  className="control"
+                  value={widgetForm.kpiFormat}
+                  onChange={(e) => setWidgetForm((curr) => ({ ...curr, kpiFormat: e.target.value }))}
+                >
+                  <option value="number">Number</option>
+                  <option value="percentage">Percentage</option>
+                </select>
+
+                {widgetForm.kpiFormat === "percentage" && (
+                  <div style={{ marginTop: 16, padding: 16, background: "var(--accent-wash, #f8f9fa)", borderRadius: 8, border: "1px solid var(--line)" }}>
+                    <h4 style={{ margin: "0 0 12px 0", fontSize: 14 }}>Numerator Condition</h4>
+                    <label className="dash__edit-label">Field</label>
+                    <select
+                      className="control"
+                      value={widgetForm.kpiNumeratorField}
+                      onChange={(e) => setWidgetForm((curr) => ({ ...curr, kpiNumeratorField: e.target.value }))}
+                      style={{ marginBottom: 12 }}
+                    >
+                      <option value="">Select field</option>
+                      {fields?.map((field) => (
+                        <option key={field.name} value={field.name}>
+                          {field.name}
+                        </option>
+                      ))}
+                    </select>
+
+                    <label className="dash__edit-label">Condition</label>
+                    <select
+                      className="control"
+                      value={widgetForm.kpiNumeratorOperator}
+                      onChange={(e) => setWidgetForm((curr) => ({ ...curr, kpiNumeratorOperator: e.target.value }))}
+                      style={{ marginBottom: 12 }}
+                    >
+                      <option value="EQUALS">Equals</option>
+                      <option value="NOT_EQUALS">Not Equals</option>
+                      <option value="GREATER_THAN">Greater Than</option>
+                      <option value="LESS_THAN">Less Than</option>
+                    </select>
+
+                    <label className="dash__edit-label">Value</label>
+                    <input
+                      type="text"
+                      className="control"
+                      value={widgetForm.kpiNumeratorValue}
+                      onChange={(e) => setWidgetForm((curr) => ({ ...curr, kpiNumeratorValue: e.target.value }))}
+                    />
+                  </div>
+                )}
               </>
             )}
 
