@@ -182,6 +182,8 @@ export default function FieldEditor({
   index,
   total,
   sections = [],
+  // Create a section from here and put this question in it: (title, index).
+  onAddSection,
   allFields = [],      // every field on the form, for a dependent catalogue
   formRules = [],      // the form's conditional logic, and how to change it
   onRules,
@@ -209,6 +211,10 @@ export default function FieldEditor({
   onDragEnd,
   onDrop,
 }) {
+  // The name of a section being created from this question, or null when the
+  // picker is just a picker.
+  const [newSection, setNewSection] = useState(null)
+
   const row = useRef(null)
   const [tab, setTab] = useState('field')
   const patch = (changes) => onChange(index, { ...field, ...changes })
@@ -317,16 +323,57 @@ export default function FieldEditor({
                    onChange={(e) => setWords({ help_text: e.target.value })} />
           </label>
 
-          {sections.length > 0 && (
-            <label className="col">
+          {(sections.length > 0 || onAddSection) && (
+            <div className="col">
               <span className="minilabel">Section</span>
-              <select className="control" value={field.section || ''} onChange={(e) => patch({ section: e.target.value || null })}>
-                <option value="">No section</option>
-                {sections.map((s) => (
-                  <option key={s.key} value={s.key}>{s.title}</option>
-                ))}
-              </select>
-            </label>
+              {newSection === null ? (
+                <select
+                  className="control"
+                  aria-label="Section"
+                  value={field.section || ''}
+                  onChange={(e) => (e.target.value === '__new__'
+                    ? setNewSection('')
+                    : patch({ section: e.target.value || null }))}
+                >
+                  <option value="">No section</option>
+                  {sections.map((s) => (
+                    <option key={s.key} value={s.key}>{s.title}</option>
+                  ))}
+                  {onAddSection && <option value="__new__">+ New section…</option>}
+                </select>
+              ) : (
+                <div className="newsection">
+                  <input
+                    className="control"
+                    aria-label="New section name"
+                    placeholder="Section name, e.g. Farmer details"
+                    autoFocus
+                    value={newSection}
+                    onChange={(e) => setNewSection(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && newSection.trim()) {
+                        e.preventDefault()
+                        onAddSection(newSection, index)
+                        setNewSection(null)
+                      }
+                      if (e.key === 'Escape') setNewSection(null)
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn--primary btn--sm"
+                    disabled={!newSection.trim()}
+                    onClick={() => { onAddSection(newSection, index); setNewSection(null) }}
+                  >
+                    Add
+                  </button>
+                  <button type="button" className="btn btn--quiet btn--sm"
+                          onClick={() => setNewSection(null)}>
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </div>
           )}
 
           {NUMERIC.has(field.type) && (

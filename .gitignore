@@ -40,3 +40,10 @@ desktop.ini
 # ── local scratch ────────────────────────────────────────────────────────────
 *.log
 tmp/
+
+# ── load testing ─────────────────────────────────────────────────────────────
+# Generated credentials for the dedicated load-test accounts. Never commit.
+load_tests/users.csv
+load_tests/users.tmp
+load_tests/results/
+results/

@@ -183,6 +183,38 @@ export default function Builder() {
       setTrial({}); setDraftTab('questions')
     })
 
+  /** A form with no questions yet, built by hand — no prompt, no model. */
+  const startBlank = () => {
+    if (form?.fields?.length && !window.confirm('Replace the current draft with a blank form?')) return
+    setError('')
+    setForm(prep({
+      title: 'Untitled form', description: '', table_name: 'untitled_form',
+      fields: [], sections: [], rules: [],
+    }))
+    setTrial({}); setTrialResult(null); setDraftTab('questions')
+  }
+
+  /**
+   * A new section, created from a question's section picker, with that question
+   * moved into it. One update for both, so the section and the question cannot
+   * disagree about which exists.
+   */
+  const addSection = (title, index) => {
+    // Short, and starting with a letter: the backend normalises section keys to
+    // SQL-safe identifiers and truncates long ones, and a key it rewrote would
+    // no longer match the question pointing at it.
+    const base = `sec_${slug(title).slice(0, 40).replace(/_+$/, '') || 'section'}`
+    const taken = new Set((form.sections || []).map((s) => s.key))
+    let key = base
+    for (let n = 2; taken.has(key); n += 1) key = `${base}_${n}`
+
+    setForm({
+      ...form,
+      sections: [...(form.sections || []), { key, title: title.trim(), description: '' }],
+      fields: form.fields.map((f, i) => (i === index ? { ...f, section: key } : f)),
+    })
+  }
+
   const revise = () =>
     run('revise', async () => {
       const res = await api.refine(untag(form), ask)
@@ -415,6 +447,9 @@ export default function Builder() {
               ))}
             </div>
             <span className="spacer" />
+            <button className="btn" onClick={startBlank} disabled={busy === 'make'}>
+              Start blank
+            </button>
             <button className="btn" onClick={() => setPicker('start')} disabled={busy === 'make'}>
               Start from a standard form
             </button>
@@ -525,10 +560,17 @@ export default function Builder() {
               </div>
             )}
 
-            {!editing && (
+            {/* A saved form — published or not — can be previewed while it is
+                being edited, exactly as a new one can. For a saved form the tab
+                is the page's address, so the sidebar and the tab agree. */}
+            {(!editing || ['questions', 'preview', 'json'].includes(section)) && (
               <div className="tabs">
                 {[['questions', 'Questions'], ['preview', 'Preview'], ['json', 'JSON']].map(([id, name]) => (
-                  <button key={id} className={draftTab === id ? 'on' : undefined} onClick={() => setDraftTab(id)}>
+                  <button
+                    key={id}
+                    className={view === id ? 'on' : undefined}
+                    onClick={() => (editing ? navigate(`/forms/${formId}/${id}`) : setDraftTab(id))}
+                  >
                     {name}
                   </button>
                 ))}
@@ -597,6 +639,7 @@ export default function Builder() {
                        index={i}
                        total={form.fields.length}
                        sections={form.sections || []}
+                       onAddSection={addSection}
                        allFields={form.fields}
                        selected={f.name === chosen}
                        onSelect={() => setChosen(f.name)}
@@ -843,6 +886,7 @@ export default function Builder() {
               index={chosenIndex}
               total={form.fields.length}
               sections={form.sections || []}
+              onAddSection={addSection}
               allFields={form.fields}
               formRules={form.rules || []}
               onRules={(rules) => setForm({ ...form, rules })}

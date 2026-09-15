@@ -412,3 +412,8 @@
 .rec__media { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
 .rec__place { display: flex; flex-direction: column; gap: 1px; }
 .rec__link { font-size: 12.5px; max-width: 220px; display: inline-block; }
+
+/* --- naming a new section, in place of the section picker --- */
+.newsection { display: flex; gap: 6px; align-items: center; }
+.newsection .control { flex: 1; min-width: 0; }
+.newsection .btn { flex: none; }
