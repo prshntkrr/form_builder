@@ -15,6 +15,9 @@ WidgetType = Literal[
     "kpi",
     "table",
     "map",
+    "bubble",
+    "histogram",
+    "scatter",
 ]
 
 AggregationType = Literal[
@@ -24,6 +27,7 @@ AggregationType = Literal[
     "AVG",
     "MIN",
     "MAX",
+    "NONE",
 ]
 
 FilterOperator = Literal[
@@ -160,6 +164,30 @@ class WidgetKpiConfig(BaseModel):
     numerator: Optional[FilterBinding] = None
 
 
+class WidgetBubbleConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    
+    x: str
+    y: str
+    y_aggregation: Optional[AggregationType] = None
+    size: str
+    size_aggregation: Optional[AggregationType] = None
+
+
+class WidgetHistogramConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    
+    field: str
+    bins: int = Field(default=10, ge=1)
+
+
+class WidgetScatterConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    
+    x: str
+    y: str
+
+
 class DashboardWidget(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -178,6 +206,12 @@ class DashboardWidget(BaseModel):
     presentation: Optional[WidgetPresentation] = None
 
     kpi: Optional[WidgetKpiConfig] = None
+
+    bubble: Optional[WidgetBubbleConfig] = None
+
+    histogram: Optional[WidgetHistogramConfig] = None
+
+    scatter: Optional[WidgetScatterConfig] = None
 
 
 # ---------------------------------------------------------------------------

@@ -15,6 +15,7 @@ SUPPORTED_AGGREGATIONS = {
     "AVG",
     "MIN",
     "MAX",
+    "NONE",
 }
 
 
@@ -63,7 +64,9 @@ def build_select_query(
 
         field = sql.Identifier(measure.field)
 
-        if measure.aggregation == "COUNT_DISTINCT":
+        if measure.aggregation == "NONE":
+            expression = field
+        elif measure.aggregation == "COUNT_DISTINCT":
             expression = sql.SQL(
                 "COUNT(DISTINCT {})"
             ).format(field)

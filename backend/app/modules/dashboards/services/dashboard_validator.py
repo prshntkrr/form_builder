@@ -115,6 +115,44 @@ def validate_dashboard_spec(
                 allowed_fields,
             )
 
+        if widget.type == "bubble":
+            if not widget.bubble:
+                raise DashboardValidationError(f"Widget '{widget.id}' is a bubble chart but missing bubble configuration.")
+        
+        elif widget.type == "histogram":
+            if not widget.histogram:
+                raise DashboardValidationError(f"Widget '{widget.id}' is a histogram but missing histogram configuration.")
+            if len(widget.data_binding.dimensions) > 0:
+                raise DashboardValidationError(f"Widget '{widget.id}' histogram cannot have dimensions.")
+            if len(widget.data_binding.measures) != 1:
+                raise DashboardValidationError(f"Widget '{widget.id}' histogram must have exactly one measure.")
+            
+            for measure in widget.data_binding.measures:
+                if measure.aggregation != "NONE":
+                    raise DashboardValidationError(f"Widget '{widget.id}' histogram measure must use NONE aggregation.")
+                if isinstance(allowed_fields, dict):
+                    field_type = allowed_fields.get(measure.field, "").lower()
+                    is_text = field_type == "text" or "char" in field_type or field_type == "string"
+                    if is_text:
+                        raise DashboardValidationError(f"Widget '{widget.id}' histogram field must be numeric.")
+
+        elif widget.type == "scatter":
+            if not widget.scatter:
+                raise DashboardValidationError(f"Widget '{widget.id}' is a scatter plot but missing scatter configuration.")
+            if len(widget.data_binding.dimensions) > 0:
+                raise DashboardValidationError(f"Widget '{widget.id}' scatter plot cannot have dimensions.")
+            if len(widget.data_binding.measures) != 2:
+                raise DashboardValidationError(f"Widget '{widget.id}' scatter plot must have exactly two measures.")
+            
+            for measure in widget.data_binding.measures:
+                if measure.aggregation != "NONE":
+                    raise DashboardValidationError(f"Widget '{widget.id}' scatter plot measure must use NONE aggregation.")
+                if isinstance(allowed_fields, dict):
+                    field_type = allowed_fields.get(measure.field, "").lower()
+                    is_text = field_type == "text" or "char" in field_type or field_type == "string"
+                    if is_text:
+                        raise DashboardValidationError(f"Widget '{widget.id}' scatter plot field must be numeric.")
+
     return specification
 
 

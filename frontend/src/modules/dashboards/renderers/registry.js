@@ -16,6 +16,9 @@ import HighchartPieRenderer from "./HighchartPieRenderer.jsx";
 import HighchartDoughnutRenderer from "./HighchartDoughnutRenderer.jsx";
 import FallbackRenderer from "./FallbackRenderer.jsx";
 import LeafletMapRenderer from "./LeafletMapRenderer";
+import HighchartBubbleRenderer from "./HighchartBubbleRenderer.jsx";
+import HighchartHistogramRenderer from "./HighchartHistogramRenderer.jsx";
+import HighchartScatterRenderer from "./HighchartScatterRenderer.jsx";
 
 const RENDERERS = {
   bar: AmChartBarRenderer,
@@ -23,6 +26,9 @@ const RENDERERS = {
   pie: HighchartPieRenderer,
   doughnut: HighchartDoughnutRenderer,
   map: LeafletMapRenderer,
+  bubble: HighchartBubbleRenderer,
+  histogram: HighchartHistogramRenderer,
+  scatter: HighchartScatterRenderer,
 };
 
 export function getRenderer(widgetType) {

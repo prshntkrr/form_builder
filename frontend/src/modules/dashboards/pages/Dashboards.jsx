@@ -97,6 +97,15 @@ export default function Dashboards() {
     kpiNumeratorField: "",
     kpiNumeratorOperator: "EQUALS",
     kpiNumeratorValue: "",
+    bubbleX: "",
+    bubbleY: "",
+    bubbleYAggregation: "SUM",
+    bubbleSize: "",
+    bubbleSizeAggregation: "SUM",
+    histogramField: "",
+    histogramBins: 10,
+    scatterX: "",
+    scatterY: "",
   });
 
   /* Version management state */
@@ -903,7 +912,10 @@ const applyDashboardFilters = async () => {
      ========================================================= */
 
   const renderChart = (widget, rows) => {
-    const chartData = prepareChartData(widget, rows);
+    let chartData = rows;
+    if (widget.type !== "histogram" && widget.type !== "scatter") {
+      chartData = prepareChartData(widget, rows);
+    }
 
     if (chartData === null) {
       return (
@@ -1066,7 +1078,7 @@ const applyDashboardFilters = async () => {
       );
     }
 
-    if (widget.type === "map") {
+    if (widget.type === "map" || widget.type === "bubble" || widget.type === "histogram" || widget.type === "scatter") {
       const Renderer = getRenderer(widget.type);
 
       return (
@@ -1138,7 +1150,12 @@ const applyDashboardFilters = async () => {
         subtitle_style: { font_size: "", bold: false, italic: false },
         x_axis: { title: "", font_size: "", bold: false, italic: false },
         y_axis: { title: "", font_size: "", bold: false, italic: false }
-      }
+      },
+      bubbleX: firstField,
+      bubbleY: firstNumericField,
+      bubbleYAggregation: "SUM",
+      bubbleSize: firstNumericField,
+      bubbleSizeAggregation: "SUM"
     };
   };
 
@@ -1165,7 +1182,31 @@ const applyDashboardFilters = async () => {
       widget.data_binding?.measures?.[0]?.aggregation || "COUNT";
 
     const p = widget.presentation || {};
-    setWidgetForm({
+      let bubbleYField = "";
+      let bubbleYAgg = "SUM";
+      let bubbleSizeField = "";
+      let bubbleSizeAgg = "SUM";
+
+      if (widget.type === "bubble") {
+        bubbleYField = widget.bubble?.y || "";
+        bubbleSizeField = widget.bubble?.size || "";
+        
+        if (widget.bubble?.y_aggregation) {
+          bubbleYAgg = widget.bubble.y_aggregation;
+        } else {
+          // Fallback if missing
+          bubbleYAgg = widget.data_binding?.measures?.find(m => m.field === bubbleYField)?.aggregation || "SUM";
+        }
+
+        if (widget.bubble?.size_aggregation) {
+          bubbleSizeAgg = widget.bubble.size_aggregation;
+        } else {
+          // Fallback if missing
+          bubbleSizeAgg = widget.data_binding?.measures?.find(m => m.field === bubbleSizeField)?.aggregation || "SUM";
+        }
+      }
+
+      setWidgetForm({
       title: widget.title || "",
       type: widget.type || "bar",
       dimension,
@@ -1175,6 +1216,15 @@ const applyDashboardFilters = async () => {
       kpiNumeratorField: widget.kpi?.numerator?.field || "",
       kpiNumeratorOperator: widget.kpi?.numerator?.operator || "EQUALS",
       kpiNumeratorValue: widget.kpi?.numerator?.value || "",
+      bubbleX: widget.bubble?.x || "",
+      bubbleY: bubbleYField,
+      bubbleYAggregation: bubbleYAgg,
+      bubbleSize: bubbleSizeField,
+      bubbleSizeAggregation: bubbleSizeAgg,
+      histogramField: widget.histogram?.field || "",
+      histogramBins: widget.histogram?.bins || 10,
+      scatterX: widget.scatter?.x || "",
+      scatterY: widget.scatter?.y || "",
       presentation: {
         subtitle: p.subtitle || "",
         title_icon: p.title_icon || "",
@@ -1238,6 +1288,48 @@ const applyDashboardFilters = async () => {
       };
     }
 
+    if (form.type === "bubble") {
+      const dimensions = form.bubbleX ? [{ field: form.bubbleX }] : [];
+      const measures = [];
+      if (form.bubbleY) {
+        const fieldDef = fields?.find(f => f.name === form.bubbleY);
+        const isYNumeric = fieldDef && numericTypes.includes(String(fieldDef.type).toLowerCase());
+        if (!isYNumeric) {
+          dimensions.push({ field: form.bubbleY });
+        } else {
+          measures.push({ field: form.bubbleY, aggregation: form.bubbleYAggregation });
+        }
+      }
+      if (form.bubbleSize) {
+        measures.push({ field: form.bubbleSize, aggregation: form.bubbleSizeAggregation });
+      }
+      return {
+        dimensions,
+        measures,
+        filters: [],
+      };
+    }
+
+    if (form.type === "histogram") {
+      return {
+        dimensions: [],
+        measures: form.histogramField ? [{ field: form.histogramField, aggregation: "NONE" }] : [],
+        filters: [],
+      };
+    }
+
+    if (form.type === "scatter") {
+      const measures = [];
+      if (form.scatterX) measures.push({ field: form.scatterX, aggregation: "NONE" });
+      if (form.scatterY) measures.push({ field: form.scatterY, aggregation: "NONE" });
+      
+      return {
+        dimensions: [],
+        measures,
+        filters: [],
+      };
+    }
+
     const dimensions = (form.type !== "kpi" && form.dimension)
       ? [
           {
@@ -1296,12 +1388,39 @@ const applyDashboardFilters = async () => {
         return;
       }
     } else {
-      if (widgetForm.type !== "kpi" && !widgetForm.dimension) {
+      if (widgetForm.type === "bubble") {
+        if (!widgetForm.bubbleX) {
+          setEditError("Please select an X field.");
+          return;
+        }
+        if (!widgetForm.bubbleY) {
+          setEditError("Please select a Y measure.");
+          return;
+        }
+        if (!widgetForm.bubbleSize) {
+          setEditError("Please select a Size measure.");
+          return;
+        }
+      } else if (widgetForm.type === "histogram") {
+        if (!widgetForm.histogramField) {
+          setEditError("Please select a numeric field for the histogram.");
+          return;
+        }
+      } else if (widgetForm.type === "scatter") {
+        if (!widgetForm.scatterX) {
+          setEditError("Please select an X field for the scatter plot.");
+          return;
+        }
+        if (!widgetForm.scatterY) {
+          setEditError("Please select a Y field for the scatter plot.");
+          return;
+        }
+      } else if (widgetForm.type !== "kpi" && !widgetForm.dimension) {
         setEditError("Please select a dimension.");
         return;
       }
 
-      if (!widgetForm.measure) {
+      if (widgetForm.type !== "histogram" && widgetForm.type !== "scatter" && !widgetForm.measure) {
         setEditError("Please select a measure.");
         return;
       }
@@ -1373,6 +1492,36 @@ const applyDashboardFilters = async () => {
         };
       } else {
         delete widgetUpdate.kpi;
+      }
+
+      if (widgetForm.type === "bubble") {
+        widgetUpdate.bubble = {
+          x: widgetForm.bubbleX,
+          y: widgetForm.bubbleY,
+          y_aggregation: widgetForm.bubbleYAggregation,
+          size: widgetForm.bubbleSize,
+          size_aggregation: widgetForm.bubbleSizeAggregation
+        };
+      } else {
+        delete widgetUpdate.bubble;
+      }
+
+      if (widgetForm.type === "histogram") {
+        widgetUpdate.histogram = {
+          field: widgetForm.histogramField,
+          bins: parseInt(widgetForm.histogramBins) || 10
+        };
+      } else {
+        delete widgetUpdate.histogram;
+      }
+
+      if (widgetForm.type === "scatter") {
+        widgetUpdate.scatter = {
+          x: widgetForm.scatterX,
+          y: widgetForm.scatterY
+        };
+      } else {
+        delete widgetUpdate.scatter;
       }
 
       if (Object.keys(cleanPresentation).length > 0) {
@@ -1491,6 +1640,30 @@ const applyDashboardFilters = async () => {
           operator: widgetForm.kpiNumeratorOperator,
           value: widgetForm.kpiNumeratorValue
         }
+      };
+    }
+
+    if (widgetForm.type === "bubble") {
+      newWidget.bubble = {
+        x: widgetForm.bubbleX,
+        y: widgetForm.bubbleY,
+        y_aggregation: widgetForm.bubbleYAggregation,
+        size: widgetForm.bubbleSize,
+        size_aggregation: widgetForm.bubbleSizeAggregation
+      };
+    }
+
+    if (widgetForm.type === "histogram") {
+      newWidget.histogram = {
+        field: widgetForm.histogramField,
+        bins: parseInt(widgetForm.histogramBins) || 10
+      };
+    }
+
+    if (widgetForm.type === "scatter") {
+      newWidget.scatter = {
+        x: widgetForm.scatterX,
+        y: widgetForm.scatterY
       };
     }
 
@@ -2968,6 +3141,10 @@ const applyDashboardFilters = async () => {
               <option value="table">Table</option>
 
               <option value="map">Map</option>
+
+              <option value="bubble">Bubble</option>
+              <option value="histogram">Histogram</option>
+              <option value="scatter">Scatter</option>
             </select>
 
             {widgetForm.type === "map" ? (
@@ -3038,7 +3215,7 @@ const applyDashboardFilters = async () => {
                 </select>
               </>
             ) : (
-              widgetForm.type !== "kpi" && (
+              widgetForm.type !== "kpi" && widgetForm.type !== "bubble" && widgetForm.type !== "histogram" && widgetForm.type !== "scatter" && (
                 <>
                   <label
                     className="dash__edit-label"
@@ -3071,7 +3248,7 @@ const applyDashboardFilters = async () => {
               )
             )}
 
-            {widgetForm.type !== "map" && (
+            {widgetForm.type !== "map" && widgetForm.type !== "bubble" && widgetForm.type !== "histogram" && widgetForm.type !== "scatter" && (
               <>
                 <label
                   className="dash__edit-label"
@@ -3139,6 +3316,128 @@ const applyDashboardFilters = async () => {
                     }
                     return null;
                   })()}
+                </select>
+              </>
+            )}
+
+            {widgetForm.type === "bubble" && (
+              <>
+                <label className="dash__edit-label" style={{ marginTop: 16 }}>X Axis (Dimension)</label>
+                <select
+                  className="control"
+                  value={widgetForm.bubbleX}
+                  onChange={(e) => setWidgetForm((current) => ({ ...current, bubbleX: e.target.value }))}
+                >
+                  <option value="">Select X field</option>
+                  {fields?.map((field) => (
+                    <option key={field.name} value={field.name}>{field.name}</option>
+                  ))}
+                </select>
+
+                <label className="dash__edit-label" style={{ marginTop: 16 }}>Y Axis (Measure)</label>
+                <select
+                  className="control"
+                  value={widgetForm.bubbleY}
+                  onChange={(e) => setWidgetForm((current) => ({ ...current, bubbleY: e.target.value }))}
+                >
+                  <option value="">Select Y field</option>
+                  {fields?.map((field) => (
+                    <option key={field.name} value={field.name}>{field.name}</option>
+                  ))}
+                </select>
+
+                <label className="dash__edit-label" style={{ marginTop: 16 }}>Y Aggregation</label>
+                <select
+                  className="control"
+                  value={widgetForm.bubbleYAggregation}
+                  onChange={(e) => setWidgetForm((current) => ({ ...current, bubbleYAggregation: e.target.value }))}
+                >
+                  <option value="COUNT">COUNT</option>
+                  <option value="COUNT_DISTINCT">COUNT DISTINCT</option>
+                  <option value="SUM">SUM</option>
+                  <option value="AVG">AVG</option>
+                  <option value="MIN">MIN</option>
+                  <option value="MAX">MAX</option>
+                </select>
+
+                <label className="dash__edit-label" style={{ marginTop: 16 }}>Bubble Size (Measure)</label>
+                <select
+                  className="control"
+                  value={widgetForm.bubbleSize}
+                  onChange={(e) => setWidgetForm((current) => ({ ...current, bubbleSize: e.target.value }))}
+                >
+                  <option value="">Select Size field</option>
+                  {fields?.map((field) => (
+                    <option key={field.name} value={field.name}>{field.name}</option>
+                  ))}
+                </select>
+
+                <label className="dash__edit-label" style={{ marginTop: 16 }}>Size Aggregation</label>
+                <select
+                  className="control"
+                  value={widgetForm.bubbleSizeAggregation}
+                  onChange={(e) => setWidgetForm((current) => ({ ...current, bubbleSizeAggregation: e.target.value }))}
+                >
+                  <option value="COUNT">COUNT</option>
+                  <option value="COUNT_DISTINCT">COUNT DISTINCT</option>
+                  <option value="SUM">SUM</option>
+                  <option value="AVG">AVG</option>
+                  <option value="MIN">MIN</option>
+                  <option value="MAX">MAX</option>
+                </select>
+              </>
+            )}
+
+            {widgetForm.type === "histogram" && (
+              <>
+                <label className="dash__edit-label" style={{ marginTop: 16 }}>Histogram Field (Numeric)</label>
+                <select
+                  className="control"
+                  value={widgetForm.histogramField}
+                  onChange={(e) => setWidgetForm((current) => ({ ...current, histogramField: e.target.value }))}
+                >
+                  <option value="">Select numeric field</option>
+                  {fields?.map((field) => (
+                    <option key={field.name} value={field.name}>{field.name}</option>
+                  ))}
+                </select>
+
+                <label className="dash__edit-label" style={{ marginTop: 16 }}>Number of Bins</label>
+                <input
+                  type="number"
+                  className="control"
+                  value={widgetForm.histogramBins}
+                  onChange={(e) => setWidgetForm((current) => ({ ...current, histogramBins: e.target.value }))}
+                  min={1}
+                  step={1}
+                />
+              </>
+            )}
+
+            {widgetForm.type === "scatter" && (
+              <>
+                <label className="dash__edit-label" style={{ marginTop: 16 }}>X Axis (Numeric)</label>
+                <select
+                  className="control"
+                  value={widgetForm.scatterX}
+                  onChange={(e) => setWidgetForm((current) => ({ ...current, scatterX: e.target.value }))}
+                >
+                  <option value="">Select numeric X field</option>
+                  {fields?.map((field) => (
+                    <option key={field.name} value={field.name}>{field.name}</option>
+                  ))}
+                </select>
+
+                <label className="dash__edit-label" style={{ marginTop: 16 }}>Y Axis (Numeric)</label>
+                <select
+                  className="control"
+                  value={widgetForm.scatterY}
+                  onChange={(e) => setWidgetForm((current) => ({ ...current, scatterY: e.target.value }))}
+                >
+                  <option value="">Select numeric Y field</option>
+                  {fields?.map((field) => (
+                    <option key={field.name} value={field.name}>{field.name}</option>
+                  ))}
                 </select>
               </>
             )}

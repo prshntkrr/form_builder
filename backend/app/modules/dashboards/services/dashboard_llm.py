@@ -8,7 +8,17 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.modules.forms.llm import get_client, LLMError
 from app.core.config import settings
 
-from app.modules.dashboards.schemas import DashboardSpecification
+from app.modules.dashboards.schemas import (
+    DashboardSpecification,
+    DashboardDataBinding,
+    DimensionBinding,
+    MeasureBinding,
+    WidgetScatterConfig,
+)
+
+from app.modules.dashboards.services.dashboard_validator import (
+    validate_dashboard_spec,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -22,6 +32,9 @@ SUPPORTED_WIDGET_TYPES = {
     "kpi",
     "table",
     "map",
+    "bubble",
+    "histogram",
+    "scatter",
 }
 
 
@@ -32,6 +45,7 @@ SUPPORTED_AGGREGATIONS = {
     "AVG",
     "MIN",
     "MAX",
+    "NONE",
 }
 
 
@@ -93,6 +107,9 @@ SUPPORTED VISUALIZATION TYPES:
 - kpi
 - table
 - map
+- bubble
+- histogram
+- scatter
 
 
 SUPPORTED AGGREGATIONS:
@@ -103,6 +120,7 @@ SUPPORTED AGGREGATIONS:
 - AVG
 - MIN
 - MAX
+- NONE
 
 
 ============================================================
@@ -342,6 +360,68 @@ Widget MUST include:
 
 Use operator "EQUALS", "GREATER_THAN", etc. as appropriate. Ensure the numerator field is in available_fields.
 Do NOT use percentage KPI for line charts, bar charts, or tables. Only use it when the widget type is "kpi".
+
+============================================================
+BUBBLE, HISTOGRAM, AND SCATTER WIDGETS
+============================================================
+
+Bubble Chart:
+- Requires exactly 3 fields mapping to x, y, and size.
+- X is typically a dimension. Size MUST be a numeric measure. Y can be a numeric measure OR a categorical dimension (e.g., for a scatter grid).
+- Must include a `bubble` property identifying these fields explicitly, including aggregations if they are measures: `{"x": "field_name", "y": "field_name", "y_aggregation": "AVG", "size": "field_name", "size_aggregation": "SUM"}`
+- Example prompt: "show sales by region with profit as bubble size"
+- Use bubble ONLY when 3 parameters (x, y, size) are requested. Do not use for normal categorical comparison.
+- CRITICAL BUBBLE OUTPUT RULE:
+
+    When widget.type is "bubble", the "bubble" property MUST NEVER be null.
+
+    The data_binding.measures array does NOT replace the bubble property.
+    You MUST populate bubble with the explicit semantic roles.
+
+    For example, for:
+    "Create a bubble chart showing district on the X-axis and the average
+    plot_area on the Y-axis. Use the SUM of plot_area as the bubble size."
+
+    you MUST generate:
+
+    "bubble": {
+    "x": "district",
+    "y": "plot_area",
+    "y_aggregation": "AVG",
+    "size": "plot_area",
+    "size_aggregation": "SUM"
+    }
+
+    The same database field may be used for both y and size with different
+    aggregations.
+
+    INVALID:
+    "bubble": null
+
+    INVALID:
+    omitting the "bubble" property
+
+    INVALID:
+    inferring bubble roles only from the order of data_binding.measures.
+
+    The explicit bubble.x, bubble.y, and bubble.size values are the
+    authoritative semantic roles.
+
+Histogram Chart:
+- Requires EXACTLY ONE numeric field to show its distribution.
+- data_binding MUST have `dimensions: []`.
+- data_binding MUST have exactly one measure with `aggregation: "NONE"`.
+- Must include a `histogram` property: `{"field": "field_name", "bins": 10}`
+- Example prompt: "show distribution of student marks"
+- Do NOT select histogram for categorical data.
+
+Scatter Plot:
+- Requires EXACTLY TWO numeric fields to show their relationship. NEVER use text/varchar/char/string fields for X or Y.
+- data_binding MUST have `dimensions: []`.
+- data_binding MUST have exactly two measures with `aggregation: "NONE"`.
+- Must include a `scatter` property: `{"x": "numeric_field_1", "y": "numeric_field_2"}`
+- Example prompt: "show relationship between age and height"
+- Do NOT select scatter for categorical x/y data.
 
 
 ============================================================
@@ -746,6 +826,103 @@ def _build_user_prompt(
     )
 
 
+def _normalize_bubble_bindings(
+    specification: DashboardSpecification,
+) -> DashboardSpecification:
+    """
+    Ensure Bubble widgets have an executable data_binding that matches
+    their explicit bubble semantic configuration.
+
+    The bubble configuration is authoritative for X/Y/size roles.
+    """
+    for widget in specification.widgets:
+        if widget.type != "bubble" or widget.bubble is None:
+            continue
+
+        bubble = widget.bubble
+
+        dimensions = [
+            DimensionBinding(field=bubble.x)
+        ]
+
+        measures = [
+            MeasureBinding(
+                field=bubble.y,
+                aggregation=bubble.y_aggregation or "AVG",
+                label="Y Value",
+            ),
+            MeasureBinding(
+                field=bubble.size,
+                aggregation=bubble.size_aggregation or "SUM",
+                label="Bubble Size",
+            ),
+        ]
+
+        widget.data_binding = DashboardDataBinding(
+            dimensions=dimensions,
+            measures=measures,
+            filters=widget.data_binding.filters,
+        )
+
+    return specification
+
+
+def _normalize_scatter_bindings(
+    specification: DashboardSpecification,
+    fields: List[Dict[str, Any]],
+) -> DashboardSpecification:
+    """
+    Ensure Scatter widgets have an executable data_binding that matches
+    their explicit scatter semantic configuration. Reject if fields are not numeric.
+    """
+    field_types = {str(f.get("name")): str(f.get("type", "")).lower() for f in fields if f.get("name")}
+
+    for widget in specification.widgets:
+        if widget.type != "scatter":
+            continue
+
+        scatter = widget.scatter
+
+        # Reconstruct scatter if missing but EXACTLY two NONE measures are provided
+        if scatter is None:
+            measures = widget.data_binding.measures
+            if len(measures) == 2 and all(m.aggregation == "NONE" for m in measures):
+                scatter = WidgetScatterConfig(
+                    x=measures[0].field,
+                    y=measures[1].field,
+                )
+                widget.scatter = scatter
+            else:
+                raise LLMError("Dashboard AI generated a scatter plot without explicit scatter configuration and without exactly two NONE measures.")
+
+        # Validate that both fields are numeric before passing to the backend validator
+        for field_name in (scatter.x, scatter.y):
+            ftype = field_types.get(field_name, "")
+            is_text = "text" in ftype or "char" in ftype or "string" in ftype
+            if is_text:
+                raise LLMError(f"Scatter plots require numeric fields. '{field_name}' is a text field.")
+
+        measures = [
+            MeasureBinding(
+                field=scatter.x,
+                aggregation="NONE",
+                label="X Value",
+            ),
+            MeasureBinding(
+                field=scatter.y,
+                aggregation="NONE",
+                label="Y Value",
+            ),
+        ]
+
+        widget.data_binding = DashboardDataBinding(
+            dimensions=[],
+            measures=measures,
+            filters=widget.data_binding.filters,
+        )
+
+    return specification
+
 def generate_dashboard(
     table_name: str,
     fields: List[Dict[str, Any]],
@@ -850,6 +1027,8 @@ def generate_dashboard(
         ) from exc
 
     specification = ai_response.dashboard
+    specification = _normalize_bubble_bindings(specification)
+    specification = _normalize_scatter_bindings(specification, fields)
 
     # ---------------------------------------------------------
     # Validate user intent
@@ -868,6 +1047,19 @@ def generate_dashboard(
     _validate_fields(
         specification,
         fields,
+    )
+
+    available_sources = {
+        "source_1": {
+            str(field.get("name")): str(field.get("type", ""))
+            for field in fields
+            if field.get("name")
+        }
+    }
+
+    validate_dashboard_spec(
+        specification,
+        available_sources,
     )
 
     return specification
