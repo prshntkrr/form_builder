@@ -94,6 +94,16 @@ class Settings(BaseSettings):
     mcdc_gateway_connect_timeout: int = 5
     mcdc_gateway_read_timeout: int = 30
 
+    # Reading another database, and copying a table out of it. Every one of
+    # these bounds an operation somebody started: a host that accepts a socket
+    # and never answers must fail the request, not hold a worker.
+    external_db_connect_timeout: int = 10
+    external_db_query_timeout: int = 30
+    # Rows per batch when copying. Bounded memory whatever the table's size.
+    external_db_batch_size: int = 1000
+    # The most a preview may ever return, however large a limit is asked for.
+    external_db_preview_max: int = 200
+
     # Email (optional). Without a host, reset links are written to the log.
     smtp_host: str = ""
     smtp_port: int = 587

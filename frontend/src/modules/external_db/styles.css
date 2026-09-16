@@ -1,0 +1,27 @@
+/* --- external database import ------------------------------------------- */
+.xdb { display: flex; flex-direction: column; gap: 16px; }
+
+.xdb__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+}
+
+.xdb__step { display: flex; flex-direction: column; gap: 10px; }
+
+.xdb__head { display: flex; align-items: baseline; gap: 10px; }
+.xdb__head h2 { margin: 0; font-size: 15px; }
+.xdb__step--off { opacity: .55; }
+
+/* A preview is for looking at: it scrolls, in both directions, inside its box. */
+.xdb__preview { max-height: 340px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
+.xdb__preview table { width: max-content; min-width: 100%; border-collapse: collapse; }
+.xdb__preview th, .xdb__preview td {
+  padding: 6px 10px; border-bottom: 1px solid var(--line);
+  font-size: 12.5px; white-space: nowrap; text-align: left;
+}
+.xdb__preview thead th { position: sticky; top: 0; background: var(--card, #fff); }
+.xdb__type { display: block; font-weight: 400; font-size: 11px; color: var(--muted, #777); }
+
+.xdb__done { display: flex; flex-wrap: wrap; gap: 18px; }
+.xdb__done b { display: block; font-size: 18px; }
