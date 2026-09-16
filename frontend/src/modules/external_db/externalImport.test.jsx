@@ -13,11 +13,22 @@ import { beforeEach, describe, expect, test, vi } from 'vitest'
 const calls = []
 const answers = {}
 
+/**
+ * A failure shaped the way core/http.js shapes one: a status, and a message
+ * that is whatever the transport could make of the body. For a 502 that is
+ * literally "Bad Gateway", which is the thing the page must never show.
+ */
+function failure(status, message = 'Bad Gateway') {
+  const error = new Error(message)
+  error.status = status
+  return error
+}
+
 vi.mock('./api.js', () => ({
   api: {
     testConnection: vi.fn(async (connection) => {
       calls.push(['test', connection])
-      if (answers.connectFails) throw new Error(answers.connectFails)
+      if (answers.connectFails) throw failure(answers.connectFails)
       return { success: true, message: 'Connection successful', db_type: connection.db_type }
     }),
     schemas: vi.fn(async (connection) => {
@@ -39,7 +50,7 @@ vi.mock('./api.js', () => ({
     }),
     load: vi.fn(async (connection, schema, table, destination) => {
       calls.push(['load', schema, table, destination])
-      if (answers.loadFails) throw new Error(answers.loadFails)
+      if (answers.loadFails) throw failure(answers.loadFails)
       return {
         success: true, source: { schema, table },
         destination: { table: destination },
@@ -93,6 +104,14 @@ async function toPreview(user) {
 
 
 describe('connecting', () => {
+  test('the page says what it does, plainly', async () => {
+    await draw()
+
+    expect(screen.getByText(
+      'Import a table from another PostgreSQL or MySQL database. The source is '
+      + 'read-only and nothing is stored after the import.')).toBeTruthy()
+  })
+
   test('the page opens on the connection step', async () => {
     await draw()
 
@@ -135,19 +154,59 @@ describe('connecting', () => {
     expect(await screen.findByRole('option', { name: 'agriculture' })).toBeTruthy()
   })
 
-  test('a failure is shown and nothing opens', async () => {
+  test('a connection that fails says so in words, not "Bad Gateway"', async () => {
     const user = userEvent.setup()
-    answers.connectFails =
-      'Unable to connect to the external database. Verify the host, port, database, '
-      + 'username, password, and network access.'
+    answers.connectFails = 502
     await draw()
 
     await fillConnection(user)
     await user.click(screen.getByRole('button', { name: 'Test connection' }))
 
-    expect(await screen.findByText(/Unable to connect/)).toBeTruthy()
+    const said = await screen.findByRole('alert')
+    expect(within(said).getByText('Connection failed')).toBeTruthy()
+    expect(within(said).getByText(
+      "We couldn't connect to the external database. Check the host, port, "
+      + 'database name, username, password, and network access.')).toBeTruthy()
+
+    // The transport's own words never reach the screen.
+    expect(document.body.textContent).not.toContain('Bad Gateway')
     expect(screen.queryByText('Connected')).toBeNull()
     expect(screen.getByText('Test a connection first.')).toBeTruthy()
+  })
+
+  test('Try again retries with what is already on the form', async () => {
+    const user = userEvent.setup()
+    answers.connectFails = 502
+    await draw()
+    await fillConnection(user)
+    await user.click(screen.getByRole('button', { name: 'Test connection' }))
+    await screen.findByRole('alert')
+
+    // Whatever was wrong is fixed; nothing is retyped.
+    answers.connectFails = null
+    await user.click(screen.getByRole('button', { name: 'Try again' }))
+
+    expect(await screen.findByText('Connected')).toBeTruthy()
+    expect(screen.queryByRole('alert')).toBeNull()
+    // The same details, sent again — nothing was retyped.
+    const attempts = calls.filter(([k]) => k === 'test')
+    expect(attempts).toHaveLength(2)
+    expect(attempts[1][1]).toEqual(attempts[0][1])
+    expect(attempts[1][1]).toMatchObject({
+      host: CONNECTION.host, database: CONNECTION.database })
+  })
+
+  test('a failure that retrying cannot help offers no Try again', async () => {
+    const user = userEvent.setup()
+    answers.connectFails = 403
+    await draw()
+
+    await fillConnection(user)
+    await user.click(screen.getByRole('button', { name: 'Test connection' }))
+
+    const said = await screen.findByRole('alert')
+    expect(within(said).getByText('Not allowed')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
   })
 
   test('editing the connection drops what the old one found', async () => {
@@ -251,18 +310,37 @@ describe('loading it', () => {
     expect(await screen.findByText('Table loaded successfully')).toBeTruthy()
   })
 
-  test('a conflict from the backend is shown as it was said', async () => {
+  test('a name already taken here is explained, not echoed', async () => {
     const user = userEvent.setup()
-    answers.loadFails =
-      "A table called 'imported_farmers' already exists here. Choose another name "
-      + '— nothing is overwritten.'
+    answers.loadFails = 409
     await draw()
     await toPreview(user)
 
     await user.click(screen.getByRole('button', { name: 'Load table' }))
 
-    expect(await screen.findByText(/already exists here/)).toBeTruthy()
+    const said = await screen.findByRole('alert')
+    expect(within(said).getByText('That table already exists')).toBeTruthy()
+    expect(within(said).getByText(/nothing is ever overwritten/)).toBeTruthy()
     expect(screen.queryByText('Table loaded successfully')).toBeNull()
+    // A conflict is not worth retrying unchanged.
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
+  })
+
+  test.each([
+    [422, 'Check the details'],
+    [401, 'Sign in again'],
+    [503, 'Unavailable'],
+    [500, 'Something went wrong'],
+  ])('a %i is explained as "%s"', async (status, title) => {
+    const user = userEvent.setup()
+    answers.loadFails = status
+    await draw()
+    await toPreview(user)
+
+    await user.click(screen.getByRole('button', { name: 'Load table' }))
+
+    expect(within(await screen.findByRole('alert')).getByText(title)).toBeTruthy()
+    expect(document.body.textContent).not.toContain('Bad Gateway')
   })
 })
 

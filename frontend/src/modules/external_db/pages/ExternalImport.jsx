@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 
 import { api } from '../api.js'
+import { describe } from '../errors.js'
 
 /**
  * Copying a table out of another database into this one.
@@ -40,24 +41,32 @@ export default function ExternalImport() {
   const [result, setResult] = useState(null)
 
   const [busy, setBusy] = useState('')      // which step is working
-  const [error, setError] = useState('')
+  // What failed, said in words somebody can act on, and the work that failed —
+  // kept so "Try again" repeats it with the values already entered.
+  const [failure, setFailure] = useState(null)
 
   const set = (change) => {
     setConnection((c) => ({ ...c, ...change }))
     // Anything already discovered belongs to the old connection.
     setConnected(false); setSchemas(null); setSchema(''); setTables(null)
-    setTable(''); setPreview(null); setResult(null)
+    setTable(''); setPreview(null); setResult(null); setFailure(null)
   }
 
   const run = async (step, work) => {
-    setBusy(step); setError('')
+    setBusy(step); setFailure(null)
     try {
       await work()
     } catch (e) {
-      setError(e.message || 'Something went wrong')
+      // Described from the status, never from the message: a driver's own
+      // words can carry a host, a user name or a connection string.
+      setFailure({ ...describe(e), step, work })
     } finally {
       setBusy('')
     }
+  }
+
+  const tryAgain = () => {
+    if (failure) run(failure.step, failure.work)
   }
 
   const test = () => run('test', async () => {
@@ -70,7 +79,8 @@ export default function ExternalImport() {
   })
 
   const chooseSchema = (next) => {
-    setSchema(next); setTables(null); setTable(''); setPreview(null); setResult(null)
+    setSchema(next); setTables(null); setTable(''); setPreview(null)
+    setResult(null); setFailure(null)
     if (!next) return
     run('tables', async () => {
       const found = await api.tables(connection, next)
@@ -99,13 +109,26 @@ export default function ExternalImport() {
       <div className="pagehead">
         <h1>External database import</h1>
         <p className="muted">
-          Copy a table from another PostgreSQL or MySQL database into this one.
-          A one-time copy of the whole table — nothing is kept in step
-          afterwards, and the source is only ever read.
+          Import a table from another PostgreSQL or MySQL database. The source
+          is read-only and nothing is stored after the import.
         </p>
       </div>
 
-      {error && <div className="note note--bad" style={{ marginBottom: 16 }}>{error}</div>}
+      {failure && (
+        <div className="note note--bad xdb__failure" role="alert"
+             style={{ marginBottom: 16 }}>
+          <strong>{failure.title}</strong>
+          <span>{failure.message}</span>
+          {failure.canRetry && (
+            <span className="row row--tight">
+              <button className="btn btn--sm" onClick={tryAgain} disabled={Boolean(busy)}>
+                {busy === failure.step && <span className="spin" />}
+                Try again
+              </button>
+            </span>
+          )}
+        </div>
+      )}
 
       <div className="xdb">
         {/* 1 — the connection */}
