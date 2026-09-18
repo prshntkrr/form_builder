@@ -1,7 +1,20 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 import { getRenderer } from "../renderers/registry.js";
 import { prepareChartData } from "../renderers/prepareChartData.js";
+import {
+  BREAKPOINTS,
+  COLUMNS,
+  GRID,
+  defaultWidgetSize,
+  widgetBounds,
+} from "../layout.js";
+import {
+  COLOR_KEYS,
+  PALETTES,
+  PALETTE_NAMES,
+  widgetColors,
+} from "../renderers/colors.js";
 
 import {
   ResponsiveGridLayout,
@@ -31,6 +44,15 @@ export default function Dashboards() {
 
   const [dashboard, setDashboard] = useState(null);
 
+  /* Which half of this page is showing.
+     'list'    every saved dashboard, which is where the page opens
+     'builder' choosing a source and composing one
+     A dashboard that is open takes over from both — see the render below.
+     The list used to render above the composer at all times, so opening a
+     dashboard changed nothing anybody could see: it drew far below the fold,
+     and the click read as having done nothing. */
+  const [view, setView] = useState("list");
+
   const [savedDashboards, setSavedDashboards] = useState([]);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
@@ -40,6 +62,32 @@ export default function Dashboards() {
 
   const [savedDashboardId, setSavedDashboardId] = useState(null);
   const [loadingSavedDashboards, setLoadingSavedDashboards] = useState(false);
+  const [exportingId, setExportingId] = useState(null);
+  /* A dashboard asked for from the list, waiting to be opened before it can
+     be printed. Nothing can be put on paper until it is on screen. */
+  const [pendingPrintId, setPendingPrintId] = useState(null);
+
+  /* Exporting and sharing the dashboard that is open. */
+  const dashboardRef = useRef(null);
+  const [imaging, setImaging] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
+  /* The public link this dashboard has, if it has been given one. */
+  const [shareToken, setShareToken] = useState(null);
+  const [sharing, setSharing] = useState(false);
+  const [exportError, setExportError] = useState("");
+
+  /* A dashboard named in the address bar: /dashboards?dashboard=<id>.
+     Read once, on the way in, because opening it changes the address. */
+  const [deepLinkId] = useState(() => {
+    try {
+      return new URLSearchParams(window.location.search).get("dashboard");
+    } catch (_e) {
+      return null;
+    }
+  });
+  const [deepLinkOpened, setDeepLinkOpened] = useState(false);
+  const [listError, setListError] = useState("");
+  const [listSearch, setListSearch] = useState("");
 
   const [widgetData, setWidgetData] = useState({});
   const [dataLoading, setDataLoading] = useState(false);
@@ -51,6 +99,10 @@ export default function Dashboards() {
      ========================================================= */
 
   const [isEditMode, setIsEditMode] = useState(false);
+
+  /* Changing an open dashboard by describing the change. */
+  const [editPrompt, setEditPrompt] = useState("");
+  const [regenerating, setRegenerating] = useState(false);
   const [editDashboardName, setEditDashboardName] = useState("");
   const [editError, setEditError] = useState("");
   const [updating, setUpdating] = useState(false);
@@ -130,31 +182,10 @@ export default function Dashboards() {
      BUILD GRID LAYOUT
      ========================================================= */
 
-  const getDefaultWidgetSize = (type) => {
-    switch (type) {
-      case "kpi":
-        return {
-          w: 3,
-          h: 2,
-        };
-
-      case "table":
-        return {
-          w: 12,
-          h: 5,
-        };
-
-      case "bar":
-      case "line":
-      case "pie":
-      case "doughnut":
-      default:
-        return {
-          w: 6,
-          h: 4,
-        };
-    }
-  };
+  /* What each kind of widget is worth on screen. The numbers live in
+     layout.js, so how dense a dashboard is can be read — and tested — in one
+     place rather than inferred from the middle of this file. */
+  const getDefaultWidgetSize = (type) => defaultWidgetSize(type);
 
 
   // cols defaults to 12 (the lg/md column count). Pass the active breakpoint's
@@ -258,19 +289,9 @@ export default function Dashboards() {
         w: size.w,
         h: size.h,
 
-        minW:
-          widget.type === "kpi"
-            ? 2
-            : widget.type === "table"
-              ? 6
-              : 3,
-
-        minH:
-          widget.type === "kpi"
-            ? 2
-            : 3,
-
-        maxW: 12,
+        /* How small this may be dragged. A table's floor used to be half the
+           row, which meant nothing could ever sit beside one. */
+        ...widgetBounds(widget.type),
       };
 
       let placedItem = false;
@@ -652,6 +673,7 @@ const applyDashboardFilters = async () => {
      ========================================================= */
 
   const openSavedDashboard = async (dashboardId) => {
+    setView("builder");
     setDataError("");
     setGenerationError("");
     setEditError("");
@@ -668,6 +690,10 @@ const applyDashboardFilters = async () => {
       const result = await api.getDashboard(dashboardId);
 
       setSavedDashboardId(result.dashboard_id);
+      /* Whether this one already has a public link decides what the export
+         menu offers: copying the link it has, or issuing one. */
+      setShareToken(result.share_token || null);
+      setCopiedLink(false);
 
       /* Track version metadata. */
       const pubVer = result.publish_version ?? null;
@@ -732,6 +758,222 @@ const applyDashboardFilters = async () => {
       setGenerationError(e.message || "Failed to open dashboard.");
     }
   };
+
+  /* Start a new dashboard: the source picker, with nothing loaded. */
+  const startNewDashboard = () => {
+    setView("builder");
+    setDashboard(null);
+    setSavedDashboardId(null);
+    setSelectedSource(null);
+    setFields(null);
+    setPrompt("");
+    setWidgetData({});
+    setGenerationError("");
+    setDataError("");
+    setIsEditMode(false);
+  };
+
+  /* Back to the list, leaving nothing half-open behind. */
+  const backToList = () => {
+    setView("list");
+    setDashboard(null);
+    setSavedDashboardId(null);
+    setSelectedSource(null);
+    setFields(null);
+    setPrompt("");
+    setWidgetData({});
+    setGenerationError("");
+    setDataError("");
+    setIsEditMode(false);
+    loadSavedDashboards();
+  };
+
+  /* A dashboard's name, as a file name. */
+  const fileStem = (title) =>
+    `${(title || "dashboard")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_|_$/g, "") || "dashboard"}`;
+
+  /* Export the open dashboard as a PDF.
+
+     This is the browser's own print, with a stylesheet that puts the dashboard
+     on the page and leaves the application around it off. No PDF library: the
+     charts are already vector SVG, so printing them keeps them sharp at any
+     paper size, where a canvas screenshot would not. The print dialog is where
+     the person chooses "Save as PDF" — on Chrome and Edge it is the default
+     destination.
+
+     The document title is what the browser writes into the page header and
+     offers as the file name, so it briefly becomes the dashboard's name. */
+  const exportPdf = () => {
+    const previousTitle = document.title;
+
+    const done = () => {
+      document.body.classList.remove("dash-printing");
+      document.title = previousTitle;
+      window.removeEventListener("afterprint", done);
+    };
+
+    window.addEventListener("afterprint", done);
+
+    document.body.classList.add("dash-printing");
+    document.title = dashboard?.dashboard?.name || "Dashboard";
+
+    window.print();
+
+    /* print() blocks until the dialog closes, so by here it is over; afterprint
+       is kept for the browsers that disagree. Both paths are safe to run. */
+    done();
+  };
+
+  /* Export from the list, where the dashboard is not on screen yet: open it,
+     and print once its data has arrived.
+
+     ponytail: this waits for the data load, not for every chart to finish
+     painting. If a chart ever prints half-drawn, wait on the renderers. */
+  const exportFromList = (dashboardId) => {
+    setExportingId(dashboardId);
+    setPendingPrintId(dashboardId);
+    setListError("");
+
+    openSavedDashboard(dashboardId);
+  };
+
+  useEffect(() => {
+    if (!pendingPrintId || !dashboard || dataLoading) {
+      return;
+    }
+
+    setPendingPrintId(null);
+    setExportingId(null);
+
+    exportPdf();
+  }, [pendingPrintId, dashboard, dataLoading]);
+
+  /* Export the open dashboard as an image.
+
+     html2canvas is loaded only when somebody actually asks for a picture, so
+     the weight of it never lands on anyone who does not. It rasterises what is
+     on screen: charts come out as drawn, but map tiles are served from another
+     origin and the canvas cannot read them back, so a map widget will be
+     blank. The PDF path keeps maps, which is why both exist. */
+  const exportImage = async () => {
+    const node = dashboardRef.current;
+
+    if (!node) {
+      return;
+    }
+
+    setImaging(true);
+    setExportError("");
+
+    try {
+      const { default: html2canvas } = await import("html2canvas");
+
+      const canvas = await html2canvas(node, {
+        backgroundColor: "#ffffff",
+        useCORS: true,
+        // Twice the pixels, so the image is still readable zoomed in.
+        scale: 2,
+      });
+
+      const name = `${fileStem(dashboard?.dashboard?.name)}.png`;
+
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          setExportError("That image could not be created. Please try again.");
+          return;
+        }
+
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+
+        link.href = url;
+        link.download = name;
+        link.click();
+
+        URL.revokeObjectURL(url);
+      });
+    } catch (e) {
+      setExportError("That image could not be created. Please try again.");
+    } finally {
+      setImaging(false);
+    }
+  };
+
+  /* A public link to this dashboard.
+
+     Read-only, and open to whoever holds it — no sign-in. The server issues
+     the token and serves only the published version through it; this page just
+     asks for one and hands it over. A dashboard with nothing published cannot
+     be shared, and says so.  */
+  const linkFor = (token) => `${window.location.origin}/d/${token}`;
+
+  const copyShareLink = async () => {
+    setExportError("");
+    setSharing(true);
+
+    /* Held here rather than read back from state in the catch: setShareToken
+       does not take effect until the next render, so a link issued moments ago
+       would still look like no link at all, and the failure would report that
+       nothing was created when something was. */
+    let issued = shareToken;
+
+    try {
+      /* Reuse the link this dashboard already has, so a second click does not
+         break one that has already been sent to people. */
+      issued =
+        shareToken || (await api.shareDashboard(savedDashboardId)).share_token;
+
+      setShareToken(issued);
+
+      await navigator.clipboard.writeText(linkFor(issued));
+
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2000);
+    } catch (e) {
+      /* Either there was nothing to share, or the clipboard was refused. When
+         the link exists, show it: it was issued whether or not it was copied,
+         and it can be copied by hand. */
+      setExportError(
+        e.status === 409
+          ? "Publish a version of this dashboard before sharing it."
+          : issued
+            ? linkFor(issued)
+            : "That link could not be created. Please try again.",
+      );
+    } finally {
+      setSharing(false);
+    }
+  };
+
+  const stopSharing = async () => {
+    setExportError("");
+    setSharing(true);
+
+    try {
+      await api.unshareDashboard(savedDashboardId);
+
+      setShareToken(null);
+      setCopiedLink(false);
+    } catch (e) {
+      setExportError("That link could not be withdrawn. Please try again.");
+    } finally {
+      setSharing(false);
+    }
+  };
+
+  /* Open the dashboard named in the address, once the data sources it will be
+     matched against have arrived. */
+  useEffect(() => {
+    if (!deepLinkId || deepLinkOpened || loading) {
+      return;
+    }
+
+    setDeepLinkOpened(true);
+    openSavedDashboard(deepLinkId);
+  }, [deepLinkId, deepLinkOpened, loading]);
 
   /* =========================================================
      GENERATE DASHBOARD
@@ -816,6 +1058,123 @@ const applyDashboardFilters = async () => {
       setGenerationError(e.message || "Failed to generate dashboard.");
     } finally {
       setGenerating(false);
+    }
+  };
+
+  /* Build one by hand instead: an empty specification over the chosen table,
+     opened straight into edit mode with the graph editor showing. Everything
+     from here on — Add Graph, the layout, Save — is the same code a generated
+     dashboard uses, so there is no second kind of dashboard to maintain. */
+  const startManualDashboard = () => {
+    if (!selectedSource || !fields?.length) {
+      return;
+    }
+
+    const empty = {
+      schema_version: 1,
+
+      dashboard: {
+        name: "Untitled dashboard",
+        description: "",
+      },
+
+      data_sources: [
+        {
+          id: selectedSource.name,
+          type: "postgresql_tabular",
+          name: selectedSource.name,
+        },
+      ],
+
+      widgets: [],
+
+      layout: {},
+    };
+
+    setDashboard(empty);
+    setSavedDashboardId(null);
+    setGenerationError("");
+
+    setWidgetData({});
+    setGridLayout([]);
+    setSavedGridLayout([]);
+    setAllLayouts({ lg: [] });
+
+    setEditDashboardName(empty.dashboard.name);
+    setEditError("");
+    setIsEditMode(true);
+
+    startAddWidget();
+  };
+
+  /* Change an open dashboard by describing the change.
+
+     This is the same endpoint the first generation uses, and it returns a
+     whole specification — so the graphs are replaced rather than merged. What
+     the dashboard keeps is its identity: the id it is saved under, its name
+     and its version history. Nothing is written until Save, so a regeneration
+     that comes back wrong costs a Cancel. */
+  const regenerateWithPrompt = async () => {
+    const table = selectedSource?.name || dashboard?.data_sources?.[0]?.name;
+
+    if (!dashboard || !editPrompt.trim() || !table) {
+      return;
+    }
+
+    setRegenerating(true);
+    setEditError("");
+
+    try {
+      const result = await api.generateDashboard(table, editPrompt.trim());
+
+      const initialLayout = buildInitialGridLayout(result?.widgets || []);
+
+      const next = {
+        ...result,
+
+        dashboard: {
+          ...result.dashboard,
+
+          /* Keep the name it is saved under. The AI names a fresh dashboard
+             every time, which would quietly rename this one. */
+          name:
+            editDashboardName
+            || dashboard.dashboard?.name
+            || result.dashboard?.name,
+        },
+
+        widgets: (result.widgets || []).map((widget) => {
+          const layoutItem = initialLayout.find(
+            (item) => item.i === widget.id,
+          );
+
+          return layoutItem
+            ? {
+                ...widget,
+
+                layout: {
+                  ...widget.layout,
+                  x: layoutItem.x,
+                  y: layoutItem.y,
+                  w: layoutItem.w,
+                  h: layoutItem.h,
+                },
+              }
+            : widget;
+        }),
+      };
+
+      setDashboard(next);
+      setGridLayout(initialLayout);
+      setSavedGridLayout(initialLayout);
+      setAllLayouts({ lg: initialLayout });
+      setEditPrompt("");
+
+      await loadDashboardData(next, selectedSource || { name: table });
+    } catch (e) {
+      setEditError(e.message || "That change could not be generated.");
+    } finally {
+      setRegenerating(false);
     }
   };
 
@@ -931,7 +1290,9 @@ const applyDashboardFilters = async () => {
 
     const Renderer = getRenderer(widget.type);
 
-    return <Renderer widget={widget} data={chartData} />;
+    /* The dashboard goes with the widget, so a palette set once reaches every
+       graph that has not chosen its own colours. */
+    return <Renderer widget={widget} data={chartData} dashboard={dashboard} />;
   };
 
   /* =========================================================
@@ -962,6 +1323,9 @@ const applyDashboardFilters = async () => {
     );
 
     const presentation = widget.presentation || {};
+    /* Whatever this widget should be coloured, decided once for every branch
+       below rather than in each of them. */
+    const colors = widgetColors(widget, dashboard);
     const titleStyle = presentation.title_style || {};
     const subtitleStyle = presentation.subtitle_style || {};
     const iconSymbol = presentation.title_icon ? getIconSymbol(presentation.title_icon) : null;
@@ -1006,12 +1370,32 @@ const applyDashboardFilters = async () => {
           {rows.length === 0 ? (
             <p className="muted">No data available.</p>
           ) : (
-            <div className="dash__table-wrap">
+            <div
+              className="dash__table-wrap"
+              style={colors.table.border ? { borderColor: colors.table.border } : undefined}
+            >
               <table className="dash__table">
                 <thead>
                   <tr>
                     {Object.keys(rows[0]).map((column) => (
-                      <th key={column}>{getColumnLabel(column, widget)}</th>
+                      <th
+                        key={column}
+                        /* Each part only when it was chosen, so an unstyled
+                           table is still the stylesheet's to decide. */
+                        style={{
+                          ...(colors.table.headerBackground
+                            ? { backgroundColor: colors.table.headerBackground }
+                            : {}),
+                          ...(colors.table.headerText
+                            ? { color: colors.table.headerText }
+                            : {}),
+                          ...(colors.table.border
+                            ? { borderBottomColor: colors.table.border }
+                            : {}),
+                        }}
+                      >
+                        {getColumnLabel(column, widget)}
+                      </th>
                     ))}
                   </tr>
                 </thead>
@@ -1020,7 +1404,19 @@ const applyDashboardFilters = async () => {
                   {rows.map((row, index) => (
                     <tr key={index}>
                       {Object.keys(rows[0]).map((column) => (
-                        <td key={column}>{String(row[column] ?? "")}</td>
+                        <td
+                          key={column}
+                          style={{
+                            ...(colors.table.text
+                              ? { color: colors.table.text }
+                              : {}),
+                            ...(colors.table.border
+                              ? { borderBottomColor: colors.table.border }
+                              : {}),
+                          }}
+                        >
+                          {String(row[column] ?? "")}
+                        </td>
                       ))}
                     </tr>
                   ))}
@@ -1073,7 +1469,14 @@ const applyDashboardFilters = async () => {
         <div className="dash__widget dash__kpi" style={widgetStyle}>
           {renderHeader()}
 
-          <div className="dash__kpi-value">{displayValue}</div>
+          {/* The number, not the card behind it: colouring a KPI's value
+              leaves its background exactly where it was. */}
+          <div
+            className="dash__kpi-value"
+            style={colors.value ? { color: colors.value } : undefined}
+          >
+            {displayValue}
+          </div>
         </div>
       );
     }
@@ -1086,7 +1489,7 @@ const applyDashboardFilters = async () => {
           {renderHeader()}
 
           <div className="dash__chart-area">
-            <Renderer widget={widget} data={rows} />
+            <Renderer widget={widget} data={rows} dashboard={dashboard} />
           </div>
         </div>
       );
@@ -1445,6 +1848,17 @@ const applyDashboardFilters = async () => {
       if (p.subtitle) cleanPresentation.subtitle = p.subtitle;
       if (p.title_icon) cleanPresentation.title_icon = p.title_icon;
       if (p.background_color) cleanPresentation.background_color = p.background_color;
+
+      /* Colour, kept the same way as everything else here: a key that was
+         never set stays absent, so an unstyled widget saves exactly the
+         presentation it always did. */
+      COLOR_KEYS.forEach((key) => {
+        const value = p[key];
+
+        if (Array.isArray(value) ? value.length > 0 : Boolean(value)) {
+          cleanPresentation[key] = value;
+        }
+      });
 
       const cleanTitleStyle = {};
       if (p.title_style?.font_size) cleanTitleStyle.font_size = Number(p.title_style.font_size);
@@ -2076,6 +2490,22 @@ const applyDashboardFilters = async () => {
      RENDER
      ========================================================= */
 
+  /* What the list shows, and how a date reads in it. */
+  const visibleDashboards = savedDashboards.filter((item) =>
+    (item.title || "").toLowerCase().includes(listSearch.trim().toLowerCase()),
+  );
+
+  const when = (value) =>
+    value
+      ? new Date(value).toLocaleString(undefined, {
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+      : "—";
+
   return (
     <main className="main main--dashboard">
       <header className="head">
@@ -2085,6 +2515,15 @@ const applyDashboardFilters = async () => {
           Compose widgets over the data your forms collect.
         </p>
       </header>
+
+      {/* Back out of the builder, to the list this page opens on. */}
+      {view === "builder" && (
+        <div className="row" style={{ marginBottom: 16 }}>
+          <button className="btn btn--sm" type="button" onClick={backToList}>
+            ← All dashboards
+          </button>
+        </div>
+      )}
 
       {/* API error */}
       {error && <div className="alert alert--bad">{error}</div>}
@@ -2109,7 +2548,7 @@ const applyDashboardFilters = async () => {
       )}
 
       {/* No data sources */}
-      {!loading && !error && dataSources.length === 0 && (
+      {view === "builder" && !loading && !error && dataSources.length === 0 && (
         <div className="blank">
           <h2>No data sources yet</h2>
 
@@ -2119,71 +2558,139 @@ const applyDashboardFilters = async () => {
         </div>
       )}
 
-      {/* Saved Dashboards */}
-      {!loading && !error && (
+      {/* Saved dashboards — where this page opens */}
+      {view === "list" && !loading && !error && (
         <section
           className="card card--pad"
           style={{
             marginBottom: 24,
           }}
         >
-          <h2>Saved Dashboards</h2>
+          <div className="dash__list-head">
+            <h2 style={{ margin: 0 }}>Saved dashboards</h2>
 
-          <p className="muted">Open a previously saved dashboard.</p>
+            <span className="tiny muted">
+              {savedDashboards.length} dashboard
+              {savedDashboards.length === 1 ? "" : "s"}
+            </span>
+
+            <span className="spacer" />
+
+            <input
+              className="control"
+              type="search"
+              aria-label="Search dashboards"
+              placeholder="Search dashboards..."
+              value={listSearch}
+              onChange={(e) => setListSearch(e.target.value)}
+            />
+
+            <button
+              className="btn btn--primary"
+              type="button"
+              onClick={startNewDashboard}
+            >
+              Create dashboard
+            </button>
+          </div>
+
+          {listError && <div className="alert alert--bad">{listError}</div>}
 
           {loadingSavedDashboards ? (
             <p className="muted">Loading saved dashboards...</p>
-          ) : savedDashboards.length === 0 ? (
-            <p className="muted">No saved dashboards yet.</p>
+          ) : visibleDashboards.length === 0 ? (
+            <div className="blank">
+              <h2>
+                {savedDashboards.length
+                  ? "Nothing matches that search"
+                  : "No dashboards yet"}
+              </h2>
+
+              <p>
+                {savedDashboards.length
+                  ? "Try another name."
+                  : "Create one over a table your forms already collect."}
+              </p>
+            </div>
           ) : (
-            <div className="stack-list">
-              {savedDashboards.map((item) => (
-                <div
-                  key={item.dashboard_id}
-                  className="row"
-                  style={{
-                    padding: "12px 0",
-                    borderBottom: "1px solid var(--border)",
-                  }}
-                >
-                  <div>
-                    <strong>{item.title}</strong>
+            <div className="dash__table-wrap">
+              <table className="dash__list">
+                <thead>
+                  <tr>
+                    <th style={{ width: 56 }}>#</th>
+                    <th>Dashboard</th>
+                    <th>Status</th>
+                    <th>Updated</th>
+                    <th>Created by</th>
+                    <th />
+                  </tr>
+                </thead>
 
-                    <div className="tiny muted">
-                      {item.created_on
-                        ? new Date(item.created_on).toLocaleString()
-                        : ""}
-                      {item.publish_version != null && (
-                        <span className="dash__saved-status">
-                          {" · "}Published v{item.publish_version}
-                        </span>
-                      )}
-                      {item.latest_version != null && item.publish_version == null && (
-                        <span className="dash__saved-status">
-                          {" · "}Draft v{item.latest_version}
-                        </span>
-                      )}
-                    </div>
-                  </div>
+                <tbody>
+                  {visibleDashboards.map((item, index) => (
+                    <tr key={item.dashboard_id}>
+                      <td className="tiny muted">{index + 1}</td>
 
-                  <span className="spacer" />
+                      <td>
+                        {/* One click. The name is the link, and the Open
+                            button beside it does the same thing. */}
+                        <button
+                          type="button"
+                          className="dash__list-name"
+                          onClick={() => openSavedDashboard(item.dashboard_id)}
+                        >
+                          {item.title}
+                        </button>
+                      </td>
 
-                  <button
-                    className="btn"
-                    type="button"
-                    onClick={() => openSavedDashboard(item.dashboard_id)}
-                  >
-                    Open
-                  </button>
-                </div>
-              ))}
+                      <td className="tiny">
+                        {item.publish_version != null
+                          ? `Published v${item.publish_version}`
+                          : item.latest_version != null
+                            ? `Draft v${item.latest_version}`
+                            : "—"}
+                      </td>
+
+                      <td className="tiny muted">
+                        {when(item.updated_on || item.created_on)}
+                      </td>
+
+                      <td className="tiny muted">{item.created_by || "—"}</td>
+
+                      <td className="dash__list-actions">
+                        <button
+                          className="btn btn--sm"
+                          type="button"
+                          onClick={() => openSavedDashboard(item.dashboard_id)}
+                        >
+                          Open
+                        </button>
+
+                        <button
+                          className="btn btn--sm"
+                          type="button"
+                          disabled={exportingId === item.dashboard_id}
+                          onClick={() => exportFromList(item.dashboard_id)}
+                        >
+                          {exportingId === item.dashboard_id
+                            ? "Opening…"
+                            : "Export PDF"}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </section>
       )}
 
-      {/* Data source selector */}
-      {!loading && !error && dataSources.length > 0 && (
+      {/* Data source selector. It used to stay on screen above an opened
+          dashboard, which is what made opening one look like nothing had
+          happened. */}
+      {view === "builder" && !dashboard && !loading && !error
+        && dataSources.length > 0 && (
         <section className="card card--pad">
           <h2>Select Data Source</h2>
 
@@ -2249,7 +2756,7 @@ const applyDashboardFilters = async () => {
       )}
 
       {/* Selected data source */}
-      {selectedSource && (
+      {view === "builder" && !dashboard && selectedSource && (
         <section
           className="card card--pad"
           style={{
@@ -2289,28 +2796,35 @@ const applyDashboardFilters = async () => {
         </section>
       )}
 
-      {/* Dashboard Prompt */}
-      {selectedSource && fields?.length > 0 && (
+      {/* Dashboard Prompt — the dashboard itself is nested inside this
+          section, so the section has to survive once one is open. What is
+          hidden then is the prompt, not the dashboard. */}
+      {view === "builder"
+        && (dashboard || (selectedSource && fields?.length > 0)) && (
         <section
           className="card card--pad"
           style={{
             marginTop: 24,
           }}
         >
-          <h2>Dashboard Prompt</h2>
+          {!dashboard && (
+            <>
+              <h2>Dashboard Prompt</h2>
 
-          <p className="muted">
-            Describe the dashboard or visualizations you want to create using
-            the available fields.
-          </p>
+              <p className="muted">
+                Describe the dashboard or visualizations you want to create
+                using the available fields.
+              </p>
 
-          <textarea
-            className="control dash__prompt"
-            rows={6}
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            placeholder="Example: Create a bar chart showing the number of students in each course and a KPI showing the total number of students."
-          />
+              <textarea
+                className="control dash__prompt"
+                rows={6}
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                placeholder="Example: Create a bar chart showing the number of students in each course and a KPI showing the total number of students."
+              />
+            </>
+          )}
 
           {generationError && (
             <div
@@ -2326,6 +2840,7 @@ const applyDashboardFilters = async () => {
           {/* Generated / Saved Dashboard */}
           {dashboard && (
             <section
+              ref={dashboardRef}
               className="card card--pad dash__dashboard"
               style={{
                 marginTop: 24,
@@ -2413,6 +2928,64 @@ const applyDashboardFilters = async () => {
                       </button>
                     )}
 
+                    {/* One control instead of three. <details> is the
+                        browser's own disclosure widget: it opens on click and
+                        on Enter, and needs no state of ours to stay right. */}
+                    <details className="dash__menu">
+                      <summary className="btn">Export and share</summary>
+
+                      <div className="dash__menu-body" role="menu">
+                        <button
+                          className="dash__menu-item"
+                          type="button"
+                          onClick={exportPdf}
+                        >
+                          Export PDF
+                        </button>
+
+                        <button
+                          className="dash__menu-item"
+                          type="button"
+                          disabled={imaging}
+                          onClick={exportImage}
+                        >
+                          {imaging ? "Saving image..." : "Export image"}
+                        </button>
+
+                        <hr className="dash__menu-rule" />
+
+                        <button
+                          className="dash__menu-item"
+                          type="button"
+                          disabled={sharing}
+                          onClick={copyShareLink}
+                        >
+                          {copiedLink
+                            ? "Link copied"
+                            : shareToken
+                              ? "Copy public link"
+                              : "Create public link"}
+                        </button>
+
+                        {shareToken && (
+                          <button
+                            className="dash__menu-item dash__menu-item--warn"
+                            type="button"
+                            disabled={sharing}
+                            onClick={stopSharing}
+                          >
+                            Stop sharing
+                          </button>
+                        )}
+
+                        <p className="dash__menu-note tiny muted">
+                          {shareToken
+                            ? "Anyone with the link can view this dashboard, without signing in."
+                            : "A public link lets anyone who has it view the published version, without signing in."}
+                        </p>
+                      </div>
+                    </details>
+
                     <button
                       className="btn"
                       type="button"
@@ -2431,6 +3004,19 @@ const applyDashboardFilters = async () => {
                   </div>
                 )}
               </div>
+
+              {/* An export or a copy that did not work. Said here rather than
+                  nowhere, which is what silence would amount to. */}
+              {exportError && (
+                <div
+                  className="alert alert--bad"
+                  style={{
+                    marginTop: 12,
+                  }}
+                >
+                  {exportError}
+                </div>
+              )}
 
               {/* Viewing-mode banner */}
               {isInViewMode && (
@@ -2674,6 +3260,99 @@ const applyDashboardFilters = async () => {
                     placeholder="Dashboard name"
                   />
 
+                  {/* One palette for the whole dashboard. Each graph still
+                      overrules it, so this sets the ones nobody has coloured
+                      by hand rather than overwriting anybody's choice. */}
+                  <label className="dash__edit-label" style={{ marginTop: 16 }}>
+                    Colour palette
+                  </label>
+
+                  <select
+                    className="control"
+                    aria-label="Dashboard palette"
+                    value={dashboard?.dashboard?.palette_name || ""}
+                    onChange={(e) => {
+                      const name = e.target.value;
+
+                      setDashboard((current) => ({
+                        ...current,
+                        dashboard: {
+                          ...(current?.dashboard || {}),
+                          palette_name: name || undefined,
+                          palette: name ? PALETTES[name] : undefined,
+                        },
+                      }));
+                    }}
+                  >
+                    <option value="">Default colours</option>
+
+                    {PALETTE_NAMES.map((name) => (
+                      <option key={name} value={name}>
+                        {name[0].toUpperCase() + name.slice(1)}
+                      </option>
+                    ))}
+                  </select>
+
+                  {/* What this dashboard's table actually holds. The graph
+                      editor has these in its dropdowns, but the prompt box had
+                      nothing to go on — you cannot name a field you cannot
+                      see. */}
+                  {fields?.length > 0 && (
+                    <>
+                      <label className="dash__edit-label">
+                        Available fields
+                        {selectedSource?.name ? ` in ${selectedSource.name}` : ""}
+                      </label>
+
+                      <div className="dash__field-box">
+                        {fields.map((field) => (
+                          <span key={field.name} className="dash__field-chip">
+                            {field.name}
+                          </span>
+                        ))}
+                      </div>
+                    </>
+                  )}
+
+                  {fieldsError && (
+                    <span className="tiny muted">
+                      Field names could not be loaded for this table.
+                    </span>
+                  )}
+
+                  <label className="dash__edit-label">Change with a prompt</label>
+
+                  <textarea
+                    className="control"
+                    rows={3}
+                    value={editPrompt}
+                    onChange={(e) => setEditPrompt(e.target.value)}
+                    placeholder="Example: drop the KPI row and show average yield by district instead."
+                  />
+
+                  <div
+                    className="row"
+                    style={{
+                      marginTop: 8,
+                    }}
+                  >
+                    <span className="tiny muted">
+                      Replaces the graphs on this dashboard. Nothing is saved
+                      until you save your changes.
+                    </span>
+
+                    <span className="spacer" />
+
+                    <button
+                      className="btn"
+                      type="button"
+                      disabled={!editPrompt.trim() || regenerating}
+                      onClick={regenerateWithPrompt}
+                    >
+                      {regenerating ? "Generating..." : "Update with AI"}
+                    </button>
+                  </div>
+
                   {editError && (
                     <div
                       className="alert alert--bad"
@@ -2786,25 +3465,9 @@ const applyDashboardFilters = async () => {
                           // allLayouts preserves every breakpoint's layout so
                           // RGL never discards derived md/sm positions.
                           layouts={allLayouts}
-                          breakpoints={{
-                            lg: 1200,
-                            md: 996,
-                            sm: 768,
-                            xs: 480,
-                            xxs: 0,
-                          }}
-                          cols={{
-                            lg: 12,
-                            md: 12,
-                            sm: 6,
-                            xs: 4,
-                            xxs: 2,
-                          }}
-                          gridConfig={{
-                            rowHeight: 80,
-                            margin: [16, 16],
-                            containerPadding: [0, 0],
-                          }}
+                          breakpoints={BREAKPOINTS}
+                          cols={COLUMNS}
+                          gridConfig={GRID}
                           dragConfig={{
                             enabled: isEditMode,
                             bounded: true,
@@ -2886,14 +3549,30 @@ const applyDashboardFilters = async () => {
               </button>
             )}
 
-            <button
-              className="btn"
-              type="button"
-              disabled={!prompt.trim() || generating}
-              onClick={generateDashboard}
-            >
-              {generating ? "Generating..." : "Generate Dashboard"}
-            </button>
+            {/* Two ways to start, and only while there is nothing open —
+                once a dashboard is on screen, changing it is the edit
+                panel's job, not a silent replacement from here. */}
+            {!dashboard && (
+              <>
+                <button
+                  className="btn"
+                  type="button"
+                  disabled={!selectedSource || !fields?.length || generating}
+                  onClick={startManualDashboard}
+                >
+                  Build it myself
+                </button>
+
+                <button
+                  className="btn"
+                  type="button"
+                  disabled={!prompt.trim() || generating}
+                  onClick={generateDashboard}
+                >
+                  {generating ? "Generating..." : "Generate Dashboard"}
+                </button>
+              </>
+            )}
           </div>
 
           {saveError && (
@@ -3503,6 +4182,205 @@ const applyDashboardFilters = async () => {
             <hr style={{ margin: "24px 0", border: "none", borderTop: "1px solid var(--border-color, #eee)" }} />
 
             <h3 style={{ marginBottom: 16 }}>Appearance</h3>
+
+            {/* Colour, per kind of graph. Each control writes one key, and an
+                unset key means the graph keeps the colour it always had —
+                which is why every one of these has a Clear beside it. */}
+            {["bar", "line", "histogram", "bubble", "scatter"].includes(
+              widgetForm.type,
+            ) && (
+              <>
+                <label className="dash__edit-label">
+                  {widgetForm.type === "line" ? "Line Color" : "Bar / Point Color"}
+                </label>
+
+                <div className="dash__color-row">
+                  <input
+                    className="control"
+                    type="color"
+                    aria-label="Series colour"
+                    value={widgetForm.presentation?.series_color || "#1a5f3f"}
+                    onChange={(e) =>
+                      setWidgetForm((curr) => ({
+                        ...curr,
+                        presentation: {
+                          ...curr.presentation,
+                          series_color: e.target.value,
+                        },
+                      }))
+                    }
+                  />
+
+                  <button
+                    type="button"
+                    className="btn1"
+                    onClick={() =>
+                      setWidgetForm((curr) => ({
+                        ...curr,
+                        presentation: { ...curr.presentation, series_color: "" },
+                      }))
+                    }
+                  >
+                    Clear
+                  </button>
+                </div>
+              </>
+            )}
+
+            {["pie", "doughnut"].includes(widgetForm.type) && (
+              <>
+                <label className="dash__edit-label">Slice Colours</label>
+
+                <select
+                  className="control"
+                  aria-label="Slice palette"
+                  value={
+                    typeof widgetForm.presentation?.palette === "string"
+                      ? widgetForm.presentation.palette
+                      : ""
+                  }
+                  onChange={(e) =>
+                    setWidgetForm((curr) => ({
+                      ...curr,
+                      presentation: {
+                        ...curr.presentation,
+                        palette: e.target.value || "",
+                      },
+                    }))
+                  }
+                  style={{ marginBottom: 16 }}
+                >
+                  <option value="">Default colours</option>
+
+                  {PALETTE_NAMES.map((name) => (
+                    <option key={name} value={name}>
+                      {name[0].toUpperCase() + name.slice(1)}
+                    </option>
+                  ))}
+                </select>
+              </>
+            )}
+
+            {widgetForm.type === "kpi" && (
+              <>
+                <label className="dash__edit-label">Value Color</label>
+
+                <div className="dash__color-row">
+                  <input
+                    className="control"
+                    type="color"
+                    aria-label="Value colour"
+                    value={widgetForm.presentation?.value_color || "#1a5f3f"}
+                    onChange={(e) =>
+                      setWidgetForm((curr) => ({
+                        ...curr,
+                        presentation: {
+                          ...curr.presentation,
+                          value_color: e.target.value,
+                        },
+                      }))
+                    }
+                  />
+
+                  <button
+                    type="button"
+                    className="btn1"
+                    onClick={() =>
+                      setWidgetForm((curr) => ({
+                        ...curr,
+                        presentation: { ...curr.presentation, value_color: "" },
+                      }))
+                    }
+                  >
+                    Clear
+                  </button>
+                </div>
+              </>
+            )}
+
+            {widgetForm.type === "map" && (
+              <>
+                <label className="dash__edit-label">Marker Color</label>
+
+                <div className="dash__color-row">
+                  <input
+                    className="control"
+                    type="color"
+                    aria-label="Marker colour"
+                    value={widgetForm.presentation?.marker_color || "#1a5f3f"}
+                    onChange={(e) =>
+                      setWidgetForm((curr) => ({
+                        ...curr,
+                        presentation: {
+                          ...curr.presentation,
+                          marker_color: e.target.value,
+                        },
+                      }))
+                    }
+                  />
+
+                  <button
+                    type="button"
+                    className="btn1"
+                    onClick={() =>
+                      setWidgetForm((curr) => ({
+                        ...curr,
+                        presentation: { ...curr.presentation, marker_color: "" },
+                      }))
+                    }
+                  >
+                    Clear
+                  </button>
+                </div>
+              </>
+            )}
+
+            {widgetForm.type === "table" && (
+              <>
+                {[
+                  ["table_header_background", "Header Background"],
+                  ["table_header_color", "Header Text"],
+                  ["table_text_color", "Row Text"],
+                  ["table_border_color", "Borders"],
+                ].map(([key, label]) => (
+                  <div key={key}>
+                    <label className="dash__edit-label">{label}</label>
+
+                    <div className="dash__color-row">
+                      <input
+                        className="control"
+                        type="color"
+                        aria-label={label}
+                        value={widgetForm.presentation?.[key] || "#1a5f3f"}
+                        onChange={(e) =>
+                          setWidgetForm((curr) => ({
+                            ...curr,
+                            presentation: {
+                              ...curr.presentation,
+                              [key]: e.target.value,
+                            },
+                          }))
+                        }
+                      />
+
+                      <button
+                        type="button"
+                        className="btn1"
+                        onClick={() =>
+                          setWidgetForm((curr) => ({
+                            ...curr,
+                            presentation: { ...curr.presentation, [key]: "" },
+                          }))
+                        }
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
+
             <label className="dash__edit-label">Background Color</label>
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
               <input

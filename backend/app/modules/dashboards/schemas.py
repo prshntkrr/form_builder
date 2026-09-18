@@ -152,6 +152,20 @@ class WidgetPresentation(BaseModel):
     x_axis: Optional[AxisPresentation] = None
     y_axis: Optional[AxisPresentation] = None
 
+    # Colour. Every one of these is optional, and absent means "as it was" —
+    # a widget nobody has styled carries none of them and renders exactly as
+    # it did before any of this existed.
+    series_color: Optional[str] = Field(default=None, min_length=1)
+    palette: Optional[List[str]] = None
+
+    value_color: Optional[str] = Field(default=None, min_length=1)
+    marker_color: Optional[str] = Field(default=None, min_length=1)
+
+    table_header_background: Optional[str] = Field(default=None, min_length=1)
+    table_header_color: Optional[str] = Field(default=None, min_length=1)
+    table_text_color: Optional[str] = Field(default=None, min_length=1)
+    table_border_color: Optional[str] = Field(default=None, min_length=1)
+
 
 # ---------------------------------------------------------------------------
 # Widget
@@ -241,6 +255,11 @@ class DashboardInfo(BaseModel):
 
     description: Optional[str] = None
 
+    # Colours for every widget that has not chosen its own, so "make this
+    # dashboard green" is one decision rather than one per chart.
+    palette: Optional[List[str]] = None
+    series_color: Optional[str] = Field(default=None, min_length=1)
+
 
 # ---------------------------------------------------------------------------
 # Complete dashboard specification
@@ -269,3 +288,20 @@ class DashboardSpecification(BaseModel):
 class DashboardGenerateRequest(BaseModel):
     table_name: str
     prompt: str
+
+
+class SharedDataRequest(BaseModel):
+    """What someone holding a public link may ask for: one widget, by name.
+
+    `extra="forbid"` is the point of this model. The signed-in data endpoint
+    takes a binding — a table, fields, aggregations, filters — because the
+    person sending it has already been authorised to query that table. Nobody
+    behind a public link has been authorised for anything, so they get to name
+    a widget and nothing else; the binding is read from the published
+    specification on the server. A request that tries to carry a table name or
+    a filter is rejected here rather than quietly ignored.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    widget_id: str = Field(min_length=1)

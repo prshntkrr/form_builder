@@ -322,6 +322,38 @@ export const api = {
   startSubmission: (formId) =>
     request(`/forms/${formId}/submissions/start`, { method: 'POST' }),
 
+  // --- a form, open to whoever holds the link ---
+  // Managing the link needs a session and the permission to hand this form
+  // outside the application. Following one needs neither, which is the point.
+  publicShare: (formId) => request(`/forms/${formId}/public-share`),
+
+  sharePublicly: (formId, options = {}) =>
+    request(`/forms/${formId}/public-share`, {
+      method: 'POST',
+      body: JSON.stringify({
+        regenerate: Boolean(options.regenerate),
+        expires_on: options.expiresOn || null,
+        allow_multiple: options.allowMultiple !== false,
+      }),
+    }),
+
+  disablePublicShare: (formId) =>
+    request(`/forms/${formId}/public-share`, { method: 'DELETE' }),
+
+  // The two below are what the public page calls, with no session. The token
+  // names the form; nothing the caller sends does.
+  publicForm: (token, language) =>
+    request(
+      `/public/forms/${encodeURIComponent(token)}`
+      + (language ? `?language=${encodeURIComponent(language)}` : ''),
+    ),
+
+  submitPublicForm: (token, data, language) =>
+    request(`/public/forms/${encodeURIComponent(token)}/submissions`, {
+      method: 'POST',
+      body: JSON.stringify({ data, language }),
+    }),
+
   // --- what leaves this application ---
   // The published configuration: the version that is live, frozen. A draft has
   // none and the backend says so.

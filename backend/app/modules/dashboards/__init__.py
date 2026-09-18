@@ -23,5 +23,6 @@ MODULE = Module(
     migrations=[
         bootstrap.ensure_version_columns,
         bootstrap.ensure_dashboard_version_table,
+        bootstrap.ensure_share_columns,
     ],
 )

@@ -78,6 +78,35 @@ export const api = {
     }),
 
   // -----------------------------
+  // Public links
+  //
+  // shareDashboard issues one (or returns the one already issued);
+  // unshareDashboard withdraws it, breaking every copy at once.
+  // -----------------------------
+
+  shareDashboard: (dashboardId) =>
+    request(`/dashboards/${encodeURIComponent(dashboardId)}/share`, {
+      method: 'POST',
+    }),
+
+  unshareDashboard: (dashboardId) =>
+    request(`/dashboards/${encodeURIComponent(dashboardId)}/share`, {
+      method: 'DELETE',
+    }),
+
+  // The two below are what the public page calls. They carry no session, and
+  // the data one names a widget rather than a table — the server reads the
+  // binding out of the published dashboard itself.
+  getSharedDashboard: (token) =>
+    request(`/dashboards/shared/${encodeURIComponent(token)}`),
+
+  getSharedData: (token, widgetId) =>
+    request(`/dashboards/shared/${encodeURIComponent(token)}/data`, {
+      method: 'POST',
+      body: JSON.stringify({ widget_id: widgetId }),
+    }),
+
+  // -----------------------------
   // Dashboard data
   // -----------------------------
 

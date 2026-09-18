@@ -2,7 +2,9 @@ import React, { useMemo } from "react";
 import Highcharts from "highcharts";
 import HighchartsReact from "highcharts-react-official";
 
-export default function HighchartHistogramRenderer({ widget, data }) {
+import { widgetColors } from "./colors.js";
+
+export default function HighchartHistogramRenderer({ widget, data, dashboard }) {
   const options = useMemo(() => {
     const p = widget.presentation || {};
     
@@ -122,11 +124,12 @@ export default function HighchartHistogramRenderer({ widget, data }) {
       series: [
         {
           name: "Frequency",
+          color: widgetColors(widget, dashboard).series || undefined,
           data: seriesData
         }
       ]
     };
-  }, [widget, data]);
+  }, [widget, data, dashboard]);
 
   return (
     <div style={{ width: "100%", height: "100%" }}>

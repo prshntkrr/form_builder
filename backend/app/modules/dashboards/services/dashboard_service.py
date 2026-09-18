@@ -9,6 +9,7 @@ Version rows in ``dashboard_version`` are immutable once inserted — only
 their ``status`` column (draft / published) may change.
 """
 
+import secrets
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
@@ -20,6 +21,134 @@ from app.core.database import transaction
 def _generate_dashboard_id() -> str:
     """Generate a short unique dashboard identifier."""
     return uuid4().hex[:20]
+
+
+class NotPublished(Exception):
+    """A dashboard was asked to be shared before anything of it was published."""
+
+
+# ── Public links ────────────────────────────────────────────────
+#
+# A public link serves one thing: the published version, to anyone holding the
+# link, read-only. Nothing else about the dashboard is reachable through it —
+# not its drafts, not its history, not who built it, and not the list it
+# belongs to.
+
+
+def share_dashboard(
+    dashboard_id: str,
+    shared_by: Optional[str],
+) -> Optional[Dict[str, Any]]:
+    """Issue the public link for a dashboard, or return the one it has.
+
+    Only a published version is ever served publicly, so a dashboard with
+    nothing published cannot be shared — there would be nothing to show, and
+    sharing a draft would mean handing out something still being worked on.
+
+    Sharing twice returns the same token rather than minting a new one: the
+    first link may already have been sent to people, and silently breaking it
+    would be a surprising thing for a second click to do.
+    """
+
+    with transaction() as cur:
+        cur.execute(
+            """
+            SELECT share_token, publish_version
+            FROM dashboard
+            WHERE dashboard_id = %s
+              AND status = 'Active'
+            """,
+            (dashboard_id,),
+        )
+
+        row = cur.fetchone()
+
+        if row is None:
+            return None
+
+        if row["publish_version"] is None:
+            raise NotPublished(
+                "Publish a version of this dashboard before sharing it."
+            )
+
+        if row["share_token"]:
+            return {"share_token": row["share_token"]}
+
+        # 32 bytes from the system source, URL-safe: not a guessable id, and
+        # not derived from anything about the dashboard.
+        token = secrets.token_urlsafe(32)
+
+        cur.execute(
+            """
+            UPDATE dashboard
+            SET    share_token = %s,
+                   shared_on   = CURRENT_TIMESTAMP,
+                   shared_by   = %s
+            WHERE  dashboard_id = %s
+            """,
+            (token, shared_by, dashboard_id),
+        )
+
+    return {"share_token": token}
+
+
+def unshare_dashboard(dashboard_id: str) -> bool:
+    """Withdraw the public link. Every copy of it stops working at once."""
+
+    with transaction() as cur:
+        cur.execute(
+            """
+            UPDATE dashboard
+            SET    share_token = NULL,
+                   shared_on   = NULL,
+                   shared_by   = NULL
+            WHERE  dashboard_id = %s
+              AND  status = 'Active'
+            """,
+            (dashboard_id,),
+        )
+
+        return cur.rowcount > 0
+
+
+def get_shared(token: str) -> Optional[Dict[str, Any]]:
+    """What a public link resolves to: one published version, or nothing.
+
+    Returns only what a viewer needs to see the dashboard. The author, the
+    drafts, the version history and the dashboard's own id stay behind — a link
+    is not a way to learn about the installation it came from.
+    """
+
+    if not token:
+        return None
+
+    with transaction() as cur:
+        cur.execute(
+            """
+            SELECT dashboard_id, title, publish_version
+            FROM dashboard
+            WHERE share_token = %s
+              AND status = 'Active'
+              AND publish_version IS NOT NULL
+            """,
+            (token,),
+        )
+
+        row = cur.fetchone()
+
+    if row is None:
+        return None
+
+    version = get_version(row["dashboard_id"], row["publish_version"])
+
+    if version is None:
+        return None
+
+    return {
+        "title": row["title"],
+        "version_no": row["publish_version"],
+        "dashboard_json": version["dashboard_json"],
+    }
 
 
 # ── Dashboard CRUD (updated for versioning) ─────────────────────
@@ -133,7 +262,8 @@ def get_dashboard(
                 updated_on,
                 created_by,
                 latest_version,
-                publish_version
+                publish_version,
+                share_token
             FROM dashboard
             WHERE dashboard_id = %s
               AND status = 'Active'

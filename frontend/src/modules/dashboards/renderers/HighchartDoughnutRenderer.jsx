@@ -3,6 +3,8 @@ import React, { useRef, useEffect, useMemo } from "react";
 import Highcharts from "highcharts";
 import HighchartsReact from "highcharts-react-official";
 
+import { paletteFor, widgetColors } from "./colors.js";
+
 /**
  * Doughnut chart rendered with Highcharts.
  *
@@ -13,7 +15,7 @@ import HighchartsReact from "highcharts-react-official";
  *   widget — the DashboardWidget object (widget.type === "doughnut")
  *   data   — [{ name, value }, …] from prepareChartData
  */
-export default function HighchartDoughnutRenderer({ widget, data }) {
+export default function HighchartDoughnutRenderer({ widget, data, dashboard }) {
   const chartComponentRef = useRef(null);
 
   // Reflow the chart when the grid widget resizes.
@@ -32,8 +34,8 @@ export default function HighchartDoughnutRenderer({ widget, data }) {
 
   // Match the existing hsl() colour palette from the Recharts renderer.
   const colors = useMemo(
-    () => data.map((_, i) => `hsl(${i * 55}, 55%, 45%)`),
-    [data],
+    () => paletteFor(data.length, widgetColors(widget, dashboard).palette),
+    [data, widget, dashboard],
   );
 
   const options = useMemo(

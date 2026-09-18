@@ -550,7 +550,7 @@ Every widget MUST have exactly these properties:
   "layout": {
     "x": 0,
     "y": 0,
-    "w": 6,
+    "w": 4,
     "h": 4
   },
 

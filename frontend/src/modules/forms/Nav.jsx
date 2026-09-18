@@ -330,6 +330,20 @@ export function FormsPanel({ onNavigate }) {
           >
             Open live form
           </NavLink>
+
+          {/* Handing this form outside the application is its own permission,
+              so the item is only offered to an account that holds it. The
+              endpoint checks again regardless. */}
+          {can.export_forms && (
+            <NavLink
+              role="menuitem"
+              className="side__section side__section--out"
+              to={`/forms/${menu.formId}/share`}
+              onClick={() => { setMenu(null); onNavigate?.() }}
+            >
+              Share publicly
+            </NavLink>
+          )}
         </div>,
         document.body,
       )}

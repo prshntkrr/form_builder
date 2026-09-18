@@ -519,3 +519,178 @@
   background: #b71c1c;
   border-color: #b71c1c;
 }
+/* --- the dashboard list, which is where the page opens ------------------- */
+.dash__list-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.dash__list-head .control { max-width: 320px; }
+
+.dash__list { width: 100%; border-collapse: collapse; }
+.dash__list th,
+.dash__list td { padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: left; }
+.dash__list th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted, #777); }
+.dash__list tbody tr:hover { background: var(--wash, #f6f6f4); }
+.dash__list td.dash__list-actions { text-align: right; white-space: nowrap; }
+.dash__list-actions .btn { margin-left: 6px; }
+
+/* One click opens it — the row itself is the target, not just the button. */
+.dash__list-name { background: none; border: 0; padding: 0; font: inherit; color: var(--link, #1a5f3f); cursor: pointer; text-align: left; }
+.dash__list-name:hover { text-decoration: underline; }
+
+/* Narrow screens scroll the table rather than the page. */
+.dash__table-wrap { overflow-x: auto; }
+
+/* --- putting a dashboard on paper --------------------------------------
+   Set while the print dialog is open. Everything except the dashboard is
+   hidden with visibility rather than display, so the charts keep the widths
+   they were laid out at instead of reflowing as the page is built. */
+@media print {
+  body.dash-printing * {
+    visibility: hidden !important;
+  }
+
+  body.dash-printing .dash__dashboard,
+  body.dash-printing .dash__dashboard * {
+    visibility: visible !important;
+  }
+
+  body.dash-printing .dash__dashboard {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+    margin: 0;
+    border: 0;
+    box-shadow: none;
+  }
+
+  /* Controls are not part of the dashboard, only of working on it. */
+  body.dash-printing .dash__version-bar,
+  body.dash-printing .dash__edit-panel,
+  body.dash-printing .dash__filter-bar,
+  body.dash-printing .react-resizable-handle {
+    display: none !important;
+  }
+
+  /* A graph split across two pages is worth neither page. */
+  .dash__widget-card {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  @page {
+    size: landscape;
+    margin: 12mm;
+  }
+}
+
+/* --- the export and share menu ------------------------------------------
+   A <details> disclosure, so opening and closing is the browser's job. */
+.dash__menu { position: relative; display: inline-block; }
+.dash__menu > summary { list-style: none; cursor: pointer; user-select: none; }
+.dash__menu > summary::-webkit-details-marker { display: none; }
+.dash__menu > summary::after { content: " ▾"; }
+
+.dash__menu-body {
+  position: absolute;
+  right: 0;
+  z-index: 40;
+  min-width: 260px;
+  margin-top: 6px;
+  padding: 6px;
+  background: var(--card, #fff);
+  border: 1px solid var(--line, #e3e3e0);
+  border-radius: var(--r, 8px);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.12);
+  text-align: left;
+}
+
+.dash__menu-item {
+  display: block;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.dash__menu-item:hover:not(:disabled) { background: var(--wash, #f6f6f4); }
+.dash__menu-item:disabled { opacity: .55; cursor: default; }
+.dash__menu-item--warn { color: #b3261e; }
+
+.dash__menu-rule { margin: 6px 4px; border: 0; border-top: 1px solid var(--line, #e3e3e0); }
+.dash__menu-note { margin: 4px 10px 6px; }
+
+/* --- a dashboard someone shared ----------------------------------------- */
+.dash__shared-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+.dash__shared .dash__widget-title { margin: 0 0 4px; font-size: 1rem; }
+
+/* --- choosing a colour ---------------------------------------------------
+   A swatch and a way back to no colour at all, which is what an unstyled
+   widget has. */
+.dash__color-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.dash__color-row input[type="color"] {
+  height: 40px;
+  width: 60px;
+  padding: 2px 4px;
+  cursor: pointer;
+}
+
+/* A coloured map pin is an SVG in a divIcon, which Leaflet would otherwise
+   give a white box and a border. */
+.dash__map-pin {
+  background: none;
+  border: 0;
+}
+
+/* --- density -------------------------------------------------------------
+   `.card--pad` is 26px everywhere in the application, which is right for a
+   page card and far too much for a widget that is mostly chart. Overridden
+   here rather than in core, so only dashboards get tighter. */
+.dash__widget-card.card--pad {
+  padding: 12px 14px;
+}
+
+.dash__widget h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+
+.dash__widget-header {
+  gap: 8px;
+}
+
+/* A KPI is one number. It does not need the room a chart needs. */
+.dash__kpi-value {
+  margin-top: 2px;
+  font-size: clamp(22px, 2.2vw, 30px);
+}
+
+.dash__table th,
+.dash__table td {
+  padding: 6px 10px;
+}
+
+/* The viewer's grid: as many graphs across as the window holds, rather than
+   two big ones and a scroll. */
+.dash__shared-grid {
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+}
+
+@media (max-width: 767px) {
+  /* One thing at a time on a phone, with the padding back to something a
+     thumb can work with. */
+  .dash__widget-card.card--pad {
+    padding: 14px 16px;
+  }
+}

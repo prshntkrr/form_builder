@@ -46,7 +46,21 @@ const on = (live) => (live ? modules.filter((m) => live.includes(m.name)) : [])
 
 /** Every route every enabled module contributes, flattened. */
 export const moduleRoutes = (live) =>
-  on(live).flatMap((m) => (m.routes || []).map((r) => ({ ...r, module: m.name })))
+  on(live)
+    .flatMap((m) => (m.routes || []).map((r) => ({ ...r, module: m.name })))
+    .filter((r) => !r.public)
+
+/**
+ * Routes a module wants reachable without signing in.
+ *
+ * Read from every module in the build rather than from the enabled ones,
+ * because a page nobody is signed in to has never asked /api/auth/me which
+ * modules are running. That costs nothing: the page is a shell until the
+ * server answers, and a switched-off module's endpoints 404 exactly as they do
+ * everywhere else.
+ */
+export const publicModuleRoutes = () =>
+  modules.flatMap((m) => (m.routes || []).filter((r) => r.public))
 
 /**
  * The sidebar has two regions, and a module says which one it is filling.

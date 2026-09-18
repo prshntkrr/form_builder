@@ -3,6 +3,8 @@ import React, { useRef, useEffect, useMemo } from "react";
 import Highcharts from "highcharts";
 import HighchartsReact from "highcharts-react-official";
 
+import { paletteFor, widgetColors } from "./colors.js";
+
 /**
  * Pie chart rendered with Highcharts.
  *
@@ -14,7 +16,7 @@ import HighchartsReact from "highcharts-react-official";
  *   widget — the DashboardWidget object
  *   data   — [{ name, value }, …] from prepareChartData
  */
-export default function HighchartPieRenderer({ widget, data }) {
+export default function HighchartPieRenderer({ widget, data, dashboard }) {
   const chartComponentRef = useRef(null);
 
   // Reflow the chart when the grid widget resizes. Highcharts needs an
@@ -33,11 +35,11 @@ export default function HighchartPieRenderer({ widget, data }) {
     return () => observer.disconnect();
   }, []);
 
-  // Build the colour list to match the existing hsl() palette used by
-  // the Recharts pie renderer so the migration is visually seamless.
+  // One slice colour each, from the palette this widget or its dashboard was
+  // given. With none chosen this is the hsl() ramp the chart always drew.
   const colors = useMemo(
-    () => data.map((_, i) => `hsl(${i * 55}, 55%, 45%)`),
-    [data],
+    () => paletteFor(data.length, widgetColors(widget, dashboard).palette),
+    [data, widget, dashboard],
   );
 
   const options = useMemo(

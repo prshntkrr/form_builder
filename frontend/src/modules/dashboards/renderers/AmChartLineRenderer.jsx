@@ -1,6 +1,8 @@
 import React, { useLayoutEffect, useRef, useId } from "react";
 
 import * as am5 from "@amcharts/amcharts5";
+
+import { widgetColors } from "./colors.js";
 import * as am5xy from "@amcharts/amcharts5/xy";
 import am5themes_Animated from "@amcharts/amcharts5/themes/Animated";
 
@@ -11,7 +13,7 @@ import am5themes_Animated from "@amcharts/amcharts5/themes/Animated";
  *   widget — the DashboardWidget object
  *   data   — [{ name, value }, …] from prepareChartData
  */
-export default function AmChartLineRenderer({ widget, data }) {
+export default function AmChartLineRenderer({ widget, data, dashboard }) {
   const chartRef = useRef(null);
   const rootRef = useRef(null);
 
@@ -110,10 +112,14 @@ export default function AmChartLineRenderer({ widget, data }) {
     // ── Series ─────────────────────────────────────────────────
     const measure = widget.data_binding?.measures?.[0];
 
-    // Use the app's accent colour via CSS variable.
-    const accent = getComputedStyle(document.documentElement)
-      .getPropertyValue("--accent")
-      .trim();
+    /* The colour this widget was given, or the app's accent as before. */
+    const chosen = widgetColors(widget, dashboard).series;
+
+    const accent =
+      chosen
+      || getComputedStyle(document.documentElement)
+        .getPropertyValue("--accent")
+        .trim();
 
     const series = chart.series.push(
       am5xy.LineSeries.new(root, {
@@ -166,7 +172,7 @@ export default function AmChartLineRenderer({ widget, data }) {
       root.dispose();
       rootRef.current = null;
     };
-  }, [data, widget, chartId]);
+  }, [data, widget, dashboard, chartId]);
 
   return (
     <div

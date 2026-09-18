@@ -269,3 +269,23 @@ class SubmissionList(BaseModel):
     limit: Optional[int] = None
     offset: Optional[int] = None
     rows: List[Dict[str, Any]]
+
+
+# --- a form, open to whoever holds the link ---------------------------------
+from datetime import datetime as _datetime  # noqa: E402  (appended section)
+
+
+class PublicShareRequest(BaseModel):
+    """Issuing a form's public link, or replacing the one it has.
+
+    `regenerate` is the only thing that breaks an address already handed out,
+    so it is asked for explicitly rather than implied by sharing again.
+    """
+
+    regenerate: bool = False
+    # When the link stops working. Enforced by the server on every request.
+    expires_on: Optional[_datetime] = None
+    # Whether one person may answer more than once. Advisory: somebody with no
+    # account cannot be recognised, so this is remembered by the browser that
+    # answered rather than enforced.
+    allow_multiple: bool = True

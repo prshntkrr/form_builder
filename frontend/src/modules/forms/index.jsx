@@ -9,6 +9,8 @@ import FormFill from './pages/FormFill.jsx'
 import FormRecords from './pages/FormRecords.jsx'
 import Library from './pages/Library.jsx'
 import LiveForms from './pages/LiveForms.jsx'
+import PublicForm from './pages/PublicForm.jsx'
+import PublicShare from './pages/PublicShare.jsx'
 import Routing from './pages/Routing.jsx'
 import './styles.css'
 
@@ -39,6 +41,10 @@ export default {
   // place for a project member as much as for a builder.
   home: (can) => ((can.build_any_forms || can.use_projects) ? '/forms' : '/fill'),
   routes: [
+    /* Open to whoever holds the link: no session, no shell, no navigation.
+       The token names the form on the server; this page never does. */
+    { path: '/p/:token', element: <PublicForm />, public: true },
+
     // Anyone signed in: filling forms in.
     { path: '/fill', element: <LiveForms /> },
     { path: '/f/:formId', element: <FormRecords /> },
@@ -54,6 +60,9 @@ export default {
     { path: '/forms/:formId', element: <Moved to="questions" />, requires: 'build_any_forms' },
     { path: '/forms/:formId/edit', element: <Moved to="questions" />, requires: 'build_any_forms' },
     { path: '/forms/:formId/data', element: <Moved to="responses" />, requires: 'build_any_forms' },
+    /* Before the catch-all section route, which would otherwise draw the
+       builder with a section nobody has. */
+    { path: '/forms/:formId/share', element: <PublicShare />, requires: 'export_forms' },
     { path: '/forms/:formId/:section', element: <Builder />, requires: 'build_any_forms' },
   ],
 }

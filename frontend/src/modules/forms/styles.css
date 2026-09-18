@@ -417,3 +417,18 @@
 .newsection { display: flex; gap: 6px; align-items: center; }
 .newsection .control { flex: 1; min-width: 0; }
 .newsection .btn { flex: none; }
+
+/* --- a form behind a public link ----------------------------------------
+   Its own page, not one of the application's: no sidebar, no navigation, and
+   a column wide enough to answer questions in on a phone or a desktop. */
+.forms__public {
+  width: 100%;
+  min-height: 100vh;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: clamp(16px, 3vw, 40px);
+  box-sizing: border-box;
+}
+
+.forms__public-head { margin-bottom: clamp(16px, 2vw, 24px); }
+.forms__public-head h1 { margin: 0 0 4px; font-size: clamp(1.3rem, 3vw, 1.7rem); }

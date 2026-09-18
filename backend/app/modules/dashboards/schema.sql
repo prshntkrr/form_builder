@@ -15,8 +15,19 @@ CREATE TABLE IF NOT EXISTS dashboard (
     updated_on      TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
     created_by      VARCHAR(50),
     latest_version  INTEGER      NOT NULL DEFAULT 0,
-    publish_version INTEGER
+    publish_version INTEGER,
+    -- A public link, when somebody has issued one. NULL means not shared,
+    -- which is every dashboard until it is.
+    share_token     VARCHAR(64),
+    shared_on       TIMESTAMP,
+    shared_by       VARCHAR(50)
 );
+
+-- Partial, so the dashboards that are not shared are not in the index at all,
+-- and a token lookup touches only the ones that are.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_dashboard_share_token
+    ON dashboard (share_token)
+    WHERE share_token IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_dashboard_status
     ON dashboard (status);

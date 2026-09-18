@@ -2,7 +2,9 @@ import React, { useMemo } from "react";
 import Highcharts from "highcharts";
 import HighchartsReact from "highcharts-react-official";
 
-export default function HighchartScatterRenderer({ widget, data }) {
+import { widgetColors } from "./colors.js";
+
+export default function HighchartScatterRenderer({ widget, data, dashboard }) {
   const options = useMemo(() => {
     const p = widget.presentation || {};
     const scatterConfig = widget.scatter || {};
@@ -97,12 +99,12 @@ export default function HighchartScatterRenderer({ widget, data }) {
       series: [
         {
           name: "Observations",
-          color: "rgba(36, 123, 219, 0.5)",
+          color: widgetColors(widget, dashboard).series || "rgba(36, 123, 219, 0.5)",
           data: seriesData
         }
       ]
     };
-  }, [widget, data]);
+  }, [widget, data, dashboard]);
 
   return (
     <div style={{ width: "100%", height: "100%" }}>

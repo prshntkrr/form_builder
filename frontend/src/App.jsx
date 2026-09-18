@@ -7,7 +7,7 @@ import Login from './core/pages/Login.jsx'
 import ResetPassword from './core/pages/ResetPassword.jsx'
 import Roles from './core/pages/Roles.jsx'
 import Users from './core/pages/Users.jsx'
-import { homeFor, moduleRoutes } from './core/registry.js'
+import { homeFor, moduleRoutes, publicModuleRoutes } from './core/registry.js'
 
 function Loading() {
   return (
@@ -80,6 +80,13 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
+
+      {/* Pages a module publishes to whoever holds the address: no session,
+          no shell, no navigation. What they may see is decided by the server
+          on every request, exactly as it is behind the gate. */}
+      {publicModuleRoutes().map((r) => (
+        <Route key={r.path} path={r.path} element={r.element} />
+      ))}
 
       {/* Signed in, any role. */}
       <Route element={<Require />}>

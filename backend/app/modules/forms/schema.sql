@@ -28,8 +28,23 @@ CREATE TABLE IF NOT EXISTS forms (
     parent_id        VARCHAR(20)  REFERENCES forms (form_id) ON DELETE SET NULL,
     created_on       TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
     updated_on       TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
-    created_by       VARCHAR(50)
+    created_by       VARCHAR(50),
+    -- A public link, when somebody has issued one. NULL is every form until
+    -- then, and a disabled link keeps its token so the state is legible —
+    -- `public_enabled` is what decides whether the link answers.
+    public_token     VARCHAR(64),
+    public_enabled   BOOLEAN      NOT NULL DEFAULT FALSE,
+    public_expires_on TIMESTAMP,
+    public_allow_multiple BOOLEAN NOT NULL DEFAULT TRUE,
+    public_shared_by VARCHAR(50),
+    public_shared_on TIMESTAMP
 );
+
+-- Partial, so the forms nobody has shared stay out of the index and a token
+-- lookup touches only the ones that are.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_forms_public_token
+    ON forms (public_token)
+    WHERE public_token IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS form_version (
     version_id  SERIAL       PRIMARY KEY,

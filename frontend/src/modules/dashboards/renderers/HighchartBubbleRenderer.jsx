@@ -1,6 +1,8 @@
 import React, { useMemo } from "react";
 import Highcharts from "highcharts";
 import HighchartsReact from "highcharts-react-official";
+
+import { widgetColors } from "./colors.js";
 import HC_more from "highcharts/highcharts-more";
 
 if (typeof Highcharts === "object") {
@@ -11,7 +13,7 @@ if (typeof Highcharts === "object") {
   }
 }
 
-export default function HighchartBubbleRenderer({ widget, data }) {
+export default function HighchartBubbleRenderer({ widget, data, dashboard }) {
   const options = useMemo(() => {
     const p = widget.presentation || {};
     
@@ -150,11 +152,13 @@ export default function HighchartBubbleRenderer({ widget, data }) {
       },
       series: [
         {
+          /* Highcharts picks its own when none was chosen. */
+          color: widgetColors(widget, dashboard).series || undefined,
           data: finalData
         }
       ]
     };
-  }, [widget, data]);
+  }, [widget, data, dashboard]);
 
   return (
     <div style={{ width: "100%", height: "100%" }}>

@@ -21,9 +21,11 @@ jobs:
           port: 22
           username: ${{ secrets.USER }}
           password: ${{ secrets.PASSWORD }}
-          # The health check waits, and an import of every crop ontology talks
-          # to cropontology.org. The default 10 minutes is not enough for a
-          # first run.
+          # Both health checks wait, and the frontend stage runs `npm install`
+          # and a full bundle build. The default 10 minutes is not enough.
+          #
+          # This used to say the crop ontology import needed the time, which it
+          # did — that import no longer runs on deploy; see the note beside it.
           command_timeout: 30m
 
           script: |
@@ -105,55 +107,53 @@ jobs:
             fi
             cat /tmp/eagrology_import.log
 
-            echo "Importing standards (SEOnt, ICASA)..."
-
-            # Every import below is idempotent — SEOnt matches concepts on their
-            # URI, ICASA matches variables on var_uid, Crop Ontology on its own
-            # identifiers, client catalogs on the client's catalog and value ids
-            # — so these update and add rather than duplicating. Each creates its
-            # own tables, so none cares whether the new backend has started yet.
+            # ===============================================================
+            # Vocabulary imports — OFF on purpose.
             #
-            # None is fatal: the application runs perfectly well with nothing
-            # loaded (the pickers simply find nothing), and a failed import is no
-            # reason to leave the service down. The warnings are worth reading in
-            # the log, though — an empty vocabulary is a silent, confusing
-            # failure on the Standards screen.
-            python import_ontology.py || echo "WARNING: ontology import failed, continuing"
-            python import_icasa.py || echo "WARNING: ICASA import failed, continuing"
-
-            # ISO 3166-1 and the units table are not here on purpose. Both are
-            # datasets held in the repository rather than fetched from anywhere,
-            # so each is a seed in its module's manifest and runs when the
-            # backend starts. Adding a script for them would mean two places
-            # that import the same rows.
-
-            echo "Importing crop ontologies..."
-
-            # Which crops this installation offers. A form's crop question is
-            # answered from whatever is imported here, so adding a crop is a
-            # one-word change — set the CROP_ONTOLOGIES repository variable to a
-            # space-separated list ("CO_322 CO_320 CO_323"), or to the single
-            # word "all", and never touch a form.
+            # SEOnt, ICASA and the crop ontologies are already loaded on this
+            # installation. Every one of them is idempotent, so running them
+            # again on each deploy changes nothing and costs minutes: the crop
+            # ontology import fetches from cropontology.org, which is why this
+            # job asks for a 30-minute timeout in the first place.
             #
-            # This used to run `--crop all` once per name in the list. The
-            # script's flag for everything is `--all`; `--crop all` looks for an
-            # ontology *called* "all", finds none, and says so — quietly, into a
-            # log nobody reads. So the deploy has never actually imported a crop
-            # ontology, and the ones in the database were loaded by hand.
-            CROP_ONTOLOGIES="${{ vars.CROP_ONTOLOGIES }}"
-            CROP_ONTOLOGIES="${CROP_ONTOLOGIES:-all}"
+            # A FRESH DATABASE STILL NEEDS THEM, once, by hand:
+            #
+            #     cd backend && source venv/bin/activate
+            #     python import_ontology.py
+            #     python import_icasa.py
+            #     python import_crop_ontology.py --all
+            #
+            # Without that, the Standards and crop pickers find nothing — a
+            # quiet, confusing emptiness rather than an error. Uncomment the
+            # block below to put them back in the deploy.
+            # ===============================================================
 
-            if [ "$CROP_ONTOLOGIES" = "all" ]; then
-                echo "  every published ontology"
-                python import_crop_ontology.py --all \
-                  || echo "WARNING: crop ontology import failed, continuing"
-            else
-                for CROP in $CROP_ONTOLOGIES; do
-                    echo "  $CROP"
-                    python import_crop_ontology.py --crop "$CROP" \
-                      || echo "WARNING: crop ontology $CROP failed, continuing"
-                done
-            fi
+            # echo "Importing standards (SEOnt, ICASA)..."
+            #
+            # python import_ontology.py || echo "WARNING: ontology import failed, continuing"
+            # python import_icasa.py || echo "WARNING: ICASA import failed, continuing"
+            #
+            # echo "Importing crop ontologies..."
+            #
+            # Which crops this installation offers: the CROP_ONTOLOGIES
+            # repository variable, space-separated ("CO_322 CO_320"), or "all".
+            #
+            # CROP_ONTOLOGIES="${{ vars.CROP_ONTOLOGIES }}"
+            # CROP_ONTOLOGIES="${CROP_ONTOLOGIES:-all}"
+            #
+            # if [ "$CROP_ONTOLOGIES" = "all" ]; then
+            #     echo "  every published ontology"
+            #     python import_crop_ontology.py --all             #       || echo "WARNING: crop ontology import failed, continuing"
+            # else
+            #     for CROP in $CROP_ONTOLOGIES; do
+            #         echo "  $CROP"
+            #         python import_crop_ontology.py --crop "$CROP"             #           || echo "WARNING: crop ontology $CROP failed, continuing"
+            #     done
+            # fi
+
+            # ISO 3166-1 and the units table were never here: both are datasets
+            # held in the repository and seeded by their module when the backend
+            # starts, so they load on every deploy regardless of the above.
 
             echo "Importing client catalogs..."
 
@@ -263,7 +263,81 @@ jobs:
             esac
 
             echo "================================="
+            echo "Frontend"
+            echo "================================="
+
+            cd ../frontend
+
+            # `npm install` rather than `npm ci`: asked for, and it tolerates a
+            # lockfile that has drifted from package.json. `npm ci` would be the
+            # reproducible choice once the two are known to agree.
+            echo "Installing frontend dependencies..."
+            npm install
+
+            # The bundle is built even though the dev server below serves from
+            # source: a build is what catches an import that does not resolve or
+            # a file that does not parse, and it fails here — before the running
+            # frontend is stopped — rather than after.
+            echo "Building the bundle..."
+            npm run build
+
+            echo "Stopping existing frontend..."
+
+            FRONTEND_PID=$(ss -ltnpH 'sport = :8020' 2>/dev/null               | grep -oP 'pid=\K[0-9]+'               | head -1 || true)
+
+            if [ -n "$FRONTEND_PID" ]; then
+                echo "Found frontend PID: $FRONTEND_PID"
+                kill "$FRONTEND_PID"
+
+                echo "Waiting for frontend to stop..."
+
+                for i in {1..10}; do
+                    if ! kill -0 "$FRONTEND_PID" 2>/dev/null; then
+                        echo "Frontend stopped."
+                        break
+                    fi
+                    sleep 1
+                done
+
+                # Still holding the port. Starting anyway would give a second
+                # vite that cannot bind, and a check that passes against the
+                # *old* one — a deploy that reports success and changes nothing.
+                if kill -0 "$FRONTEND_PID" 2>/dev/null; then
+                    echo "Frontend did not stop; forcing it."
+                    kill -9 "$FRONTEND_PID" || true
+                    sleep 2
+                fi
+            else
+                echo "No process listening on port 8020."
+            fi
+
+            echo "Starting frontend..."
+
+            nohup npm run dev -- --host 0.0.0.0 --port 8020 > frontend.log 2>&1 &
+
+            echo "Checking frontend..."
+
+            # Ask the port, not the process table: `npm run dev` stays up as a
+            # process while vite behind it has already exited, so a running
+            # process proves nothing. Without this a dead dev server would still
+            # report a successful deploy.
+            FRONTEND_UP=""
+            for i in {1..20}; do
+                if curl -fsS --max-time 5 -o /dev/null http://127.0.0.1:8020/ 2>/dev/null; then
+                    FRONTEND_UP="yes"
+                    break
+                fi
+                sleep 2
+            done
+
+            if [ -z "$FRONTEND_UP" ]; then
+                echo "Frontend did not answer on port 8020."
+                echo "Last frontend logs:"
+                tail -50 frontend.log
+                exit 1
+            fi
+
+            echo "================================="
             echo "Deployment completed successfully"
             echo "================================="
-            echo "Backend only. The frontend bundle is published separately —"
-            echo "a UI change is not live until that has run too."
+            echo "Backend on 8021, frontend on 8020."

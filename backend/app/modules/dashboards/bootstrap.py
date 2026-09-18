@@ -47,6 +47,54 @@ def ensure_version_columns() -> bool:
     return True
 
 
+def ensure_share_columns() -> bool:
+    """Add the public-link columns to ``dashboard`` if they are missing.
+
+    Every existing dashboard comes out of this unshared — the token is NULL,
+    and a NULL token is matched by nothing — so switching this on publishes
+    nothing that was not published before.
+    """
+    with transaction() as cur:
+        if not table_exists(cur, "dashboard"):
+            return False
+
+        cur.execute(
+            """
+            SELECT column_name FROM information_schema.columns
+            WHERE table_name = 'dashboard'
+              AND column_name IN ('share_token', 'shared_on', 'shared_by')
+            """
+        )
+        present = {row["column_name"] for row in cur.fetchall()}
+
+        if "share_token" not in present:
+            cur.execute(
+                "ALTER TABLE dashboard ADD COLUMN share_token VARCHAR(64)"
+            )
+            logger.info("Added dashboard.share_token")
+
+        if "shared_on" not in present:
+            cur.execute(
+                "ALTER TABLE dashboard ADD COLUMN shared_on TIMESTAMP"
+            )
+
+        if "shared_by" not in present:
+            cur.execute(
+                "ALTER TABLE dashboard ADD COLUMN shared_by VARCHAR(50)"
+            )
+
+        # Partial: unshared dashboards stay out of the index entirely.
+        cur.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_dashboard_share_token
+                ON dashboard (share_token)
+                WHERE share_token IS NOT NULL
+            """
+        )
+
+    return True
+
+
 def ensure_dashboard_version_table() -> bool:
     """Create ``dashboard_version`` and back-fill version 1 for existing rows.
 

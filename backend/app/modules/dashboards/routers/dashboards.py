@@ -16,20 +16,27 @@ from app.modules.dashboards.permissions import (
     DASHBOARDS_VIEW,
     DASHBOARDS_EDIT,
     DASHBOARDS_DELETE,
+    DASHBOARDS_SHARE,
 )
 
 from app.modules.dashboards.schemas import (
+    DashboardDataBinding,
     DashboardDataRequest,
-    DashboardGenerateRequest
+    DashboardGenerateRequest,
+    SharedDataRequest,
 )
 from app.modules.dashboards.services.query_service import (
     execute_dashboard_query,
 )
 
 from app.modules.dashboards.services.dashboard_service import (
+    NotPublished,
     create_dashboard,
     list_dashboards,
     get_dashboard,
+    get_shared,
+    share_dashboard,
+    unshare_dashboard,
     update_dashboard,
     delete_dashboard,
     list_versions,
@@ -389,3 +396,140 @@ def get_dashboard_data(
         "table_name": table_name,
         "rows": rows,
     }
+
+
+# ── Public links ────────────────────────────────────────────────
+#
+# The two routes below take no session. They are the only ones in this
+# application that do not, so they are written to give away as little as
+# possible: an unguessable token names one published dashboard, and nothing
+# reachable through it lets the caller ask about anything else.
+
+
+@router.post("/{dashboard_id}/share")
+def share_dashboard_route(
+    dashboard_id: str,
+    user: Dict[str, Any] = Depends(needs(DASHBOARDS_SHARE)),
+):
+    """Issue a public link for a published dashboard.
+
+    Its own permission: being allowed to look at a dashboard says nothing about
+    being allowed to put its contents in front of anyone with a URL.
+    """
+
+    try:
+        result = share_dashboard(dashboard_id, user.get("username"))
+    except NotPublished as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No dashboard '{dashboard_id}'",
+        )
+
+    return result
+
+
+@router.delete("/{dashboard_id}/share", status_code=204)
+def unshare_dashboard_route(
+    dashboard_id: str,
+    user: Dict[str, Any] = Depends(needs(DASHBOARDS_SHARE)),
+):
+    """Withdraw the public link, breaking every copy of it."""
+
+    if not unshare_dashboard(dashboard_id):
+        raise HTTPException(
+            status_code=404,
+            detail=f"No dashboard '{dashboard_id}'",
+        )
+
+    return None
+
+
+@router.get("/shared/{token}")
+def shared_dashboard(token: str):
+    """A published dashboard, to whoever holds the link. No session.
+
+    A token that names nothing — withdrawn, mistyped, or never issued — is a
+    404, the same answer as a token that never existed, so the reply says
+    nothing about which of those it was.
+    """
+
+    shared = get_shared(token)
+
+    if shared is None:
+        raise HTTPException(status_code=404, detail="That link is not valid.")
+
+    return shared
+
+
+@router.post("/shared/{token}/data")
+def shared_dashboard_data(token: str, req: SharedDataRequest):
+    """The data behind one widget of a shared dashboard. No session.
+
+    The signed-in endpoint above takes a binding — a table, fields,
+    aggregations, filters — because whoever sends it has been authorised to
+    query that table. Nobody here has been authorised for anything, so this
+    takes a widget id and reads the binding out of the published specification
+    itself. The caller cannot name a table, a column or a filter, which means
+    this endpoint can only ever run a query that the dashboard's author already
+    put on the dashboard.
+    """
+
+    shared = get_shared(token)
+
+    if shared is None:
+        raise HTTPException(status_code=404, detail="That link is not valid.")
+
+    specification = shared.get("dashboard_json") or {}
+
+    widget = next(
+        (
+            item
+            for item in specification.get("widgets", [])
+            if item.get("id") == req.widget_id
+        ),
+        None,
+    )
+
+    if widget is None:
+        raise HTTPException(
+            status_code=404,
+            detail="That widget is not on this dashboard.",
+        )
+
+    # The table comes from the specification, never from the request.
+    source = next(
+        (
+            item
+            for item in specification.get("data_sources", [])
+            if item.get("id") == widget.get("data_source_id")
+        ),
+        None,
+    )
+
+    table_name = ((source or {}).get("name") or "").strip()
+
+    if not table_name.endswith("_tabular"):
+        raise HTTPException(
+            status_code=400,
+            detail="Only tabular dashboard data sources are supported.",
+        )
+
+    try:
+        binding = DashboardDataBinding(**(widget.get("data_binding") or {}))
+        rows = execute_dashboard_query(table_name, binding)
+
+    except Exception as exc:
+        logger.exception(
+            "Shared dashboard data query failed for %s",
+            table_name,
+        )
+
+        raise HTTPException(
+            status_code=422,
+            detail="Unable to execute dashboard data query.",
+        ) from exc
+
+    return {"rows": rows}

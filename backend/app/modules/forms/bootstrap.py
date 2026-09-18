@@ -224,6 +224,59 @@ def ensure_relationship_columns() -> int:
     return corrected
 
 
+def ensure_public_share_columns() -> List[str]:
+    """Give `forms` somewhere to keep a public link.
+
+    Every existing form comes out of this unshared: no token, and
+    `public_enabled` false. Switching this on publishes nothing that was not
+    published before — a form becomes reachable without a session only when
+    somebody issues a link for it, and only while that link is enabled.
+    """
+    from psycopg2 import sql
+
+    wanted = [
+        ("public_token", "VARCHAR(64)"),
+        ("public_enabled", "BOOLEAN NOT NULL DEFAULT FALSE"),
+        ("public_expires_on", "TIMESTAMP"),
+        ("public_allow_multiple", "BOOLEAN NOT NULL DEFAULT TRUE"),
+        ("public_shared_by", "VARCHAR(50)"),
+        ("public_shared_on", "TIMESTAMP"),
+    ]
+    added: List[str] = []
+
+    with transaction() as cur:
+        if not table_exists(cur, "forms"):
+            return added                      # schema.sql will create it whole
+
+        cur.execute(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_schema = %s AND table_name = 'forms'",
+            (settings.db_schema,),
+        )
+        have = {r["column_name"] for r in cur.fetchall()}
+
+        for column, definition in wanted:
+            if column in have:
+                continue
+            cur.execute(
+                sql.SQL("ALTER TABLE {}.forms ADD COLUMN {} {}").format(
+                    sql.Identifier(settings.db_schema), sql.Identifier(column),
+                    sql.SQL(definition)))
+            added.append(column)
+
+        # Partial: the forms nobody has shared are not in the index at all.
+        cur.execute(
+            sql.SQL(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_forms_public_token "
+                "ON {}.forms (public_token) WHERE public_token IS NOT NULL"
+            ).format(sql.Identifier(settings.db_schema)))
+
+    if added:
+        logger.info("Added public share columns to forms: %s", ", ".join(added))
+
+    return added
+
+
 def ensure_export_permission() -> int:
     """Give `forms.export` to the roles that already publish forms.
 

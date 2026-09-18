@@ -26,6 +26,7 @@ from app.modules.forms.schemas import (
     CreateFormRequest,
     ExportRequest,
     GenerateRequest,
+    PublicShareRequest,
     RefineRequest,
     RevalidateRequest,
     RollbackRequest,
@@ -769,6 +770,67 @@ def published_config(
     A project this account cannot reach answers 404 like everywhere else.
     """
     return _published(form_id)
+
+
+@router.get("/{form_id}/public-share")
+def public_share_state(
+    form_id: str,
+    user: Dict[str, Any] = Depends(needs_on_form(FORMS_EXPORT, "project.forms.manage")),
+):
+    """Whether this form has a public link, and what it is.
+
+    The same permission as exporting, and for the same reason: both hand this
+    form's definition to something outside this application. Reading a form, or
+    filling one in, says nothing about whether this account may put it in front
+    of anyone with a URL.
+    """
+    from app.modules.forms import public_share
+
+    try:
+        form_service.get_form(form_id)
+    except form_service.FormNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+    return public_share.get_state(form_id)
+
+
+@router.post("/{form_id}/public-share")
+def share_form_publicly(
+    form_id: str,
+    req: PublicShareRequest,
+    user: Dict[str, Any] = Depends(needs_on_form(FORMS_EXPORT, "project.forms.manage")),
+):
+    """Issue this form's public link, or replace the one it has."""
+    from app.modules.forms import public_share
+
+    try:
+        return public_share.share(
+            form_id,
+            auth_service.display_name(user),
+            regenerate=req.regenerate,
+            expires_on=req.expires_on,
+            allow_multiple=req.allow_multiple,
+        )
+    except public_share.ShareError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except form_service.FormNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@router.delete("/{form_id}/public-share")
+def stop_sharing_form(
+    form_id: str,
+    user: Dict[str, Any] = Depends(needs_on_form(FORMS_EXPORT, "project.forms.manage")),
+):
+    """Switch the public link off. Every copy of it stops working at once."""
+    from app.modules.forms import public_share
+
+    try:
+        form_service.get_form(form_id)
+    except form_service.FormNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+    return public_share.disable(form_id)
 
 
 @router.get("/{form_id}/exports")

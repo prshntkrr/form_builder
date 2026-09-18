@@ -1,6 +1,7 @@
 import React from 'react'
 import DashboardsNav from './Nav.jsx'
 import Dashboards from './pages/Dashboards.jsx'
+import SharedDashboard from './pages/SharedDashboard.jsx'
 import './styles.css'
 
 /**
@@ -19,5 +20,10 @@ export default {
   home: () => null,        // forms still decides where people land
   routes: [
     { path: '/dashboards', element: <Dashboards />, requires: 'view_dashboards' },
+
+    /* A dashboard someone shared. `public` means no session is required to
+       reach the page — the token in the address is what the server checks,
+       and it only ever answers with one published dashboard. */
+    { path: '/d/:token', element: <SharedDashboard />, public: true },
   ],
 }
