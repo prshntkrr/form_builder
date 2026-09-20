@@ -51,3 +51,9 @@ results/
 # Load-test accounts: generated, and real passwords.
 load_tests/users.csv
 load_tests/__pycache__/
+
+# The frontend dev-server config is edited on each machine (ports, allowed
+# hosts), so it is not tracked. frontend/vite.config.example.js is the template;
+# the deploy copies it when a machine has no config of its own, and keeps the
+# one already there.
+frontend/vite.config.js
