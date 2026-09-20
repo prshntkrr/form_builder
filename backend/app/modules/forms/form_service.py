@@ -7,6 +7,7 @@ from psycopg2.extras import Json
 
 from app.modules.forms.constants import FORM_STATUSES, FORM_TYPES
 from app.core.config import settings
+from app.modules.forms.channels import form_channel
 from app.modules.forms.config_validation import BusinessContext, validate_config
 from app.modules.forms.diff_service import diff_versions as _diff_versions, trace_names
 from app.modules.forms.form_schema import derive_table_name, normalize_form
@@ -78,6 +79,9 @@ def _row_to_form(row: Dict[str, Any], version: Optional[int] = None) -> Dict[str
         "created_by": row.get("created_by"),
         "table_name": form_json.get("table_name"),
         "field_count": len(form_json.get("fields") or []),
+        # The one channel this form is built for — read from a legacy form's
+        # profile when it never declared one. See `channels.form_channel`.
+        "channel": form_channel(form_json),
         "version_no": int(live),
         "latest_version": int(latest) if latest else int(live),
         "submission_count": row.get("submission_count"),
@@ -192,12 +196,16 @@ def _validate_config(
     form_type: str = "parent",
     parent_id: Optional[str] = None,
     status: str = "Active",
+    stored: Optional[Dict[str, Any]] = None,
 ) -> None:
     """Run the two-stage pipeline before a config is allowed to be persisted.
 
     The database facts a business rule needs are gathered here so the pipeline
-    itself stays pure and testable without a connection.
+    itself stays pure and testable without a connection. `stored` is the
+    definition being replaced, when an existing form is saved.
     """
+    from app.modules.forms.channels import declared_channel
+
     context = BusinessContext(
         form_id=form_id,
         form_type=form_type,
@@ -205,6 +213,8 @@ def _validate_config(
         form_status=status,
         known_form_ids=_known_form_ids(cur) if parent_id else (),
         known_standard_ids=standard_library.known_ids(cur),
+        updating=stored is not None,
+        stored_channel=declared_channel(stored) if stored is not None else None,
     )
     validate_config(form_json, context)
 
@@ -567,6 +577,7 @@ def update_form(
             form_type=form_type,
             parent_id=parent_id,
             status=status or existing.get("form_status") or "Active",
+            stored=existing["form_json"] or {},
         )
 
         existing_json = existing["form_json"] or {}
@@ -647,6 +658,16 @@ def set_status(form_id: str, status: str) -> Dict[str, Any]:
             f"Unknown status '{status}' - expected one of {', '.join(FORM_STATUSES)}"
         )
     with transaction() as cur:
+        if status == "Active":
+            # Going live asks what saving a draft did not: can the form's
+            # channel collect every required answer, and may that channel be
+            # published at all. A legacy form answers both as it always did.
+            cur.execute("SELECT form_json FROM forms WHERE form_id = %s", (form_id,))
+            found = cur.fetchone()
+            if found and found["form_json"]:
+                from app.modules.forms.config_validation import validate_publishable
+                validate_publishable(found["form_json"])
+
         cur.execute(
             """
             UPDATE forms SET form_status = %s, updated_on = CURRENT_TIMESTAMP

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { DIGITS, NUMERIC, STORAGE, TEXTUAL, TYPES, WITH_OPTIONS } from '../fieldTypes.js'
+import PolygonPicker from './PolygonPicker.jsx'
 import StandardPicker from './StandardPicker.jsx'
 import ConditionEditor from './ConditionEditor.jsx'
 import { api } from '../api.js'
@@ -423,6 +424,36 @@ export default function FieldEditor({
             </label>
           </label>
         </div>
+
+        {/* A boundary drawn here is part of the question, and it is kept in
+            the field's own `coordinates`. The backend preserves that key for
+            polygon fields specifically, so it survives saving and comes back
+            drawn when the form is opened again. */}
+        {field.type === 'polygon' && (
+          <div className="insp__polygon">
+            {/* Previewed here, drawn full-screen. Nothing reaches the field
+                until Save Area, so opening the map and closing it again
+                leaves the saved boundary alone. */}
+            <PolygonPicker
+              value={field.coordinates || []}
+              onChange={(coordinates) => patch({ coordinates })}
+            />
+
+            <label className="insp__check">
+              <input
+                type="checkbox"
+                checked={!!field.editable}
+                onChange={(e) => patch({ editable: e.target.checked })}
+              />
+              Let the person filling the form draw their own boundary
+            </label>
+
+            <p className="tiny muted">
+              Left unticked, the boundary above is shown as part of the
+              question and cannot be changed by whoever answers it.
+            </p>
+          </div>
+        )}
 
         {WITH_OPTIONS.has(field.type) && (
           <OptionSource field={field} fields={allFields} patch={patch} />

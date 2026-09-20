@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../api.js'
+import { FORM_CHANNEL_NAMES } from '../channelCapabilities.js'
 import { formsChanged } from '../../../core/events.js'
 
 const ago = (value) => {
@@ -86,6 +87,8 @@ export default function FormsList() {
               </div>
               {f.form_description && <div className="item__sub">{f.form_description}</div>}
               <div className="item__meta">
+                <span className="item__channel">{FORM_CHANNEL_NAMES[f.channel] || FORM_CHANNEL_NAMES.web_mobile}</span>
+                <span className="sep">·</span>
                 <span>{f.field_count} questions</span>
                 <span className="sep">·</span>
                 <Link

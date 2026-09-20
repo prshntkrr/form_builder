@@ -88,6 +88,7 @@ def options_for(
     limit: int = MAX_OPTIONS,
     language: Optional[str] = None,
     allowed: Optional[List[str]] = None,
+    include_parent: bool = False,
 ) -> List[Dict[str, str]]:
     """The client's values for one catalog, as form options.
 
@@ -100,6 +101,10 @@ def options_for(
     of a catalogue rather than all of it. The *labels* still come from here, so
     a wording the client corrects tomorrow reaches every such field on its own —
     the field stores which values, never what they are called.
+
+    `include_parent` adds each value's `parent_code`, for a caller that takes
+    the whole of a dependent list at once (the mobile package) and narrows it
+    itself. Off by default, so every existing answer keeps its shape.
     """
     if not catalog_id:
         return []
@@ -111,7 +116,7 @@ def options_for(
         if parent_code:
             cur.execute(
                 f"""
-                SELECT code, label, labels, status
+                SELECT code, label, labels, status, parent_code
                 FROM   client_catalog_value
                 WHERE  catalog_id = %s AND parent_code = %s{narrowed}
                 ORDER BY display_order, code
@@ -122,7 +127,7 @@ def options_for(
         else:
             cur.execute(
                 f"""
-                SELECT v.code, v.label, v.labels, v.status
+                SELECT v.code, v.label, v.labels, v.status, v.parent_code
                 FROM   client_catalog_value v
                 JOIN   client_catalog c ON c.catalog_id = v.catalog_id
                 WHERE  v.catalog_id = %s AND {_REACHABLE}
@@ -137,7 +142,8 @@ def options_for(
     # The value is the code, in every language. Translating it would make the
     # same answer two different answers.
     return [
-        {"label": _labelled(row, language), "value": row["code"]}
+        {"label": _labelled(row, language), "value": row["code"],
+         **({"parent_code": row["parent_code"]} if include_parent else {})}
         for row in rows
         if _is_offered(row["status"])
     ]

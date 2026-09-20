@@ -2,7 +2,7 @@
 import logging
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import Response
 from pydantic import BaseModel
 
@@ -92,7 +92,18 @@ def live_forms(
         None, description="One project's forms, or 'none' for the system forms"),
     user: Dict[str, Any] = Depends(needs(RECORDS_VIEW)),
 ):
-    """The forms **this account** may fill in right now.
+    """The forms **this account** may fill in right now, on the web or the app."""
+    return fillable_forms(project, user)
+
+
+def fillable_forms(project: Optional[str], user: Dict[str, Any],
+                   channel: Optional[str] = None):
+    """The forms this account may fill in right now.
+
+    `channel` narrows it to forms open on that one channel — "mobile" for the
+    MCDC mobile list, so a form whose profile keeps mobile off is not offered to
+    phones. Without it, a form open on the web or on mobile is listed, which is
+    what this application's own fill page has always shown.
 
     Separate from `GET /api/forms` because that one is the builder's view — it
     carries table names, versions and response counts, none of which somebody
@@ -161,8 +172,17 @@ def live_forms(
     if not allowed:
         return []
 
+    # Only forms answered on the web or the app. A form built for WhatsApp or
+    # IVR is filled in there, not here; every legacy form is Web / Mobile.
+    from app.modules.forms import channels
+
+    def open_here(form_json):
+        if channel:
+            return channels.enabled(form_json, channel)
+        return channels.enabled(form_json, "web") or channels.enabled(form_json, "mobile")
+
     forms = [f for f in form_service.list_forms(status="Active", limit=500)
-             if f["form_id"] in allowed]
+             if f["form_id"] in allowed and open_here(f["form_json"])]
 
     # Which project each one belongs to, and what that project is called — a
     # list on a phone shows more than a title. One lookup for the page, not one
@@ -191,6 +211,13 @@ def live_forms(
             # opening this form now would be filling in.
             "version": f["version_no"],
             "form_status": f["form_status"],
+            "channel": f["channel"],
+            # Enough to pick a language before downloading anything.
+            "default_language": translations.default_language(f["form_json"] or {}),
+            "languages": translations.form_languages(f["form_json"] or {}),
+            "updated_on": f["updated_on"],
+            # Where the complete, renderable definition is.
+            "package_url": f"/api/forms/{f['form_id']}/package",
             "project_id": where.get(f["form_id"]),
             "project_name": named.get(where.get(f["form_id"])),
         }
@@ -219,6 +246,16 @@ def render(
             else "This form is no longer available.",
         )
     form_json = form["form_json"] or {}
+
+    # A form built for WhatsApp or IVR has no web page to fill: say where it is
+    # answered rather than drawing a form whose submission would be refused.
+    from app.modules.forms import channels
+    if not (channels.enabled(form_json, "web") or channels.enabled(form_json, "mobile")):
+        raise HTTPException(status_code=409, detail=(
+            f"This form is answered on "
+            f"{channels.FORM_CHANNEL_NAMES[channels.form_channel(form_json)]}, "
+            "not on the web."))
+
     languages = translations.form_languages(form_json)
     chosen = language if language in languages else translations.default_language(form_json)
 
@@ -233,6 +270,62 @@ def render(
             for code in languages
         ],
     }
+
+
+@router.get("/{form_id}/package")
+def form_package(
+    form_id: str,
+    response: Response,
+    language: Optional[str] = Query(None, description="Language code, e.g. 'es'"),
+    if_none_match: Optional[str] = Header(None),
+    user: Dict[str, Any] = Depends(needs(RECORDS_CREATE)),
+):
+    """Everything a mobile app needs to draw and check this form on its own.
+
+    The published version (never a draft, never an unpublished edit), its
+    words in `language` with every other translation kept, and the values
+    behind each catalogue, ontology and standard question — see
+    `mobile_package`. Guarded exactly like filling the form in: the same
+    permission, the same project and assignment rules, 404 for a form this
+    account may not answer.
+
+    `ETag` is the package's SHA-256. Send it back as `If-None-Match` and an
+    unchanged package answers 304 with no body.
+    """
+    from app.modules.forms import channels, mobile_package, publishing
+
+    form = _load(form_id, user, filling=True)
+
+    # A form built for WhatsApp or IVR — or one whose profile keeps mobile
+    # off — is not a mobile form, whatever else it is.
+    if not channels.enabled(form["form_json"] or {}, "mobile"):
+        raise HTTPException(status_code=409, detail=(
+            "This form is not answered on mobile "
+            f"({channels.FORM_CHANNEL_NAMES[channels.form_channel(form['form_json'])]})."))
+
+    try:
+        from app.modules.projects import project_service
+        project_id = project_service.project_of_form(form_id)
+    except Exception:
+        project_id = None
+
+    try:
+        package = mobile_package.build(form, language=language, project_id=project_id)
+    except publishing.NotPublished:
+        # Said for someone downloading, not exporting: why there is nothing to take.
+        raise HTTPException(status_code=409, detail={
+            "Draft": "This form has not been published, so there is nothing to download yet.",
+            "Inactive": "This form is paused and is not collecting answers.",
+        }.get(form.get("form_status"), "This form is no longer available."))
+
+    etag = f'"{package["package_hash"]}"'
+    # Ask before reusing: a catalogue value can change without a new form version.
+    headers = {"ETag": etag, "Cache-Control": "private, no-cache"}
+    if if_none_match and etag in [tag.strip() for tag in if_none_match.split(",")]:
+        return Response(status_code=304, headers=headers)
+
+    response.headers.update(headers)
+    return package
 
 
 @router.post("/{form_id}/submissions/start", status_code=201)
@@ -251,9 +344,23 @@ def start_submission(form_id: str, user: Dict[str, Any] = Depends(needs(RECORDS_
         raise HTTPException(status_code=409, detail=str(exc))
 
 
+def _client_id(body_value: Optional[str], header_value: Optional[str]) -> Optional[str]:
+    """The client's id for this submission: the body's, or the Idempotency-Key.
+
+    The gateway has always accepted the header and checked its shape; this is
+    where it starts meaning something. Two different ids at once is a client
+    bug, and guessing which one it meant is not an option.
+    """
+    if body_value and header_value and body_value != header_value:
+        raise HTTPException(status_code=422, detail={"errors": {
+            "client_submission_id": "Differs from the Idempotency-Key header. "
+                                    "Send one id, or the same id in both."}})
+    return body_value or header_value or None
+
+
 def _store(form, user, *, data, language=None, location=None,
            parent_survey_id=None, survey_id=None, form_version=None,
-           channel="web"):
+           channel="web", client_submission_id=None, source_ref=None):
     """The one way a submission is stored, whatever it arrived on.
 
     Mobile, WhatsApp, IVR and this application's own form page all end up here:
@@ -264,6 +371,13 @@ def _store(form, user, *, data, language=None, location=None,
     from app.modules.forms import ingestion, relationships
 
     try:
+        # A retry of a submission that was already stored gets that submission
+        # back — before the version check, so a retry that arrives after the
+        # form was republished is still answered rather than refused.
+        earlier = submission_service.replay(form, client_submission_id, data, channel)
+        if earlier is not None:
+            return {**earlier, "channel": channel}
+
         # Collected against a version that is no longer live? Say so, rather
         # than reinterpreting those answers with today's definition.
         ingestion.check_version(form, form_version)
@@ -284,9 +398,14 @@ def _store(form, user, *, data, language=None, location=None,
             parent_survey_id=parent,
             location=location,
             survey_id=survey_id,
+            channel=channel,
+            client_submission_id=client_submission_id,
+            source_ref=source_ref or "",
         )
     except submission_service.ValidationFailed as exc:
         raise HTTPException(status_code=422, detail={"errors": exc.errors})
+    except submission_service.SubmissionConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
     except form_service.FormNotFound as exc:
         raise HTTPException(status_code=409, detail=str(exc))
     except HTTPException:
@@ -295,22 +414,35 @@ def _store(form, user, *, data, language=None, location=None,
         logger.exception("Submission failed for %s", form["form_id"])
         raise HTTPException(status_code=500, detail=f"Could not save submission: {exc}")
 
-    # How it arrived, noted beside it. Metadata: it changed nothing above.
-    ingestion.record_channel(form["form_id"], stored["survey_id"], channel)
+    # How it arrived was recorded by the submission service, in the same
+    # transaction as the answers. Metadata: it changed nothing above.
     return {**stored, "channel": channel}
 
 
+def _answered(stored: Dict[str, Any], response: Response) -> Dict[str, Any]:
+    """201 for a submission stored now; 200 for one a retry found already stored."""
+    if stored.get("replayed"):
+        response.status_code = 200
+    return stored
+
+
 @router.post("/{form_id}/submissions", status_code=201)
-def create_submission(form_id: str, req: SubmitRequest, user: Dict[str, Any] = Depends(needs(RECORDS_CREATE))):
+def create_submission(form_id: str, req: SubmitRequest, response: Response,
+                      idempotency_key: Optional[str] = Header(None),
+                      user: Dict[str, Any] = Depends(needs(RECORDS_CREATE))):
     form = _load(form_id, user, filling=True)
-    return _store(form, user, data=req.data, language=req.language,
-                  location=req.location, parent_survey_id=req.parent_survey_id,
-                  survey_id=req.survey_id, form_version=req.form_version,
-                  channel=req.channel or "web")
+    return _answered(_store(
+        form, user, data=req.data, language=req.language,
+        location=req.location, parent_survey_id=req.parent_survey_id,
+        survey_id=req.survey_id, form_version=req.form_version,
+        channel=req.channel or "web",
+        client_submission_id=_client_id(req.client_submission_id, idempotency_key),
+    ), response)
 
 
 @router.post("/{form_id}/submissions/ingest", status_code=201)
-def ingest_submission(form_id: str, req: IngestRequest,
+def ingest_submission(form_id: str, req: IngestRequest, response: Response,
+                      idempotency_key: Optional[str] = Header(None),
                       user: Dict[str, Any] = Depends(needs(RECORDS_CREATE))):
     """Answers collected on another channel.
 
@@ -352,10 +484,14 @@ def ingest_submission(form_id: str, req: IngestRequest,
     except ingestion.ChannelError as exc:
         raise HTTPException(status_code=422, detail={"errors": {"_channel": str(exc)}})
 
-    return _store(form, user, data=answers, language=req.language,
-                  location=req.location, parent_survey_id=req.parent_survey_id,
-                  survey_id=req.survey_id, form_version=req.form_version,
-                  channel=ingestion.adapter(req.channel).channel)
+    return _answered(_store(
+        form, user, data=answers, language=req.language,
+        location=req.location, parent_survey_id=req.parent_survey_id,
+        survey_id=req.survey_id, form_version=req.form_version,
+        channel=ingestion.adapter(req.channel).channel,
+        client_submission_id=_client_id(req.client_submission_id, idempotency_key),
+        source_ref=req.source_ref,
+    ), response)
 
 
 @router.post("/{form_id}/test-submission")

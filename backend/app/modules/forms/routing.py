@@ -35,8 +35,8 @@ from app.core.database import transaction
 logger = logging.getLogger(__name__)
 
 # Mobile needs no routing — an application account asks for the forms it may
-# fill, which is a list, not a keyword.
-CHANNELS = ("whatsapp", "ivr")
+# fill, which is a list, not a keyword. The list itself lives in `channels`.
+from app.modules.forms.channels import ROUTED_CHANNELS as CHANNELS  # noqa: E402
 
 # What an IVR menu option may be: what a keypad can send. Letters are not on a
 # phone keypad in any way a caller would reach reliably.

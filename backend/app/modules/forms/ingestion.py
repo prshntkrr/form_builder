@@ -21,11 +21,10 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from app.core.database import transaction
+from app.modules.forms.channels import CHANNELS  # noqa: F401  (the one list; re-exported)
 from app.modules.forms.form_schema import field_name
 
 logger = logging.getLogger(__name__)
-
-CHANNELS = ("mobile", "whatsapp", "ivr", "web")
 
 
 class ChannelError(ValueError):
@@ -230,25 +229,29 @@ def check_version(form: Dict[str, Any], claimed: Optional[int]) -> None:
             )})
 
 
-def record_channel(form_id: str, survey_id: str, channel: str) -> None:
+def record_channel(form_id: str, survey_id: str, channel: str, cur=None) -> None:
     """How one submission arrived, kept beside it.
 
     Its own row rather than a column in `form_data`, which is answers, and
     rather than a column on every form's table, which would be a migration for
-    every form to store one word. Defensive on purpose: a submission that is
-    already stored must not fail because a note about it could not be.
+    every form to store one word.
+
+    `submission_service` passes its own cursor, so the note is written in the
+    same transaction as the answers and cannot exist without them — or they
+    without it. A failure here rolls the submission back rather than leaving it
+    unlabelled. Without a cursor (a caller labelling something already stored)
+    it opens its own transaction.
     """
     if not channel or channel == "web":
         return
-    try:
-        with transaction() as cur:
-            cur.execute(
-                "INSERT INTO submission_channel (form_id, survey_id, channel) "
-                "VALUES (%s, %s, %s) ON CONFLICT (form_id, survey_id) DO NOTHING",
-                (form_id, survey_id, channel),
-            )
-    except Exception:
-        logger.exception("Could not record the channel for %s", survey_id)
+
+    statement = ("INSERT INTO submission_channel (form_id, survey_id, channel) "
+                 "VALUES (%s, %s, %s) ON CONFLICT (form_id, survey_id) DO NOTHING")
+    if cur is not None:
+        cur.execute(statement, (form_id, survey_id, channel))
+        return
+    with transaction() as own:
+        own.execute(statement, (form_id, survey_id, channel))
 
 
 def channel_of(form_id: str, survey_id: str) -> str:

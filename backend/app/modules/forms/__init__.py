@@ -19,7 +19,7 @@ MODULE = Module(
              dictionary.router, mcdc.router, public_forms.router],
     tables=["forms", "form_version", "standard_form_library", "form_view",
             "data_dictionary", "form_media", "form_survey_progress",
-            "form_export", "submission_channel",
+            "form_export", "submission_channel", "submission_receipt",
             "channel_form_route", "channel_identity"],
     schema_file=Path(__file__).resolve().parent / "schema.sql",
     migrations=[

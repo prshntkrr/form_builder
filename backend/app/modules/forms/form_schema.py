@@ -351,6 +351,21 @@ def _normalize_field(raw: Any, index: int, taken: set) -> Optional[Dict[str, Any
     if source in ("ontology", "standard") and (concept or standard):
         field["option_source"] = source
 
+    # A polygon question carries its boundary in the definition.
+    #
+    # This function rebuilds every field from the fixed list above, so anything
+    # not named here is dropped — which is exactly what happened to a ring
+    # drawn in the builder: it saved, and came back gone. Only for a polygon
+    # field, so no other type can smuggle a `coordinates` key into a form.
+    if ftype == "polygon":
+        ring = _normalize_ring(raw.get("coordinates"))
+        if ring:
+            field["coordinates"] = ring
+        # Whether the person filling the form in may redraw it. Creator-defined
+        # and read-only is the default: a boundary somebody drew is usually the
+        # question, not the answer.
+        field["editable"] = bool(raw.get("editable"))
+
     return field
 
 
@@ -696,7 +711,173 @@ def normalize_form(raw: Any, fallback_title: str = "Untitled Form") -> Dict[str,
     if geofence:
         form["geofence"] = geofence
 
+    # Where each question sits on the page. Absent for a form nobody has laid
+    # out — every form built before this existed — so those definitions
+    # normalize to exactly the bytes they had before.
+    layout = _normalize_layout(raw.get("layout"), fields)
+    if layout:
+        form["layout"] = layout
+
+    # Which channels this form is open to. Absent for a form that never said —
+    # every form built before this existed — so it normalizes to the bytes it
+    # had and takes the defaults (web and mobile open, whatsapp and ivr closed).
+    # Only known channels and a boolean `enabled` survive: nothing arbitrary
+    # rides along in a definition that is published and handed to phones.
+    #
+    # A form built for one channel (`channel`: web_mobile, whatsapp or ivr)
+    # carries the profile that choice implies, derived here every time so the
+    # two can never disagree. A legacy form — no `channel` — keeps its profile
+    # exactly as it was.
+    from app.modules.forms import channel_config
+    from app.modules.forms.channels import (
+        normalize_form_channel, normalize_profile, profile_for,
+    )
+    built_for = normalize_form_channel(raw.get("channel"))
+    if built_for:
+        form["channel"] = built_for
+        form["channels"] = profile_for(built_for)
+    else:
+        channels = normalize_profile(raw.get("channels"))
+        if channels:
+            form["channels"] = channels
+
+    # How the form is presented on its channel. Kept whatever the channel, so
+    # nothing configured is ever lost; it only has an effect on its own channel.
+    presented = channel_config.normalize(raw.get("channel_config"))
+    if presented:
+        form["channel_config"] = presented
+
     return form
+
+
+# --------------------------------------------------------------------------- #
+# layout
+# --------------------------------------------------------------------------- #
+#: Twelve columns, so a width reads as a fraction of the row: 6 is half, 4 is a
+#: third, 12 is all of it.
+LAYOUT_COLUMNS = 12
+
+
+def _layout_width(raw: Any) -> int:
+    """A width as a whole number of columns, 1 to 12. Anything else is 12."""
+    if isinstance(raw, bool):
+        return LAYOUT_COLUMNS
+    try:
+        width = int(float(raw))
+    except (TypeError, ValueError):
+        return LAYOUT_COLUMNS
+    return max(1, min(LAYOUT_COLUMNS, width))
+
+
+def _layout_id(raw: Any, fallback: str, taken: set) -> str:
+    """A stable, unique id for a section or a row.
+
+    Kept to letters, digits, `-` and `_`, because it becomes a React key and a
+    DOM attribute; made unique by suffix, because two rows with one id would be
+    one row to anything that reads them back.
+    """
+    text = "".join(
+        ch if (ch.isalnum() or ch in "-_") else "-"
+        for ch in str(raw or "").strip()
+    )[:64].strip("-")
+    base = text or fallback
+
+    candidate, n = base, 2
+    while candidate in taken:
+        candidate = f"{base}-{n}"
+        n += 1
+
+    taken.add(candidate)
+    return candidate
+
+
+def _normalize_layout(raw: Any, fields: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Where each question sits: sections, holding rows, holding fields.
+
+        {"sections": [
+            {"id": "farmer", "title": "Farmer Information", "description": "",
+             "containers": [
+                 {"id": "farmer-row-1",
+                  "fields": [{"fieldId": "farmer_name", "width": 6},
+                             {"fieldId": "mobile", "width": 6}]}]}]}
+
+    The layout *references* questions by their `name` — the same key their
+    answers are stored under — and never carries a copy of one. So a question
+    has one definition, in `fields`, however it is laid out.
+
+    Lenient on shape, strict on meaning. Anything that is not the right kind of
+    thing is skipped rather than refusing the whole form; a reference to a
+    question this form does not have is dropped; and a question placed twice
+    keeps its first place only. Order is kept exactly as given.
+
+    A question the layout does not mention is **not** removed. It stays in
+    `fields`, and the renderer shows it after everything that was placed —
+    leaving a question out of the layout must never be a way to lose it.
+    """
+    if not isinstance(raw, dict):
+        return None
+
+    raw_sections = raw.get("sections")
+    if not isinstance(raw_sections, list):
+        return None
+
+    names = {field["name"] for field in fields}
+    placed: set = set()
+    section_ids: set = set()
+    container_ids: set = set()
+    sections: List[Dict[str, Any]] = []
+
+    for s_index, raw_section in enumerate(raw_sections):
+        if not isinstance(raw_section, dict):
+            continue
+
+        section_id = _layout_id(
+            raw_section.get("id"), f"section-{s_index + 1}", section_ids)
+
+        containers: List[Dict[str, Any]] = []
+        raw_containers = raw_section.get("containers")
+
+        for c_index, raw_container in enumerate(
+                raw_containers if isinstance(raw_containers, list) else []):
+            if not isinstance(raw_container, dict):
+                continue
+
+            cells: List[Dict[str, Any]] = []
+            raw_cells = raw_container.get("fields")
+
+            for raw_cell in raw_cells if isinstance(raw_cells, list) else []:
+                if not isinstance(raw_cell, dict):
+                    continue
+
+                name = str(raw_cell.get("fieldId") or "").strip()
+                if name not in names or name in placed:
+                    continue
+
+                placed.add(name)
+                cells.append({"fieldId": name,
+                              "width": _layout_width(raw_cell.get("width"))})
+
+            # An empty row is kept: it is somewhere to drop a question, and the
+            # designer that makes one expects to find it again.
+            containers.append({
+                "id": _layout_id(raw_container.get("id"),
+                                 f"{section_id}-row-{c_index + 1}", container_ids),
+                "fields": cells,
+            })
+
+        section: Dict[str, Any] = {
+            "id": section_id,
+            "title": str(raw_section.get("title") or "").strip()[:200],
+            "containers": containers,
+        }
+
+        description = str(raw_section.get("description") or "").strip()
+        if description:
+            section["description"] = description[:1000]
+
+        sections.append(section)
+
+    return {"sections": sections} if sections else None
 
 
 RELATIONSHIP_TYPES = ("independent", "child")
@@ -717,6 +898,44 @@ def _normalize_location(raw: Any) -> Optional[Dict[str, bool]]:
     return {"enabled": True, "required": bool(raw.get("required"))}
 
 
+def _ring_points(raw: Any) -> List[List[float]]:
+    """The valid [longitude, latitude] pairs in whatever was given.
+
+    Lenient on purpose — a point that is not a pair of numbers, or is off the
+    globe, is dropped rather than refusing the whole definition. Callers decide
+    what too few points means: a geofence normalizes away, and a polygon field
+    keeps no coordinates at all.
+    """
+    points: List[List[float]] = []
+
+    for point in raw or []:
+        try:
+            lng, lat = float(point[0]), float(point[1])
+        except (TypeError, ValueError, IndexError):
+            continue
+        if -180 <= lng <= 180 and -90 <= lat <= 90:
+            points.append([lng, lat])
+
+    return points
+
+
+def _normalize_ring(raw: Any) -> Optional[List[List[float]]]:
+    """A polygon field's own boundary, as drawn in the builder.
+
+    Three points at the least, and closed — the last repeats the first — so
+    whatever draws or measures it afterwards does not have to close it itself.
+    """
+    points = _ring_points(raw)
+
+    if len(points) < 3:
+        return None
+
+    if points[0] != points[-1]:
+        points.append(list(points[0]))
+
+    return points
+
+
 def _normalize_geofence(raw: Any) -> Optional[Dict[str, Any]]:
     """The area a submission has to be inside, if there is one.
 
@@ -731,18 +950,15 @@ def _normalize_geofence(raw: Any) -> Optional[Dict[str, Any]]:
     if not isinstance(raw, dict) or not raw.get("enabled"):
         return None
 
-    ring = []
-    for point in raw.get("polygon") or []:
-        try:
-            lng, lat = float(point[0]), float(point[1])
-        except (TypeError, ValueError, IndexError):
-            continue
-        if -180 <= lng <= 180 and -90 <= lat <= 90:
-            ring.append([lng, lat])
+    ring = _ring_points(raw.get("polygon"))
 
     if len(ring) < 3:
         return None
 
+    # Deliberately not closed here. A fence is read by `point_in_ring`, which
+    # treats the ring as closed whether or not its last point repeats its
+    # first — and every fence already stored is open, so closing them now
+    # would rewrite definitions that work.
     return {"enabled": True, "polygon": ring}
 
 

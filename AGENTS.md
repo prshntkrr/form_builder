@@ -113,6 +113,89 @@ and never at import time. A module is mid-import when it registers; anything
 that reads the catalogue from module scope re-enters discovery and sees a
 half-built registry.
 
+## Channels (web, mobile, whatsapp, ivr)
+
+**A form is built for exactly one channel**: `form_json.channel` is
+`web_mobile`, `whatsapp` or `ivr` (a radio choice in the builder, never a set of
+switches). Web / Mobile is one choice with one builder; WhatsApp has its own
+builder (`components/WhatsAppBuilder.jsx`); IVR is a placeholder until its
+builder exists. Rules:
+
+- `channel` is the only stored choice. `normalize_form` *derives* the
+  per-channel `channels` profile from it (`channels.profile_for`) so the
+  submission path keeps one rule; never write the profile independently.
+- **Legacy forms have no `channel`** (every form before this, and anything
+  created through the API without one). They keep their old profile and
+  behaviour and read as Web / Mobile (`channels.form_channel`). No data was
+  migrated. Do not add `channel` to a legacy form: `channel_is_fixed` refuses it.
+- **A saved form's channel never changes** (`channel_is_fixed`). Taking a form
+  to another channel is a copy ("Copy as a … form" in the builder).
+- **`channel_config.whatsapp`** — welcome/completion messages, `review`,
+  `order`, and per-question `{prompt, interaction}` keyed by field name. It
+  references questions, never copies them; unknown names and interactions a
+  question cannot use are refused (`channel_config.whatsapp_problems`). Nothing
+  else may be stored there — credentials belong to the future gateway.
+- **How WhatsApp may ask a question** is `channel_capabilities.whatsapp_interactions`
+  (mirrored in `channelCapabilities.js`, compared by a test). Buttons ≤ 3
+  choices, list ≤ 10, catalogue questions numbered only.
+- **Publishing**: the channel compatibility rule and "IVR cannot be published"
+  apply when a form is Active — on save of a live form, on create-as-Active, and
+  in `set_status('Active')` via `validate_publishable`. Drafts may hold a
+  question their channel cannot ask; the WhatsApp builder shows it.
+- Renaming or deleting a question in the builder moves or drops its WhatsApp
+  settings in the same update (`whatsappConfig.renameInWhatsApp` /
+  `removeFromWhatsApp`), exactly as layout references are handled.
+
+One canonical form, answered on several channels. Read before touching any of it:
+
+- **The mobile contract is `MOBILE_API.md`**: login → `GET /api/mcdc/forms`
+  (`fillable_forms(..., channel="mobile")`) → `GET /api/forms/{id}/package`
+  (`mobile_package.build`) → `POST /api/forms/{id}/submissions`. The package is
+  the *published* version plus resolved option sets and a SHA-256
+  `package_hash` (the ETag; excludes `published_at`). It is assembled from
+  `publishing`, `translations` and the option resolvers — never a second
+  definition — and whitelists `CONFIG_KEYS` so no table name or creator leaves.
+  The app owns rendering, storage and offline; MCDC owns the definition and
+  validates every answer.
+
+- **The list lives in `forms/channels.py`** (`CHANNELS`, `ROUTED_CHANNELS`,
+  `DEFAULTS`). `ingestion` and `routing` import it. `core/gateway.py` keeps a
+  literal copy because core must load with forms switched off;
+  `test_channels.py` fails if the two drift.
+- **Which channels a form is open to is `form_json.channels`** — inside the
+  versioned definition, so it publishes and rolls back with the questions.
+  `normalize_form` keeps only the four channels and a boolean `enabled` (so no
+  token can ride along into a published config); absent means no key at all,
+  and a legacy form normalizes to the bytes it had.
+- **Defaults: web and mobile on, whatsapp and ivr off** (`channels.enabled`).
+  Enforcement at submission (`channels.refusal`, error key `_channel`) applies
+  **only to forms that carry a profile**. A form without one keeps accepting
+  every channel it accepted before — the MCDC ingest path sends WhatsApp/IVR to
+  such forms today, and existing tests hold that. Do not "fix" this without a
+  product decision; it would stop live forms taking answers.
+- **What a channel can ask is `forms/channel_capabilities.py`**, keyed by the
+  existing `field_types.FIELD_TYPES`. Every type needs a row for every channel
+  (a test enforces it); unknown types are unsupported, never assumed.
+  `frontend/src/modules/forms/channelCapabilities.js` mirrors the levels and a
+  backend test compares the two line by line.
+- **`channels_can_complete_the_form` is the one exception** to
+  `validate_config(normalize_form(x))` never raising: an enabled channel that
+  would reach a required question it cannot ask is refused, because the only
+  "repair" would be silently switching the channel off. Reachability uses
+  `conditions.hidden` by probing answer sets (see `reachable_fields`); an
+  optional unaskable question is fine.
+- **One validation implementation.** `submission_service._check_field` is the
+  per-question check; `validate_payload` loops it, `validate_field` (for
+  one-question-at-a-time channels) calls it once. Never copy the rules.
+- **Idempotent submissions.** `client_submission_id` (or the `Idempotency-Key`
+  header) → `submission_receipt`, primary key `(form_id, client_submission_id)`.
+  Same id + same answers + same channel returns the original (200,
+  `replayed: true`); anything else under that id is 409. The receipt, the
+  answers row, the tabular mirror and the `submission_channel` note are written
+  in **one transaction** (`submission_service._write`); a failure in any rolls
+  back all of them. `record_channel` takes the caller's cursor for this — do not
+  move it back outside the transaction.
+
 ## Schema changes
 
 There is no Alembic. `backend/schema.sql` is the desired state and is run at

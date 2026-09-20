@@ -277,6 +277,33 @@ CREATE TABLE IF NOT EXISTS submission_channel (
 );
 
 
+-- What a client called a submission, so sending it twice stores it once.
+--
+-- A phone that lost its connection after pressing Submit cannot tell whether
+-- the answers arrived; a WhatsApp provider retries a webhook it never heard
+-- back from. Both send again with the same `client_submission_id`, and this
+-- row turns the second attempt into a lookup: same answers, same channel, the
+-- original survey comes back; anything else under the same id is refused.
+--
+-- Scoped to the form, not global: two forms are two sequences of surveys, and a
+-- client that happens to reuse an id on another form is not describing the same
+-- submission. Written in the same transaction as the answers, so a receipt never
+-- exists for answers that were not stored. `request_hash` is a SHA-256 of the
+-- answers as sent — a fingerprint for comparing a retry, never the answers.
+CREATE TABLE IF NOT EXISTS submission_receipt (
+    form_id              VARCHAR(20)  NOT NULL REFERENCES forms (form_id) ON DELETE CASCADE,
+    client_submission_id VARCHAR(64)  NOT NULL,
+    survey_id            VARCHAR(50)  NOT NULL,
+    channel              VARCHAR(20)  NOT NULL,
+    -- Where the client says it came from — a provider's message id, a device
+    -- id. Informational; nothing is decided by it.
+    source_ref           VARCHAR(200) NOT NULL DEFAULT '',
+    request_hash         VARCHAR(64)  NOT NULL,
+    created_on           TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (form_id, client_submission_id)
+);
+
+
 -- How a channel reaches a form: a keyword, or a menu option.
 --
 -- Configuration, not code — adding a keyword is a row, not a deployment — and

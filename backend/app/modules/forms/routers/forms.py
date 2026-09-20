@@ -580,6 +580,10 @@ def change_status(form_id: str, req: StatusRequest,
         return form_service.set_status(form_id, req.form_status)
     except form_service.FormNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+    except ConfigValidationError as exc:
+        # Refused going live: its channel cannot collect a required answer, or
+        # cannot be published at all yet. Same shape as a refused save.
+        raise HTTPException(status_code=422, detail=exc.as_payload())
     except form_service.FormServiceError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except IntegrityError as exc:

@@ -307,7 +307,10 @@ def forms(project_id: str,
                -- Read from the definition where the relationship already lives.
                -- Nothing here configures one; a screen listing forms just needs
                -- to be able to say which are children of which.
-               f.form_json -> 'relationship' ->> 'parent_form_id' AS parent_form_id
+               f.form_json -> 'relationship' ->> 'parent_form_id' AS parent_form_id,
+               -- The two keys that say which channel the form is built for.
+               f.form_json -> 'channel' AS channel_declared,
+               f.form_json -> 'channels' AS channels_profile
         FROM   forms f
     """
 
@@ -332,6 +335,19 @@ def forms(project_id: str,
                 (project_id, visible),
             )
         found = [dict(row) for row in cur.fetchall()]
+
+    # One channel per form, read the way the forms module reads it — a legacy
+    # form from its profile. Defensive: this module must load without forms'
+    # newer pieces.
+    try:
+        from app.modules.forms.channels import form_channel
+    except Exception:
+        form_channel = None
+    for row in found:
+        declared = row.pop("channel_declared", None)
+        profile = row.pop("channels_profile", None)
+        if form_channel is not None:
+            row["channel"] = form_channel({"channel": declared, "channels": profile})
 
     return {"forms": found, "everything": visible is None}
 

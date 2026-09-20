@@ -37,29 +37,48 @@ export function useLocation(formJson) {
     let cancelled = false
     setState('asking')
 
-    navigator.geolocation.getCurrentPosition(
-      ({ coords, timestamp }) => {
-        if (cancelled) return
-        setPosition({
-          latitude: coords.latitude,
-          longitude: coords.longitude,
-          accuracy: coords.accuracy,
-          captured_at: new Date(timestamp || Date.now()).toISOString(),
-        })
-        setState('ready')
-      },
-      (error) => {
-        if (cancelled) return
-        // 1 is PERMISSION_DENIED; anything else is the device failing to fix a
-        // position, which is a different thing to tell somebody.
-        setState(error?.code === 1 ? 'refused' : 'failed')
-      },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 },
-    )
+    const got = ({ coords, timestamp }) => {
+      if (cancelled) return
+      setPosition({
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        accuracy: coords.accuracy,
+        captured_at: new Date(timestamp || Date.now()).toISOString(),
+      })
+      setState('ready')
+    }
+
+    const failed = (error) => {
+      if (cancelled) return
+      // 1 is PERMISSION_DENIED; anything else is the device failing to fix a
+      // position, which is a different thing to tell somebody.
+      setState(error?.code === 1 ? 'refused' : 'failed')
+    }
+
+    const how = { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
+
+    /* Watched rather than asked once.
+       A fence has to keep up with somebody walking: standing outside it and
+       stepping inside should let the form be sent, without reloading the page.
+       This is not the same as asking again — permission is requested once and a
+       refusal still ends it, which is what the note above is about.
+       A browser (or a test) that offers only getCurrentPosition still works. */
+    if (typeof navigator.geolocation.watchPosition === 'function') {
+      const watch = navigator.geolocation.watchPosition(got, failed, how)
+
+      return () => {
+        cancelled = true
+        navigator.geolocation.clearWatch?.(watch)
+      }
+    }
+
+    navigator.geolocation.getCurrentPosition(got, failed, how)
 
     return () => { cancelled = true }
     // Asked once per form. Not on every render, and not on every answer.
   }, [wanted, formJson?.form_id])
+
+  const inside = insideFence(formJson, position)
 
   return {
     wanted,
@@ -70,7 +89,12 @@ export function useLocation(formJson) {
     // stops it here as well as on the backend — better than filling in a form
     // and being refused at the end.
     blocked: wanted && required && state !== 'ready',
-    inside: insideFence(formJson, position),
+    inside,
+    /* Known to be outside the fence — which is different from "no fence"
+       (null) and from "position not known yet" (also null). Only a definite
+       outside disables the button, so somebody whose position has not arrived
+       is not stopped by a fence nobody has measured them against. */
+    outsideGeofence: inside === false,
   }
 }
 

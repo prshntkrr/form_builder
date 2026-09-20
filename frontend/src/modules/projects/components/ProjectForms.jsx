@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
 import { api } from '../api.js'
+import { FORM_CHANNEL_NAMES } from '../../forms/channelCapabilities.js'
 
 const ASSIGN = 'project.forms.assign'
 const MANAGE = 'project.forms.manage'
@@ -74,7 +75,7 @@ export default function ProjectForms({ projectId, projectName, can }) {
         <div className="tablebox">
           <table className="data">
             <thead>
-              <tr><th>Form</th><th>Status</th><th /></tr>
+              <tr><th>Form</th><th>Status</th><th>Channel</th><th /></tr>
             </thead>
             <tbody>
               {forms.map((f) => (
@@ -104,6 +105,7 @@ export default function ProjectForms({ projectId, projectName, can }) {
                         Fill  — actually answer it, only once it is live
                         Edit  — the builder, on this form
                         Who can fill it — who it is assigned to */}
+                  <td className="tiny">{FORM_CHANNEL_NAMES[f.channel] || FORM_CHANNEL_NAMES.web_mobile}</td>
                   <td className="cat__actions">
                     <Link className="btn btn--quiet btn--sm"
                           to={`/forms/${f.form_id}/preview`}>Open</Link>

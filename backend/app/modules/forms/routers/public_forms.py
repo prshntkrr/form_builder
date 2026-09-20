@@ -61,6 +61,10 @@ PUBLIC_FORM_KEYS = (
     "languages",
     "default_language",
     "translations",
+    # Where each question sits. Safe to show: it names only questions that are
+    # already in `fields` above, and carries widths and headings — nothing
+    # about where the answers are kept or who built the form.
+    "layout",
 )
 
 

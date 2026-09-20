@@ -120,6 +120,52 @@ def _to_object(value: Any) -> Optional[Dict[str, Any]]:
     raise FieldValueError(f"'{value}' is not a valid location")
 
 
+def _to_ring(value: Any) -> Optional[List[List[float]]]:
+    """A polygon answer: a ring of [longitude, latitude] pairs.
+
+    GeoJSON order — longitude first — so the ring can be handed to anything
+    that reads GeoJSON without being flipped, and so it matches the geofence
+    rings the forms already store.
+
+    Closed on the way in: the last point repeats the first. A ring that is
+    already closed is left as it is rather than closed twice.
+    """
+    if value is None or value == "" or value == []:
+        return None
+
+    if not isinstance(value, (list, tuple)):
+        raise FieldValueError("A boundary is a list of longitude, latitude pairs")
+
+    points: List[List[float]] = []
+
+    for point in value:
+        if not isinstance(point, (list, tuple)) or len(point) != 2:
+            raise FieldValueError(
+                f"'{point}' is not a longitude, latitude pair"
+            )
+        try:
+            lng, lat = float(point[0]), float(point[1])
+        except (TypeError, ValueError):
+            raise FieldValueError(
+                f"'{point}' is not a pair of numbers"
+            )
+        if not -180 <= lng <= 180:
+            raise FieldValueError(f"Longitude {lng} is outside -180 to 180")
+        if not -90 <= lat <= 90:
+            raise FieldValueError(f"Latitude {lat} is outside -90 to 90")
+        points.append([lng, lat])
+
+    if len(points) < 3:
+        raise FieldValueError(
+            "A boundary needs at least three points to enclose anything"
+        )
+
+    if points[0] != points[-1]:
+        points.append(list(points[0]))
+
+    return points
+
+
 def _to_email(value: Any) -> Optional[str]:
     text = _to_str(value)
     if text and not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", text):
@@ -188,6 +234,11 @@ _TYPES: List[FieldType] = [
     FieldType("signature", _to_str, "string", "TEXT"),
     FieldType("location", _to_object, "object {lat, lng}", "TEXT",
               aliases=["gps", "geo", "coordinates", "geopoint"]),
+    # A ring rather than a point. Stored the way `location` is — in form_data,
+    # mirrored as TEXT in the flat table — so nothing about how answers are
+    # kept had to change to hold one.
+    FieldType("polygon", _to_ring, "array [[lng, lat], ...]", "TEXT",
+              aliases=["boundary", "area", "geopolygon", "geofence"]),
 ]
 
 FIELD_TYPES: Dict[str, FieldType] = {t.name: t for t in _TYPES}

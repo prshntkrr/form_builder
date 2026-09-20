@@ -1,10 +1,17 @@
 import MediaField from './MediaField.jsx'
-import React from 'react'
+import { isUsableRing } from './PolygonMap.jsx'
+import PolygonSheet from './PolygonSheet.jsx'
+import React, { useState } from 'react'
 
 /** One control for one field. Types match the backend registry. */
 export default function FieldInput({ field, value, onChange, error, media }) {
   const v = field.validation || {}
   const set = (val) => onChange(field.name, val)
+
+  /* Whether the full-screen map is open. Declared here, not in the polygon
+     case: the switch below runs during render, and a hook cannot live inside
+     a branch of it. */
+  const [mapOpen, setMapOpen] = useState(false)
 
   const base = {
     id: `f_${field.name}`,
@@ -149,6 +156,56 @@ export default function FieldInput({ field, value, onChange, error, media }) {
         </div>
       )
       break
+
+    case 'polygon': {
+      /* The same map the builder draws on. What differs is whether this person
+         may touch it.
+
+         A boundary the designer drew is the question: it is shown rather than
+         asked, unless the field says otherwise. But a polygon question with
+         *nothing* drawn is only a question if somebody can answer it — left
+         read-only it rendered an empty map with zoom controls and no way to
+         put a point on it, which is no question at all. So an unanswerable
+         combination resolves the only way that makes sense.
+
+         `isUsableRing` is the same three-valid-points rule the map draws by,
+         so "has a boundary" means the same thing here as it does there. */
+      const hasBoundary = isUsableRing(field.coordinates)
+      const editable = Boolean(field.editable) || !hasBoundary
+
+      const drawn = Array.isArray(value) && value.length
+        ? value
+        : (field.coordinates || [])
+
+      /* No map on the form itself — only the way into one.
+
+         A boundary is unreadable at the size a form field can spare, and
+         placing points on a thumbnail is guesswork, so the inline map earned
+         its space by being neither useful to look at nor usable to draw on.
+         The question's label stays above this (it is rendered outside
+         `control`), and everything the map can do lives in the sheet. */
+      control = (
+        <>
+          <button
+            type="button"
+            className="linkbtn polymap__open"
+            onClick={() => setMapOpen(true)}
+          >
+            Open Map
+          </button>
+
+          <PolygonSheet
+            open={mapOpen}
+            value={drawn}
+            editable={editable}
+            title={field.label || 'Map'}
+            onSave={(ring) => { set(ring); setMapOpen(false) }}
+            onClose={() => setMapOpen(false)}
+          />
+        </>
+      )
+      break
+    }
 
     case 'location': {
       const at = value && typeof value === 'object' ? value : {}

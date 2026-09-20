@@ -20,6 +20,7 @@ export const TYPES = [
   ['file', 'File'],
   ['signature', 'Signature'],
   ['location', 'Location'],
+  ['polygon', 'Polygon'],
 ]
 
 const NAMES = Object.fromEntries(TYPES)
@@ -67,4 +68,8 @@ export const STORAGE = {
   file: ['string (media id)', 'TEXT'],
   signature: ['string', 'TEXT'],
   location: ['object {lat, lng}', 'TEXT'],
+  // A ring of [longitude, latitude] pairs — GeoJSON order, the same order the
+  // geofence rings use. Stored the way a location is: in form_data, mirrored
+  // as TEXT. Mirrors backend/app/modules/forms/field_types.py.
+  polygon: ['array [[lng, lat], …]', 'TEXT'],
 }

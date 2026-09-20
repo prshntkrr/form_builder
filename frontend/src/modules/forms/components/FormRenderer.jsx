@@ -4,6 +4,7 @@ import { useLocation } from '../useLocation.js'
 import { api } from '../api.js'
 import { defaultLanguage, languageChoices, translateForm } from '../translate.js'
 import { hidden } from '../conditions.js'
+import { resolveLayout } from '../formLayout.js'
 
 const FULL_WIDTH = new Set(['textarea', 'multiselect', 'radio', 'location'])
 
@@ -218,6 +219,121 @@ export default function FormRenderer({
     }
   }
 
+  /**
+   * One question's control.
+   *
+   * The only place a question is drawn. The plain list and a laid-out form both
+   * call this, so values, errors, choices, translations and the polygon map
+   * behave identically whichever way the page is arranged.
+   */
+  const input = (field) => (
+    <FieldInput
+      field={resolve(field)}
+      value={values?.[field.name]}
+      error={errors[field.name]}
+      onChange={change}
+      media={media}
+    />
+  )
+
+  /**
+   * Whether a question is shown, given the answers so far.
+   *
+   * Checks the question and the section it belongs to, the same two things the
+   * plain list checks — so a rule written before layouts existed still hides
+   * what it hid, wherever the layout has since put that question.
+   */
+  const showing = (field) =>
+    !off.fields.has(field.name) && !off.sections.has(field.section)
+
+  /**
+   * A layout section's heading, in the language being shown.
+   *
+   * A section made from one of the form's own keeps that key as its id, so its
+   * translation can be found. A heading somebody wrote in the layout itself is
+   * kept as written: it is not a translation of anything.
+   */
+  const ownSections = new Map((formJson.sections || []).map((s) => [s.key, s]))
+  const shownSections = new Map((shown.sections || []).map((s) => [s.key, s]))
+
+  const wording = (section) => {
+    const own = ownSections.get(section.id)
+    const translated = shownSections.get(section.id)
+
+    if (!own || !translated) {
+      return { title: section.title, description: section.description }
+    }
+
+    return {
+      title: section.title === own.title ? translated.title : section.title,
+      description: (section.description || '') === (own.description || '')
+        ? translated.description
+        : section.description,
+    }
+  }
+
+  /** One row of questions, each as wide as its layout says. */
+  const row = (id, cells) => (
+    <div key={id} className="lay__row" data-container={id}>
+      {cells.map(({ field, width }) => (
+        <div
+          key={field.name}
+          className={`lay__cell lay__cell--w${width}`}
+          data-field={field.name}
+          data-width={width}
+        >
+          {input(field)}
+        </div>
+      ))}
+    </div>
+  )
+
+  /** The form, drawn from its layout: sections, then rows, then questions. */
+  const laidOut = () => {
+    const { sections, unplaced } = resolveLayout(formJson.layout, shown.fields)
+
+    const drawn = sections
+      .filter((section) => !off.sections.has(section.id))
+      .map((section) => {
+        const rows = section.containers
+          .map((container) => ({
+            id: container.id,
+            cells: container.cells.filter(({ field }) => showing(field)),
+          }))
+          // A row with nothing left to show would be an empty band on the page.
+          .filter((container) => container.cells.length)
+
+        if (!rows.length) return null
+
+        const { title, description } = wording(section)
+
+        return (
+          <fieldset key={section.id} className="group lay__section" data-section={section.id}>
+            {title && <div className="group__name">{title}</div>}
+            {description && <div className="group__note">{description}</div>}
+            {rows.map((container) => row(container.id, container.cells))}
+          </fieldset>
+        )
+      })
+
+    /* Questions the layout does not place. Never dropped: they go after
+       everything that was placed, a full row each, in the form's own order. */
+    const loose = unplaced
+      .filter(showing)
+      .map((field) => ({ field, width: 12 }))
+
+    return (
+      <>
+        {drawn}
+        {loose.length > 0 && (
+          <fieldset className="group lay__section lay__section--unplaced" data-section="_unplaced">
+            {row('_unplaced-row', loose)}
+          </fieldset>
+        )}
+      </>
+    )
+  }
+
   return (
     <form className="formview" onSubmit={submit}>
       {languages.length > 1 && (
@@ -258,9 +374,6 @@ export default function FormRenderer({
               Location recorded
               {place.position?.accuracy
                 && ` · accurate to about ${Math.round(place.position.accuracy)} m`}
-              {place.inside === false && (
-                <b> · this looks outside the area this form covers</b>
-              )}
             </>
           )}
           {place.state === 'refused' && (place.required
@@ -272,7 +385,9 @@ export default function FormRenderer({
         </div>
       )}
 
-      {group(shown)
+      {/* A laid-out form draws from its layout. Every other form — which is
+          every form built before layouts existed — draws exactly as before. */}
+      {Array.isArray(formJson.layout?.sections) ? laidOut() : group(shown)
         .filter((g) => !off.sections.has(g.key))
         .map((g) => ({ ...g, fields: g.fields.filter((f) => !off.fields.has(f.name)) }))
         .filter((g) => g.fields.length)
@@ -284,13 +399,7 @@ export default function FormRenderer({
           <div className="group__fields">
             {g.fields.map((field) => (
               <div key={field.name} className={FULL_WIDTH.has(field.type) ? 'wide' : undefined}>
-                <FieldInput
-                  field={resolve(field)}
-                  value={values?.[field.name]}
-                  error={errors[field.name]}
-                  onChange={change}
-                  media={media}
-                />
+                {input(field)}
               </div>
             ))}
           </div>
@@ -305,7 +414,21 @@ export default function FormRenderer({
 
       {onSubmit && !off.form && !place.blocked && (
         <div className="formview__send">
-          <button type="submit" className="btn btn--primary" disabled={submitting}>
+          {/* Said as soon as the position is known, not after a rejected
+              submission. The backend checks the same ring again on the way in;
+              this is so nobody fills a form in to be refused at the end. */}
+          {place.outsideGeofence && (
+            <p className="formview__fenced" role="alert">
+              You are outside the permitted area. Please move inside the
+              boundary to submit this form.
+            </p>
+          )}
+
+          <button
+            type="submit"
+            className="btn btn--primary"
+            disabled={submitting || place.outsideGeofence}
+          >
             {submitting && <span className="spin" />}
             {submitting ? 'Saving' : shown.submit_label || 'Submit'}
           </button>

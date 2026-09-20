@@ -629,6 +629,10 @@ With the backend running, FastAPI serves interactive documentation:
 - `http://localhost:8000/openapi.json` — the schema
 - `http://localhost:8000/api/health` — reachability, and which tables are missing
 
+**[EXTERNAL_DB_IMPORT.md](EXTERNAL_DB_IMPORT.md)** is the external-database
+import: connect to another PostgreSQL or MySQL database, preview a table, and
+copy it into this one. A one-time load — not synchronisation.
+
 **[STANDARDS_ISO3166.md](STANDARDS_ISO3166.md)** is the country codes: where
 ISO 3166-1 lives in the standards tables, how it is imported and versioned, and
 why it is a standard rather than a client catalogue.

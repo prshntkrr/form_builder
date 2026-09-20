@@ -9,6 +9,7 @@ import { useProjects } from '../projects/active.js'
 
 export const SECTIONS = [
   ['questions', 'Questions'],
+  ['design', 'Design'],
   ['preview', 'Preview'],
   ['json', 'JSON'],
   ['history', 'History'],

@@ -80,6 +80,8 @@ ROUTES: Tuple[Tuple[str, str], ...] = (
     # Collecting: the published configuration, then the submission.
     ("GET", r"/api/forms/live/list"),
     ("GET", rf"/api/forms/{FORM_ID}/published"),
+    # The complete package a mobile app keeps and renders itself.
+    ("GET", rf"/api/forms/{FORM_ID}/package"),
     ("GET", rf"/api/forms/{FORM_ID}/render"),
     ("GET", rf"/api/forms/{FORM_ID}/relationship"),
     ("GET", rf"/api/forms/{FORM_ID}/parent-options"),
@@ -107,7 +109,7 @@ _COMPILED = tuple((method, re.compile(f"^{pattern}$")) for method, pattern in RO
 # this boundary.
 COLLECTION_SHAPES = tuple((method, re.compile(pattern)) for method, pattern in (
     ("GET", r"^/api/forms/live/list$"),
-    ("GET", r"^/api/forms/[^/]+/(published|render|relationship|parent-options)$"),
+    ("GET", r"^/api/forms/[^/]+/(published|package|render|relationship|parent-options)$"),
     # Writing a submission, starting one, sending one in from a channel, and
     # the media control calls that hang off one.
     ("POST", r"^/api/forms/[^/]+/submissions(/|$)"),

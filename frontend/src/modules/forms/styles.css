@@ -432,3 +432,363 @@
 
 .forms__public-head { margin-bottom: clamp(16px, 2vw, 24px); }
 .forms__public-head h1 { margin: 0 0 4px; font-size: clamp(1.3rem, 3vw, 1.7rem); }
+
+/* --- drawing a boundary --------------------------------------------------
+   One component, two screens: the field editor and the form itself. */
+.poly {
+  display: grid;
+  gap: 10px;
+}
+
+.poly__map {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  overflow: hidden;
+}
+
+.poly__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.poly__list {
+  margin: 6px 0 0;
+  padding-left: 20px;
+  max-height: 160px;
+  overflow-y: auto;
+  font-size: 12px;
+}
+
+.poly__list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+}
+
+/* Longitude first, as stored and as the backend reads it. */
+.poly__list code {
+  font-family: monospace;
+  overflow-wrap: anywhere;
+}
+
+.insp__polygon {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+/* A warning that stops the form, rather than an aside beside the position. */
+.formview__fenced {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--rose, #b3261e);
+  border-radius: var(--r-sm);
+  background: var(--rose-wash, #fdecea);
+  color: var(--rose, #b3261e);
+  font-size: 14px;
+}
+
+/* --- a boundary, previewed small and drawn big --------------------------- */
+.polypick {
+  display: grid;
+  gap: 8px;
+}
+
+/* The preview takes no clicks: it is a picture of the boundary, and the
+   button below it is the way in. */
+.polypick__preview .poly__map {
+  pointer-events: none;
+}
+
+.polypick__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+/* The sheet a map is drawn in wants the window, not a column of it. */
+.sheet__panel--full {
+  max-width: min(1200px, 96vw);
+  width: 96vw;
+  height: 88vh;
+  max-height: 88vh;
+}
+
+.polypick__editor {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  padding-bottom: 14px;
+}
+
+.polypick__editor .poly {
+  flex: 1 1 auto;
+  min-height: 0;
+  grid-template-rows: 1fr auto;
+}
+
+.polypick__editor .poly__map {
+  min-height: 0;
+}
+
+/* Room to read the points while drawing, without pushing the map off. */
+.polypick__editor .poly__list {
+  max-height: 22vh;
+}
+
+/* A link, not a button: opening the map is a way of looking closer, not an
+   action on the form. */
+.linkbtn {
+  border: 0;
+  padding: 0;
+  background: none;
+  font: inherit;
+  color: var(--accent-deep, #1a5f3f);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.linkbtn:hover { text-decoration: none; }
+
+.polymap__open {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+/* Above Leaflet.
+   Core puts `.sheet` at z-index 50, which is plenty over ordinary page
+   content — but Leaflet gives its own panes 400–800 (markers 600, popups 700,
+   controls 800), so a map on the page paints straight over the sheet meant to
+   cover it. Only the map sheet needs this; the rest of the application's
+   sheets have nothing underneath them that behaves this way.
+
+   Two classes, not one: core/styles.css is imported after this module's
+   stylesheet (main.jsx imports App, and with it every module, first), so a
+   lone `.sheet--map` tied with core's `.sheet` on specificity and lost on
+   order — the sheet stayed at 50 in the browser. */
+.sheet.sheet--map {
+  z-index: 1200;
+}
+
+
+/* --- a laid-out form ------------------------------------------------------
+   Twelve columns, so a question's width is a fraction of its row: 6 is half,
+   4 is a third, 12 is all of it. The stored width never changes with the
+   screen — only how it is drawn does. */
+.lay__row {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 14px 16px;
+  align-items: start;
+}
+
+.lay__row + .lay__row {
+  margin-top: 14px;
+}
+
+.lay__cell {
+  min-width: 0;
+  grid-column: span 12;
+}
+
+.lay__cell--w1 { grid-column: span 1; }
+.lay__cell--w2 { grid-column: span 2; }
+.lay__cell--w3 { grid-column: span 3; }
+.lay__cell--w4 { grid-column: span 4; }
+.lay__cell--w5 { grid-column: span 5; }
+.lay__cell--w6 { grid-column: span 6; }
+.lay__cell--w7 { grid-column: span 7; }
+.lay__cell--w8 { grid-column: span 8; }
+.lay__cell--w9 { grid-column: span 9; }
+.lay__cell--w10 { grid-column: span 10; }
+.lay__cell--w11 { grid-column: span 11; }
+.lay__cell--w12 { grid-column: span 12; }
+
+/* Narrower screens: a question under half a row wide becomes half, so three
+   or four across does not leave controls too narrow to use. */
+@media (max-width: 960px) {
+  .lay__cell--w1, .lay__cell--w2, .lay__cell--w3,
+  .lay__cell--w4, .lay__cell--w5 { grid-column: span 6; }
+}
+
+/* A phone: one question to a row, whatever the layout says. */
+@media (max-width: 640px) {
+  .lay__cell { grid-column: span 12; }
+}
+
+/* --- the layout designer --------------------------------------------------
+   Rows are drawn with the same .lay__row grid the form uses, so a width looks
+   here exactly as it will on the page, and narrows and stacks the same way. */
+.designer {
+  display: grid;
+  /* One column: the available questions sit above the rows, not beside them.
+     Beside them (and beside the inspector) the rows were left half the width
+     the form is drawn at, so a 3/12 question was too narrow to read. Stacked,
+     the rows are as wide as Preview's, and a width looks the same in both. */
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.designer__pool {
+  border: 1px dashed var(--line-2);
+  border-radius: 10px;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.designer__head { font-weight: 600; font-size: 13px; }
+
+.designer__chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.designer__chip { max-width: 100%; }
+
+.designer__chip,
+.designer__cell {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card, #fff);
+  cursor: grab;
+}
+
+.designer__chip.is-selected,
+.designer__cell.is-selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-wash);
+}
+
+.designer__pick {
+  all: unset;
+  box-sizing: border-box;
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 10px;
+  cursor: pointer;
+  /* Break between words; inside one only when a single word is wider than
+     the question (a long variable name), never "Mobil/e Numb/er". */
+  overflow-wrap: break-word;
+  min-width: 0;
+}
+
+.designer__pick:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.designer__tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 0 8px 8px;
+  align-items: center;
+}
+
+.designer__tools .control { width: auto; max-width: 100%; min-width: 0; }
+
+.designer__canvas { display: grid; gap: 14px; min-width: 0; }
+
+.designer__section {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+}
+
+.designer__section > * { justify-self: stretch; }
+.designer__section > .btn { justify-self: start; }
+
+.designer__sectionhead,
+.designer__rowhead { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+
+.designer__title { flex: 1; min-width: 140px; font-weight: 600; }
+
+.designer__rowhead .control { width: auto; max-width: 220px; }
+
+.designer__drop {
+  border: 1px dashed transparent;
+  border-radius: 8px;
+  padding: 6px;
+  min-height: 56px;
+}
+
+.designer__drop.is-over,
+.designer__pool.is-over { border-color: var(--accent); background: var(--accent-wash); }
+
+/* Where a dragged question would land: a bar on the leading edge of the
+   question it would go before, or the trailing edge of the last one. */
+.designer__cell.is-before { box-shadow: -3px -3px 0 var(--accent); }
+.designer__cell.is-after { box-shadow: 3px 3px 0 var(--accent); }
+.designer__cell.is-lifted { opacity: .45; }
+
+.designer__empty {
+  border: 1px dashed var(--line-2);
+  border-radius: 8px;
+  padding: 14px;
+  text-align: center;
+  font-size: 12px;
+  color: #8a877d;
+}
+
+.designer__addsection { justify-self: start; }
+
+
+/* --- the one channel a form is built for --------------------------------- */
+.chanpick { border: none; margin: 12px 0; padding: 0; display: grid; gap: 6px; }
+.chanpick__opt {
+  display: flex; gap: 8px; align-items: flex-start;
+  padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer;
+}
+.chanpick__opt.is-on { border-color: var(--accent); background: var(--accent-wash); }
+.chanpick[disabled] .chanpick__opt { cursor: default; }
+.chanpick__note { margin: 2px 0 0; }
+.chanpick__copy { display: flex; flex-wrap: wrap; gap: 6px; }
+/* Why a new form cannot be started yet, beside the buttons that are disabled for it. */
+.compose__why { margin: 0 0 8px; color: #8a5a00; }
+.ivr__placeholder { margin: 10px 0; }
+
+/* --- the WhatsApp builder -------------------------------------------------- */
+.wa { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 18px; align-items: start; }
+.wa__build { display: grid; gap: 12px; min-width: 0; }
+.wa__title { font-size: 15px; margin: 0; }
+.wa__message { display: grid; gap: 4px; }
+.wa__steps { margin: 0; padding-left: 22px; display: grid; gap: 8px; }
+.wa__step { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+.wa__step.is-selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-wash); }
+.wa__stephead { display: flex; gap: 6px; align-items: center; }
+.wa__pick { all: unset; flex: 1; display: grid; cursor: pointer; min-width: 0; overflow-wrap: break-word; }
+.wa__pick:focus-visible { outline: 2px solid var(--accent); }
+.wa__level { font-weight: 700; width: 18px; text-align: center; }
+.wa__level--supported { color: var(--accent); }
+.wa__level--limited { color: #a4671a; }
+.wa__level--unsupported { color: #b3261e; }
+.wa__stepbody { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; margin-top: 6px; }
+.wa__cannot { color: #b3261e; margin: 6px 0 0; }
+.wa__check { font-size: 13px; }
+.wa__compat { display: grid; gap: 4px; }
+.wa__compatlist { list-style: none; margin: 0; padding: 0; font-size: 13px; }
+.wa__compatlist--limited { color: #a4671a; }
+.wa__compatlist--unsupported { color: #b3261e; }
+.wa__blocked { margin: 4px 0 0; }
+
+/* A picture of a chat, not a chat. */
+.wa__phone { position: sticky; top: 12px; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.wa__phonehead { background: #075e54; color: #fff; padding: 8px 12px; font-size: 13px; font-weight: 600; }
+.wa__chat { background: #ece5dd; padding: 10px; display: grid; gap: 8px; max-height: 70vh; overflow-y: auto; }
+.wa__bubble { background: #fff; border-radius: 8px; padding: 7px 9px; font-size: 13px; max-width: 92%; overflow-wrap: break-word; }
+.wa__buttons { display: grid; gap: 4px; margin-top: 6px; }
+.wa__button {
+  display: block; text-align: center; margin-top: 6px; padding: 5px;
+  border-top: 1px solid #e3ded7; color: #0b7a70; font-weight: 600;
+}
+.wa__rows { margin: 6px 0 0; padding-left: 18px; }
+.wa__hint { margin-top: 4px; color: #6b6b6b; }
+
+@media (max-width: 900px) {
+  .wa { grid-template-columns: minmax(0, 1fr); }
+  .wa__phone { position: static; }
+}

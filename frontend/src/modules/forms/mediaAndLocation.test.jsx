@@ -7,7 +7,7 @@
  * courtesy and the backend decides, from the same ring, on submission.
  */
 import React from 'react'
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 
@@ -39,16 +39,48 @@ const form = (extra = {}) => ({
   ...extra,
 })
 
-/** A browser that answers the location question however a test wants. */
+/**
+ * A browser that answers the location question however a test wants.
+ *
+ * Both ways of asking, because the page watches now and only falls back to a
+ * single reading when a browser cannot watch — so both paths stay covered.
+ * `move` is how a test walks somebody across a boundary: it re-fires every
+ * live watcher, which is what a phone does.
+ */
 function geolocation(answer) {
-  const getCurrentPosition = vi.fn((ok, fail) => {
-    if (answer instanceof Error) return fail({ code: answer.message === 'denied' ? 1 : 2 })
-    ok({ coords: answer, timestamp: 1767225600000 })
+  const watchers = []
+
+  const answerWith = (coords) => (ok, fail) => {
+    if (coords instanceof Error) {
+      return fail({ code: coords.message === 'denied' ? 1 : 2 })
+    }
+    ok({ coords, timestamp: 1767225600000 })
+  }
+
+  const getCurrentPosition = vi.fn((ok, fail) => answerWith(answer)(ok, fail))
+
+  const watchPosition = vi.fn((ok, fail) => {
+    watchers.push({ ok, fail })
+    answerWith(answer)(ok, fail)
+    return watchers.length
   })
+
+  const clearWatch = vi.fn()
+
   Object.defineProperty(window.navigator, 'geolocation', {
-    value: { getCurrentPosition }, configurable: true, writable: true,
+    value: { getCurrentPosition, watchPosition, clearWatch },
+    configurable: true, writable: true,
   })
-  return getCurrentPosition
+
+  return {
+    getCurrentPosition,
+    watchPosition,
+    clearWatch,
+    /** Somebody walks. Every watcher hears about it. */
+    move: (coords) => act(() => {
+      watchers.forEach(({ ok, fail }) => answerWith(coords)(ok, fail))
+    }),
+  }
 }
 
 const MEXICO = { latitude: 19.4326, longitude: -99.1332, accuracy: 12.4 }
@@ -81,19 +113,23 @@ async function draw(formJson, props = {}) {
 
 describe('where the form is being filled in', () => {
   test('a form that does not record a place asks for nothing', async () => {
-    const asked = geolocation(MEXICO)
+    const browser = geolocation(MEXICO)
     await draw(form())
 
-    expect(asked).not.toHaveBeenCalled()
+    // Neither way of asking: a form that records no place asks for nothing.
+    expect(browser.watchPosition).not.toHaveBeenCalled()
+    expect(browser.getCurrentPosition).not.toHaveBeenCalled()
     expect(screen.queryByText(/location/i)).toBeNull()
   })
 
   test('a form that does asks once, and reports what it got', async () => {
-    const asked = geolocation(MEXICO)
+    const browser = geolocation(MEXICO)
     const seen = await draw(form({ location: { enabled: true } }))
 
     await waitFor(() => expect(seen.filter(Boolean).length).toBe(1))
-    expect(asked).toHaveBeenCalledTimes(1)
+    // Watched once. Permission is still requested exactly once, which is what
+    // the note in useLocation is about — watching is not asking again.
+    expect(browser.watchPosition).toHaveBeenCalledTimes(1)
 
     const position = seen.filter(Boolean)[0]
     expect(position).toMatchObject({
@@ -139,38 +175,92 @@ describe('where the form is being filled in', () => {
     expect(await screen.findByText(/could not be found/)).toBeTruthy()
   })
 
-  test('it warns when the position looks outside the form’s area', async () => {
-    geolocation(DELHI)
-    await draw(form({
-      location: { enabled: true },
-      geofence: { enabled: true, polygon: RING },
-    }))
-
-    expect(await screen.findByText(/outside the area this form covers/)).toBeTruthy()
+  const fenced = (extra = {}) => form({
+    location: { enabled: true, ...extra },
+    geofence: { enabled: true, polygon: RING },
   })
 
-  test('and says nothing when it is inside', async () => {
+  const submit = () => screen.getByRole('button', { name: /Submit/ })
+
+  test('outside the boundary, it says so and Submit is disabled', async () => {
+    geolocation(DELHI)
+    await draw(fenced())
+
+    expect(await screen.findByText(
+      /You are outside the permitted area\. Please move inside the boundary to submit this form\./,
+    )).toBeTruthy()
+    expect(submit().disabled).toBe(true)
+  })
+
+  test('inside it, nothing is said and Submit works', async () => {
     geolocation(MEXICO)
-    await draw(form({
-      location: { enabled: true },
-      geofence: { enabled: true, polygon: RING },
-    }))
+    await draw(fenced())
 
     await screen.findByText(/Location recorded/)
-    expect(screen.queryByText(/outside the area/)).toBeNull()
+    expect(screen.queryByText(/outside the permitted area/)).toBeNull()
+    expect(submit().disabled).toBe(false)
   })
 
-  test('the warning is a courtesy — it does not stop the form', async () => {
-    // The backend decides. A page that got this wrong, or lied, changes
-    // nothing about what is accepted.
-    geolocation(DELHI)
-    await draw(form({
-      location: { enabled: true, required: true },
-      geofence: { enabled: true, polygon: RING },
-    }))
+  test('walking in enables it', async () => {
+    const browser = geolocation(DELHI)
+    await draw(fenced())
 
-    await screen.findByText(/outside the area/)
-    expect(screen.getByRole('button', { name: /Submit/ })).toBeTruthy()
+    await screen.findByText(/outside the permitted area/)
+    expect(submit().disabled).toBe(true)
+
+    browser.move(MEXICO)
+
+    await waitFor(() => expect(submit().disabled).toBe(false))
+    expect(screen.queryByText(/outside the permitted area/)).toBeNull()
+  })
+
+  test('and walking out disables it again', async () => {
+    const browser = geolocation(MEXICO)
+    await draw(fenced())
+
+    await screen.findByText(/Location recorded/)
+    expect(submit().disabled).toBe(false)
+
+    browser.move(DELHI)
+
+    await waitFor(() => expect(submit().disabled).toBe(true))
+    expect(screen.getByText(/outside the permitted area/)).toBeTruthy()
+  })
+
+  test('the fence stops the page, and the backend stops the submission', async () => {
+    // This used to assert the opposite — that the warning was a courtesy and
+    // never blocked Submit. The requirement changed: the button is disabled
+    // here *as well as* refused there. The backend remains the authority; this
+    // is so nobody fills a form in only to be refused at the end.
+    geolocation(DELHI)
+    await draw(fenced({ required: true }))
+
+    await screen.findByText(/outside the permitted area/)
+    expect(submit().disabled).toBe(true)
+  })
+
+  test('with no fence, Submit behaves as it always did', async () => {
+    geolocation(DELHI)
+    await draw(form({ location: { enabled: true } }))
+
+    await screen.findByText(/Location recorded/)
+    expect(screen.queryByText(/outside the permitted area/)).toBeNull()
+    expect(submit().disabled).toBe(false)
+  })
+
+  test('the watcher is let go when the form closes', async () => {
+    const browser = geolocation(MEXICO)
+    const { default: FormRenderer } = await import('./components/FormRenderer.jsx')
+
+    const page = render(
+      <FormRenderer formJson={fenced()} values={{}} onChange={() => {}}
+                    onSubmit={() => {}} onLocation={() => {}} />,
+    )
+
+    await waitFor(() => expect(browser.watchPosition).toHaveBeenCalled())
+    page.unmount()
+
+    expect(browser.clearWatch).toHaveBeenCalled()
   })
 
   test('the point-in-polygon agrees with the backend’s', async () => {

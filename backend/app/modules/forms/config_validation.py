@@ -34,6 +34,13 @@ kept. The guarantee tying the two together, asserted in the tests, is:
     validate_config(normalize_form(anything))   always succeeds
 
 so nothing this pipeline rejects can be produced by the normalizer.
+
+One deliberate exception: `channels_can_complete_the_form`. Enabling a channel
+is somebody's decision, and a form that channel cannot finish — a required
+boundary on WhatsApp — has to be refused rather than repaired, because the only
+repair would be quietly switching the channel back off. The normalizer never
+enables a channel on its own, so LLM output without a channel profile is
+unaffected and the invariant tests still hold for it.
 """
 import re
 from dataclasses import dataclass, field as dc_field
@@ -227,6 +234,49 @@ class FieldConfig(_Config):
         return self
 
 
+class ChannelConfig(BaseModel):
+    """One channel's entry in `channels`.
+
+    Stricter than the rest of the config on purpose: `enabled` must be a real
+    boolean and nothing else may appear. The profile is published with the form
+    and handed to phones, so an unexpected key here is refused rather than
+    ignored — it is exactly where somebody might paste a token.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = Field(strict=True)
+
+
+class WhatsAppFieldConfig(BaseModel):
+    """How one question is asked on WhatsApp. References the question; copies nothing."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    prompt: str = Field(default="", max_length=1024)
+    interaction: Optional[str] = None
+
+
+class WhatsAppConfig(BaseModel):
+    """A WhatsApp form's conversation. Strict: nothing else may be stored here."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    welcome_message: str = Field(default="", max_length=1024)
+    completion_message: str = Field(default="", max_length=1024)
+    review: bool = Field(default=False, strict=True)
+    order: List[str] = Field(default_factory=list)
+    fields: Dict[str, WhatsAppFieldConfig] = Field(default_factory=dict)
+
+
+class ChannelPresentation(BaseModel):
+    """`channel_config`: what each channel adds on top of the questions."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    whatsapp: Optional[WhatsAppConfig] = None
+
+
 class FormConfig(_Config):
     """A whole form definition.
 
@@ -257,6 +307,34 @@ class FormConfig(_Config):
     rules: List[Dict[str, Any]] = dc_field(default_factory=list)
     fields: List[FieldConfig] = Field(
         min_length=1, validation_alias=AliasChoices("fields", "questions", "elements"))
+    # Which channels the form is open to. Optional: a form without one takes
+    # the defaults in `channels.DEFAULTS`.
+    channels: Optional[Dict[str, ChannelConfig]] = None
+    # The one channel the form is built for. Absent on a legacy form.
+    channel: Optional[str] = None
+    channel_config: Optional[ChannelPresentation] = None
+
+    @field_validator("channel")
+    @classmethod
+    def _one_known_channel(cls, value: Optional[str]) -> Optional[str]:
+        from app.modules.forms.channels import FORM_CHANNELS
+
+        if value is not None and value not in FORM_CHANNELS:
+            raise ValueError(
+                f"'{value}' is not a form channel ({', '.join(FORM_CHANNELS)})")
+        return value
+
+    @field_validator("channels")
+    @classmethod
+    def _only_known_channels(
+            cls, value: Optional[Dict[str, ChannelConfig]]) -> Optional[Dict[str, ChannelConfig]]:
+        from app.modules.forms.channels import CHANNELS
+
+        unknown = sorted(set(value or {}) - set(CHANNELS))
+        if unknown:
+            raise ValueError(
+                f"'{unknown[0]}' is not a channel ({', '.join(CHANNELS)})")
+        return value
 
     @model_validator(mode="before")
     @classmethod
@@ -315,6 +393,10 @@ class BusinessContext:
     # Standard form ids the library currently offers. Empty means "not checked",
     # so a caller that does not care need not load the library.
     known_standard_ids: Sequence[str] = ()
+    # Set when an existing form is being saved: the channel it was created for
+    # (None for a legacy form). A form's channel cannot change once it exists.
+    updating: bool = False
+    stored_channel: Optional[str] = None
 
 
 Rule = Callable[[FormConfig, BusinessContext], List[ValidationIssue]]
@@ -550,6 +632,99 @@ def conditional_rules_are_answerable(config: FormConfig, _: BusinessContext) -> 
     return [_issue(found["path"], found["message"]) for found in conditions.problems(form_json)]
 
 
+def whatsapp_config_matches_the_form(config: FormConfig, _: BusinessContext) -> List[ValidationIssue]:
+    """A WhatsApp configuration may only refer to questions this form has, and
+    ask each one in a way WhatsApp — and that question — allows."""
+    from app.modules.forms import channel_config
+
+    if not (config.channel_config and config.channel_config.whatsapp):
+        return []
+
+    form_json = {
+        "fields": [{"name": f.name, "label": f.label, "type": f.type,
+                    "options": [o.model_dump() for o in f.options],
+                    "options_from": f.options_from}
+                   for f in config.fields],
+        "channel_config": {"whatsapp": config.channel_config.whatsapp.model_dump()},
+    }
+    return [_issue(p["path"], p["message"])
+            for p in channel_config.whatsapp_problems(form_json)]
+
+
+def channel_is_publishable(config: FormConfig, ctx: BusinessContext) -> List[ValidationIssue]:
+    """An IVR form can be drafted, not put live: there is no IVR builder yet."""
+    from app.modules.forms.channels import PUBLISHABLE, FORM_CHANNEL_NAMES
+
+    if ctx.form_status == "Active" and config.channel and config.channel not in PUBLISHABLE:
+        return [_issue("channel", (
+            f"{FORM_CHANNEL_NAMES[config.channel]} forms cannot be published yet — "
+            "the IVR builder is not available. Keep it as a draft."))]
+    return []
+
+
+def channel_is_fixed(config: FormConfig, ctx: BusinessContext) -> List[ValidationIssue]:
+    """A form keeps the channel it was created for.
+
+    Its versions, its answers and its channel configuration were all made for
+    that channel; switching would leave them describing a different product. To
+    take a form to another channel, create a copy for it.
+    """
+    if ctx.updating and (config.channel or None) != (ctx.stored_channel or None):
+        return [_issue("channel", (
+            "A form's channel is chosen when it is created and cannot be changed. "
+            "Create a copy of the form for the other channel instead."))]
+    return []
+
+
+def channels_can_complete_the_form(config: FormConfig, ctx: BusinessContext) -> List[ValidationIssue]:
+    """A channel is open to a form only if it can collect every required answer.
+
+    Only questions somebody on that channel could reach count: a required
+    boundary shown only after an answer the channel cannot give is never asked
+    there. An optional question the channel cannot ask is skipped, not refused.
+    Reachability comes from the condition engine itself, not a copy of it.
+    """
+    from app.modules.forms import channel_capabilities, channels
+
+    # Checked when the form goes live, not on every draft save: a WhatsApp form
+    # being built may hold a question it cannot ask yet, and the builder shows
+    # it. Publishing it — or saving a form that is already live — is refused.
+    if ctx.form_status != "Active":
+        return []
+
+    # A form built for one channel is open on that one; a legacy form on
+    # whatever its own profile says. Read from `channel` here because this runs
+    # on the definition as it arrived, before `normalize_form` derived anything.
+    if config.channel:
+        profile = channels.profile_for(config.channel)
+    elif config.channels:
+        profile = {c: {"enabled": entry.enabled} for c, entry in config.channels.items()}
+    else:
+        return []
+
+    form_json = {
+        "rules": config.rules or [],
+        "fields": [{"name": f.name, "label": f.label, "type": f.type,
+                    "required": f.required, "section": f.section}
+                   for f in config.fields],
+        "sections": [{"key": s.key} for s in config.sections],
+        "channels": profile,
+    }
+
+    issues = []
+    for channel in channels.CHANNELS:
+        if not channels.enabled(form_json, channel):
+            continue
+        for gap in channel_capabilities.required_unreachable(form_json, channel):
+            issues.append(_issue(
+                f"channels.{channel}",
+                f"{gap['channel']} cannot ask '{gap['label']}' — {gap['reason']}. "
+                f"Make that question optional, or keep {gap['channel']} off "
+                f"for this form.",
+            ))
+    return issues
+
+
 BUSINESS_RULES: List[Rule] = [
     unique_field_names,
     field_names_are_not_reserved,
@@ -564,7 +739,26 @@ BUSINESS_RULES: List[Rule] = [
     standard_reference_is_valid,
     parent_reference_is_valid,
     conditional_rules_are_answerable,
+    channel_is_fixed,
+    channel_is_publishable,
+    whatsapp_config_matches_the_form,
+    channels_can_complete_the_form,
 ]
+
+#: What going live asks of a form that was already saved as a draft. Only the
+#: channel rules: everything else was checked when the draft was saved, and an
+#: older draft must not become unpublishable because an unrelated rule changed.
+PUBLISH_RULES: List[Rule] = [channel_is_publishable, channels_can_complete_the_form]
+
+
+def validate_publishable(raw: Any) -> FormConfig:
+    """Whether a stored definition may be put live. Raises ConfigValidationError."""
+    config = validate_structure(raw)
+    ctx = BusinessContext(form_status="Active")
+    issues = [issue for rule in PUBLISH_RULES for issue in rule(config, ctx)]
+    if issues:
+        raise ConfigValidationError(issues)
+    return config
 
 
 def validate_business(

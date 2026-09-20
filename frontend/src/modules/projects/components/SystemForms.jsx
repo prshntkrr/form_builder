@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { api as formsApi } from '../../forms/api.js'
+import { FORM_CHANNEL_NAMES } from '../../forms/channelCapabilities.js'
 import { useAuth } from '../../../core/auth.jsx'
 
 /**
@@ -57,7 +58,7 @@ export default function SystemForms() {
         <div className="tablebox">
           <table className="data">
             <thead>
-              <tr><th>Form</th><th>Status</th><th>Responses</th><th /></tr>
+              <tr><th>Form</th><th>Status</th><th>Channel</th><th>Responses</th><th /></tr>
             </thead>
             <tbody>
               {forms.map((f) => (
@@ -73,6 +74,7 @@ export default function SystemForms() {
                       {f.form_status}
                     </span>
                   </td>
+                  <td className="tiny">{FORM_CHANNEL_NAMES[f.channel] || FORM_CHANNEL_NAMES.web_mobile}</td>
                   <td>{f.submission_count ?? 0}</td>
                   <td className="cat__actions">
                     <Link className="btn btn--quiet btn--sm" to={`/f/${f.form_id}`}>Open</Link>

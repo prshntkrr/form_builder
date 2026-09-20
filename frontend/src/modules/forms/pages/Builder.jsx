@@ -1,16 +1,22 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api.js'
 import { formsChanged } from '../../../core/events.js'
 import FieldEditor from '../components/FieldEditor.jsx'
 import { defaultLanguage, languageChoices } from '../translate.js'
 import { applicable } from '../conditions.js'
+import { generateLayout, removeFromLayout, withFieldReplaced } from '../formLayout.js'
+import { FORM_CHANNEL_NAMES, PUBLISHABLE, formChannel } from '../channelCapabilities.js'
+import { conversationOrder, configOf, removeFromWhatsApp, renameInWhatsApp } from '../whatsappConfig.js'
 import { activeProjectId } from '../../projects/active.js'
 import ConditionEditor from '../components/ConditionEditor.jsx'
 import ExportPanel from '../components/ExportPanel.jsx'
 import FormRelationship from '../components/FormRelationship.jsx'
 import LocationSettings from '../components/LocationSettings.jsx'
+import ChannelPicker, { IvrPlaceholder } from '../components/ChannelPicker.jsx'
+import WhatsAppBuilder, { ChatPreview } from '../components/WhatsAppBuilder.jsx'
 import FormRenderer from '../components/FormRenderer.jsx'
+import LayoutDesigner from '../components/LayoutDesigner.jsx'
 import ContributeToLibrary from '../components/ContributeToLibrary.jsx'
 import LibraryPicker from '../components/LibraryPicker.jsx'
 import StandardDrift from '../components/StandardDrift.jsx'
@@ -60,6 +66,35 @@ const untag = (json) => ({
   ...json,
   fields: (json.fields || []).map(({ _uid, _orig, ...f }) => f),
 })
+
+/**
+ * A saved form, as a new draft built for another channel.
+ *
+ * A form keeps the channel it was created for, so taking one elsewhere is a
+ * copy: the same questions, rules and catalogue references, a new title and
+ * table, and nothing that ties it to the original's versions or answers.
+ */
+function copyFor(formJson, channel) {
+  const { form_id, version, created_by, channels, channel: _was, ...rest } = formJson
+  const title = `${formJson.title || 'Untitled form'} (${FORM_CHANNEL_NAMES[channel] || channel})`
+  return {
+    ...rest,
+    title,
+    table_name: slug(title),
+    channel,
+    fields: (formJson.fields || []).map(({ _uid, _orig, ...f }) => f),
+  }
+}
+
+/**
+ * What went wrong, as the server put it. A refused definition comes back as a
+ * list of issues; showing only "Please fix the highlighted fields" would hide
+ * why — which, for a channel that cannot ask a required question, is the point.
+ */
+function explain(e) {
+  const issues = Array.isArray(e?.fieldErrors) ? e.fieldErrors.map((i) => i.message).filter(Boolean) : []
+  return issues.length ? `${e.message}: ${issues.join(' ')}` : (e?.message || 'Something went wrong')
+}
 
 /** What the flat reporting mirror did in response to this save. */
 function TabularNote({ report }) {
@@ -126,6 +161,12 @@ export default function Builder() {
   const [picker, setPicker] = useState(null)   // 'start' | 'borrow'
   const [dict, setDict] = useState(null)      // what the dictionary changed, if anything
   const [contributing, setContributing] = useState(false)
+  // The one channel a new form is being built for. Chosen on the draft, once
+  // there is something to look at; see ChannelPicker. A saved form's channel
+  // comes from the form. Nothing is picked for them: `null` until they choose,
+  // so a form is never saved on a channel nobody chose. A copy arrives with its
+  // channel.
+  const [newChannel, setNewChannel] = useState(location.state?.channel || null)
 
   const view = editing ? section : draftTab
 
@@ -143,12 +184,26 @@ export default function Builder() {
     setDict(null)
 
     if (!formId) {
+      // A copy of a saved form, made for another channel ("Copy as …").
+      const copyOf = location.state?.copyOf
+      if (copyOf) {
+        setForm(prep(copyFor(copyOf, location.state.channel)))
+        setBusy(null)
+        return
+      }
       const fromLibrary = location.state?.standardId
       if (fromLibrary) {
         setBusy('make')
         api
           .startFromStandard(fromLibrary)
-          .then((res) => setForm(prep(res.form_json)))
+          .then((res) => {
+            // Started from the library page, before any channel was picked: the
+            // library's forms are Web / Mobile forms, and the picker says so
+            // (it can still be changed while this is an unsaved draft).
+            const channel = location.state?.channel || 'web_mobile'
+            setNewChannel(channel)
+            setForm(prep({ ...res.form_json, channel }))
+          })
           .catch((e) => setError(e.message))
           .finally(() => setBusy(null))
         return
@@ -171,13 +226,55 @@ export default function Builder() {
 
   const run = async (kind, fn) => {
     setBusy(kind); setError(''); setSaved(null)
-    try { await fn() } catch (e) { setError(e.message || 'Something went wrong') } finally { setBusy(null) }
+    try { await fn() } catch (e) { setError(explain(e)) } finally { setBusy(null) }
   }
+
+  /**
+   * A draft's channel settings, carried over a reply that replaced the whole
+   * definition — the model's, or the library's. Neither is asked to change
+   * which channel the form is for or how it is asked there, so a reply that
+   * dropped them must not quietly change them. A legacy form has neither.
+   */
+  const keepChannel = (next) => ({
+    ...next,
+    ...(form?.channel ? { channel: form.channel } : {}),
+    ...(form?.channel_config ? { channel_config: form.channel_config } : {}),
+    ...(form?.channels && !form?.channel ? { channels: form.channels } : {}),
+  })
+
+  /** The channel picked for the new form, while it is still a draft. */
+  const pickChannel = (channel) => {
+    if (form && !editing && channel !== form.channel) {
+      if (channel === 'ivr') {
+        // There is no IVR builder, so an IVR draft could only ever be saved as a
+        // form nobody can build or publish. The draft stays what it is.
+        setError('IVR forms are not supported yet. This draft stays '
+          + `${FORM_CHANNEL_NAMES[form.channel] || 'as it is'}.`)
+        return
+      }
+      if (form.channel && form.fields?.length && !window.confirm(
+        `Switch this unsaved draft to ${FORM_CHANNEL_NAMES[channel]}? Its questions are kept, `
+        + `and it will open in the ${FORM_CHANNEL_NAMES[channel]} builder.`)) return
+      setError('')
+      setForm({ ...form, channel })
+      setDraftTab('questions')
+    }
+    setNewChannel(channel)
+  }
+
+  /**
+   * Why a new form cannot be started yet, or [] if it can. Said on the page
+   * beside the disabled buttons rather than left for somebody to guess.
+   */
+  const blockers = (needsDescription) => [
+    needsDescription && !prompt.trim() && 'Describe the form you need.',
+    needsDescription && prompt.trim() && prompt.trim().length < 5 && 'Describe the form in a little more detail.',
+  ].filter(Boolean)
 
   const create = () =>
     run('make', async () => {
       const res = await api.generate(prompt)
-      setForm(prep(res.form_json))
+      setForm(prep({ ...res.form_json, channel: newChannel }))
       // The dictionary still shapes the draft — it just does not announce it.
       // Nobody asked it to run, so a report here is noise on top of a new form.
       setTrial({}); setDraftTab('questions')
@@ -189,7 +286,7 @@ export default function Builder() {
     setError('')
     setForm(prep({
       title: 'Untitled form', description: '', table_name: 'untitled_form',
-      fields: [], sections: [], rules: [],
+      fields: [], sections: [], rules: [], channel: newChannel,
     }))
     setTrial({}); setTrialResult(null); setDraftTab('questions')
   }
@@ -225,6 +322,10 @@ export default function Builder() {
         // understand; where the draft came from is ours to keep.
         standard_id: form.standard_id ?? res.form_json.standard_id ?? null,
         standard_version: form.standard_version ?? res.form_json.standard_version ?? null,
+        // Which channels the form is open to is a decision, not wording: the
+        // model is not asked to change it, so a reply that dropped it must not
+        // quietly close (or open) a channel.
+        ...keepChannel({}),
         fields: res.form_json.fields.map((f) => ({ ...f, _orig: before.get(f.name) })),
       }))
       setAsk('')
@@ -248,9 +349,13 @@ export default function Builder() {
       if (!editing) {
         // A draft has nothing live to open, so stay in the builder on it. Only a
         // published form goes straight to the form people will fill in.
+        // A form answered elsewhere (WhatsApp) has no page here to fill in, so
+        // it reopens in its own builder rather than a fill page that refuses it.
+        const fillHere = formChannel(form) === 'web_mobile'
         navigate(
-          saveAs === 'Draft' ? `/forms/${result.form_id}/preview` : `/f/${result.form_id}`,
-          { replace: true, state: saveAs === 'Draft' ? undefined : { published: result } },
+          saveAs === 'Draft' || !fillHere ? `/forms/${result.form_id}/${saveAs === 'Draft' ? 'preview' : 'questions'}`
+            : `/f/${result.form_id}`,
+          { replace: true, state: saveAs === 'Draft' || !fillHere ? undefined : { published: result } },
         )
         return
       }
@@ -317,13 +422,23 @@ export default function Builder() {
   }, [form, chosen])
 
   const put = (i, next) => {
-    const fields = [...form.fields]
     // Editing the label of an unsaved question renames its key, so the panel
     // follows it rather than losing its place.
     if (form.fields[i]?.name === chosen && next.name !== chosen) setChosen(next.name)
-    fields[i] = next
-    setForm({ ...form, fields })
+    // The field and anything referring to it by name, in one update. A layout
+    // still pointing at the old key would lose the question from the page.
+    // A key cleared to be retyped is empty for a moment; the layout goes on
+    // knowing the question by its last real name until the new one arrives.
+    const was = form.fields[i]?.name
+    if (was) knownAs.current[next._uid] = was
+    const from = was || knownAs.current[next._uid]
+    // The WhatsApp conversation refers to questions by name too, so it follows
+    // the rename in the same update — the server refuses a configuration that
+    // names a question the form no longer has.
+    const replaced = withFieldReplaced(form, i, next, from)
+    setForm(next.name ? renameInWhatsApp(replaced, from, next.name) : replaced)
   }
+  const knownAs = useRef({})
 
   // Which language the questions are being worded in, and whether that is a
   // translation rather than the form's own language.
@@ -369,13 +484,17 @@ export default function Builder() {
   }
   const remove = (i) => {
     const fields = form.fields.filter((_, n) => n !== i).map((f, n) => ({ ...f, order: n + 1 }))
+    // A deleted question leaves no reference behind in the layout.
+    const layout = removeFromLayout(form.layout, form.fields[i]?.name)
     // Deleting the question being inspected moves to its neighbour rather than
     // leaving the panel empty or jumping to the top of a long form.
     if (form.fields[i]?.name === chosen) {
       const near = fields[Math.min(i, fields.length - 1)]
       setChosen(near ? near.name : null)
     }
-    setForm({ ...form, fields })
+    const kept = layout === form.layout ? { ...form, fields } : { ...form, fields, layout }
+    // …nor in the WhatsApp conversation.
+    setForm(removeFromWhatsApp(kept, form.fields[i]?.name))
   }
 
   const add = () => {
@@ -403,6 +522,18 @@ export default function Builder() {
     setForm({ ...form, fields: fields.map((f, n) => ({ ...f, order: n + 1 })) })
   }
 
+  /* Opening Design is what gives a form a layout: made once from its own
+     sections and question order, and kept in the form like any other edit, so
+     Save stores it. A form that already has one keeps it untouched, and one
+     that is never designed never gets one — Preview does not make one. */
+  useEffect(() => {
+    if (view !== 'design' || !form || Array.isArray(form.layout?.sections)) return
+    // Layout belongs to Web / Mobile; another channel's form never gets one.
+    if (formChannel(form) !== 'web_mobile') return
+    const made = generateLayout(form)
+    if (made) setForm({ ...form, layout: made })
+  }, [view, form])
+
   // ── render ────────────────────────────────────────────────────────────────
   if (busy === 'load') {
     return (
@@ -423,7 +554,21 @@ export default function Builder() {
   // card: it sits beside the whole builder, keeps its own scrollbar, and stays
   // put while the list scrolls. Only the questions view has anything to inspect,
   // so every other view keeps the ordinary centred page.
-  const workspace = Boolean(form) && view === 'questions'
+  // The one channel this form is built for, and so which builder it gets. A
+  // draft's is the one being picked; a saved form's is its own, fixed. A
+  // legacy form never picked one and is Web / Mobile, exactly as it was.
+  // An unsaved draft with no channel yet is shown in the general question list.
+  const channel = form ? (editing ? formChannel(form) : (form.channel || 'web_mobile')) : newChannel
+  const legacy = Boolean(editing && form && !form.channel)
+  // Layout is a Web / Mobile idea: any other channel's builder answers /design.
+  const pane = channel !== 'web_mobile' && view === 'design' ? 'questions' : view
+  const tabs = channel === 'whatsapp'
+    ? [['questions', 'WhatsApp'], ['preview', 'Chat preview'], ['json', 'JSON']]
+    : channel === 'ivr'
+      ? [['questions', 'IVR'], ['json', 'JSON']]
+      : [['questions', 'Questions'], ['design', 'Design'], ['preview', 'Preview'], ['json', 'JSON']]
+
+  const workspace = Boolean(form) && channel !== 'ivr' && (pane === 'questions' || pane === 'design')
   const chosenIndex = form ? form.fields.findIndex((f) => f.name === chosen) : -1
   const chosenField = chosenIndex < 0 ? null : form.fields[chosenIndex]
 
@@ -440,6 +585,15 @@ export default function Builder() {
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
           />
+          {(() => {
+            const why = blockers(true)
+            if (!why.length || busy === 'make') return null
+            return (
+              <p id="create-why" className="tiny compose__why" role="status">
+                {why.join(' ')}
+              </p>
+            )
+          })()}
           <div className="compose__foot">
             <div className="seeds">
               {SEEDS.map(([name, text]) => (
@@ -447,13 +601,22 @@ export default function Builder() {
               ))}
             </div>
             <span className="spacer" />
-            <button className="btn" onClick={startBlank} disabled={busy === 'make'}>
+            <button className="btn" onClick={startBlank}
+              disabled={busy === 'make' || blockers(false).length > 0}
+              aria-describedby={blockers(false).length ? 'create-why' : undefined}
+              title={blockers(false).join(' ') || undefined}>
               Start blank
             </button>
-            <button className="btn" onClick={() => setPicker('start')} disabled={busy === 'make'}>
+            <button className="btn" onClick={() => setPicker('start')}
+              disabled={busy === 'make' || blockers(false).length > 0}
+              aria-describedby={blockers(false).length ? 'create-why' : undefined}
+              title={blockers(false).join(' ') || undefined}>
               Start from a standard form
             </button>
-            <button className="btn btn--primary" onClick={create} disabled={busy === 'make' || prompt.trim().length < 5}>
+            <button className="btn btn--primary" onClick={create}
+              disabled={busy === 'make' || blockers(true).length > 0}
+              aria-describedby={blockers(true).length ? 'create-why' : undefined}
+              title={blockers(true).join(' ') || undefined}>
               {busy === 'make' && <span className="spin" />}
               {busy === 'make' ? 'Drafting' : form ? 'Start over' : 'Create form'}
             </button>
@@ -526,6 +689,17 @@ export default function Builder() {
 
       {form && (
         <>
+          {!editing && (
+            <div className="card card--pad draft-channel">
+              <ChannelPicker value={form.channel || null} onChange={pickChannel} required />
+              {!form.channel && (
+                <p id="save-why" className="tiny compose__why" role="status">
+                  Choose where this form will be answered before saving it.
+                  The channel cannot be changed after the form is saved.
+                </p>
+              )}
+            </div>
+          )}
           <div className="card">
             <div className="editor__top">
               <div className="grow">
@@ -546,29 +720,53 @@ export default function Builder() {
               </div>
             </div>
 
-            {view === 'questions' && (
+            {pane === 'questions' && (
               <div className="editor__relationship">
-                <FormRelationship
-                  form={form}
-                  formId={formId}
-                  onChange={(change) => setForm({ ...form, ...change })}
-                />
-                <LocationSettings
-                  form={form}
-                  onChange={(change) => setForm({ ...form, ...change })}
-                />
+                {/* Parent records and device position are Web / Mobile ideas: a
+                    WhatsApp or IVR form has no picker and no GPS to offer. */}
+                {channel === 'web_mobile' && (
+                  <>
+                    <FormRelationship
+                      form={form}
+                      formId={formId}
+                      onChange={(change) => setForm({ ...form, ...change })}
+                    />
+                    <LocationSettings
+                      form={form}
+                      onChange={(change) => setForm({ ...form, ...change })}
+                    />
+                  </>
+                )}
+                {/* A saved form keeps its channel. Moving it is a copy. */}
+                {editing && (
+                  <div className="rel">
+                    <ChannelPicker value={channel} readOnly legacy={legacy} />
+                    <div className="chanpick__copy">
+                      {PUBLISHABLE.filter((c) => c !== channel).map((c) => (
+                        <button
+                          key={c}
+                          type="button"
+                          className="btn btn--quiet btn--sm"
+                          onClick={() => navigate('/builder', { state: { copyOf: untag(form), channel: c } })}
+                        >
+                          Copy as a {FORM_CHANNEL_NAMES[c]} form
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
             {/* A saved form — published or not — can be previewed while it is
                 being edited, exactly as a new one can. For a saved form the tab
                 is the page's address, so the sidebar and the tab agree. */}
-            {(!editing || ['questions', 'preview', 'json'].includes(section)) && (
+            {(!editing || ['questions', 'design', 'preview', 'json'].includes(section)) && (
               <div className="tabs">
-                {[['questions', 'Questions'], ['preview', 'Preview'], ['json', 'JSON']].map(([id, name]) => (
+                {tabs.map(([id, name]) => (
                   <button
                     key={id}
-                    className={view === id ? 'on' : undefined}
+                    className={pane === id ? 'on' : undefined}
                     onClick={() => (editing ? navigate(`/forms/${formId}/${id}`) : setDraftTab(id))}
                   >
                     {name}
@@ -578,7 +776,27 @@ export default function Builder() {
             )}
 
             <div className="editor__body">
-              {view === 'questions' && (
+              {pane === 'questions' && channel === 'whatsapp' && (
+                <WhatsAppBuilder
+                  form={form}
+                  chosen={chosen}
+                  onSelect={setChosen}
+                  onChange={setForm}
+                  onAdd={add}
+                />
+              )}
+
+              {channel === 'ivr' && pane !== 'json' && <IvrPlaceholder />}
+
+              {pane === 'preview' && channel === 'whatsapp' && (
+                <ChatPreview
+                  form={form}
+                  order={conversationOrder(form).map((n) => form.fields.find((f) => f.name === n)).filter(Boolean)}
+                  config={configOf(form)}
+                />
+              )}
+
+              {pane === 'questions' && channel === 'web_mobile' && (
                 <>
                   {(() => {
                     const languages = languageChoices(form)
@@ -694,7 +912,17 @@ export default function Builder() {
                 </>
               )}
 
-              {view === 'preview' && (
+              {pane === 'design' && (
+                <LayoutDesigner
+                  layout={form.layout}
+                  fields={form.fields}
+                  chosen={chosen}
+                  onSelect={setChosen}
+                  onChange={(layout) => setForm({ ...form, layout })}
+                />
+              )}
+
+              {pane === 'preview' && channel === 'web_mobile' && (
                 <>
                   <FormRenderer
                     formJson={form}
@@ -791,7 +1019,7 @@ export default function Builder() {
                   Check responses
                 </button>
               )}
-              {editing && status === 'Draft' && (
+              {editing && status === 'Draft' && PUBLISHABLE.includes(channel) && (
                 <button
                   className="btn btn--primary"
                   onClick={() => setLive('Active')}
@@ -817,8 +1045,9 @@ export default function Builder() {
                 <button
                   className="btn btn--quiet"
                   onClick={() => save('Draft')}
-                  disabled={busy === 'save'}
-                  title="Build it now, publish when it is ready"
+                  disabled={busy === 'save' || !form.channel}
+                  aria-describedby={form.channel ? undefined : 'save-why'}
+                  title={form.channel ? 'Build it now, publish when it is ready' : 'Choose a channel first.'}
                 >
                   Save as draft
                 </button>
@@ -826,7 +1055,9 @@ export default function Builder() {
               <button
                 className="btn btn--primary"
                 onClick={() => save('Active')}
-                disabled={busy === 'save'}
+                disabled={busy === 'save' || (!editing && !form.channel)}
+                aria-describedby={!editing && !form.channel ? 'save-why' : undefined}
+                title={!editing && !form.channel ? 'Choose a channel first.' : undefined}
               >
                 {busy === 'save' && <span className="spin" />}
                 {busy === 'save' ? 'Saving' : editing ? 'Save changes' : 'Publish'}
@@ -850,7 +1081,7 @@ export default function Builder() {
           draft={picker === 'borrow' ? untag(form) : null}
           onClose={() => setPicker(null)}
           onPick={(formJson) => {
-            setForm(prep(formJson, editing))
+            setForm(prep(form ? keepChannel(formJson) : { ...formJson, channel: newChannel }, editing))
             setPicker(null)
             setTrial({})
           }}

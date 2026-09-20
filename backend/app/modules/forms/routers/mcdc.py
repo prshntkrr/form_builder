@@ -114,7 +114,7 @@ def mobile_forms(
     `identity` is for the platform asking on somebody's behalf; it takes
     `mcdc.integrate`, and without it an account only ever asks about itself.
     """
-    from app.modules.forms.routers.submissions import live_forms
+    from app.modules.forms.routers.submissions import fillable_forms
 
     caller = user
     if identity:
@@ -126,7 +126,9 @@ def mobile_forms(
         if caller is None:
             return []
 
-    return live_forms(project=project, user=caller)
+    # Only forms open on mobile: never a WhatsApp or IVR form, and never a form
+    # whose profile keeps mobile off.
+    return fillable_forms(project, caller, channel="mobile")
 
 
 # --------------------------------------------------------------------------- #

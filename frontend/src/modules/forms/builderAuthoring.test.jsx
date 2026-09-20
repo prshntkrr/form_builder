@@ -73,6 +73,7 @@ describe('starting a form without a prompt', () => {
     const user = userEvent.setup()
     await open('/builder')
 
+    // The channel is chosen on the draft, not before it.
     await user.click(screen.getByRole('button', { name: 'Start blank' }))
 
     expect(screen.getByDisplayValue('Untitled form')).toBeTruthy()
@@ -82,6 +83,7 @@ describe('starting a form without a prompt', () => {
   })
 
   test('the prompt is still there for anybody who wants it', async () => {
+    const user = userEvent.setup()
     await open('/builder')
 
     expect(screen.getByRole('button', { name: 'Create form' })).toBeTruthy()
@@ -94,6 +96,7 @@ describe('a new section from a question', () => {
   async function newQuestion(user) {
     await open('/builder')
     await user.click(screen.getByRole('button', { name: 'Start blank' }))
+    await user.click(screen.getByRole('radio', { name: /Web \/ Mobile/ }))
     await user.click(screen.getByRole('button', { name: 'Add a question' }))
     return (await screen.findAllByLabelText('Section'))[0]
   }

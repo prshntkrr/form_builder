@@ -120,6 +120,11 @@ class SubmitRequest(BaseModel):
     # uploads had to be filed under it before the answers could be sent. Absent
     # for a form with nothing to upload, which is submitted in one call.
     survey_id: Optional[str] = None
+    # The client's own name for this submission, so a retry after a lost
+    # response stores nothing twice: the same id and the same answers get the
+    # original survey back. Up to 64 of [A-Za-z0-9._:-]. The `Idempotency-Key`
+    # header is read as this when the body does not carry one.
+    client_submission_id: Optional[str] = None
 
 
 class ExportRequest(BaseModel):
@@ -150,6 +155,11 @@ class IngestRequest(BaseModel):
     location: Optional[Dict[str, Any]] = None
     parent_survey_id: Optional[str] = None
     survey_id: Optional[str] = None
+    # As on `SubmitRequest`. A channel retrying the same message sends the same
+    # id; `source_ref` is its own reference for it (a provider message id),
+    # kept on the receipt for tracing and never used to decide anything.
+    client_submission_id: Optional[str] = None
+    source_ref: Optional[str] = None
 
 
 class RouteRequest(BaseModel):
