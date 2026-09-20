@@ -90,6 +90,44 @@ export function widgetBounds(type) {
   return { minW: 2, minH: 3, maxW: COLUMNS.lg };
 }
 
+/**
+ * Where every widget sits, from what the dashboard saved.
+ *
+ * One function, because two pages draw the same dashboard: the builder, and
+ * the read-only page behind a shared link. The shared page used to lay the
+ * widgets out with a CSS grid of its own — so a dashboard that had been
+ * arranged carefully came out in a different order, at different widths, with
+ * charts in boxes of no particular height. Same numbers here, same picture
+ * there.
+ *
+ * A widget with no stored layout falls back to its type's default size, and
+ * anything wider than the breakpoint's columns is clamped to fit.
+ */
+export function gridLayoutFor(widgets = [], cols = COLUMNS.lg) {
+  return widgets.map((widget) => {
+    const defaults = defaultWidgetSize(widget.type);
+
+    const w = Math.max(1, Math.min(Number(widget.layout?.w ?? defaults.w), cols));
+    const h = Math.max(1, Number(widget.layout?.h ?? defaults.h));
+    const x = Math.max(0, Math.min(Number(widget.layout?.x ?? 0), cols - w));
+    const y = Math.max(0, Number(widget.layout?.y ?? 0));
+
+    return {
+      i: widget.id,
+      x,
+      y,
+      w,
+      h,
+      // The floors the builder's resize handles have always used. Not
+      // `widgetBounds`, which is a little looser: changing them here would
+      // change how small an existing dashboard can be dragged.
+      minW: widget.type === "kpi" ? 2 : widget.type === "table" ? 6 : 3,
+      minH: widget.type === "kpi" ? 2 : 3,
+      maxW: cols,
+    };
+  });
+}
+
 /** How many of these fit across a full-width desktop row. Used by the tests. */
 export function perRow(type, columns = COLUMNS.lg) {
   return Math.floor(columns / defaultWidgetSize(type).w);

@@ -1,9 +1,17 @@
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 
+import {
+  ResponsiveGridLayout,
+  useContainerWidth,
+  verticalCompactor,
+} from "react-grid-layout";
+
+import "react-grid-layout/css/styles.css";
+
 import { api } from "../api.js";
-import { getRenderer } from "../renderers/registry.js";
-import { prepareChartData } from "../renderers/prepareChartData.js";
+import { BREAKPOINTS, COLUMNS, GRID, gridLayoutFor } from "../layout.js";
+import { dataFor, getRenderer } from "../renderers/registry.js";
 
 /**
  * A dashboard behind a public link.
@@ -17,9 +25,17 @@ import { prepareChartData } from "../renderers/prepareChartData.js";
  * The link is the credential. Anyone holding it can see this, which is what
  * issuing one means; withdrawing it from the dashboard's own page breaks every
  * copy at once.
+ *
+ * What it shows is the dashboard as it was arranged: the same twelve-column
+ * grid the builder uses, from the same layout each widget saved.
  */
 export default function SharedDashboard() {
   const { token } = useParams();
+
+  // The grid draws in pixels, so it has to know how wide its container is.
+  const { width: gridWidth, containerRef: gridContainerRef } = useContainerWidth({
+    initialWidth: 0,
+  });
 
   const [dashboard, setDashboard] = useState(null);
   const [widgetData, setWidgetData] = useState({});
@@ -106,6 +122,7 @@ export default function SharedDashboard() {
   }
 
   const widgets = dashboard?.dashboard_json?.widgets || [];
+  const layouts = { lg: gridLayoutFor(widgets, COLUMNS.lg) };
 
   return (
     <main className="main dash__shared">
@@ -124,47 +141,101 @@ export default function SharedDashboard() {
           <p>Nothing has been added to it yet.</p>
         </div>
       ) : (
-        <div className="dash__shared-grid">
-          {widgets.map((widget) => {
-            const held = widgetData[widget.id] || {};
-            const Renderer = getRenderer(widget.type);
-            const data = held.failed
-              ? null
-              : prepareChartData(widget, held.rows || []);
+        /* The same grid the builder draws, with nothing to drag or resize: the
+           dashboard was arranged there, and this is that arrangement. It also
+           gives every widget a height in pixels, which is what a chart drawn at
+           100% of its box needs to exist at all. */
+        <div className="dash__grid-wrapper" ref={gridContainerRef}>
+          {(
+            <ResponsiveGridLayout
+              /* Until the container has been measured — the first frame, and
+                 every environment without layout at all — lay out against a
+                 desktop width rather than draw nothing. */
+              width={gridWidth || COLUMNS.lg * 100}
+              layouts={layouts}
+              breakpoints={BREAKPOINTS}
+              cols={COLUMNS}
+              gridConfig={GRID}
+              dragConfig={{ enabled: false }}
+              resizeConfig={{ enabled: false }}
+              compactor={verticalCompactor}
+            >
+              {widgets.map((widget) => {
+                const held = widgetData[widget.id] || {};
+                const Renderer = getRenderer(widget.type);
+                const presentation = widget.presentation || {};
+                const titleStyle = presentation.title_style || {};
+                const subtitleStyle = presentation.subtitle_style || {};
 
-            return (
-              <section
-                key={widget.id}
-                className="card card--pad dash__widget-card"
-                style={
-                  widget.presentation?.background_color
-                    ? { backgroundColor: widget.presentation.background_color }
-                    : {}
-                }
-              >
-                <h2 className="dash__widget-title">{widget.title}</h2>
+                return (
+                  <div
+                    key={widget.id}
+                    className="card card--pad dash__widget-card"
+                    style={
+                      presentation.background_color
+                        ? { backgroundColor: presentation.background_color }
+                        : {}
+                    }
+                  >
+                    <div className="dash__widget">
+                      <div className="dash__widget-header">
+                        <div>
+                          <h3
+                            style={{
+                              margin: 0,
+                              ...(titleStyle.font_size
+                                ? { fontSize: `${titleStyle.font_size}px` }
+                                : {}),
+                              ...(titleStyle.bold ? { fontWeight: "bold" } : {}),
+                              ...(titleStyle.italic ? { fontStyle: "italic" } : {}),
+                            }}
+                          >
+                            {widget.title}
+                          </h3>
 
-                {widget.presentation?.subtitle && (
-                  <p className="muted tiny">{widget.presentation.subtitle}</p>
-                )}
+                          {presentation.subtitle && (
+                            <div
+                              className="dash__widget-subtitle"
+                              style={{
+                                marginTop: 4,
+                                color: "var(--text-muted, #666)",
+                                ...(subtitleStyle.font_size
+                                  ? { fontSize: `${subtitleStyle.font_size}px` }
+                                  : {}),
+                                ...(subtitleStyle.bold ? { fontWeight: "bold" } : {}),
+                                ...(subtitleStyle.italic ? { fontStyle: "italic" } : {}),
+                              }}
+                            >
+                              {presentation.subtitle}
+                            </div>
+                          )}
+                        </div>
+                      </div>
 
-                {held.failed ? (
-                  <p className="muted tiny">
-                    This graph could not be loaded.
-                  </p>
-                ) : (
-                  <Renderer
-                    widget={widget}
-                    data={data}
-                    rows={held.rows || []}
-                    /* So a dashboard-wide palette reaches a shared dashboard
-                       too, rather than only the one being edited. */
-                    dashboard={dashboard?.dashboard_json}
-                  />
-                )}
-              </section>
-            );
-          })}
+                      {held.failed ? (
+                        <p className="muted tiny">This graph could not be loaded.</p>
+                      ) : (
+                        <div className="dash__chart-area">
+                          <Renderer
+                            widget={widget}
+                            /* Summarised or raw, by type — the same rule the
+                               builder follows. A histogram handed summarised
+                               rows draws nothing, which is what this page used
+                               to do to it. */
+                            data={dataFor(widget, held.rows || [])}
+                            rows={held.rows || []}
+                            /* So a dashboard-wide palette reaches a shared
+                               dashboard too, not only the one being edited. */
+                            dashboard={dashboard?.dashboard_json}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </ResponsiveGridLayout>
+          )}
         </div>
       )}
     </main>

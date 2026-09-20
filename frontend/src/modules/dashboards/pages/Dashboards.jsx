@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 
-import { getRenderer } from "../renderers/registry.js";
+import { dataFor, getRenderer } from "../renderers/registry.js";
 import { prepareChartData } from "../renderers/prepareChartData.js";
 import {
   BREAKPOINTS,
@@ -8,6 +8,7 @@ import {
   GRID,
   defaultWidgetSize,
   widgetBounds,
+  gridLayoutFor,
 } from "../layout.js";
 import {
   COLOR_KEYS,
@@ -191,74 +192,9 @@ export default function Dashboards() {
   // cols defaults to 12 (the lg/md column count). Pass the active breakpoint's
   // column count when available so that saved x coordinates are always clamped
   // correctly (e.g., sm breakpoint uses 6 cols).
-  const buildGridLayout = (widgets = [], cols = 12) => {
-    return widgets.map((widget) => {
-      const defaults = getDefaultWidgetSize(
-        widget.type
-      );
-
-      const requestedW = Number(
-        widget.layout?.w ?? defaults.w
-      );
-
-      const requestedH = Number(
-        widget.layout?.h ?? defaults.h
-      );
-
-      const w = Math.max(
-        1,
-        Math.min(requestedW, cols)
-      );
-
-      const h = Math.max(
-        1,
-        requestedH
-      );
-
-      const requestedX = Number(
-        widget.layout?.x ?? 0
-      );
-
-      const requestedY = Number(
-        widget.layout?.y ?? 0
-      );
-
-      const x = Math.max(
-        0,
-        Math.min(
-          requestedX,
-          cols - w
-        )
-      );
-
-      const y = Math.max(
-        0,
-        requestedY
-      );
-
-      return {
-        i: widget.id,
-        x,
-        y,
-        w,
-        h,
-
-        minW:
-          widget.type === "kpi"
-            ? 2
-            : widget.type === "table"
-              ? 6
-              : 3,
-
-        minH:
-          widget.type === "kpi"
-            ? 2
-            : 3,
-
-        maxW: cols,
-      };
-    });
-  };
+  const buildGridLayout = (widgets = [], cols = 12) =>
+    // The same geometry the shared link draws — see layout.js, which both use.
+    gridLayoutFor(widgets, cols);
 
   const buildInitialGridLayout = (
     widgets = []
@@ -1489,7 +1425,8 @@ const applyDashboardFilters = async () => {
           {renderHeader()}
 
           <div className="dash__chart-area">
-            <Renderer widget={widget} data={rows} dashboard={dashboard} />
+            {/* Raw rows for these types; see dataFor in the renderer registry. */}
+            <Renderer widget={widget} data={dataFor(widget, rows)} dashboard={dashboard} />
           </div>
         </div>
       );

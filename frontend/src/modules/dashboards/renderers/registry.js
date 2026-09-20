@@ -19,6 +19,7 @@ import LeafletMapRenderer from "./LeafletMapRenderer";
 import HighchartBubbleRenderer from "./HighchartBubbleRenderer.jsx";
 import HighchartHistogramRenderer from "./HighchartHistogramRenderer.jsx";
 import HighchartScatterRenderer from "./HighchartScatterRenderer.jsx";
+import { prepareChartData } from "./prepareChartData.js";
 
 const RENDERERS = {
   bar: AmChartBarRenderer,
@@ -33,4 +34,20 @@ const RENDERERS = {
 
 export function getRenderer(widgetType) {
   return RENDERERS[widgetType] || FallbackRenderer;
+}
+
+/**
+ * Which renderers want the rows as they came, rather than summarised.
+ *
+ * A bar or a pie is one number per category, which `prepareChartData` works
+ * out. A histogram counts the rows into buckets itself, a scatter plots one
+ * point per row, a bubble reads three columns from each, and a map needs the
+ * coordinates on the row — all of which summarising away leaves them nothing to
+ * draw. Which is exactly what a shared dashboard used to do to them.
+ */
+export const RAW_ROW_TYPES = new Set(["map", "bubble", "histogram", "scatter"]);
+
+/** The `data` one widget's renderer expects. The rule lives here, once. */
+export function dataFor(widget, rows = []) {
+  return RAW_ROW_TYPES.has(widget?.type) ? rows : prepareChartData(widget, rows);
 }

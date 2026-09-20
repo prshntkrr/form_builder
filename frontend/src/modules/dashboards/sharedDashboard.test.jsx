@@ -35,12 +35,24 @@ vi.mock('react-router-dom', () => ({
   useParams: () => ({ token: 'TKN123' }),
 }))
 
-/* The charts themselves are not what this page is responsible for. */
-vi.mock('./renderers/registry.js', () => ({
-  getRenderer: () => function Stub({ rows }) {
-    return <div data-testid="chart">{(rows || []).length} rows</div>
-  },
-}))
+/* The charts themselves are not what this page is responsible for — but which
+   shape each one is handed is, so `dataFor` is the real one. */
+vi.mock('./renderers/registry.js', async (importOriginal) => {
+  const real = await importOriginal()
+  return {
+    ...real,
+    getRenderer: () => function Stub({ rows, data, widget }) {
+      return (
+        // `dataFor` hands a raw type the very array it was given, so identity
+        // says which of the two shapes arrived without guessing from keys.
+        <div data-testid="chart" data-widget={widget?.id}
+             data-shape={data === rows ? 'rows' : 'prepared'}>
+          {(rows || []).length} rows
+        </div>
+      )
+    },
+  }
+})
 
 vi.mock('./api.js', () => ({
   BASE: '/api',
@@ -48,7 +60,7 @@ vi.mock('./api.js', () => ({
     getSharedDashboard: vi.fn(async (token) => {
       calls.push(['dashboard', token])
       if (answers.status) throw Object.assign(new Error('no'), { status: answers.status })
-      return SHARED
+      return answers.dashboard || SHARED
     }),
     getSharedData: vi.fn(async (token, widgetId) => {
       calls.push(['data', token, widgetId])
@@ -63,6 +75,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   answers.status = null
   answers.failWidget = null
+  answers.dashboard = null
 })
 
 
@@ -119,5 +132,84 @@ describe('a dashboard behind a link', () => {
 
     expect(screen.queryByRole('navigation')).toBeNull()
     expect(screen.queryByRole('button', { name: /export|share|edit/i })).toBeNull()
+  })
+})
+
+
+// --------------------------------------------------------------------------- //
+// the arrangement, and what each chart is handed
+// --------------------------------------------------------------------------- //
+describe('a shared dashboard is the dashboard as it was arranged', () => {
+  const ARRANGED = {
+    ...SHARED,
+    dashboard_json: {
+      ...SHARED.dashboard_json,
+      widgets: [
+        { id: 'wide', type: 'bar', title: 'Attendance by event', data_source_id: 'src',
+          layout: { x: 0, y: 0, w: 12, h: 5 },
+          data_binding: { dimensions: [], measures: [], filters: [] } },
+        { id: 'left', type: 'pie', title: 'By sex', data_source_id: 'src',
+          layout: { x: 0, y: 5, w: 6, h: 4 },
+          data_binding: { dimensions: [], measures: [], filters: [] } },
+        { id: 'right', type: 'line', title: 'Over time', data_source_id: 'src',
+          layout: { x: 6, y: 5, w: 6, h: 4 },
+          data_binding: { dimensions: [], measures: [], filters: [] } },
+        { id: 'hist', type: 'histogram', title: 'Contact number', data_source_id: 'src',
+          layout: { x: 0, y: 9, w: 8, h: 5 },
+          data_binding: { dimensions: [], measures: [], filters: [] } },
+      ],
+    },
+  }
+
+  beforeEach(() => { answers.dashboard = ARRANGED })
+
+  test('every widget keeps the place and size it was saved with', async () => {
+    const { gridLayoutFor } = await import('./layout.js')
+    await render(<SharedDashboard />)
+    await screen.findByRole('heading', { name: 'Attendance by event' })
+
+    // The page lays out from the same helper the builder does, so the two
+    // cannot drift apart: what it asks for is exactly the saved geometry.
+    expect(gridLayoutFor(ARRANGED.dashboard_json.widgets)).toEqual([
+      { i: 'wide', x: 0, y: 0, w: 12, h: 5, minW: 3, minH: 3, maxW: 12 },
+      { i: 'left', x: 0, y: 5, w: 6, h: 4, minW: 3, minH: 3, maxW: 12 },
+      { i: 'right', x: 6, y: 5, w: 6, h: 4, minW: 3, minH: 3, maxW: 12 },
+      { i: 'hist', x: 0, y: 9, w: 8, h: 5, minW: 3, minH: 3, maxW: 12 },
+    ])
+  })
+
+  test('the widgets are laid out, not stacked in a column of equal boxes', async () => {
+    await render(<SharedDashboard />)
+    await screen.findByRole('heading', { name: 'Attendance by event' })
+
+    const items = [...document.querySelectorAll('.react-grid-item')]
+    expect(items).toHaveLength(4)
+    // Each one is positioned and given a height in pixels — which is what a
+    // chart drawn at 100% of its box needs in order to exist at all.
+    for (const item of items) {
+      expect(item.style.transform || item.style.left).toBeTruthy()
+      expect(parseFloat(item.style.height)).toBeGreaterThan(0)
+    }
+    // The full-width one really is wider than the half-width ones beside it.
+    const width = (n) => parseFloat(items[n].style.width)
+    expect(width(0)).toBeGreaterThan(width(1))
+    expect(width(1)).toBeCloseTo(width(2), 0)
+  })
+
+  test('a histogram is handed its rows, not a summary of them', async () => {
+    await render(<SharedDashboard />)
+    await screen.findByRole('heading', { name: 'Contact number' })
+
+    const shape = (id) =>
+      document.querySelector(`[data-widget="${id}"]`).getAttribute('data-shape')
+    expect(shape('hist')).toBe('rows')
+    // While a bar chart still gets the summarised form it expects.
+    expect(shape('wide')).toBe('prepared')
+  })
+
+  test('a widget saved with no layout still gets its type\'s size', async () => {
+    const { gridLayoutFor } = await import('./layout.js')
+    expect(gridLayoutFor([{ id: 'x', type: 'kpi' }])[0])
+      .toMatchObject({ i: 'x', x: 0, y: 0, w: 3, h: 2 })
   })
 })

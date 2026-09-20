@@ -620,13 +620,11 @@
 .dash__menu-rule { margin: 6px 4px; border: 0; border-top: 1px solid var(--line, #e3e3e0); }
 .dash__menu-note { margin: 4px 10px 6px; }
 
-/* --- a dashboard someone shared ----------------------------------------- */
-.dash__shared-grid {
-  display: grid;
-  gap: 16px;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-}
-.dash__shared .dash__widget-title { margin: 0 0 4px; font-size: 1rem; }
+/* --- a dashboard someone shared -----------------------------------------
+   No grid of its own any more: the page draws the builder's twelve-column
+   grid, from the layout each widget saved, so a shared link looks like the
+   dashboard somebody arranged rather than a re-flow of the same boxes. */
+.dash__shared .head { margin-bottom: 16px; }
 
 /* --- choosing a colour ---------------------------------------------------
    A swatch and a way back to no colour at all, which is what an unstyled
@@ -678,13 +676,6 @@
 .dash__table th,
 .dash__table td {
   padding: 6px 10px;
-}
-
-/* The viewer's grid: as many graphs across as the window holds, rather than
-   two big ones and a scroll. */
-.dash__shared-grid {
-  gap: 12px;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
 }
 
 @media (max-width: 767px) {
