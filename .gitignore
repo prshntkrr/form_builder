@@ -47,3 +47,7 @@ load_tests/users.csv
 load_tests/users.tmp
 load_tests/results/
 results/
+
+# Load-test accounts: generated, and real passwords.
+load_tests/users.csv
+load_tests/__pycache__/

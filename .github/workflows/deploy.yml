@@ -5,8 +5,13 @@ on:
     branches:
       - master
 
-# The backend only. The frontend is built and published by something else, so
-# nothing here touches it — see the note at the end of the script.
+# One push to master brings the server up to date end to end: pull, install,
+# check the new code loads, bring the database schema up to date, then restart
+# the backend (8021) and the frontend (8020) — each verified by asking its port
+# rather than the process table.
+#
+# Everything that can fail without breaking the site — loading the new code,
+# and the schema work — happens while the old processes are still serving.
 
 jobs:
   deploy:
@@ -97,6 +102,9 @@ jobs:
                   f"{settings.mcdc_gateway_rate_limit}/{settings.mcdc_gateway_rate_window_seconds}s "
                   f"per caller, body <= {settings.mcdc_gateway_max_body_mb} MB")
             print("  OpenAI key       :", "set" if settings.openai_api_key else "NOT SET — the AI builder is off")
+            print("  SECRET_KEY       :",
+                  "set" if len((settings.secret_key or "").strip()) >= 32
+                  else "NOT SET — external-database connections cannot be saved")
             PREFLIGHT
             then
                 echo "The new code does not load cleanly. Nothing has been changed —"
@@ -154,6 +162,52 @@ jobs:
             # ISO 3166-1 and the units table were never here: both are datasets
             # held in the repository and seeded by their module when the backend
             # starts, so they load on every deploy regardless of the above.
+
+            echo "Bringing the database up to date..."
+
+            # The same work the backend does when it starts — done here, on
+            # purpose, while the old backend is still serving. A release that
+            # adds a table or a column (external_connection and
+            # external_import.connection_id are the latest) then fails *before*
+            # anything is stopped, instead of leaving the site down while
+            # somebody works out why the new backend will not come up.
+            #
+            # Both steps are idempotent: `CREATE TABLE IF NOT EXISTS` and
+            # `ensure_*` migrations that return early once their work is done.
+            # On a deploy that changes no schema this prints one line and stops.
+            if ! python - > /tmp/eagrology_schema.log 2>&1 <<'SCHEMA'
+            import logging
+            import sys
+
+            logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+
+            import app.main  # noqa: F401  (every module registers its tables)
+            from app.core import bootstrap
+            from app.core.database import ping
+
+            if not ping():
+                print("The database is not reachable — check DB_HOST/DB_USER in backend/.env")
+                sys.exit(1)
+
+            created = bootstrap.ensure_base_tables()
+            print("tables created:", ", ".join(created) if created else "none — already current")
+
+            bootstrap.run_module_migrations()
+
+            still = bootstrap.missing_tables()
+            if still:
+                print("STILL MISSING after running the schema files:", ", ".join(still))
+                sys.exit(1)
+            print("schema ready")
+            SCHEMA
+            then
+                echo "The database could not be brought up to date. Nothing has been"
+                echo "stopped — the running backend is untouched and still serving."
+                echo ""
+                tail -30 /tmp/eagrology_schema.log
+                exit 1
+            fi
+            cat /tmp/eagrology_schema.log
 
             echo "Importing client catalogs..."
 
@@ -243,7 +297,7 @@ jobs:
             # every deploy but the one that changed something — which is the one
             # worth being able to read afterwards.
             echo "Schema and seed work on this start:"
-            grep -aE "Granted|form_export gained|ISO 3166-1|Created (form table|survey sequence)|Creating missing table" \
+            grep -aE "Granted|form_export gained|ISO 3166-1|Created (form table|survey sequence)|Creating missing table|connection_id added" \
               backend.log | tail -20 || echo "  (nothing to do — the database was already current)"
 
             case "$HEALTH" in
