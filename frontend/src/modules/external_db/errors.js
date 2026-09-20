@@ -63,9 +63,46 @@ const UNKNOWN = {
 /** Statuses where trying the same thing again is a reasonable thing to do. */
 const WORTH_RETRYING = new Set([502, 503, 504])
 
-export function describe(error) {
+// Databricks has no port, database or password; it has a host, a warehouse and a token.
+const DATABRICKS = {
+  502: {
+    title: 'Connection failed',
+    message: "We couldn't reach the Databricks SQL warehouse. Check the workspace "
+      + 'host, the warehouse ID, the access token, and that the token may use it.',
+  },
+  422: {
+    title: 'Check the details',
+    message: 'Some of the details are not valid. Check the workspace host (a '
+      + 'Databricks host name only), the warehouse ID, the catalog, and the table.',
+  },
+}
+
+/**
+ * Refusals this module's backend writes itself — "'x' is not a valid table
+ * name", "Column 'photo' uses unsupported type…". Their text is ours, never a
+ * driver's or Databricks', so it is shown: it names the field that is wrong.
+ * Connection failures (502) keep the fixed copy above.
+ */
+const OWN_WORDS = new Set([
+  'VALIDATION_ERROR', 'UNSUPPORTED_DB_TYPE', 'UNSUPPORTED_COLUMN_TYPE',
+  'RESOURCE_NOT_FOUND', 'CONFLICT', 'IMPORT_LIMIT',
+])
+
+/** A configured limit was reached: the message names which one. */
+const TITLES = { IMPORT_LIMIT: 'Import limit reached' }
+
+export function describe(error, dbType) {
   const status = error?.status
-  const known = BY_STATUS[status]
+  const known = (dbType === 'databricks' && DATABRICKS[status]) || BY_STATUS[status]
+
+  if (status >= 400 && status < 500 && OWN_WORDS.has(error?.code) && error?.serverMessage) {
+    return {
+      title: TITLES[error.code] || known?.title || 'Check the details',
+      message: error.serverMessage,
+      canRetry: false,
+      status,
+    }
+  }
 
   // A 5xx nobody has written copy for is still the server's fault, not the
   // person's — and still worth retrying.

@@ -10,6 +10,12 @@ class Settings(BaseSettings):
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
     )
 
+    # The key this application seals stored secrets with — today, saved
+    # external-database credentials (`app/core/secrets.py`). At least 32
+    # characters, from the environment and never from source. Empty means this
+    # installation stores no credentials at all, and says so when asked to.
+    secret_key: str = ""
+
     # Postgres
     db_host: str = "localhost"
     db_port: int = 5432
@@ -103,6 +109,17 @@ class Settings(BaseSettings):
     external_db_batch_size: int = 1000
     # The most a preview may ever return, however large a limit is asked for.
     external_db_preview_max: int = 200
+    # Databricks. An import is fetched chunk by chunk (EXTERNAL_LINKS), so its
+    # size is bounded by these, not by Databricks' 25 MB inline-response cap.
+    # How long to wait for the query to finish (a stopped warehouse takes a
+    # few minutes to start); it is cancelled after that.
+    external_db_databricks_wait_seconds: int = 300
+    # The most rows, and bytes of result, one import copies. Over either, the
+    # import is refused and nothing is written.
+    external_db_databricks_max_rows: int = 500000
+    external_db_databricks_max_bytes: int = 1024 * 1024 * 1024
+    # How long downloading and inserting every chunk may take, in total.
+    external_db_databricks_import_seconds: int = 1800
 
     # Email (optional). Without a host, reset links are written to the log.
     smtp_host: str = ""

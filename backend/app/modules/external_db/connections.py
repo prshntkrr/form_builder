@@ -8,6 +8,7 @@ schema name, a table name and a row limit, each checked before it is used.
 
     PostgreSQL   psycopg2, a named (server-side) cursor for the copy
     MySQL        PyMySQL, an unbuffered cursor for the copy
+    Databricks   the SQL Statement Execution API, over HTTPS (databricks.py)
 
 Both are opened with a connect timeout and a statement/read timeout, so a
 request cannot hang on a host that accepts a socket and never answers.
@@ -23,11 +24,12 @@ from contextlib import contextmanager
 from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 from app.core.config import settings
+from app.modules.external_db import databricks
 
 logger = logging.getLogger(__name__)
 
-POSTGRESQL, MYSQL = "postgresql", "mysql"
-SUPPORTED = (POSTGRESQL, MYSQL)
+POSTGRESQL, MYSQL, DATABRICKS = "postgresql", "mysql", databricks.DATABRICKS
+SUPPORTED = (POSTGRESQL, MYSQL, DATABRICKS)
 
 # A schema or table name as the source database spells it. Deliberately strict:
 # anything outside this never reaches a query, quoted or not.
@@ -77,6 +79,8 @@ def check_connection(spec: Dict[str, Any]) -> Dict[str, Any]:
         raise UnsupportedDbType(
             f"'{db_type or 'none'}' is not a database this can read. "
             f"Supported: {', '.join(SUPPORTED)}.")
+    if db_type == DATABRICKS:
+        return databricks.check(spec)
 
     host = str(spec.get("host") or "").strip()
     if not host or any(c in host for c in " \t\r\n;'\""):
@@ -101,11 +105,14 @@ def check_connection(spec: Dict[str, Any]) -> Dict[str, Any]:
 
     return {"db_type": db_type, "host": host, "port": port, "database": database,
             "username": str(spec.get("username") or ""),
-            "password": str(spec.get("password") or "")}
+            "password": str(spec.get("password") or ""),
+            "name": str(spec.get("name") or "").strip()[:100]}
 
 
 def describe(spec: Dict[str, Any]) -> str:
     """A connection in a form that is safe to log: never the password."""
+    if spec["db_type"] == DATABRICKS:
+        return databricks.describe(spec)
     return (f"{spec['db_type']}://{spec['username'] or '-'}@{spec['host']}:"
             f"{spec['port']}/{spec['database']}")
 
@@ -219,6 +226,8 @@ def _query(connection, db_type: str, sql: str, params: tuple = ()) -> List[Dict[
 # --------------------------------------------------------------------------- #
 def test(spec: Dict[str, Any]) -> Dict[str, Any]:
     """Open a connection, ask it the cheapest possible question, close it."""
+    if str(spec.get("db_type") or "").strip().lower() == DATABRICKS:
+        return databricks.test(spec)
     checked = check_connection(spec)
     with connect(checked) as connection:
         _query(connection, checked["db_type"], "SELECT 1")
@@ -228,6 +237,8 @@ def test(spec: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def schemas(spec: Dict[str, Any]) -> List[str]:
+    if str(spec.get("db_type") or "").strip().lower() == DATABRICKS:
+        return databricks.schemas(spec)
     checked = check_connection(spec)
     with connect(checked) as connection:
         if checked["db_type"] == POSTGRESQL:
@@ -245,6 +256,8 @@ def schemas(spec: Dict[str, Any]) -> List[str]:
 
 
 def tables(spec: Dict[str, Any], schema: str) -> List[Dict[str, str]]:
+    if str(spec.get("db_type") or "").strip().lower() == DATABRICKS:
+        return databricks.tables(spec, schema)
     checked = check_connection(spec)
     wanted = check_identifier(schema, "schema")
 
@@ -261,6 +274,8 @@ def tables(spec: Dict[str, Any], schema: str) -> List[Dict[str, str]]:
 
 def columns(spec: Dict[str, Any], schema: str, table: str) -> List[Dict[str, Any]]:
     """The source columns, in their declared order."""
+    if str(spec.get("db_type") or "").strip().lower() == DATABRICKS:
+        return databricks.columns(spec, schema, table)
     checked = check_connection(spec)
     wanted_schema = check_identifier(schema, "schema")
     wanted_table = check_identifier(table, "table")
@@ -309,6 +324,8 @@ def _quoted(db_type: str, schema: str, table: str) -> str:
 def preview(spec: Dict[str, Any], schema: str, table: str,
             limit: int = 20) -> Dict[str, Any]:
     """A few rows, for somebody deciding whether this is the right table."""
+    if str(spec.get("db_type") or "").strip().lower() == DATABRICKS:
+        return databricks.preview(spec, schema, table, limit)
     checked = check_connection(spec)
     wanted_schema = check_identifier(schema, "schema")
     wanted_table = check_identifier(table, "table")
@@ -352,6 +369,10 @@ def rows(spec: Dict[str, Any], schema: str, table: str,
     A generator on purpose: the caller writes each batch and lets it go, so the
     memory this uses is one batch whatever the size of the table.
     """
+    if str(spec.get("db_type") or "").strip().lower() == DATABRICKS:
+        # This is a generator: `return x` would end it with nothing yielded.
+        yield from databricks.rows(spec, schema, table, batch)
+        return
     checked = check_connection(spec)
     wanted_schema = check_identifier(schema, "schema")
     wanted_table = check_identifier(table, "table")

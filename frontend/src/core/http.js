@@ -57,6 +57,10 @@ export async function request(path, options = {}) {
     const error = new Error(message)
     error.status = res.status
     error.fieldErrors = detail?.errors ?? null
+    // A structured refusal — `{code, message}` — kept whole, so a page that
+    // knows those codes can show the message. Nothing else reads these.
+    error.code = typeof detail?.code === 'string' ? detail.code : null
+    error.serverMessage = typeof detail?.message === 'string' ? detail.message : null
     throw error
   }
   return body

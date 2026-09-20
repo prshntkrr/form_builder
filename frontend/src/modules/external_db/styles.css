@@ -25,3 +25,21 @@
 
 .xdb__done { display: flex; flex-wrap: wrap; gap: 18px; }
 .xdb__done b { display: block; font-size: 18px; }
+
+/* Imported tables: an error message wraps rather than widening the table. */
+.xdb__error { white-space: normal !important; min-width: 220px; max-width: 380px; }
+
+/* Saved connections: one row each, its actions on the right. */
+.xdb__saved { display: flex; flex-direction: column; gap: 8px; }
+.xdb__conn {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px;
+}
+.xdb__conn--on { border-color: var(--accent, #2b7); background: var(--accent-wash, transparent); }
+.xdb__editor {
+  display: flex; flex-direction: column; gap: 10px; margin-top: 10px;
+  padding: 12px; border: 1px solid var(--line); border-radius: 8px;
+}
+.xdb__dots { letter-spacing: 2px; color: var(--muted, #777); }
+.xdb__fields { border: 0; margin: 0; padding: 0; min-width: 0; }
+.xdb__fields[disabled] { opacity: .6; }
