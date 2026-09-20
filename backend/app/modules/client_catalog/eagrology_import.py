@@ -39,8 +39,20 @@ logger = logging.getLogger(__name__)
 
 SHEET = "Catalogs"
 
-LIST_COLUMN = "list"
-CODE_COLUMN = "variable"
+#: The same sheet, in the language the client wrote it in. Their workbook is
+#: Spanish throughout — the label column already was (`etiqueta`), so the sheet
+#: and the two other columns are read the same way rather than asking anybody to
+#: rename a file before it can be loaded.
+SHEET_NAMES = ("catalogs", "catálogos", "catalogos", "catalogues")
+
+#: Which column names the list, and which holds the code. First match wins, and
+#: the canonical spelling is first.
+LIST_COLUMNS = ("list", "catálogos", "catalogos", "catálogo", "catalogo", "lista")
+CODE_COLUMNS = ("variable", "valor", "código", "codigo", "code")
+
+# Kept as the names the rest of this module reads.
+LIST_COLUMN = LIST_COLUMNS[0]
+CODE_COLUMN = CODE_COLUMNS[0]
 
 # The label columns, and the language each one is written in. The workbook's own
 # headings are the evidence; nothing is assumed about which languages a client
@@ -81,8 +93,16 @@ def _headings(row) -> Dict[str, int]:
 
 def _catalogs_sheet(workbook):
     for name in workbook.sheetnames:
-        if name.strip().lower() == SHEET.lower():
+        if name.strip().lower() in SHEET_NAMES:
             return workbook[name]
+    return None
+
+
+def _column(headings: Dict[str, int], names) -> Optional[int]:
+    """Where one of these headings is, whichever spelling the workbook used."""
+    for name in names:
+        if name in headings:
+            return headings[name]
     return None
 
 
@@ -106,8 +126,8 @@ def is_eagrology_workbook(data: bytes) -> bool:
 
             # A list column, a code column, and at least one label column.
             return (
-                LIST_COLUMN in headings
-                and CODE_COLUMN in headings
+                _column(headings, LIST_COLUMNS) is not None
+                and _column(headings, CODE_COLUMNS) is not None
                 and any(heading in LABEL_COLUMNS for heading in headings)
             )
     except Exception:
@@ -124,7 +144,7 @@ def read_workbook(data: bytes) -> Dict[str, Any]:
 
             if sheet is None:
                 raise EagrologyCatalogError(
-                    f"This workbook has no '{SHEET}' sheet. Found: "
+                    f"This workbook has no '{SHEET}' sheet (or 'Catálogos'). Found: "
                     + ", ".join(workbook.sheetnames)
                 )
 
@@ -138,10 +158,13 @@ def read_workbook(data: bytes) -> Dict[str, Any]:
         raise EagrologyCatalogError(f"The '{SHEET}' sheet is empty.")
 
     headings = _headings(rows[0])
+    list_column = _column(headings, LIST_COLUMNS)
+    code_column = _column(headings, CODE_COLUMNS)
 
-    if LIST_COLUMN not in headings or CODE_COLUMN not in headings:
+    if list_column is None or code_column is None:
         raise EagrologyCatalogError(
-            f"The '{SHEET}' sheet needs a List column and a Variable column. Found: "
+            f"The '{SHEET}' sheet needs a List column and a Variable column "
+            "(or 'Catálogos' and 'Valor'). Found: "
             + ", ".join(_text(cell) for cell in rows[0] if _text(cell))
         )
 
@@ -166,13 +189,13 @@ def read_workbook(data: bytes) -> Dict[str, Any]:
         return _text(row[index]) if index is not None and index < len(row) else ""
 
     for row in rows[1:]:
-        catalog_id = cell(row, headings[LIST_COLUMN])
+        catalog_id = cell(row, list_column)
         if not catalog_id:
             continue
 
         catalog = catalogs.setdefault(catalog_id, {"catalog_id": catalog_id, "values": []})
 
-        code = cell(row, headings[CODE_COLUMN])
+        code = cell(row, code_column)
         if not code:
             # A row naming the list and nothing else — the group heading above
             # its values. It creates the catalogue, not a value in it.
