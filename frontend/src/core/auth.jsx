@@ -21,6 +21,9 @@ export function AuthProvider({ children }) {
   // so nothing renders a module the server has switched off — not even briefly.
   const [modules, setModules] = useState(null)
   const [checking, setChecking] = useState(true)
+  // A session that ran out, rather than one that was never there. The sign-in
+  // page says so, so nobody is left wondering why they are being asked again.
+  const [expired, setExpired] = useState(false)
 
   const forget = useCallback(() => {
     localStorage.removeItem(TOKEN_KEY)
@@ -43,19 +46,20 @@ export function AuthProvider({ children }) {
       .then(({ user: me, can: allowed, permissions: held, modules: live }) => {
         setUser(me); setCan(allowed); setPermissions(held || []); setModules(live || [])
       })
-      .catch(forget)
+      .catch(() => { forget(); setExpired(true) })
       .finally(() => setChecking(false))
   }, [forget])
 
   // A 401 from anywhere means the session is gone — stop pretending otherwise.
   useEffect(() => {
-    const onExpired = () => forget()
+    const onExpired = () => { forget(); setExpired(true) }
     window.addEventListener('ea_session_expired', onExpired)
     return () => window.removeEventListener('ea_session_expired', onExpired)
   }, [forget])
 
   const signIn = async (email, password) => {
     const result = await api.login(email, password)
+    setExpired(false)
     localStorage.setItem(TOKEN_KEY, result.token)
     setAuthToken(result.token)
     const { user: me, can: allowed, permissions: held, modules: live } = await api.me()
@@ -78,7 +82,7 @@ export function AuthProvider({ children }) {
   return (
     <AuthContext.Provider
       value={{
-        user, can, permissions, modules, checking, signIn, signOut, refresh: forget,
+        user, can, permissions, modules, checking, expired, signIn, signOut, refresh: forget,
         // The permission list is the real answer; `can` is a convenience for
         // deciding which whole sections of the app to show.
         has: (permission) => permissions.includes(permission),

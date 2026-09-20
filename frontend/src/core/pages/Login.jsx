@@ -3,7 +3,7 @@ import { Link, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../auth.jsx'
 
 export default function Login() {
-  const { user, signIn } = useAuth()
+  const { user, signIn, expired } = useAuth()
   const location = useLocation()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -39,6 +39,11 @@ export default function Login() {
 
         {location.state?.signedOut && (
           <div className="note note--good">You have been signed out.</div>
+        )}
+        {expired && !location.state?.signedOut && (
+          <div className="note note--warn">
+            Your session has ended. Sign in to go back to what you were doing.
+          </div>
         )}
         {error && <div className="note note--bad">{error}</div>}
 

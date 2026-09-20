@@ -35,6 +35,40 @@ function Require({ need }) {
   return <Outlet />
 }
 
+/**
+ * A URL that matches nothing.
+ *
+ * Which is what *every* module page is when nobody is signed in: the routes
+ * come from the modules /api/auth/me reports, and a session that has expired
+ * answers nothing, so there is no `/forms/...` route left to match. Falling
+ * through to "Nothing here" told somebody whose token had quietly run out that
+ * their page did not exist. Sign in again instead, and come back to where they
+ * were.
+ */
+function NotFound() {
+  const { user, checking } = useAuth()
+  const location = useLocation()
+
+  if (checking) return <Loading />
+  if (!user) {
+    return (
+      <Navigate
+        to="/login"
+        replace
+        state={{ from: `${location.pathname}${location.search}`, expired: true }}
+      />
+    )
+  }
+  return (
+    <main className="main">
+      <div className="blank">
+        <h2>Nothing here</h2>
+        <p>That page doesn't exist.</p>
+      </div>
+    </main>
+  )
+}
+
 /** The shell: navigation plus whatever is being worked on. */
 function Shell() {
   const [open, setOpen] = useState(false)
@@ -124,17 +158,7 @@ export default function App() {
         </Route>
       </Route>
 
-      <Route
-        path="*"
-        element={
-          <main className="main">
-            <div className="blank">
-              <h2>Nothing here</h2>
-              <p>That page doesn't exist.</p>
-            </div>
-          </main>
-        }
-      />
+      <Route path="*" element={<NotFound />} />
     </Routes>
   )
 }
