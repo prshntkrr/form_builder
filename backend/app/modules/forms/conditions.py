@@ -192,7 +192,7 @@ def hidden(form_json: Dict[str, Any], answers: Dict[str, Any]) -> Dict[str, Any]
     A field a rule reads is never hidden by that rule. The question controlling
     the questionnaire has to stay answerable, or nothing could ever be shown.
     """
-    from app.modules.forms.form_schema import field_name
+    from app.modules.forms.form_schema import field_hidden, field_name
 
     rules = [r for r in (form_json.get("rules") or []) if isinstance(r, dict)]
 
@@ -237,6 +237,17 @@ def hidden(form_json: Dict[str, Any], answers: Dict[str, Any]) -> Dict[str, Any]
     # controlling question could never be satisfied again.
     for name in controlling_fields(rules):
         hidden_fields.discard(name)
+
+    # A question hidden outright (`config.hide`) is hidden whatever the rules
+    # say — after the exception above, not before it: a question nobody can see
+    # cannot be the one that makes a rule hold, and leaving it "visible because
+    # a rule reads it" would put it back on the form. Last word, on purpose, so
+    # that "hidden" and "not required" mean the same thing here as everywhere.
+    for field in form_json.get("fields") or []:
+        if isinstance(field, dict) and field_hidden(field):
+            name = field_name(field)
+            if name:
+                hidden_fields.add(name)
 
     return {
         "fields": sorted(hidden_fields),
@@ -345,7 +356,7 @@ def problems(form_json: Dict[str, Any]) -> List[Dict[str, str]]:
     have. And a chain of rules cannot come back round to where it started, since
     nothing would settle.
     """
-    from app.modules.forms.form_schema import field_name
+    from app.modules.forms.form_schema import field_hidden, field_name
 
     rules = form_json.get("rules") or []
     names = {field_name(f) for f in form_json.get("fields") or []

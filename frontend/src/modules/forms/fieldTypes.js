@@ -73,3 +73,43 @@ export const STORAGE = {
   // as TEXT. Mirrors backend/app/modules/forms/field_types.py.
   polygon: ['array [[lng, lat], …]', 'TEXT'],
 }
+
+/**
+ * A question's key, from whatever it is called.
+ *
+ * The mirror of `slugify_identifier` in backend/app/modules/forms/form_schema.py,
+ * **including its length**: a key becomes a Postgres column, and Postgres stops
+ * at 63 bytes, so the backend has always cut one at 55 characters. This did
+ * not, so a question written as a sentence — or a form with a long title —
+ * produced a key the server then refused with "String should have at most 55
+ * characters", about a property nobody had typed.
+ */
+export const MAX_IDENTIFIER = 55
+
+export const identifier = (text) => {
+  let ident = String(text || '').trim().toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_|_$/g, '')
+  if (!ident) return ''
+  // Postgres identifiers may not start with a digit.
+  if (/^[0-9]/.test(ident)) ident = `f_${ident}`
+  return ident.slice(0, MAX_IDENTIFIER).replace(/_+$/, '')
+}
+
+/**
+ * Whether a question is hidden outright — `config.hide`.
+ *
+ * A flat `hide` is read too, for a definition written that way by an import or
+ * a model. Everything that decides what to *show* goes through
+ * `conditions.hidden`, which folds this in with the rules; this is the one
+ * place that reads the flag itself.
+ */
+export const fieldHidden = (field) => {
+  const config = field?.config
+  if (config && typeof config === 'object' && 'hide' in config) return Boolean(config.hide)
+  return Boolean(field?.hide)
+}
+
+/** A question's settings as they are stored. Every new question gets these. */
+export const fieldConfig = (field) => ({ ...(field?.config || {}), hide: fieldHidden(field) })

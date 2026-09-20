@@ -15,6 +15,8 @@
  * Every function returns a new object; nothing is changed in place.
  */
 
+import { fieldHidden } from './fieldTypes.js'
+
 export const configOf = (form) => form?.channel_config?.whatsapp || {}
 
 /** The form with this as its WhatsApp configuration. */
@@ -30,7 +32,12 @@ export function withWhatsApp(form, config) {
  * later is asked at the end rather than never.
  */
 export function conversationOrder(form) {
-  const names = (form?.fields || []).map((f) => f.name).filter(Boolean)
+  // A hidden question is not asked on WhatsApp either: it is left out of the
+  // conversation entirely rather than sent and ignored.
+  const names = (form?.fields || [])
+    .filter((f) => !fieldHidden(f))
+    .map((f) => f.name)
+    .filter(Boolean)
   const known = new Set(names)
   const placed = (configOf(form).order || []).filter((n, i, all) => known.has(n) && all.indexOf(n) === i)
   return [...placed, ...names.filter((n) => !placed.includes(n))]

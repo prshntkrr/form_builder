@@ -6,9 +6,10 @@ import ConditionEditor from './ConditionEditor.jsx'
 import { api } from '../api.js'
 import CatalogueValues from './CatalogueValues.jsx'
 import { useAuth } from '../../../core/auth.jsx'
+import { fieldConfig, fieldHidden, identifier } from '../fieldTypes.js'
 
-const slug = (t) =>
-  String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '')
+/* The backend's `slugify_identifier`, cap included — see fieldTypes.js. */
+const slug = identifier
 
 /**
  * Where this question's choices come from.
@@ -423,6 +424,27 @@ export default function FieldEditor({
               Required
             </label>
           </label>
+
+          {/* Out of the form, not out of the definition: the question keeps its
+              place, its column and every answer already given. Nobody is asked
+              it — so it is not required of them either, whatever Required says
+              above; `conditions.hidden` treats it exactly as a rule-hidden
+              question, on every channel. */}
+          <label className="col">
+            <span className="minilabel">Visibility</span>
+            <label className="insp__check">
+              <input type="checkbox" checked={fieldHidden(field)}
+                     onChange={(e) => patch({ config: { ...fieldConfig(field), hide: e.target.checked } })} />
+              Hide element
+            </label>
+            {fieldHidden(field) && (
+              <span className="tiny muted">
+                Hidden: nobody filling the form in sees this question, and it is
+                not asked for even if it is marked required. Answers already
+                collected are kept.
+              </span>
+            )}
+          </label>
         </div>
 
         {/* A boundary drawn here is part of the question, and it is kept in
@@ -649,6 +671,15 @@ export default function FieldEditor({
           <input type="checkbox" checked={!!field.required} onChange={(e) => patch({ required: e.target.checked })} />
           Required
         </label>
+
+        {/* Said on the row, not only inside the question: a hidden question is
+            still listed here — that is how it gets un-hidden — and without
+            this it would look like every other one. */}
+        {fieldHidden(field) && (
+          <span className="pill frow__hidden" title="Hidden from the form. Open the question to show it again.">
+            Hidden
+          </span>
+        )}
 
         {/* Which standards this question carries, without having to open it. */}
         {(field.semantic_concept || field.data_standard || field.crop_ontology) && (

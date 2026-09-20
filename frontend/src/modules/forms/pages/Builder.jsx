@@ -5,6 +5,7 @@ import { formsChanged } from '../../../core/events.js'
 import FieldEditor from '../components/FieldEditor.jsx'
 import { defaultLanguage, languageChoices } from '../translate.js'
 import { applicable } from '../conditions.js'
+import { fieldHidden, identifier } from '../fieldTypes.js'
 import { generateLayout, removeFromLayout, withFieldReplaced } from '../formLayout.js'
 import { FORM_CHANNEL_NAMES, PUBLISHABLE, formChannel } from '../channelCapabilities.js'
 import { conversationOrder, configOf, removeFromWhatsApp, renameInWhatsApp } from '../whatsappConfig.js'
@@ -42,8 +43,10 @@ const SEEDS = [
   ],
 ];
 
-const slug = (t) =>
-  String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '')
+/* The backend's `slugify_identifier`, cap included — see fieldTypes.js. A key
+   longer than that is a column Postgres cannot name, and used to come back as
+   "String should have at most 55 characters" about a property nobody typed. */
+const slug = identifier
 
 let seq = 0
 const uid = () => `u${++seq}`
@@ -91,8 +94,32 @@ function copyFor(formJson, channel) {
  * list of issues; showing only "Please fix the highlighted fields" would hide
  * why — which, for a channel that cannot ask a required question, is the point.
  */
+/**
+ * Where in the form an error is, in the words of the builder rather than of
+ * the document. `fields.3.label` is question 4's label, and saying so is the
+ * difference between an error somebody can act on and one they have to decode.
+ */
+export function where(path) {
+  const parts = String(path || '').split('.')
+  const nth = (i) => Number(parts[i]) + 1
+
+  if (parts[0] === 'fields' && !Number.isNaN(nth(1))) {
+    const question = `Question ${nth(1)}`
+    if (parts[2] === 'options' && !Number.isNaN(nth(3))) {
+      return `${question}, choice ${nth(3)}${parts[4] ? ` (${parts[4]})` : ''}`
+    }
+    return parts[2] ? `${question} (${parts[2]})` : question
+  }
+  if (parts[0] === 'sections' && !Number.isNaN(nth(1))) {
+    return parts[2] ? `Section ${nth(1)} (${parts[2]})` : `Section ${nth(1)}`
+  }
+  return path === 'config' || !path ? 'The form' : path
+}
+
 function explain(e) {
-  const issues = Array.isArray(e?.fieldErrors) ? e.fieldErrors.map((i) => i.message).filter(Boolean) : []
+  const issues = Array.isArray(e?.fieldErrors)
+    ? e.fieldErrors.filter((i) => i?.message).map((i) => `${where(i.field)}: ${i.message}`)
+    : []
   return issues.length ? `${e.message}: ${issues.join(' ')}` : (e?.message || 'Something went wrong')
 }
 
@@ -502,7 +529,10 @@ export default function Builder() {
     const made = {
       _uid: uid(),
       name: `question_${n}`, label: '', type: 'text', required: false,
-      placeholder: '', help_text: '', options: [], validation: {}, section: null, order: n,
+      placeholder: '', help_text: '', options: [], validation: {}, section: null,
+      // Every new question carries its settings, visible by default.
+      config: { hide: false },
+      order: n,
     }
     setForm({ ...form, fields: [...form.fields, made] })
     setChosen(made.name)

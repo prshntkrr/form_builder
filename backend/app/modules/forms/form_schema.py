@@ -39,6 +39,14 @@ envelope columns; see ENVELOPE_COLUMNS below.
 import re
 from typing import Any, Dict, List, Optional
 
+from app.modules.forms.constants import (
+    MAX_DESCRIPTION,
+    MAX_HELP_TEXT,
+    MAX_LABEL,
+    MAX_OPTION_LABEL,
+    MAX_PLACEHOLDER,
+    MAX_SECTION_TITLE,
+)
 from app.modules.forms.field_types import get_type, normalize_type
 from app.modules.forms.translations import (
     DEFAULT_LANGUAGE,
@@ -160,7 +168,8 @@ def _normalize_options(raw: Any) -> List[Dict[str, str]]:
             label = value = item
         if label is None:
             continue
-        label, value = str(label).strip(), str(value).strip()
+        label = str(label).strip()[:MAX_OPTION_LABEL]
+        value = str(value).strip()[:MAX_OPTION_LABEL]
         if not label or not value or value in seen:
             continue
         seen.add(value)
@@ -299,15 +308,20 @@ def _normalize_field(raw: Any, index: int, taken: set) -> Optional[Dict[str, Any
 
     field: Dict[str, Any] = {
         "name": name,
-        "label": label,
+        "label": _cut(label, MAX_LABEL),
         "type": ftype,
         "required": bool(raw.get("required") or raw.get("is_required")),
-        "placeholder": str(raw.get("placeholder") or "").strip(),
-        "help_text": str(raw.get("help_text") or raw.get("helpText") or raw.get("hint") or "").strip(),
+        "placeholder": _cut(raw.get("placeholder"), MAX_PLACEHOLDER),
+        "help_text": _cut(
+            raw.get("help_text") or raw.get("helpText") or raw.get("hint"), MAX_HELP_TEXT),
         "default": default,
         "section": slugify_identifier(raw.get("section") or "", "") or None,
         "options": options,
         "validation": _normalize_validation(raw.get("validation"), ftype),
+        # Per-question settings, always present so every reader can ask without
+        # checking first. A definition written before this existed has none,
+        # and gets `hide: false` here — which is what it always meant.
+        "config": _normalize_field_config(raw),
         "order": index + 1,
     }
 
@@ -367,6 +381,45 @@ def _normalize_field(raw: Any, index: int, taken: set) -> Optional[Dict[str, Any
         field["editable"] = bool(raw.get("editable"))
 
     return field
+
+
+def _cut(text: Any, limit: int) -> str:
+    """Text as it will be stored: stripped, and no longer than it may be.
+
+    The normalizer repairs rather than refuses — `validate_config` is what tells
+    somebody their question is too long, and it uses the same numbers (see
+    `constants`). Cutting here is what keeps that promise for the definitions
+    nobody types: an LLM's, an import's.
+    """
+    return str(text or "").strip()[:limit]
+
+
+def _normalize_field_config(raw: Dict[str, Any]) -> Dict[str, Any]:
+    """A question's settings: `{"hide": bool}`, however it was written.
+
+    `config.hide` is where it belongs; a flat `hide` beside the label is taken
+    too, because that is the shorter thing to write and both an import and a
+    model reach for it.
+    """
+    given = raw.get("config")
+    given = given if isinstance(given, dict) else {}
+    hide = given.get("hide") if "hide" in given else raw.get("hide")
+    return {"hide": bool(hide)}
+
+
+def field_hidden(field: Any) -> bool:
+    """Whether this question is hidden outright, whatever the answers are.
+
+    The one place that reads the flag. Everything else — the form page, the
+    submission service, what a channel can ask — goes through
+    `conditions.hidden`, which folds this in with the rules.
+    """
+    if not isinstance(field, dict):
+        return False
+    config = field.get("config")
+    if isinstance(config, dict) and "hide" in config:
+        return bool(config["hide"])
+    return bool(field.get("hide"))
 
 
 def _normalize_semantic_concept(raw: Dict[str, Any]) -> Optional[Dict[str, str]]:
@@ -601,7 +654,8 @@ def _normalize_sections(raw: Any, fields: List[Dict[str, Any]]) -> List[Dict[str
             continue
         seen.add(key)
         sections.append(
-            {"key": key, "title": title, "description": str(item.get("description") or "").strip()}
+            {"key": key, "title": title[:MAX_SECTION_TITLE],
+             "description": str(item.get("description") or "").strip()[:MAX_DESCRIPTION]}
         )
 
     # Fields may reference a section by its title; re-point them at the key, and
@@ -674,7 +728,8 @@ def normalize_form(raw: Any, fallback_title: str = "Untitled Form") -> Dict[str,
 
     form = {
         "title": title or fallback_title,
-        "description": str(raw.get("description") or raw.get("form_description") or "").strip(),
+        "description": _cut(raw.get("description") or raw.get("form_description"),
+                            MAX_DESCRIPTION),
         "table_name": derive_table_name(title, raw.get("table_name")),
         "created_by": author or None,
         "standard_id": standard_id,

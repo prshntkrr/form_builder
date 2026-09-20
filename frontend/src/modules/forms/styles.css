@@ -792,3 +792,6 @@
   .wa { grid-template-columns: minmax(0, 1fr); }
   .wa__phone { position: static; }
 }
+
+/* A question kept in the definition but out of the form. */
+.frow__hidden { background: var(--amber-wash, #fdf3e0); color: var(--amber, #a76b12); }

@@ -56,7 +56,16 @@ from pydantic import (
     model_validator,
 )
 
-from app.modules.forms.constants import FORM_STATUSES, FORM_TYPES
+from app.modules.forms.constants import (
+    FORM_STATUSES,
+    FORM_TYPES,
+    MAX_DESCRIPTION,
+    MAX_HELP_TEXT,
+    MAX_LABEL,
+    MAX_OPTION_LABEL,
+    MAX_PLACEHOLDER,
+    MAX_SECTION_TITLE,
+)
 from app.modules.forms.field_types import get_type, resolve_type, SUPPORTED_TYPES
 from app.modules.forms.form_schema import (
     MAX_IDENTIFIER,
@@ -72,6 +81,9 @@ BUSINESS_RULE = "business_rule"
 MAX_TITLE = 200
 MAX_SUBMIT_LABEL = 50
 MAX_SUCCESS_MESSAGE = 200
+
+# The text limits are in `constants`, because the normalizer cuts to the same
+# numbers this refuses past — see the note there.
 
 
 # --------------------------------------------------------------------------- #
@@ -115,8 +127,10 @@ class _Config(BaseModel):
 
 
 class OptionConfig(_Config):
-    label: str = Field(min_length=1)
-    value: str = Field(min_length=1)
+    label: str = Field(min_length=1, max_length=MAX_OPTION_LABEL)
+    # Not an identifier: an option's value is stored as data, not as a column
+    # name, so it is held to the same length as the label it usually is.
+    value: str = Field(min_length=1, max_length=MAX_OPTION_LABEL)
 
     @model_validator(mode="before")
     @classmethod
@@ -143,8 +157,9 @@ class ValidationRules(_Config):
 
 class SectionConfig(_Config):
     key: Optional[str] = Field(default=None, max_length=MAX_IDENTIFIER)
-    title: str = Field(min_length=1, validation_alias=AliasChoices("title", "name"))
-    description: str = ""
+    title: str = Field(min_length=1, max_length=MAX_SECTION_TITLE,
+                       validation_alias=AliasChoices("title", "name"))
+    description: str = Field(default="", max_length=MAX_DESCRIPTION)
 
     @model_validator(mode="before")
     @classmethod
@@ -156,6 +171,18 @@ class SectionConfig(_Config):
         if not self.key:
             self.key = slugify_identifier(self.title, "section")
         return self
+
+
+class FieldSettings(_Config):
+    """Per-question settings that are neither its content nor its validation.
+
+    One so far. `hide` takes a question out of the form without deleting it:
+    the answers already collected stay, its column stays, and it can be put
+    back. Static, on purpose — hiding a question *depending on an answer* is
+    what the `rules` engine has always done, and this does not duplicate it.
+    """
+
+    hide: bool = False
 
 
 class FieldConfig(_Config):
@@ -173,19 +200,22 @@ class FieldConfig(_Config):
         validation_alias=AliasChoices("name", "key", "id"),
     )
     label: Optional[str] = Field(
-        default=None, validation_alias=AliasChoices("label", "title", "question"))
+        default=None, max_length=MAX_LABEL,
+        validation_alias=AliasChoices("label", "title", "question"))
     type: str = Field(
         default="text", validation_alias=AliasChoices("type", "field_type", "input_type"))
     required: bool = Field(
         default=False, validation_alias=AliasChoices("required", "is_required"))
-    placeholder: str = ""
+    placeholder: str = Field(default="", max_length=MAX_PLACEHOLDER)
     help_text: str = Field(
-        default="", validation_alias=AliasChoices("help_text", "helpText", "hint"))
+        default="", max_length=MAX_HELP_TEXT,
+        validation_alias=AliasChoices("help_text", "helpText", "hint"))
     default: Any = None
     section: Optional[str] = None
     options: List[OptionConfig] = Field(
         default_factory=list, validation_alias=AliasChoices("options", "choices", "values"))
     validation: ValidationRules = Field(default_factory=ValidationRules)
+    config: FieldSettings = Field(default_factory=FieldSettings)
     order: Optional[int] = None
     # Where the choices are read from, for a field that does not carry them.
     options_from: Optional[Dict[str, Any]] = None
@@ -358,6 +388,39 @@ def _path(location: Iterable[Any]) -> str:
     return ".".join(parts) or "config"
 
 
+#: Where a too-long identifier came from, for the message about it.
+_DERIVED_FROM = {
+    "name": "It is made from the question's label, so shorten the label or give "
+            "the question a shorter name.",
+    "table_name": "It is made from the form's title, so shorten the title or "
+                  "give the form a shorter table name.",
+    "key": "It is made from the section's title, so shorten the title.",
+}
+
+
+def _said(err: Dict[str, Any]) -> str:
+    """One pydantic error, in words somebody can act on.
+
+    "String should have at most 55 characters" does not say which 55, of what,
+    or how far over. This names the property, the limit and the length that was
+    sent — the length, never the value: a validation error is not a place to
+    echo somebody's data back at them.
+    """
+    message = err.get("msg", "").replace("Value error, ", "")
+
+    if err.get("type") == "string_too_long":
+        limit = (err.get("ctx") or {}).get("max_length")
+        given = err.get("input")
+        length = len(given) if isinstance(given, str) else None
+        prop = str(err["loc"][-1]) if err.get("loc") else "value"
+        counted = f"is {length} characters" if length is not None else "is too long"
+        message = f"'{prop}' {counted}; the most allowed is {limit}."
+        if prop in _DERIVED_FROM:
+            message = f"{message} {_DERIVED_FROM[prop]}"
+
+    return message
+
+
 def validate_structure(raw: Any) -> FormConfig:
     """Stage 1. Shape, types, nesting and enums. Raises ConfigValidationError."""
     if not isinstance(raw, dict):
@@ -369,7 +432,7 @@ def validate_structure(raw: Any) -> FormConfig:
         return FormConfig.model_validate(raw)
     except ValidationError as exc:
         issues = [
-            ValidationIssue(STRUCTURAL, _path(err["loc"]), err["msg"].replace("Value error, ", ""))
+            ValidationIssue(STRUCTURAL, _path(err["loc"]), _said(err))
             for err in exc.errors()
         ]
         raise ConfigValidationError(issues) from exc

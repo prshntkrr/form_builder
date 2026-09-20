@@ -11,6 +11,8 @@
 // compares against the stored value, so translating the form or a catalogue
 // changes what is read and never what is compared.
 
+import { fieldHidden } from './fieldTypes.js'
+
 const text = (value) => (value == null ? '' : String(value).trim())
 
 const empty = (value) =>
@@ -154,6 +156,14 @@ export function hidden(formJson, answers) {
   }
 
   for (const name of controllingFields(rules)) fields.delete(name)
+
+  // A question hidden outright (`config.hide`) is hidden whatever the rules
+  // say — after the exception above, not before it: a question nobody can see
+  // cannot be the one that makes a rule hold. The backend's conditions.py does
+  // the same, in the same order.
+  for (const field of formJson?.fields || []) {
+    if (field?.name && fieldHidden(field)) fields.add(field.name)
+  }
 
   return { fields, sections, form }
 }
