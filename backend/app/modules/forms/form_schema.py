@@ -56,6 +56,20 @@ from app.modules.forms.translations import (
 
 MAX_IDENTIFIER = 55  # leaves headroom under Postgres' 63-byte NAMEDATALEN limit
 
+# How long a question's key may be.
+#
+# Longer than an identifier, because it is not one: a key is where the answer
+# sits in the `form_data` JSONB, what a rule names, what the layout and the
+# WhatsApp config point at, and what the mobile package sends back. None of
+# those is a Postgres name, and none of them is bounded at 63 bytes.
+#
+# The one place a key did become a Postgres name is the flat `<form>_tabular`
+# reporting mirror, which has one column per question. That is now a mapping
+# (`tabular_service.column_for`) rather than the key itself: a key of 55
+# characters or fewer is still its own column, exactly as before, and a longer
+# one gets a shortened, deterministic column beside the full key in `form_data`.
+MAX_FIELD_NAME = 150
+
 # Field names that would read ambiguously next to the envelope columns — a
 # `form_data ->> 'created_on'` sitting beside a real `created_on` column invites
 # the wrong query.
@@ -106,26 +120,36 @@ class FormSchemaError(ValueError):
 # --------------------------------------------------------------------------- #
 # identifiers
 # --------------------------------------------------------------------------- #
-def slugify_identifier(text: str, fallback: str = "field") -> str:
-    """Turn arbitrary text into a safe, lowercase SQL identifier."""
+def slugify_identifier(text: str, fallback: str = "field",
+                       limit: int = MAX_IDENTIFIER) -> str:
+    """Turn arbitrary text into a safe, lowercase identifier.
+
+    `limit` is what this is going to be: a Postgres name (the default, 55) or a
+    question's key (`MAX_FIELD_NAME`), which is a JSON key and may be longer.
+    """
     ident = re.sub(r"[^a-z0-9]+", "_", str(text or "").strip().lower())
     ident = re.sub(r"_+", "_", ident).strip("_")
     if not ident:
         return fallback  # an empty fallback is the caller's way of saying "no value"
     if ident[0].isdigit():
         ident = f"f_{ident}"  # Postgres identifiers may not start with a digit
-    return ident[:MAX_IDENTIFIER].rstrip("_") or fallback
+    return ident[:limit].rstrip("_") or fallback
 
 
 def safe_field_name(raw: str, taken: set, fallback: str = "field") -> str:
-    """Unique, non-reserved key for a field inside `form_data`."""
-    name = slugify_identifier(raw, fallback)
+    """Unique, non-reserved key for a field inside `form_data`.
+
+    Bounded by `MAX_FIELD_NAME`, not by the Postgres identifier limit: this is a
+    JSON key. Uniqueness is unchanged — a second question that would take the
+    same key gets `_2`, `_3`, … and the base is shortened to make room.
+    """
+    name = slugify_identifier(raw, fallback, MAX_FIELD_NAME)
     if name in RESERVED_FIELD_NAMES:
         name = f"{name}_value"
     base, n = name, 2
     while name in taken:
         suffix = f"_{n}"
-        name = f"{base[:MAX_IDENTIFIER - len(suffix)]}{suffix}"
+        name = f"{base[:MAX_FIELD_NAME - len(suffix)]}{suffix}"
         n += 1
     taken.add(name)
     return name

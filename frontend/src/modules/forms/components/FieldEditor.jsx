@@ -6,7 +6,7 @@ import ConditionEditor from './ConditionEditor.jsx'
 import { api } from '../api.js'
 import CatalogueValues from './CatalogueValues.jsx'
 import { useAuth } from '../../../core/auth.jsx'
-import { fieldConfig, fieldHidden, identifier } from '../fieldTypes.js'
+import { MAX_FIELD_NAME, fieldConfig, fieldHidden, identifier } from '../fieldTypes.js'
 
 /* The backend's `slugify_identifier`, cap included — see fieldTypes.js. */
 const slug = identifier
@@ -529,8 +529,15 @@ export default function FieldEditor({
               <input
                 className="control"
                 value={field.name}
+                maxLength={MAX_FIELD_NAME}
                 onChange={(e) => patch({ name: slug(e.target.value) })}
               />
+              {/* Said while it is being typed, rather than after saving: the
+                  server refuses a longer key, and this is the one property a
+                  person can hit the limit on. */}
+              <span className={`tiny${(field.name || '').length > MAX_FIELD_NAME * 0.8 ? '' : ' muted'}`}>
+                {(field.name || '').length} / {MAX_FIELD_NAME} characters
+              </span>
             </label>
           </div>
 

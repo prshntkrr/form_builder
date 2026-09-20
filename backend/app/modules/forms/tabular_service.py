@@ -16,6 +16,7 @@ its column is dropped, and when a type changes the column is rebuilt — both
 destroy nothing, because `rebuild` can reconstruct the whole mirror from
 `form_data` at any time.
 """
+import hashlib
 import logging
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -53,11 +54,32 @@ def _q(table_name: str) -> sql.Composed:
     )
 
 
+def column_for(field_name: str) -> str:
+    """The mirror column one question's key is written to.
+
+    A key may be up to `MAX_FIELD_NAME` characters because it is a JSON key.
+    A Postgres column may not: identifiers are cut at 63 bytes, silently, so two
+    long keys sharing a prefix would land in one column and the sync would try
+    to add a column that "does not exist" on every save.
+
+    So: a key of 55 characters or fewer **is** its own column — every mirror
+    built so far keeps exactly the columns it has — and a longer one is
+    shortened and given eight characters of its own digest, which is stable
+    across processes and databases, and different for two keys that start the
+    same way.
+    """
+    name = str(field_name or "")
+    if len(name) <= MAX_IDENTIFIER:
+        return name
+    digest = hashlib.sha1(name.encode("utf-8")).hexdigest()[:8]
+    return f"{name[:MAX_IDENTIFIER - len(digest) - 1]}_{digest}"
+
+
 def _field_columns(form_json: Dict[str, Any]) -> List[Tuple[str, str]]:
     """(column, type) for each question, skipping any that would shadow the
     envelope — `form_schema` already keeps those names clear."""
     return [
-        (f["name"], pg_type_for(f["type"]))
+        (column_for(f["name"]), pg_type_for(f["type"]))
         for f in form_json.get("fields") or []
         if f["name"] not in ENVELOPE_NAMES
     ]
@@ -158,9 +180,11 @@ def sync(
             report.setdefault("linked", []).append(column)
 
     # Renames first, so the column is recognised as existing below.
-    for old, new in (renames or {}).items():
+    for given_old, given_new in (renames or {}).items():
+        # Renames are given as question keys; columns are what those keys map to.
+        old, new = column_for(given_old), column_for(given_new)
         current = set(existing_columns(cur, name))
-        if old not in current:
+        if old not in current or old == new:
             continue
 
         # Because columns are kept forever, the target name may be occupied by a
@@ -244,19 +268,24 @@ def _base(db_type: str) -> str:
 # rows
 # --------------------------------------------------------------------------- #
 def _row_values(form_json: Dict[str, Any], form_data: Dict[str, Any]) -> Dict[str, Any]:
-    """Project one stored response onto the mirror's columns."""
+    """Project one stored response onto the mirror's columns.
+
+    Keyed by column, not by question key — the two are the same name until a
+    key is longer than a Postgres identifier (see `column_for`).
+    """
     out: Dict[str, Any] = {}
     for field in form_json.get("fields") or []:
         name = field["name"]
         if name in ENVELOPE_NAMES:
             continue
+        column = column_for(name)
         raw = (form_data or {}).get(name)
         try:
-            out[name] = flatten(coerce_value(field["type"], raw))
+            out[column] = flatten(coerce_value(field["type"], raw))
         except Exception:
             # A historic answer that no longer fits the current type leaves the
             # cell empty. form_data keeps the original, and revalidate reports it.
-            out[name] = None
+            out[column] = None
     return out
 
 

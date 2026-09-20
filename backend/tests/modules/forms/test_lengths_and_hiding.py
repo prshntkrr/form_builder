@@ -18,7 +18,9 @@ from app.modules.forms.config_validation import (
     MAX_HELP_TEXT, MAX_LABEL, MAX_OPTION_LABEL, ConfigValidationError,
     validate_structure,
 )
-from app.modules.forms.form_schema import MAX_IDENTIFIER, field_hidden, normalize_form
+from app.modules.forms.form_schema import (
+    MAX_FIELD_NAME, MAX_IDENTIFIER, field_hidden, normalize_form,
+)
 
 
 def form(**change):
@@ -90,13 +92,12 @@ def test_an_option_label_has_a_limit_of_its_own():
 # --------------------------------------------------------------------------- #
 # what Postgres has to be able to name
 # --------------------------------------------------------------------------- #
-@pytest.mark.parametrize("prop,raw", [
-    ("name", {"name": "a" * 56, "label": "A", "type": "text"}),
-])
-def test_a_key_is_still_a_column_name(prop, raw):
-    said = issues(form(fields=[raw]))[f"fields.0.{prop}"]
-    assert f"'{prop}' is 56 characters" in said
-    assert f"the most allowed is {MAX_IDENTIFIER}" in said
+def test_a_key_has_a_limit_of_its_own_and_says_where_it_came_from():
+    """150, not the identifier's 55 — see test_long_field_names.py for why."""
+    said = issues(form(fields=[{"name": "a" * (MAX_FIELD_NAME + 1), "label": "A",
+                                "type": "text"}]))["fields.0.name"]
+    assert f"'name' is {MAX_FIELD_NAME + 1} characters" in said
+    assert f"the most allowed is {MAX_FIELD_NAME}" in said
     # …and says where it came from, because nobody typed this property.
     assert "made from the question's label" in said
 
@@ -120,7 +121,7 @@ def test_a_key_the_builder_derives_is_never_too_long():
     """The length the frontend cuts to is the length the backend accepts."""
     kept = normalize_form(form(fields=[{"label": LONG_QUESTION, "type": "text"}]))
     name = kept["fields"][0]["name"]
-    assert len(name) <= MAX_IDENTIFIER
+    assert len(name) <= MAX_FIELD_NAME
     assert validate_structure({**form(), "fields": [kept["fields"][0]]})
 
 

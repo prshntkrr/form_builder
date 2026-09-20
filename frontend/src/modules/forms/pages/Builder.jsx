@@ -5,7 +5,7 @@ import { formsChanged } from '../../../core/events.js'
 import FieldEditor from '../components/FieldEditor.jsx'
 import { defaultLanguage, languageChoices } from '../translate.js'
 import { applicable } from '../conditions.js'
-import { fieldHidden, identifier } from '../fieldTypes.js'
+import { MAX_IDENTIFIER, fieldHidden, identifier } from '../fieldTypes.js'
 import { generateLayout, removeFromLayout, withFieldReplaced } from '../formLayout.js'
 import { FORM_CHANNEL_NAMES, PUBLISHABLE, formChannel } from '../channelCapabilities.js'
 import { conversationOrder, configOf, removeFromWhatsApp, renameInWhatsApp } from '../whatsappConfig.js'
@@ -83,7 +83,8 @@ function copyFor(formJson, channel) {
   return {
     ...rest,
     title,
-    table_name: slug(title),
+    // A table name really is a Postgres name, so it keeps the shorter cap.
+    table_name: identifier(title, MAX_IDENTIFIER),
     channel,
     fields: (formJson.fields || []).map(({ _uid, _orig, ...f }) => f),
   }
@@ -738,7 +739,7 @@ export default function Builder() {
                   value={form.title}
                   placeholder="Untitled form"
                   onChange={(e) =>
-                    setForm({ ...form, title: e.target.value, ...(editing ? {} : { table_name: slug(e.target.value) }) })
+                    setForm({ ...form, title: e.target.value, ...(editing ? {} : { table_name: identifier(e.target.value, MAX_IDENTIFIER) }) })
                   }
                 />
                 <input

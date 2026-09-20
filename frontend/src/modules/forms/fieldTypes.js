@@ -86,7 +86,18 @@ export const STORAGE = {
  */
 export const MAX_IDENTIFIER = 55
 
-export const identifier = (text) => {
+/**
+ * How long a question's key may be.
+ *
+ * Longer than a Postgres name, because it is not one: the key is where the
+ * answer sits in `form_data`, what a rule names and what the layout points at.
+ * The one place it used to have to be a column — the flat reporting mirror —
+ * maps a long key to a short column server-side, so 150 is safe here.
+ * A *table* name is still a Postgres name: pass MAX_IDENTIFIER for that.
+ */
+export const MAX_FIELD_NAME = 150
+
+export const identifier = (text, limit = MAX_FIELD_NAME) => {
   let ident = String(text || '').trim().toLowerCase()
     .replace(/[^a-z0-9]+/g, '_')
     .replace(/_+/g, '_')
@@ -94,7 +105,7 @@ export const identifier = (text) => {
   if (!ident) return ''
   // Postgres identifiers may not start with a digit.
   if (/^[0-9]/.test(ident)) ident = `f_${ident}`
-  return ident.slice(0, MAX_IDENTIFIER).replace(/_+$/, '')
+  return ident.slice(0, limit).replace(/_+$/, '')
 }
 
 /**

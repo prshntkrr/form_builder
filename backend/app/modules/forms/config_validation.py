@@ -68,6 +68,7 @@ from app.modules.forms.constants import (
 )
 from app.modules.forms.field_types import get_type, resolve_type, SUPPORTED_TYPES
 from app.modules.forms.form_schema import (
+    MAX_FIELD_NAME,
     MAX_IDENTIFIER,
     RESERVED_FIELD_NAMES,
     RESERVED_TABLE_NAMES,
@@ -196,7 +197,7 @@ class FieldConfig(_Config):
     """
 
     name: Optional[str] = Field(
-        default=None, max_length=MAX_IDENTIFIER,
+        default=None, max_length=MAX_FIELD_NAME,
         validation_alias=AliasChoices("name", "key", "id"),
     )
     label: Optional[str] = Field(

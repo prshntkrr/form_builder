@@ -16,7 +16,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 
-import { MAX_IDENTIFIER, fieldHidden, identifier } from './fieldTypes.js'
+import { MAX_FIELD_NAME, MAX_IDENTIFIER, fieldHidden, identifier } from './fieldTypes.js'
 import { applicable, hidden } from './conditions.js'
 import { conversationOrder } from './whatsappConfig.js'
 
@@ -55,19 +55,32 @@ const LONG_QUESTION =
   + 'of participation as they were read out to you today?'
 
 // --------------------------------------------------------------------------- //
-describe('a key is a column name', () => {
-  test('it is cut to the length the server accepts', () => {
+describe('a key, and a Postgres name', () => {
+  test('a question key may be long — the server accepts 150', () => {
     expect(LONG_QUESTION.length).toBeGreaterThan(MAX_IDENTIFIER)
     const key = identifier(LONG_QUESTION)
-    expect(key.length).toBeLessThanOrEqual(MAX_IDENTIFIER)
-    expect(key).toBe('do_you_agree_to_take_part_in_this_programme_and_to_the')
+    expect(key.length).toBeLessThanOrEqual(MAX_FIELD_NAME)
+    expect(key).toBe(
+      'do_you_agree_to_take_part_in_this_programme_and_to_the_terms_and_'
+      + 'conditions_of_participation_as_they_were_read_out_to_you_today')
+  })
+
+  test('it is still cut at 150, not left unbounded', () => {
+    expect(identifier('word_'.repeat(60)).length).toBe(MAX_FIELD_NAME - 1)
+  })
+
+  test('a table name keeps the shorter Postgres cap', () => {
+    const table = identifier(LONG_QUESTION, MAX_IDENTIFIER)
+    expect(table.length).toBeLessThanOrEqual(MAX_IDENTIFIER)
+    expect(table).toBe('do_you_agree_to_take_part_in_this_programme_and_to_the')
   })
 
   test('it is lowercase, underscored, and never ends in an underscore', () => {
     expect(identifier('  Farmer Name!  ')).toBe('farmer_name')
     expect(identifier('Crop / Variety')).toBe('crop_variety')
     // A cut that lands on a separator would otherwise leave one trailing.
-    expect(identifier('x'.repeat(54) + ' more')).not.toMatch(/_$/)
+    expect(identifier('x'.repeat(149) + ' more')).not.toMatch(/_$/)
+    expect(identifier('x'.repeat(54) + ' more', MAX_IDENTIFIER)).not.toMatch(/_$/)
     expect(identifier('')).toBe('')
   })
 
@@ -173,7 +186,8 @@ describe('the builder', () => {
 
     const [field] = (await stored(user)).fields
     expect(field.label).toBe(LONG_QUESTION)
-    expect(field.name.length).toBeLessThanOrEqual(MAX_IDENTIFIER)
+    expect(field.name).toBe(identifier(LONG_QUESTION))
+    expect(field.name.length).toBeLessThanOrEqual(MAX_FIELD_NAME)
   })
 
   test('Hide element is offered on every question, and stores config.hide', async () => {
