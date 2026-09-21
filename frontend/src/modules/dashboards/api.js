@@ -64,6 +64,16 @@ export const api = {
       `/dashboards/data-sources/${encodeURIComponent(tableName)}`
     ),
 
+  // Creates the table and fills it in one call. The name comes back with the
+  // _tabular suffix the picker discovers sources by, which is not always what
+  // was typed — the caller shows what was actually created.
+  importExcelSource: (file, tableName) => {
+    const body = new FormData()
+    body.append('file', file)
+    body.append('table_name', tableName)
+    return request('/dashboards/data-sources/excel', { method: 'POST', body })
+  },
+
   // -----------------------------
   // Dashboard generation
   // -----------------------------

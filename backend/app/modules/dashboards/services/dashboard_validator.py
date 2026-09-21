@@ -91,7 +91,15 @@ def validate_dashboard_spec(
             if isinstance(allowed_fields, dict):
                 field_type = allowed_fields.get(measure.field, "").lower()
                 is_text = field_type == "text" or "char" in field_type or field_type == "string"
-                if is_text and measure.aggregation not in ("COUNT", "COUNT_DISTINCT"):
+                # NONE on a table is not an aggregation at all — it selects the
+                # column as it stands, which is what a listing of records is.
+                # The rule below exists to stop SUM and AVG being asked of a
+                # word; applying it to a table refused every table that showed
+                # a text column, which is most of them.
+                lists_raw_values = (
+                    widget.type == "table" and measure.aggregation == "NONE"
+                )
+                if is_text and not lists_raw_values and measure.aggregation not in ("COUNT", "COUNT_DISTINCT"):
                     raise DashboardValidationError(
                         f"Widget '{widget.id}' cannot use aggregation '{measure.aggregation}' "
                         f"on text field '{measure.field}'."

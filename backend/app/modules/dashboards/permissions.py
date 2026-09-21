@@ -10,6 +10,7 @@ DASHBOARDS_CREATE = "dashboards.create"
 DASHBOARDS_EDIT = "dashboards.edit"
 DASHBOARDS_DELETE = "dashboards.delete"
 DASHBOARDS_SHARE = "dashboards.share"
+DASHBOARDS_IMPORT = "dashboards.import_source"
 
 CATALOGUE = [
     Permission(DASHBOARDS_VIEW, "See dashboards",
@@ -22,6 +23,12 @@ CATALOGUE = [
                "Take a dashboard out of the list", "Dashboards"),
     Permission(DASHBOARDS_SHARE, "Share dashboards",
                "Export to PDF or image, and issue a shareable link", "Dashboards"),
+    # Separate from `create` because it writes a table rather than a dashboard:
+    # a role that composes widgets over data somebody else loaded does not
+    # necessarily get to put new tables in the database.
+    Permission(DASHBOARDS_IMPORT, "Import a spreadsheet as a data source",
+               "Upload an .xlsx file and create a table from it that dashboards "
+               "can be built over", "Dashboards"),
 ]
 
 register(
@@ -29,7 +36,7 @@ register(
     groups=["Dashboards"],
     grants={
         "editor": [DASHBOARDS_VIEW, DASHBOARDS_CREATE, DASHBOARDS_EDIT,
-                   DASHBOARDS_DELETE, DASHBOARDS_SHARE],
+                   DASHBOARDS_DELETE, DASHBOARDS_SHARE, DASHBOARDS_IMPORT],
         "standard": [DASHBOARDS_VIEW],
     },
     # Flags for /api/auth/me. The frontend module gates its routes on these, so
@@ -38,5 +45,6 @@ register(
         "view_dashboards": DASHBOARDS_VIEW,
         "build_dashboards": DASHBOARDS_CREATE,
         "share_dashboards": DASHBOARDS_SHARE,
+        "import_dashboard_source": DASHBOARDS_IMPORT,
     },
 )

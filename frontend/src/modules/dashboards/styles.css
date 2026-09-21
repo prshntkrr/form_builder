@@ -685,3 +685,33 @@
     padding: 14px 16px;
   }
 }
+
+/* The Select Data Source heading and the action that adds one to it, on one
+   line: choosing a source and bringing one in belong together. */
+.dash__source-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dash__source-head h2 {
+  margin: 0;
+}
+
+/* A labelled control in the import dialog. */
+.dash__field {
+  display: block;
+  margin-top: 14px;
+}
+
+.dash__field-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.85rem;
+  color: var(--ink-secondary, #5f6368);
+}
+
+.dash__field .control {
+  width: 100%;
+}
