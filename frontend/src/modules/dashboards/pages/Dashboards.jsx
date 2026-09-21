@@ -27,8 +27,11 @@ import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 
 import { api } from "../api.js";
+import { useCapabilities } from "../../../core/auth.jsx";
 
 export default function Dashboards() {
+  const can = useCapabilities();
+
   const [dataSources, setDataSources] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -38,6 +41,15 @@ export default function Dashboards() {
 
   const [fields, setFields] = useState(null);
   const [fieldsError, setFieldsError] = useState("");
+
+  /* Importing a spreadsheet as a data source. The file is held here only
+     until it is sent; nothing is read from it in the browser. */
+  const [importOpen, setImportOpen] = useState(false);
+  const [importFile, setImportFile] = useState(null);
+  const [importName, setImportName] = useState("");
+  const [importBusy, setImportBusy] = useState(false);
+  const [importError, setImportError] = useState("");
+  const [importNotice, setImportNotice] = useState("");
 
   const [prompt, setPrompt] = useState("");
   const [generating, setGenerating] = useState(false);
@@ -341,24 +353,88 @@ export default function Dashboards() {
     }
   };
 
-  useEffect(() => {
-    setLoading(true);
+  /* Read once on arrival, and again after an import adds one. Returns the
+     list so the caller can act on what is now there. */
+  const loadDataSources = async ({ showLoading = true } = {}) => {
+    if (showLoading) {
+      setLoading(true);
+    }
+
     setError("");
 
-    api
-      .listDataSources()
-      .then((result) => {
-        setDataSources(result.data_sources || []);
-      })
-      .catch((e) => {
-        setError(e.message || "Failed to load data sources.");
-      })
-      .finally(() => {
-        setLoading(false);
-      });
+    try {
+      const result = await api.listDataSources();
+      const sources = result.data_sources || [];
 
+      setDataSources(sources);
+
+      return sources;
+    } catch (e) {
+      setError(e.message || "Failed to load data sources.");
+
+      return [];
+    } finally {
+      if (showLoading) {
+        setLoading(false);
+      }
+    }
+  };
+
+  useEffect(() => {
+    loadDataSources();
     loadSavedDashboards();
   }, []);
+
+  /* =========================================================
+     IMPORT A SPREADSHEET AS A DATA SOURCE
+     ========================================================= */
+
+  const closeImport = () => {
+    setImportOpen(false);
+    setImportFile(null);
+    setImportName("");
+    setImportError("");
+  };
+
+  const importExcel = async () => {
+    if (!importFile) {
+      setImportError("Choose an .xlsx file first.");
+      return;
+    }
+
+    if (!importName.trim()) {
+      setImportError("Enter a table name.");
+      return;
+    }
+
+    setImportBusy(true);
+    setImportError("");
+
+    try {
+      const result = await api.importExcelSource(importFile, importName.trim());
+
+      // The picker finds sources by their _tabular suffix, so the table that
+      // was created is rarely named exactly what was typed. Select by what
+      // came back, never by what was entered.
+      const sources = await loadDataSources({ showLoading: false });
+      const created = sources.find((item) => item.name === result.table_name);
+
+      if (created) {
+        await selectDataSource(created);
+      }
+
+      setImportNotice(
+        `Imported ${result.rows_loaded.toLocaleString()} rows into ` +
+          `${result.table_name} (${result.columns_loaded} columns).`,
+      );
+
+      closeImport();
+    } catch (e) {
+      setImportError(e.message || "The spreadsheet could not be imported.");
+    } finally {
+      setImportBusy(false);
+    }
+  };
 
   /* =========================================================
      LOAD DASHBOARD DATA
@@ -380,7 +456,11 @@ export default function Dashboards() {
     setDataError("");
 
     try {
-      const results = await Promise.all(
+      // allSettled, not all: a binding one widget cannot execute used to reject
+      // the whole batch, so twelve widgets that had already answered were
+      // thrown away and the dashboard rendered as nothing but an error line.
+      // Each widget now carries its own outcome.
+      const results = await Promise.allSettled(
         generatedDashboard.widgets.map(async (widget) => {
           let binding = {
             ...widget.data_binding,
@@ -427,12 +507,40 @@ export default function Dashboards() {
       );
 
       const dataByWidget = {};
+      let failures = 0;
 
-      results.forEach(({ widgetId, rows, numRows }) => {
-        dataByWidget[widgetId] = { rows, numRows };
+      results.forEach((result, index) => {
+        if (result.status === "fulfilled") {
+          const { widgetId, rows, numRows } = result.value;
+          dataByWidget[widgetId] = { rows, numRows };
+          return;
+        }
+
+        failures += 1;
+
+        // Keyed by position: a widget whose request threw never reported its
+        // own id back, and the widget in that slot is the one that failed.
+        const widget = generatedDashboard.widgets[index];
+
+        dataByWidget[widget.id] = {
+          rows: [],
+          numRows: null,
+          error:
+            result.reason?.message ||
+            "This widget's data could not be loaded.",
+        };
       });
 
       setWidgetData(dataByWidget);
+
+      // Only a dashboard where nothing loaded is a dashboard-level failure.
+      // Anything less is one widget saying so in its own tile.
+      if (failures === generatedDashboard.widgets.length) {
+        setDataError(
+          results[0]?.reason?.message ||
+            "Failed to load dashboard data.",
+        );
+      }
     } catch (e) {
       setDataError(
         e.message || "Failed to load dashboard data.",
@@ -1236,7 +1344,11 @@ const applyDashboardFilters = async () => {
      ========================================================= */
 
   const renderWidget = (widget) => {
-    const { rows = [], numRows = null } = widgetData[widget.id] || {};
+    const {
+      rows = [],
+      numRows = null,
+      error: widgetError = null,
+    } = widgetData[widget.id] || {};
 
     const editButton = isEditMode && (
       <div className=" row1">
@@ -1296,6 +1408,17 @@ const applyDashboardFilters = async () => {
         {editButton}
       </div>
     );
+
+    if (widgetError) {
+      // Named and in place, so it is obvious which widget needs attention and
+      // the rest of the dashboard is still readable around it.
+      return (
+        <div className="dash__widget" style={widgetStyle}>
+          {renderHeader()}
+          <p className="muted">{widgetError}</p>
+        </div>
+      );
+    }
 
     if (widget.type === "table") {
       return (
@@ -2626,14 +2749,50 @@ const applyDashboardFilters = async () => {
       {/* Data source selector. It used to stay on screen above an opened
           dashboard, which is what made opening one look like nothing had
           happened. */}
-      {view === "builder" && !dashboard && !loading && !error
-        && dataSources.length > 0 && (
+      {view === "builder" && !dashboard && !loading && !error && (
         <section className="card card--pad">
-          <h2>Select Data Source</h2>
+          {/* The heading carries the import action, so bringing data in and
+              choosing data are the same decision in the same place. */}
+          <div className="dash__source-head">
+            <h2>Select Data Source</h2>
+
+            {can.import_dashboard_source && (
+              <button
+                className="btn"
+                type="button"
+                onClick={() => {
+                  setImportNotice("");
+                  setImportOpen(true);
+                }}
+              >
+                Import Excel
+              </button>
+            )}
+          </div>
 
           <p className="muted">
             Search and select a table to inspect its available fields.
           </p>
+
+          {importNotice && (
+            <div
+              className="alert alert--good"
+              style={{
+                marginBottom: 12,
+              }}
+            >
+              {importNotice}
+            </div>
+          )}
+
+          {dataSources.length === 0 && (
+            <div className="tiny muted" style={{ marginBottom: 8 }}>
+              No data sources yet.
+              {can.import_dashboard_source
+                ? " Import a spreadsheet to create one."
+                : ""}
+            </div>
+          )}
 
           <div className="dash__source-picker">
             <input
@@ -2690,6 +2849,82 @@ const applyDashboardFilters = async () => {
             </div>
           )}
         </section>
+      )}
+
+      {/* Import a spreadsheet. The table is created on the server; the file
+          is only carried there. */}
+      {importOpen && (
+        <div className="dash__modal-overlay" role="dialog" aria-modal="true">
+          <div className="dash__modal">
+            <h3>Import Excel</h3>
+
+            {importError && (
+              <div className="alert alert--bad">{importError}</div>
+            )}
+
+            <label className="dash__field">
+              <span className="dash__field-label">Excel File</span>
+              <input
+                className="control"
+                type="file"
+                accept=".xlsx,.xlsm"
+                disabled={importBusy}
+                onChange={(e) => {
+                  setImportFile(e.target.files?.[0] || null);
+                  setImportError("");
+                }}
+              />
+            </label>
+
+            <label className="dash__field">
+              <span className="dash__field-label">Table Name</span>
+              <input
+                className="control"
+                type="text"
+                placeholder="farmer_data"
+                value={importName}
+                disabled={importBusy}
+                onChange={(e) => {
+                  setImportName(e.target.value);
+                  setImportError("");
+                }}
+              />
+            </label>
+
+            <p className="tiny muted">
+              Letters, digits and underscores. The table is created as
+              {" "}
+              <code>
+                {(importName.trim() || "your_name")
+                  .toLowerCase()
+                  .replace(/_tabular$/, "")}
+                _tabular
+              </code>
+              , which is how dashboards find it. An existing table is never
+              overwritten.
+            </p>
+
+            <div className="dash__modal-actions">
+              <button
+                className="btn"
+                type="button"
+                onClick={closeImport}
+                disabled={importBusy}
+              >
+                Cancel
+              </button>
+
+              <button
+                className="btn btn--primary"
+                type="button"
+                onClick={importExcel}
+                disabled={importBusy}
+              >
+                {importBusy ? "Importing..." : "Import"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Selected data source */}
@@ -3389,7 +3624,7 @@ const applyDashboardFilters = async () => {
                 </div>
               )}
 
-              {!dataLoading && !dataError && (
+              {!dataLoading && (
                 <>
                   <div
                     ref={gridContainerRef}

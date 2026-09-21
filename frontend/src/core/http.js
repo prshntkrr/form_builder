@@ -42,10 +42,14 @@ export async function request(path, options = {}) {
   if (!res.ok) {
     const detail = body?.detail ?? body
     let message
-    if (res.status === 404 && detail === 'Not Found') {
-      // FastAPI's reply for a path it has no route for — almost always a server
-      // running older code, which "Not Found" on its own does not convey.
-      message = `The server has no ${path} endpoint. It may be running an older version — restart it and try again.`
+    if (res.status === 404 && (detail == null || detail === 'Not Found')) {
+      // Nothing claimed this path. Either FastAPI's own reply for a route it
+      // does not have (`{"detail": "Not Found"}`), or a 404 with no body at
+      // all, which is what the dev proxy returns when /api is not forwarded —
+      // a missing vite.config.js looks exactly like this. Left alone the empty
+      // case falls through to res.statusText, i.e. a bare "Not Found" that
+      // says nothing about which of the two happened.
+      message = `Nothing is serving ${path}. The API may be stopped, not proxied, or running older code — check it is running and restart it.`
     } else if (typeof detail === 'string') {
       message = detail
     } else if (detail?.errors) {

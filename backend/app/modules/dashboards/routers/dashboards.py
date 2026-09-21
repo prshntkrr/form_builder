@@ -6,13 +6,17 @@ the installation's to define, permissions are the application's.
 import logging
 from typing import Any, Dict
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
 from app.modules.forms.llm import LLMError
+from app.modules.dashboards.services.dashboard_validator import (
+    DashboardValidationError,
+)
 from app.core.config import settings
 
 from app.core.deps import needs
 from app.modules.dashboards.permissions import (
+    DASHBOARDS_IMPORT,
     DASHBOARDS_VIEW,
     DASHBOARDS_EDIT,
     DASHBOARDS_DELETE,
@@ -95,13 +99,69 @@ def list_data_sources(
         "data_sources": list_tabular_tables(),
     }
 
+@router.post("/data-sources/excel")
+async def import_excel_data_source(
+    file: UploadFile = File(...),
+    table_name: str = Form(...),
+    user: Dict[str, Any] = Depends(needs(DASHBOARDS_IMPORT)),
+):
+    """Create a data source from a spreadsheet.
+
+    The table is named `<table_name>_tabular`, which is how `list_data_sources`
+    finds it — the import is only useful if the result appears in the picker.
+    Nothing is overwritten: a name already in use is refused.
+    """
+    from app.modules.dashboards.services.excel_source_service import (
+        ExcelSourceError,
+        MAX_WORKBOOK_BYTES,
+        import_workbook,
+    )
+
+    name = file.filename or "workbook.xlsx"
+
+    if not name.lower().endswith((".xlsx", ".xlsm")):
+        raise HTTPException(
+            status_code=400,
+            detail="That is not an .xlsx file. Save the spreadsheet as Excel and try again.",
+        )
+
+    data = await file.read()
+
+    if not data:
+        raise HTTPException(status_code=400, detail="That file is empty.")
+
+    if len(data) > MAX_WORKBOOK_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"That file is larger than {MAX_WORKBOOK_BYTES // (1024 * 1024)} MB.",
+        )
+
+    try:
+        return import_workbook(
+            data,
+            table_name,
+            imported_by=user.get("username", ""),
+        )
+    except ExcelSourceError as exc:
+        # Every one of these names what is wrong with the file or the name, and
+        # none of them is the server failing.
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @router.get("/data-sources/{table_name}")
 def get_data_source(
     table_name: str,
     user: Dict[str, Any] = Depends(needs(DASHBOARDS_VIEW)),
 ):
     """Return active field metadata for a selected _tabular table."""
-    return get_tabular_metadata(table_name)
+    try:
+        return get_tabular_metadata(table_name)
+    except ValueError as exc:
+        # A table the dashboard cannot describe is the caller asking for the
+        # wrong thing, not the server failing. Left unhandled it surfaced in
+        # the builder as "Internal Server Error", which named neither the
+        # table nor the reason.
+        raise HTTPException(status_code=404, detail=str(exc))
 
 @router.get("/{dashboard_id}")
 def get_dashboard_route(
@@ -298,7 +358,11 @@ def generate_dashboard_route(
             source_type="postgresql_tabular",
         )
 
-    except LLMError as exc:
+    # A spec the validator refuses is the generator producing something
+    # unusable, exactly like LLMError — not the server breaking. Uncaught it
+    # reached the builder as "Internal Server Error", which told nobody which
+    # widget was wrong even though the message names it.
+    except (LLMError, DashboardValidationError) as exc:
         logger.exception(
             "Dashboard AI generation failed for %s",
             table_name,

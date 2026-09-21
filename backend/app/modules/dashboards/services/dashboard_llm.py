@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from openai import OpenAIError
 from pydantic import BaseModel, ConfigDict, Field
@@ -13,6 +13,8 @@ from app.modules.dashboards.schemas import (
     DashboardDataBinding,
     DimensionBinding,
     MeasureBinding,
+    WidgetBubbleConfig,
+    WidgetHistogramConfig,
     WidgetScatterConfig,
 )
 
@@ -836,10 +838,35 @@ def _normalize_bubble_bindings(
     The bubble configuration is authoritative for X/Y/size roles.
     """
     for widget in specification.widgets:
-        if widget.type != "bubble" or widget.bubble is None:
+        if widget.type != "bubble":
             continue
 
         bubble = widget.bubble
+
+        # The prompt says the bubble block is mandatory, and the model still
+        # leaves it out sometimes — usually having put the same three roles in
+        # data_binding instead. One dimension and two measures is that shape
+        # unambiguously, so read the roles back rather than failing a whole
+        # dashboard over a block that can be reconstructed.
+        if bubble is None:
+            dimensions = widget.data_binding.dimensions
+            measures = widget.data_binding.measures
+
+            if len(dimensions) == 1 and len(measures) == 2:
+                bubble = WidgetBubbleConfig(
+                    x=dimensions[0].field,
+                    y=measures[0].field,
+                    y_aggregation=measures[0].aggregation,
+                    size=measures[1].field,
+                    size_aggregation=measures[1].aggregation,
+                )
+                widget.bubble = bubble
+            else:
+                raise LLMError(
+                    f"Dashboard AI generated the bubble chart '{widget.title}' "
+                    "without the x, y and size fields it needs. Ask for that "
+                    "chart on its own, naming the three fields."
+                )
 
         dimensions = [
             DimensionBinding(field=bubble.x)
@@ -861,6 +888,214 @@ def _normalize_bubble_bindings(
         widget.data_binding = DashboardDataBinding(
             dimensions=dimensions,
             measures=measures,
+            filters=widget.data_binding.filters,
+        )
+
+    return specification
+
+
+# The per-type blocks belong to the widget, beside data_binding rather than
+# inside it. The model reads "the widget's histogram configuration" as part of
+# the binding often enough that a whole dashboard was failing schema validation
+# over placement alone, with every value it needed already present.
+_WIDGET_CONFIG_KEYS = ("kpi", "bubble", "histogram", "scatter")
+
+
+def _lift_widget_configs(raw: Any) -> Any:
+    """Move a misplaced config block from data_binding up to its widget.
+
+    Runs on the raw JSON, before the schema sees it: DashboardDataBinding
+    forbids extra keys, so this placement is rejected outright rather than
+    reaching any of the normalizers below.
+    """
+    if not isinstance(raw, dict):
+        return raw
+
+    dashboard = raw.get("dashboard")
+
+    if not isinstance(dashboard, dict):
+        return raw
+
+    for widget in dashboard.get("widgets") or []:
+        if not isinstance(widget, dict):
+            continue
+
+        binding = widget.get("data_binding")
+
+        if not isinstance(binding, dict):
+            continue
+
+        for key in _WIDGET_CONFIG_KEYS:
+            if key not in binding:
+                continue
+
+            misplaced = binding.pop(key)
+
+            # A block the model also put in the right place wins: that one is
+            # what the rest of the response was written against.
+            if widget.get(key) is None:
+                widget[key] = misplaced
+
+    return raw
+
+
+def _normalize_table_bindings(
+    specification: DashboardSpecification,
+) -> DashboardSpecification:
+    """
+    Keep a table that lists raw records from also asking for a GROUP BY.
+
+    A dimension groups; a NONE measure selects the column as it stands. The
+    query builder adds GROUP BY whenever there is a dimension, so a table
+    holding both asks Postgres for an ungrouped column in a grouped query and
+    is rejected by the database. A table listing records wants no grouping at
+    all, so the dimensions become plain columns too.
+
+    A table that genuinely aggregates — a count per state — has no NONE measure
+    and is left exactly as it is.
+    """
+    for widget in specification.widgets:
+        if widget.type != "table":
+            continue
+
+        dimensions = widget.data_binding.dimensions
+        measures = widget.data_binding.measures
+
+        if not dimensions:
+            continue
+
+        if not any(measure.aggregation == "NONE" for measure in measures):
+            continue
+
+        widget.data_binding = DashboardDataBinding(
+            dimensions=[],
+            measures=[
+                # The grouping columns first, in the order they were asked for.
+                MeasureBinding(
+                    field=dimension.field,
+                    aggregation="NONE",
+                    label=dimension.field,
+                )
+                for dimension in dimensions
+            ] + list(measures),
+            filters=widget.data_binding.filters,
+        )
+
+    return specification
+
+
+def _normalize_map_bindings(
+    specification: DashboardSpecification,
+    fields: List[Dict[str, Any]],
+) -> DashboardSpecification:
+    """
+    Ensure Map widgets name the two coordinate fields they plot.
+
+    A map is told to carry latitude and longitude as its two dimensions and no
+    measure. When the model drops the dimensions as well, the binding has
+    neither a dimension nor a measure, which the query builder refuses — the
+    widget reached the browser as a failed request rather than a map.
+    """
+    names = [str(f.get("name")) for f in fields if f.get("name")]
+
+    def _coordinate(exact: str, prefixes: tuple) -> Optional[str]:
+        for name in names:
+            if name.lower() == exact:
+                return name
+        # Only then a looser match, so a column actually called "latitude" is
+        # never passed over for one that merely starts with "lat".
+        for name in names:
+            if name.lower().startswith(prefixes):
+                return name
+        return None
+
+    for widget in specification.widgets:
+        if widget.type != "map":
+            continue
+
+        if len(widget.data_binding.dimensions) >= 2:
+            continue
+
+        latitude = _coordinate("latitude", ("lat",))
+        longitude = _coordinate("longitude", ("lon", "lng"))
+
+        if not latitude or not longitude:
+            raise LLMError(
+                f"The map '{widget.title}' needs a latitude and a longitude "
+                "field, and this data source has none that can be identified."
+            )
+
+        widget.data_binding = DashboardDataBinding(
+            dimensions=[
+                DimensionBinding(field=latitude),
+                DimensionBinding(field=longitude),
+            ],
+            measures=[],
+            filters=widget.data_binding.filters,
+        )
+
+    return specification
+
+
+def _normalize_histogram_bindings(
+    specification: DashboardSpecification,
+    fields: List[Dict[str, Any]],
+) -> DashboardSpecification:
+    """
+    Ensure Histogram widgets carry the histogram block the validator requires.
+
+    A histogram is one numeric field and a bin count. The model frequently
+    describes it correctly in data_binding — a single NONE measure — and omits
+    the block anyway, which failed the whole dashboard rather than the widget.
+    """
+    field_types = {
+        str(f.get("name")): str(f.get("type", "")).lower()
+        for f in fields
+        if f.get("name")
+    }
+
+    for widget in specification.widgets:
+        if widget.type != "histogram":
+            continue
+
+        histogram = widget.histogram
+
+        if histogram is None:
+            # The field is whichever one the model bound, wherever it put it.
+            candidates = [m.field for m in widget.data_binding.measures]
+            candidates += [d.field for d in widget.data_binding.dimensions]
+
+            # Distinct, in the order they appeared: a model that names the same
+            # field as both measure and dimension still means one histogram.
+            unique = list(dict.fromkeys(candidates))
+
+            if len(unique) != 1:
+                raise LLMError(
+                    f"Dashboard AI generated the histogram '{widget.title}' "
+                    "without naming a single field to distribute. Ask for that "
+                    "chart on its own, naming one numeric field."
+                )
+
+            histogram = WidgetHistogramConfig(field=unique[0], bins=10)
+            widget.histogram = histogram
+
+        ftype = field_types.get(histogram.field, "")
+        if "text" in ftype or "char" in ftype or "string" in ftype:
+            raise LLMError(
+                f"Histograms need a numeric field. '{histogram.field}' holds text."
+            )
+
+        # The block is authoritative: rebuild the binding to match it, the way
+        # bubble and scatter do, so a half-described widget still executes.
+        widget.data_binding = DashboardDataBinding(
+            dimensions=[],
+            measures=[
+                MeasureBinding(
+                    field=histogram.field,
+                    aggregation="NONE",
+                    label="Value",
+                )
+            ],
             filters=widget.data_binding.filters,
         )
 
@@ -1013,6 +1248,8 @@ def generate_dashboard(
     # Validate the complete AI response
     # ---------------------------------------------------------
 
+    raw = _lift_widget_configs(raw)
+
     try:
         ai_response = DashboardAIResponse.model_validate(raw)
 
@@ -1027,7 +1264,10 @@ def generate_dashboard(
         ) from exc
 
     specification = ai_response.dashboard
+    specification = _normalize_table_bindings(specification)
+    specification = _normalize_map_bindings(specification, fields)
     specification = _normalize_bubble_bindings(specification)
+    specification = _normalize_histogram_bindings(specification, fields)
     specification = _normalize_scatter_bindings(specification, fields)
 
     # ---------------------------------------------------------

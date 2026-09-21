@@ -4,7 +4,7 @@ import { setAuthToken } from './http.js'
 
 const TOKEN_KEY = 'ea_token'
 
-const AuthContext = createContext(null)
+export const AuthContext = createContext(null)
 
 /**
  * Who is signed in, and what they may do.
@@ -97,6 +97,17 @@ export function useAuth() {
   const value = useContext(AuthContext)
   if (!value) throw new Error('useAuth must be used inside an AuthProvider')
   return value
+}
+
+/** What the signed-in role may do, for a screen that only wants to hide an
+ *  action it cannot perform.
+ *
+ *  Unlike `useAuth` this does not insist on a provider: a component that is
+ *  otherwise self-contained — a module page rendered on its own in a test —
+ *  stays renderable, and shows nothing it is not sure is allowed. The server
+ *  is what actually refuses; this only decides what is worth offering. */
+export function useCapabilities() {
+  return useContext(AuthContext)?.can || {}
 }
 
 export const initials = (user) =>
