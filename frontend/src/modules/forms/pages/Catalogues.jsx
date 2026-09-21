@@ -180,6 +180,33 @@ export default function Catalogues() {
 }
 
 /** Create a catalogue, or revise its details. Its id is never editable. */
+/**
+ * The catalogues this one may depend on.
+ *
+ * Itself is out, and so is anything that already depends on it: districts may
+ * hang off states, but states hanging off districts is a loop with no list at
+ * the top of it. The server refuses one either way — this keeps it off the menu
+ * rather than letting somebody pick it and be told no.
+ */
+export function mayDependOn(catalogues, catalogId) {
+  const parentOf = new Map(
+    (catalogues || []).map((c) => [c.catalog_id, c.parent_catalog_id || null]))
+
+  const dependsOnIt = (candidate) => {
+    const seen = new Set()
+    let current = parentOf.get(candidate) || null
+    while (current && !seen.has(current)) {
+      if (current === catalogId) return true
+      seen.add(current)
+      current = parentOf.get(current) || null
+    }
+    return false
+  }
+
+  return (catalogues || []).filter(
+    (c) => c.catalog_id !== catalogId && !dependsOnIt(c.catalog_id))
+}
+
 function CatalogueForm({ catalogue, catalogues, onClose, onSaved }) {
   const [draft, setDraft] = useState(catalogue)
   const [busy, setBusy] = useState(false)
@@ -187,6 +214,12 @@ function CatalogueForm({ catalogue, catalogues, onClose, onSaved }) {
 
   const existing = Boolean(catalogue.catalog_id && catalogue.value_count !== undefined)
   const set = (changes) => setDraft((d) => ({ ...d, ...changes }))
+
+  // Moving a catalogue to another parent — or to none — makes its values' parent
+  // codes meaningless, and the server clears them. Said here, before saving.
+  const parentMoving = existing
+    && (draft.parent_catalog_id || null) !== (catalogue.parent_catalog_id || null)
+    && Boolean(catalogue.parent_catalog_id)
 
   const save = async () => {
     setBusy(true)
@@ -277,18 +310,25 @@ function CatalogueForm({ catalogue, catalogues, onClose, onSaved }) {
               onChange={(e) => set({ parent_catalog_id: e.target.value })}
             >
               <option value="">None — this list stands on its own</option>
-              {catalogues
-                .filter((c) => c.catalog_id !== draft.catalog_id)
-                .map((c) => (
-                  <option key={c.catalog_id} value={c.catalog_id}>
-                    {c.name} ({c.catalog_id})
-                  </option>
-                ))}
+              {mayDependOn(catalogues, draft.catalog_id).map((c) => (
+                <option key={c.catalog_id} value={c.catalog_id}>
+                  {c.name} ({c.catalog_id})
+                </option>
+              ))}
             </select>
             <span className="tiny muted">
               For a dependent list. Districts name the state catalogue, and every
               district's parent code must be a code in it.
             </span>
+            {parentMoving && (
+              <span className="tiny" style={{ color: 'var(--amber, #a76b12)' }}>
+                Every value here names a code in {catalogue.parent_catalog_id}.
+                Those are cleared when you save
+                {draft.parent_catalog_id
+                  ? ', and each value then needs a parent in the new catalogue — nothing is guessed.'
+                  : '; the list then stands on its own.'}
+              </span>
+            )}
           </label>
 
           {draft.status === 'Approved' && existing && (

@@ -143,6 +143,51 @@ def get(catalog_id: str) -> Dict[str, Any]:
     return catalog
 
 
+#: "this field was not in the changes at all", which is not the same as None —
+#: None is somebody asking for the parent to be taken away.
+_UNCHANGED = object()
+
+
+def ancestors(catalog_id: str) -> List[str]:
+    """Every catalogue this one depends on, nearest first.
+
+    Districts -> States -> Countries. Bounded by the number of catalogues, so a
+    chain that somehow already loops (a row written before this was checked)
+    ends rather than spins.
+    """
+    seen: List[str] = []
+    with transaction() as cur:
+        current = _parent_catalog_of(cur, catalog_id)
+        while current and current not in seen:
+            seen.append(current)
+            current = _parent_catalog_of(cur, current)
+    return seen
+
+
+def _check_parent_catalog(catalog_id: str, parent: Optional[str]) -> None:
+    """Whether this catalogue may depend on that one.
+
+    Three answers, and all three are refusals: itself, one that does not exist,
+    and one that already depends on it. The last is what makes a cycle — states
+    depending on districts while districts depend on states — and a cycle has no
+    answer at the top, so no list could ever be drawn.
+    """
+    if not parent:
+        return
+    if parent == catalog_id:
+        raise CatalogError("A catalogue cannot depend on itself.")
+    if get_catalog(parent) is None:
+        raise CatalogError(f"There is no catalogue '{parent}' to depend on.")
+
+    chain = ancestors(parent)
+    if catalog_id in chain:
+        through = " -> ".join([parent] + chain[:chain.index(catalog_id) + 1])
+        raise CatalogError(
+            f"'{parent}' already depends on '{catalog_id}' ({through}), so this "
+            "would be a loop with no list at the top of it."
+        )
+
+
 def _parent_catalog_of(cur, catalog_id: str) -> Optional[str]:
     cur.execute(
         "SELECT parent_catalog_id FROM client_catalog WHERE catalog_id = %s",
@@ -245,14 +290,16 @@ def update_catalog(catalog_id: str, changes: Dict[str, Any]) -> Dict[str, Any]:
         sets.append("status = %s")
         params.append(_one_of(changes["status"], CATALOG_STATUSES, "Status"))
 
+    # The parent this catalogue is being moved to, if it is being moved at all.
+    # Whether that is a *change* is read from the row itself, below: `get_catalog`
+    # does not carry the current parent, and comparing against a key that is not
+    # there is how this silently did nothing at all.
+    wanted_parent = _UNCHANGED
     if "parent_catalog_id" in changes:
-        parent = _text(changes["parent_catalog_id"]) or None
-        if parent == catalog_id:
-            raise CatalogError("A catalogue cannot depend on itself.")
-        if parent and get_catalog(parent) is None:
-            raise CatalogError(f"There is no catalogue '{parent}' to depend on.")
+        wanted_parent = _text(changes["parent_catalog_id"]) or None
+        _check_parent_catalog(catalog_id, wanted_parent)
         sets.append("parent_catalog_id = %s")
-        params.append(parent)
+        params.append(wanted_parent)
 
     if not sets:
         return get(catalog_id)
@@ -261,10 +308,31 @@ def update_catalog(catalog_id: str, changes: Dict[str, Any]) -> Dict[str, Any]:
     params.append(catalog_id)
 
     with transaction() as cur:
+        moved = (wanted_parent is not _UNCHANGED
+                 and wanted_parent != _parent_catalog_of(cur, catalog_id))
+
         cur.execute(
             f"UPDATE client_catalog SET {', '.join(sets)} WHERE catalog_id = %s",
             params,
         )
+
+        if moved:
+            # The codes these values named belong to the catalogue this one used
+            # to depend on. Under a different parent — or none — they point at
+            # nothing, so they are cleared rather than left to look meaningful.
+            # Which parent each value belongs to now is the client's to say;
+            # nothing here guesses it from a label. A dependent catalogue's
+            # values are then `incomplete` until somebody says, which is exactly
+            # what that flag is for.
+            cur.execute(
+                "UPDATE client_catalog_value SET parent_code = NULL, "
+                "updated_on = CURRENT_TIMESTAMP "
+                "WHERE catalog_id = %s AND parent_code IS NOT NULL",
+                (catalog_id,),
+            )
+            if cur.rowcount:
+                logger.info("Cleared %s parent code(s) in %s: its parent catalogue changed",
+                            cur.rowcount, catalog_id)
 
     return get(catalog_id)
 
