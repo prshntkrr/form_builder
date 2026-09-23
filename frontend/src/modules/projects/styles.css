@@ -76,3 +76,16 @@
   color: inherit; text-align: left; cursor: pointer;
 }
 .linky:hover { text-decoration: underline; }
+
+/* A form that hangs off another. The indent is the whole message, so it is
+   kept quiet: a child form is not a lesser form, just a dependent one. */
+.forms__child > td:first-child { position: relative; }
+.forms__rail {
+  color: var(--ink-3, var(--ink-2)); margin-right: 7px; user-select: none;
+}
+.forms__of { font-weight: 400; }
+
+@media (max-width: 620px) {
+  /* The indent costs width a phone has not got; the rail still says it. */
+  .forms__child > td:first-child { padding-left: 16px !important; }
+}

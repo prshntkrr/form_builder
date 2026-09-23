@@ -38,10 +38,16 @@ from app.modules.forms.table_service import table_exists
 
 logger = logging.getLogger(__name__)
 
-# How deep a chain may go. Farmer -> Plot -> Crop season is three; the limit is
-# generous and exists only so a cycle that somehow survived the check below
-# cannot loop forever.
-MAX_DEPTH = 10
+def max_depth() -> int:
+    """How deep a chain of forms may go (`FORMS_MAX_RELATIONSHIP_DEPTH`).
+
+    Read per call rather than bound at import, so an installation that raises
+    it in `.env` gets the new limit. It is not what stops a cycle — `ancestry`
+    does that with the set of forms it has already seen — so it can be moved
+    without weakening anything: it bounds how many queries walking a chain
+    costs, nothing else.
+    """
+    return max(1, int(settings.forms_max_relationship_depth))
 
 
 class RelationshipError(ValueError):
@@ -96,14 +102,16 @@ def child_forms(form_id: str) -> List[Dict[str, Any]]:
 def ancestry(form_id: str) -> List[str]:
     """This form and every form above it, nearest first.
 
-    Stops at `MAX_DEPTH` and on a repeat, so a loop that somehow reached the
-    database cannot hang a request.
+    Stops on a repeat, so a loop that somehow reached the database cannot hang
+    a request, and one level past the configured depth — far enough for
+    `check_configuration` to tell a chain at the limit from one over it.
     """
     chain: List[str] = []
     seen = set()
     current: Optional[str] = form_id
+    ceiling = max_depth() + 1
 
-    while current and current not in seen and len(chain) < MAX_DEPTH:
+    while current and current not in seen and len(chain) < ceiling:
         seen.add(current)
         chain.append(current)
         current = parent_of_form(current)
@@ -157,9 +165,13 @@ def check_configuration(form_id: Optional[str], form_json: Dict[str, Any],
             "one you picked."
         )
 
-    if len(ancestry(parent)) >= MAX_DEPTH:
+    # The new form is one level below `parent`, so the chain it would make is
+    # the parent's own chain plus itself.
+    deepest = max_depth()
+    if len(ancestry(parent)) + 1 > deepest:
         raise RelationshipError(
-            f"That chain would be more than {MAX_DEPTH} forms deep."
+            f"That chain would be more than {deepest} forms deep "
+            "(FORMS_MAX_RELATIONSHIP_DEPTH)."
         )
 
 

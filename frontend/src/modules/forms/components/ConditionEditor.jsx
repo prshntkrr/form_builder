@@ -1,5 +1,6 @@
 import React from 'react'
 import { OPERATOR_LABELS, UNARY } from '../conditions.js'
+import { useDynamicOptions } from '../dynamicOptions.js'
 
 /**
  * When a question, a section or the whole questionnaire applies.
@@ -153,12 +154,32 @@ export default function ConditionEditor({ target, fields, rules, onChange }) {
  * What the condition compares against.
  *
  * A dropdown offers the option's **value**, showing its label — so the designer
- * reads "Yes" and the rule stores "yes". A field whose choices live in a
- * catalogue or the crop ontologies has none to list here, so the code is typed;
- * it is the code that gets compared either way.
+ * reads "Yes" and the rule stores "yes". It is the value that is compared, and
+ * the value that is stored, whichever control this turns out to be.
+ *
+ * A question whose choices live in a catalogue, a data standard or the crop
+ * ontologies lists none of them on the field, so they are read from the same
+ * place the form itself reads them (`useDynamicOptions`) and offered here too.
+ * The designer used to have to remember the stored code and type it, which is
+ * how a rule ends up pointing at a value the question can never produce.
+ *
+ * Unnarrowed on purpose: a dependent question is narrowed by an answer, and
+ * there is no answer while a rule is being written — "when municipality is …"
+ * may name any municipality. Where the source cannot answer unnarrowed (crop
+ * traits, which differ per crop) nothing comes back and the code is typed, as
+ * before.
  */
 function Value({ field, value, onChange }) {
-  const options = field?.options || []
+  const dynamic = useDynamicOptions(
+    field?.options_from ? [field] : [],
+    null,
+    null,
+    { ignoreDependency: true },
+  )
+
+  const options = field?.options?.length
+    ? field.options
+    : (dynamic[field?.name] || [])
 
   if (options.length) {
     return (

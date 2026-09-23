@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional
 from psycopg2 import sql
 from psycopg2.extras import Json
 
-from app.modules.forms.constants import FORM_STATUSES, FORM_TYPES
+from app.modules.forms.constants import DRAFT, FORM_STATUSES, FORM_TYPES
 from app.core.config import settings
 from app.modules.forms.channels import form_channel
 from app.modules.forms.config_validation import BusinessContext, validate_config
@@ -57,6 +57,49 @@ def _current_version(cur, form_id: str) -> int:
         (form_id,),
     )
     return int(cur.fetchone()["v"])
+
+
+def _replaceable_draft_version(cur, form_id: str, existing_json: Dict[str, Any],
+                               status: Optional[str]) -> Optional[int]:
+    """The version number this save may overwrite, or None to append a new one.
+
+    A version row earns its keep when a response points at it: every submission
+    stores `form_version`, and that row is how the answer is read back against
+    the definition it was collected under. A draft collects nothing, so saving
+    one twenty times left twenty rows nothing could ever refer to and a form
+    that published as version 21.
+
+    Three things have to hold, and the second two are why this is not simply
+    `status == 'Draft'`:
+
+    * the form is a draft **after** this save — a save that publishes it freezes
+      what it publishes;
+    * the version being replaced is the highest one, so a form sitting on an
+      earlier version after a rollback appends instead of rewriting history
+      under the rollback's feet;
+    * **nothing was collected against it**. A form that was live, took answers,
+      and was taken back to draft still has responses stamped with version
+      numbers, and overwriting one would silently change the definition those
+      answers are read against.
+    """
+    if str(status or "") != DRAFT:
+        return None
+
+    live = int(existing_json.get("version") or 0)
+    if not live or live != _current_version(cur, form_id):
+        return None
+
+    table = existing_json.get("table_name")
+    if table and table_exists(cur, table):
+        cur.execute(
+            sql.SQL("SELECT 1 FROM {}.{} WHERE form_id = %s AND form_version = %s LIMIT 1")
+               .format(sql.Identifier(settings.db_schema), sql.Identifier(table)),
+            (form_id, live),
+        )
+        if cur.fetchone():
+            return None
+
+    return live
 
 
 def _row_to_form(row: Dict[str, Any], version: Optional[int] = None) -> Dict[str, Any]:
@@ -588,7 +631,11 @@ def update_form(
         )
         definition["form_id"] = form_id
 
-        version_no = _current_version(cur, form_id) + 1
+        # A draft nobody has answered is one working copy, not a version each
+        # time it is saved. See `_replaceable_draft_version`.
+        replacing = _replaceable_draft_version(
+            cur, form_id, existing_json, status or existing.get("form_status"))
+        version_no = replacing or _current_version(cur, form_id) + 1
         definition["version"] = version_no
         # The original author is never rewritten by an edit.
         definition["created_by"] = existing_json.get("created_by") or existing.get("created_by")
@@ -603,7 +650,17 @@ def update_form(
         )
         # Stored new key -> old key, so a later diff can follow a field across
         # however many versions separate the two being compared.
-        definition["renamed_from"] = {new: old for old, new in rename_map.items()} or None
+        renamed_from = {new: old for old, new in rename_map.items()}
+        if replacing:
+            # The version being replaced is about to stop existing, so a rename
+            # it recorded has to be carried: a -> b there and b -> c here is
+            # a -> c to every version that survives, and a diff that stopped at
+            # `b` would report the question deleted and another one added.
+            carried = existing_json.get("renamed_from") or {}
+            renamed_from = {new: carried.get(old, old) for new, old in renamed_from.items()}
+            for new, old in carried.items():
+                renamed_from.setdefault(new, old)
+        definition["renamed_from"] = renamed_from or None
 
         cur.execute(
             """
@@ -627,10 +684,19 @@ def update_form(
         )
         row = dict(cur.fetchone())
 
-        cur.execute(
-            "INSERT INTO form_version (form_id, version_no, form_json) VALUES (%s, %s, %s)",
-            (form_id, version_no, Json(definition)),
-        )
+        if replacing:
+            cur.execute(
+                "UPDATE form_version SET form_json = %s "
+                " WHERE form_id = %s AND version_no = %s",
+                (Json(definition), form_id, version_no),
+            )
+        # An UPDATE that matched nothing still has to leave a version behind —
+        # a form whose row is missing for any reason gets one rather than none.
+        if not replacing or cur.rowcount == 0:
+            cur.execute(
+                "INSERT INTO form_version (form_id, version_no, form_json) VALUES (%s, %s, %s)",
+                (form_id, version_no, Json(definition)),
+            )
 
         table_report = sync_table(cur, definition)
 

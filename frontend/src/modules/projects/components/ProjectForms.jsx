@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 
 import { api } from '../api.js'
 import { FORM_CHANNEL_NAMES } from '../../forms/channelCapabilities.js'
+import { formTree, hasHierarchy } from '../../forms/formTree.js'
 
 const ASSIGN = 'project.forms.assign'
 const MANAGE = 'project.forms.manage'
@@ -71,6 +72,12 @@ export default function ProjectForms({ projectId, projectName, can }) {
         </p>
       )}
 
+      {hasHierarchy(forms || []) && (
+        <p className="tiny muted" style={{ marginBottom: 10 }}>
+          An indented form is filled in against one of the form above it.
+        </p>
+      )}
+
       {forms?.length > 0 && (
         <div className="tablebox">
           <table className="data">
@@ -78,10 +85,22 @@ export default function ProjectForms({ projectId, projectName, can }) {
               <tr><th>Form</th><th>Status</th><th>Channel</th><th /></tr>
             </thead>
             <tbody>
-              {forms.map((f) => (
-                <tr key={f.form_id}>
-                  <td>
+              {/* Arranged by which form hangs off which, not flat: a child
+                  form's submissions belong to its parent's, and a project of a
+                  dozen forms is unreadable as a list of twelve equals. The
+                  relationship comes from the definition, on each row already. */}
+              {formTree(forms).map(({ form: f, depth }) => (
+                <tr key={f.form_id} className={depth ? 'forms__child' : undefined}>
+                  <td style={depth ? { paddingLeft: 14 + depth * 22 } : undefined}>
+                    {depth > 0 && (
+                      <span className="forms__rail" aria-hidden="true">↳</span>
+                    )}
                     <b>{f.form_title}</b>
+                    {depth > 0 && (
+                      <span className="tiny muted forms__of">
+                        {' '}— answered against {parentTitle(forms, f)}
+                      </span>
+                    )}
                     {f.form_description && (
                       <div className="tiny muted">{f.form_description}</div>
                     )}
@@ -142,6 +161,12 @@ export default function ProjectForms({ projectId, projectName, can }) {
       )}
     </section>
   )
+}
+
+/** What an indented row hangs off, by name — the id means nothing to a reader. */
+function parentTitle(forms, form) {
+  const parent = forms.find((f) => f.form_id === form.parent_form_id)
+  return parent ? parent.form_title : form.parent_form_id
 }
 
 /**
