@@ -6,7 +6,7 @@ import FieldEditor from '../components/FieldEditor.jsx'
 import { defaultLanguage, languageChoices } from '../translate.js'
 import { applicable } from '../conditions.js'
 import { MAX_IDENTIFIER, fieldHidden, identifier } from '../fieldTypes.js'
-import { generateLayout, removeFromLayout, withFieldReplaced } from '../formLayout.js'
+import { generateLayout, layoutIsStale, removeFromLayout, withFieldReplaced } from '../formLayout.js'
 import { FORM_CHANNEL_NAMES, PUBLISHABLE, formChannel } from '../channelCapabilities.js'
 import { conversationOrder, configOf, removeFromWhatsApp, renameInWhatsApp } from '../whatsappConfig.js'
 import { activeProjectId } from '../../projects/active.js'
@@ -558,10 +558,23 @@ export default function Builder() {
      Save stores it. A form that already has one keeps it untouched, and one
      that is never designed never gets one — Preview does not make one. */
   useEffect(() => {
-    if (view !== 'design' || !form || Array.isArray(form.layout?.sections)) return
+    if (!form) return
     // Layout belongs to Web / Mobile; another channel's form never gets one.
     if (formChannel(form) !== 'web_mobile') return
-    const made = generateLayout(form)
+
+    const has = Array.isArray(form.layout?.sections)
+
+    /* Opening Design is what gives a form its first layout; Preview still does
+       not make one, so a form nobody designs never gets one.
+
+       A layout it derived, though, follows the form wherever the form goes —
+       on any tab, so Preview is never drawn from a stale one. Adding a section
+       used to change nothing on screen, because the page was already coming
+       from a layout made before that section existed. One somebody arranged by
+       hand is left alone: it is theirs. */
+    if (!has ? view !== 'design' : !layoutIsStale(form.layout, form)) return
+
+    const made = generateLayout({ ...form, layout: null })
     if (made) setForm({ ...form, layout: made })
   }, [view, form])
 
@@ -604,7 +617,8 @@ export default function Builder() {
   const chosenField = chosenIndex < 0 ? null : form.fields[chosenIndex]
 
   return (
-    <main className={`main${workspace ? ' main--builder' : ''}`}>
+    <main className={`main${workspace ? ' main--builder' : ''}`
+                     + (pane === 'preview' ? ' main--preview' : '')}>
      <div className={workspace ? 'workspace' : undefined}>
       <div className={workspace ? 'workspace__main' : undefined}>
       {!editing && (
@@ -949,7 +963,12 @@ export default function Builder() {
                   fields={form.fields}
                   chosen={chosen}
                   onSelect={setChosen}
-                  onChange={(layout) => setForm({ ...form, layout })}
+                  /* The first edit makes the layout somebody's own: from here
+                     it is no longer rebuilt when the sections change, because
+                     rebuilding it would throw away what they arranged. */
+                  onChange={(layout) => setForm({
+                    ...form, layout: { ...layout, auto: false },
+                  })}
                 />
               )}
 

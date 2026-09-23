@@ -40,6 +40,48 @@ export function clampWidth(raw) {
   return Number.isFinite(width) ? Math.min(COLUMNS, Math.max(1, width)) : COLUMNS
 }
 
+/**
+ * Question types that need the whole row.
+ *
+ * A paragraph, a set of choices, a map: each is taller or wider than a box,
+ * and halving it makes it unusable rather than compact. Everything else — a
+ * line of text, a number, a date, a dropdown — reads fine in half a row.
+ *
+ * The plain (undesigned) renderer follows the same list, so a form looks the
+ * same either side of being laid out.
+ */
+export const FULL_WIDTH = new Set(['textarea', 'multiselect', 'radio', 'location'])
+
+/** How wide one question starts out, before anybody arranges the page. */
+export function defaultWidth(field) {
+  return FULL_WIDTH.has(field?.type) ? COLUMNS : COLUMNS / 2
+}
+
+/**
+ * Questions packed into rows, each row adding up to no more than a full one.
+ *
+ * Order is never changed: this only decides where one row ends and the next
+ * begins, so a form reads top to bottom exactly as its question list does.
+ */
+function pack(cells) {
+  const rows = []
+  let row = []
+  let used = 0
+
+  for (const cell of cells) {
+    if (used && used + cell.width > COLUMNS) {
+      rows.push(row)
+      row = []
+      used = 0
+    }
+    row.push(cell)
+    used += cell.width
+  }
+
+  if (row.length) rows.push(row)
+  return rows
+}
+
 /** Ids for sections and rows, unique within one layout. */
 function idMaker() {
   const taken = new Set()
@@ -62,8 +104,15 @@ function idMaker() {
  * joins the unsectioned ones rather than vanishing. So switching a form onto a
  * layout does not reorder it.
  *
- * Every question starts a full row wide. Nothing about the page changes until
- * somebody decides it should.
+ * Questions that fit beside one another are put beside one another: a text box
+ * or a dropdown takes half a row, so two share it, and only the ones that need
+ * the width — a paragraph, a map, a list of choices — take the whole of it.
+ * Every question used to start a full row wide, which drew a page of single
+ * boxes down the middle of the screen with both margins empty.
+ *
+ * The result is marked `auto`, which is what tells the builder this layout was
+ * derived rather than arranged: a derived one is rebuilt when the form's
+ * sections change, and the first edit in the designer makes it somebody's own.
  *
  * An existing layout is returned as it is — this never overwrites one.
  */
@@ -89,11 +138,11 @@ export function generateLayout(form) {
 
     let bucket = byKey.get(key)
     if (!bucket) {
-      bucket = { key, names: [] }
+      bucket = { key, cells: [] }
       byKey.set(key, bucket)
       groups.push(bucket)            // first question decides where it sits
     }
-    bucket.names.push(name)
+    bucket.cells.push({ fieldId: name, width: defaultWidth(field) })
   }
 
   if (!groups.length) return null
@@ -101,6 +150,8 @@ export function generateLayout(form) {
   const id = idMaker()
 
   return {
+    // Derived, not arranged. See `layoutIsStale`.
+    auto: true,
     sections: groups.map((group) => {
       const source = known.get(group.key)
 
@@ -114,16 +165,45 @@ export function generateLayout(form) {
       const section = {
         id: sectionId,
         title: source?.title || '',
-        containers: [{
-          id: `${sectionId}-row-1`,
-          fields: group.names.map((fieldId) => ({ fieldId, width: COLUMNS })),
-        }],
+        containers: pack(group.cells).map((cells, n) => ({
+          id: `${sectionId}-row-${n + 1}`,
+          fields: cells,
+        })),
       }
 
       if (source?.description) section.description = source.description
       return section
     }),
   }
+}
+
+/**
+ * Whether a derived layout no longer says what the form says.
+ *
+ * Opening the designer is what gives a form a layout, and from that moment the
+ * page is drawn from the layout and not from the question list — so a section
+ * added afterwards was simply never shown, and its questions dropped into the
+ * untitled band at the end. That is the bug this exists to close: while nobody
+ * has arranged the page by hand, the layout follows the form.
+ *
+ * A layout somebody has edited is never stale. It is theirs, it may deliberately
+ * differ from the sections, and rebuilding it would throw their work away —
+ * questions added after it still appear, unplaced, which is what that band is
+ * for.
+ */
+export function layoutIsStale(layout, form) {
+  if (!layout?.auto || !Array.isArray(layout.sections)) return false
+
+  const fresh = generateLayout({ ...form, layout: null })
+  if (!fresh) return Boolean(layout.sections.length)
+
+  const shape = (one) => JSON.stringify((one.sections || []).map((section) => [
+    section.title || '',
+    (section.containers || []).flatMap((container) =>
+      (container.fields || []).map((cell) => [cell.fieldId, cell.width])),
+  ]))
+
+  return shape(fresh) !== shape(layout)
 }
 
 /** Whether a layout mentions a question anywhere. */

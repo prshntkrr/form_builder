@@ -4,10 +4,8 @@ import { useLocation } from '../useLocation.js'
 import { api } from '../api.js'
 import { defaultLanguage, languageChoices, translateForm } from '../translate.js'
 import { hidden } from '../conditions.js'
-import { resolveLayout } from '../formLayout.js'
+import { FULL_WIDTH, resolveLayout } from '../formLayout.js'
 import { useDynamicOptions } from '../dynamicOptions.js'
-
-const FULL_WIDTH = new Set(['textarea', 'multiselect', 'radio', 'location'])
 
 /**
  * The form's questions, in the order the builder shows them.

@@ -17,6 +17,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest'
 import {
   clampWidth,
   generateLayout,
+  layoutIsStale,
   renameInLayout,
   resolveLayout,
   withFieldReplaced,
@@ -79,13 +80,39 @@ describe('a first layout, from what the form already says', () => {
 
     expect(layout.sections.map((s) => s.id)).toEqual(['farmer', 'farm'])
     expect(layout.sections.map((s) => s.title)).toEqual(['Farmer', 'Farm'])
+    // Two text boxes fit beside one another, so they are put beside one
+    // another: a page of single full-width boxes wastes both margins.
     expect(layout.sections[0].containers[0].fields).toEqual([
-      { fieldId: 'farmer_name', width: 12 },
-      { fieldId: 'mobile', width: 12 },
+      { fieldId: 'farmer_name', width: 6 },
+      { fieldId: 'mobile', width: 6 },
     ])
     expect(layout.sections[1].containers[0].fields).toEqual([
-      { fieldId: 'crop', width: 12 },
+      { fieldId: 'crop', width: 6 },
     ])
+  })
+
+  test('a question that needs the width gets it, and starts a row', () => {
+    const layout = generateLayout({
+      sections: [],
+      fields: [
+        { name: 'note', type: 'text' },
+        { name: 'story', type: 'textarea' },
+        { name: 'where', type: 'location' },
+        { name: 'age', type: 'number' },
+      ],
+    })
+
+    const rows = layout.sections[0].containers.map((c) => c.fields)
+    expect(rows).toEqual([
+      [{ fieldId: 'note', width: 6 }],
+      [{ fieldId: 'story', width: 12 }],
+      [{ fieldId: 'where', width: 12 }],
+      [{ fieldId: 'age', width: 6 }],
+    ])
+  })
+
+  test('a derived layout says so, so the builder can rebuild it', () => {
+    expect(generateLayout({ sections: SECTIONS, fields: FIELDS }).auto).toBe(true)
   })
 
   test('orders sections the way the form draws them: by their first question', () => {
@@ -345,5 +372,56 @@ describe('drawing a form', () => {
     // The form itself shows no map; the sheet behind Open Map does.
     expect(screen.queryByTestId('map')).toBeNull()
     expect(container.querySelector('[data-field="farm_boundary"]').dataset.width).toBe('12')
+  })
+})
+
+
+// --------------------------------------------------------------------------- //
+/**
+ * A derived layout follows the form; an arranged one does not.
+ *
+ * Opening the designer is what gives a form a layout, and from that moment the
+ * page is drawn from the layout rather than from the question list. A section
+ * added afterwards was simply never shown, and its questions fell into the
+ * untitled band at the end — which is what this closes.
+ */
+describe('whether a layout still says what the form says', () => {
+  const form = { sections: SECTIONS, fields: FIELDS }
+
+  test('a freshly derived one is not stale', () => {
+    expect(layoutIsStale(generateLayout(form), form)).toBe(false)
+  })
+
+  test('a section added afterwards makes it stale', () => {
+    const layout = generateLayout({ sections: [], fields: FIELDS.map(
+      ({ section, ...f }) => f) })
+    expect(layout.sections).toHaveLength(1)
+    expect(layout.sections[0].title).toBe('')
+
+    // The same questions, now sorted into two named sections.
+    expect(layoutIsStale(layout, form)).toBe(true)
+  })
+
+  test('a question added afterwards makes it stale', () => {
+    const layout = generateLayout(form)
+    const grown = { ...form,
+                    fields: [...FIELDS, { name: 'notes', type: 'text', section: 'farm' }] }
+
+    expect(layoutIsStale(layout, grown)).toBe(true)
+  })
+
+  test('one somebody arranged is never stale, however the form changes', () => {
+    // Theirs to differ from the sections, and rebuilding would discard it.
+    const arranged = { ...generateLayout(form), auto: false }
+    const grown = { ...form,
+                    fields: [...FIELDS, { name: 'notes', type: 'text', section: 'farm' }] }
+
+    expect(layoutIsStale(arranged, grown)).toBe(false)
+    expect(layoutIsStale(LAYOUT, grown)).toBe(false)   // saved before `auto` existed
+  })
+
+  test('a form with no layout has nothing to be stale', () => {
+    expect(layoutIsStale(undefined, form)).toBe(false)
+    expect(layoutIsStale({ auto: true }, form)).toBe(false)
   })
 })
