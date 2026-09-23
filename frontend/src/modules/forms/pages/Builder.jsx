@@ -7,6 +7,7 @@ import { defaultLanguage, languageChoices } from '../translate.js'
 import { applicable } from '../conditions.js'
 import { MAX_IDENTIFIER, fieldHidden, identifier } from '../fieldTypes.js'
 import { generateLayout, layoutIsStale, removeFromLayout, withFieldReplaced } from '../formLayout.js'
+import * as recovery from '../draftRecovery.js'
 import { FORM_CHANNEL_NAMES, PUBLISHABLE, formChannel } from '../channelCapabilities.js'
 import { conversationOrder, configOf, removeFromWhatsApp, renameInWhatsApp } from '../whatsappConfig.js'
 import { activeProjectId } from '../../projects/active.js'
@@ -196,6 +197,17 @@ export default function Builder() {
   // channel.
   const [newChannel, setNewChannel] = useState(location.state?.channel || null)
 
+  // A draft kept in this browser, offered when the builder opens on work that
+  // never reached the server. See draftRecovery.js.
+  const [recovered, setRecovered] = useState(null)
+
+  // The id the server gave a form that had none when the builder opened —
+  // autosave created it as a Draft. From then on this is the form being edited,
+  // even though the URL still says /builder.
+  const [autoSavedId, setAutoSavedId] = useState(null)
+  // When the server last took a copy, and whether the last attempt got there.
+  const [autoSaved, setAutoSaved] = useState(null)
+
   const view = editing ? section : draftTab
 
   useEffect(() => {
@@ -210,6 +222,9 @@ export default function Builder() {
     setTrial({})
     setDraftTab('questions')
     setDict(null)
+    setRecovered(null)
+    setAutoSavedId(null)
+    setAutoSaved(null)
 
     if (!formId) {
       // A copy of a saved form, made for another channel ("Copy as …").
@@ -251,6 +266,130 @@ export default function Builder() {
       .catch((e) => setError(e.message))
       .finally(() => setBusy(null))
   }, [formId])
+
+  /* Write the draft down every minute, and again on the way out.
+     Only while it is a draft: a live form's questions are already on the
+     server, and offering an older local copy of one would be a way to undo a
+     published change by accident.
+
+     `form` is in the dependency list, so the timer restarts on every edit —
+     which is what makes a minute mean "a minute since you last typed" rather
+     than a minute since the builder opened. */
+  const unsaved = !editing || status === 'Draft'
+
+  /* Which form the server is holding this draft as. `formId` while editing one,
+     the id autosave was given for a form that started with none, and null
+     before the first autosave has happened. */
+  const draftId = editing ? formId : autoSavedId
+
+  /** The draft, sent to the server, quietly.
+   *
+   *  A half-built form is refused by the same validation as a manual save — a
+   *  dropdown with no choices yet, a question with no name — and that is fine:
+   *  the attempt says so and the next minute tries again. What it must never do
+   *  is interrupt somebody mid-question with an error they did not ask for.
+   */
+  const autosave = async () => {
+    const payload = untag(form)
+
+    try {
+      if (draftId) {
+        const renames = {}
+        for (const f of form.fields) if (f._orig && f._orig !== f.name) renames[f._orig] = f.name
+
+        await api.updateForm(draftId, payload, undefined, renames)
+
+        /* The renames have happened, so the next autosave must not send them
+           again — `_orig` would then name a column that no longer exists.
+           Updated in place, keeping each `_uid`: rebuilding the field objects
+           would remount every row and take the cursor with it. */
+        if (Object.keys(renames).length) {
+          setForm((current) => ({
+            ...current,
+            fields: (current.fields || []).map((f) => ({ ...f, _orig: f.name })),
+          }))
+        }
+      } else {
+        const made = await api.createForm(payload, undefined, 'Draft', buildingIn)
+        setAutoSavedId(made.form_id)
+        setStatus('Draft')
+        formsChanged()
+      }
+
+      setAutoSaved({ at: Date.now(), ok: true })
+      return true
+    } catch {
+      // Silent on purpose. See above.
+      setAutoSaved((was) => ({ at: was?.at || null, ok: false }))
+      return false
+    }
+  }
+
+  useEffect(() => {
+    if (!form || !unsaved) return
+
+    /* Tagged, so `_orig` — which is how a save knows a question was renamed —
+       survives the reload. `_uid` is dropped on the way back in. The id the
+       server gave this draft rides along, so a reload cannot end up creating a
+       second form beside the one autosave already made. */
+    const locally = () => recovery.keep(editing ? formId : null, form, autoSavedId)
+
+    /* A form nobody has chosen a channel for cannot be created — the server
+       refuses it, and rightly. It is still kept in the browser. */
+    const worthSending = editing || Boolean(form.channel)
+
+    const tick = () => {
+      locally()
+      // Never while a manual save, publish or AI call is in flight: two writes
+      // to one form racing each other is nobody's idea of a safety net.
+      if (worthSending && !busy) autosave()
+    }
+
+    const timer = setInterval(tick, recovery.EVERY_MS)
+    // A reload is the case this exists for, and it does not wait for a timer.
+    // Only the local half: an unload is no time to start a request.
+    window.addEventListener('beforeunload', locally)
+
+    return () => {
+      clearInterval(timer)
+      window.removeEventListener('beforeunload', locally)
+    }
+  }, [form, unsaved, editing, formId, autoSavedId, busy])
+
+  /* What this browser held when the builder opened.
+     Offered, never applied: replacing what the server has with an older copy
+     from a tab somebody forgot about would be worse than the loss this
+     prevents. */
+  useEffect(() => {
+    if (!form || recovered !== null) return
+    if (editing && status !== 'Draft') return
+
+    const snapshot = recovery.held(editing ? formId : null)
+    // `false` rather than `null`: checked, and there is nothing to offer. The
+    // guard above reads `null` as "not looked yet", so declining an offer has
+    // to leave something other than `null` behind or it comes straight back.
+    setRecovered(snapshot && recovery.differs(snapshot, form, untag) ? snapshot : false)
+  }, [form, status, editing, formId, recovered])
+
+  const restoreDraft = () => {
+    // Fresh `_uid`s: they are React keys from a counter that restarted with the
+    // page, and reusing the stored ones could collide with a question added
+    // since. `_orig` is kept, which is what a rename is detected from.
+    setForm(prep({
+      ...recovered.form,
+      fields: (recovered.form.fields || []).map(({ _uid, ...f }) => f),
+    }, false))
+    // Whatever autosave had already created for these questions is the form
+    // they belong to; without this the next save would make a second one.
+    if (recovered.serverId) setAutoSavedId(recovered.serverId)
+    recovery.drop(editing ? formId : null)
+    setRecovered(false)
+  }
+
+  const discardDraft = () => {
+    recovery.drop(editing ? formId : null)
+    setRecovered(false)
+  }
 
   const run = async (kind, fn) => {
     setBusy(kind); setError(''); setSaved(null)
@@ -368,21 +507,34 @@ export default function Builder() {
 
       const payload = untag(form)
 
-      const result = editing
-        ? await api.updateForm(formId, payload, undefined, renames)
+      /* `draftId`, not `formId`: autosave may already have created this form,
+         and creating it again would leave two. Publishing one autosave made is
+         an update plus a status change, because the row already exists. */
+      const result = draftId
+        ? await api.updateForm(draftId, payload, undefined, renames)
         : await api.createForm(payload, undefined, saveAs, buildingIn)
+
+      if (draftId && !editing && saveAs !== 'Draft') {
+        await api.setStatus(draftId, saveAs)
+      }
 
       formsChanged()
 
+      // Saved: there is nothing left to recover. A new form's snapshot is kept
+      // under 'new', so it is that one that goes.
+      recovery.drop(editing ? formId : null)
+      setRecovered(false)
+
       if (!editing) {
+        const newId = result.form_id || draftId
         // A draft has nothing live to open, so stay in the builder on it. Only a
         // published form goes straight to the form people will fill in.
         // A form answered elsewhere (WhatsApp) has no page here to fill in, so
         // it reopens in its own builder rather than a fill page that refuses it.
         const fillHere = formChannel(form) === 'web_mobile'
         navigate(
-          saveAs === 'Draft' || !fillHere ? `/forms/${result.form_id}/${saveAs === 'Draft' ? 'preview' : 'questions'}`
-            : `/f/${result.form_id}`,
+          saveAs === 'Draft' || !fillHere ? `/forms/${newId}/${saveAs === 'Draft' ? 'preview' : 'questions'}`
+            : `/f/${newId}`,
           { replace: true, state: saveAs === 'Draft' || !fillHere ? undefined : { published: result } },
         )
         return
@@ -621,6 +773,42 @@ export default function Builder() {
                      + (pane === 'preview' ? ' main--preview' : '')}>
      <div className={workspace ? 'workspace' : undefined}>
       <div className={workspace ? 'workspace__main' : undefined}>
+      {/* Work this browser kept when the page last closed. Offered rather than
+          applied — see draftRecovery.js. */}
+      {recovered && (
+        <div className="note note--warn recover" role="status">
+          <div className="recover__said">
+            <b>Unsaved questions from {recovery.since(recovered.savedAt)}</b>
+            <span className="tiny">
+              {recovered.questions} question{recovered.questions === 1 ? '' : 's'}
+              {recovered.title ? ` — “${recovered.title}”` : ''}. This browser kept
+              them while they were not saved.
+            </span>
+          </div>
+          <div className="recover__acts">
+            <button className="btn btn--sm btn--primary" onClick={restoreDraft}>
+              Restore them
+            </button>
+            <button className="btn btn--sm btn--quiet" onClick={discardDraft}>
+              Discard
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Whether the server has this draft. Said plainly, because an autosave
+          nobody can see is an autosave nobody trusts — and a failing one has to
+          be visible without interrupting the question being typed. */}
+      {unsaved && autoSaved && (
+        <p className={`tiny autosave${autoSaved.ok ? '' : ' autosave--stale'}`} role="status">
+          {autoSaved.ok
+            ? `Draft saved automatically at ${new Date(autoSaved.at).toLocaleTimeString()}`
+            : autoSaved.at
+              ? `Could not reach the server — last saved at ${new Date(autoSaved.at).toLocaleTimeString()}. Your questions are kept in this browser.`
+              : 'Could not reach the server. Your questions are kept in this browser.'}
+        </p>
+      )}
+
       {!editing && (
         <div className="card card--pad compose">
           <h1>What do you need to collect?</h1>
