@@ -42,8 +42,10 @@ export default function AmChartLineRenderer({ widget, data, dashboard }) {
         panX: false,
         panY: false,
         layout: root.verticalLayout,
-        paddingTop: 10,
-        paddingRight: 10,
+        // Just enough that the top value label and the last x label are not
+        // against the edge of the widget. It was 10 on both.
+        paddingTop: 4,
+        paddingRight: 6,
         paddingBottom: 0,
         paddingLeft: 0,
       })

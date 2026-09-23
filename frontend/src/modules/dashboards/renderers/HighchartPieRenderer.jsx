@@ -1,9 +1,10 @@
-import React, { useRef, useEffect, useMemo } from "react";
+import React, { useMemo } from "react";
 
 import Highcharts from "highcharts";
 import HighchartsReact from "highcharts-react-official";
 
 import { paletteFor, widgetColors } from "./colors.js";
+import { useChartFit } from "./useChartFit.js";
 
 /**
  * Pie chart rendered with Highcharts.
@@ -17,23 +18,8 @@ import { paletteFor, widgetColors } from "./colors.js";
  *   data   — [{ name, value }, …] from prepareChartData
  */
 export default function HighchartPieRenderer({ widget, data, dashboard }) {
-  const chartComponentRef = useRef(null);
-
-  // Reflow the chart when the grid widget resizes. Highcharts needs an
-  // explicit reflow when its container changes size outside of a window
-  // resize event (react-grid-layout resizes are CSS-driven, not window).
-  useEffect(() => {
-    const container = chartComponentRef.current?.container?.current;
-    if (!container) return;
-
-    const observer = new ResizeObserver(() => {
-      chartComponentRef.current?.chart?.reflow();
-    });
-
-    observer.observe(container);
-
-    return () => observer.disconnect();
-  }, []);
+  // Sized and resized by its container, not by a 400px default.
+  const chartComponentRef = useChartFit();
 
   // One slice colour each, from the palette this widget or its dashboard was
   // given. With none chosen this is the hsl() ramp the chart always drew.
@@ -48,6 +34,9 @@ export default function HighchartPieRenderer({ widget, data, dashboard }) {
         type: "pie",
         backgroundColor: widget.presentation?.background_color || "transparent",
         style: { fontFamily: "inherit" },
+        // Highcharts keeps 10px around the plot and 15 under it, which is
+        // a second margin inside a widget that already has one.
+        spacing: [4, 4, 4, 4],
       },
 
       title: { text: undefined },
@@ -65,6 +54,11 @@ export default function HighchartPieRenderer({ widget, data, dashboard }) {
           dataLabels: {
             enabled: true,
             format: "{point.name}",
+            /* Highcharts places these 30px out by default and shrinks the
+               pie to make room, so a small widget was mostly connector
+               line. The same labels, next to the slice they name. */
+            distance: 10,
+            connectorPadding: 2,
             style: { fontSize: "12px", fontWeight: "normal" },
           },
           showInLegend: true,
@@ -72,6 +66,11 @@ export default function HighchartPieRenderer({ widget, data, dashboard }) {
       },
 
       legend: {
+        /* Tight enough that the circle above it keeps the room. */
+        margin: 6,
+        padding: 0,
+        itemMarginTop: 0,
+        itemMarginBottom: 0,
         itemStyle: {
           fontSize: "12px",
           fontWeight: "normal",
@@ -100,7 +99,7 @@ export default function HighchartPieRenderer({ widget, data, dashboard }) {
       ref={chartComponentRef}
       highcharts={Highcharts}
       options={options}
-      containerProps={{ style: { width: "100%", height: "100%" } }}
+      containerProps={{ className: "dash__chart-fill" }}
     />
   );
 }

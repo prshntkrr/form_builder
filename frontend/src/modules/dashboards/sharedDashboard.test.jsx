@@ -209,7 +209,9 @@ describe('a shared dashboard is the dashboard as it was arranged', () => {
 
   test('a widget saved with no layout still gets its type\'s size', async () => {
     const { gridLayoutFor } = await import('./layout.js')
+    // A KPI is one row: the compact card is a fixed band, so the height comes
+    // from the card's design rather than from what was stored.
     expect(gridLayoutFor([{ id: 'x', type: 'kpi' }])[0])
-      .toMatchObject({ i: 'x', x: 0, y: 0, w: 3, h: 2 })
+      .toMatchObject({ i: 'x', x: 0, y: 0, w: 3, h: 1 })
   })
 })

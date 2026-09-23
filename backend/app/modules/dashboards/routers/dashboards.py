@@ -30,6 +30,7 @@ from app.modules.dashboards.schemas import (
     SharedDataRequest,
 )
 from app.modules.dashboards.services.query_service import (
+    count_dashboard_rows,
     execute_dashboard_query,
 )
 
@@ -439,10 +440,20 @@ def get_dashboard_data(
                 detail=f"Unknown filter field: {filter_item.field}",
             )
 
+    paging = req.page is not None and req.page_size is not None
+
     try:
         rows = execute_dashboard_query(
             table_name,
             req.binding,
+            page=req.page,
+            page_size=req.page_size,
+        )
+
+        # Counted only when somebody is paging. Every other widget reads its
+        # whole result and would pay for a count it has no use for.
+        total_rows = (
+            count_dashboard_rows(table_name, req.binding) if paging else None
         )
 
     except Exception as exc:
@@ -456,10 +467,20 @@ def get_dashboard_data(
             detail="Unable to execute dashboard data query.",
         ) from exc
 
-    return {
+    answer = {
         "table_name": table_name,
         "rows": rows,
     }
+
+    if paging:
+        # Added to the reply rather than replacing it: a caller that does not
+        # page sees the same two keys it always saw.
+        answer["page"] = req.page
+        answer["page_size"] = req.page_size
+        answer["total_rows"] = total_rows
+        answer["total_pages"] = max(1, -(-total_rows // req.page_size))
+
+    return answer
 
 
 # ── Public links ────────────────────────────────────────────────

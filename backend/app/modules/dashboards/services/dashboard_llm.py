@@ -364,6 +364,54 @@ Use operator "EQUALS", "GREATER_THAN", etc. as appropriate. Ensure the numerator
 Do NOT use percentage KPI for line charts, bar charts, or tables. Only use it when the widget type is "kpi".
 
 ============================================================
+GROUPED AND STACKED BAR CHARTS
+============================================================
+
+A bar chart that breaks each category down by a second field — "male and
+female farmers by district", "sales by region and product", "plots by state
+and season" — is ONE bar widget with TWO dimensions, not two measures and not
+two widgets.
+
+- data_binding.dimensions[0] is the category axis (the thing being grouped by).
+- data_binding.dimensions[1] is the field being compared within each group.
+- data_binding.measures stays a SINGLE measure, counting or summing a field.
+- Set "presentation": {"bar_mode": "grouped"} — or "stacked" when the request
+  asks for the parts to be stacked into one bar rather than placed side by side.
+
+For "Show the number of male and female farmers in each district", with
+`district` and `respondant_gender` available:
+
+{
+  "id": "widget_1",
+  "type": "bar",
+  "title": "Male and Female Farmers by District",
+  "data_source_id": "source_1",
+  "layout": {"x": 0, "y": 0, "w": 6, "h": 4},
+  "presentation": {"bar_mode": "grouped"},
+  "data_binding": {
+    "dimensions": [
+      {"field": "district"},
+      {"field": "respondant_gender"}
+    ],
+    "measures": [
+      {"field": "id", "aggregation": "COUNT", "label": "Farmers"}
+    ],
+    "filters": []
+  }
+}
+
+WRONG, and the most common mistake: putting the compared field in `measures`.
+
+  "dimensions": [{"field": "district"}],
+  "measures": [{"field": "respondant_gender", "aggregation": "COUNT"}]
+
+That counts how many gender values each district has and draws ONE bar per
+district. It answers a different question from the one that was asked.
+
+Use a single dimension whenever nothing is being broken down — "farmers by
+district" on its own is one dimension and one measure, as it always was.
+
+============================================================
 BUBBLE, HISTOGRAM, AND SCATTER WIDGETS
 ============================================================
 
