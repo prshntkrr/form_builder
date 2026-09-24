@@ -3,6 +3,7 @@ import Highcharts from "highcharts";
 import HighchartsReact from "highcharts-react-official";
 
 import { widgetColors } from "./colors.js";
+import { useChartFit } from "./useChartFit.js";
 import HC_more from "highcharts/highcharts-more";
 
 if (typeof Highcharts === "object") {
@@ -14,6 +15,9 @@ if (typeof Highcharts === "object") {
 }
 
 export default function HighchartBubbleRenderer({ widget, data, dashboard }) {
+  // Sized and resized by its container, not by a 400px default.
+  const chartRef = useChartFit();
+
   const options = useMemo(() => {
     const p = widget.presentation || {};
     
@@ -117,7 +121,10 @@ export default function HighchartBubbleRenderer({ widget, data, dashboard }) {
       chart: {
         type: "bubble",
         backgroundColor: "transparent",
-        animation: false
+        animation: false,
+        // Highcharts keeps 10px around the plot and 15 under it, which is
+        // a second margin inside a widget that already has one.
+        spacing: [4, 4, 4, 4],
       },
       title: {
         text: null
@@ -161,11 +168,12 @@ export default function HighchartBubbleRenderer({ widget, data, dashboard }) {
   }, [widget, data, dashboard]);
 
   return (
-    <div style={{ width: "100%", height: "100%" }}>
+    <div className="dash__chart-fill">
       <HighchartsReact
+        ref={chartRef}
         highcharts={Highcharts}
         options={options}
-        containerProps={{ style: { width: "100%", height: "100%" } }}
+        containerProps={{ className: "dash__chart-fill" }}
       />
     </div>
   );

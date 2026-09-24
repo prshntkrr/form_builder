@@ -364,6 +364,99 @@ Use operator "EQUALS", "GREATER_THAN", etc. as appropriate. Ensure the numerator
 Do NOT use percentage KPI for line charts, bar charts, or tables. Only use it when the widget type is "kpi".
 
 ============================================================
+GROUPED AND STACKED BAR CHARTS
+============================================================
+
+A bar chart that breaks each category down by a second field — "male and
+female farmers by district", "sales by region and product", "plots by state
+and season" — is ONE bar widget with TWO dimensions, not two measures and not
+two widgets.
+
+- data_binding.dimensions[0] is the category axis (the thing being grouped by).
+- data_binding.dimensions[1] is the field being compared within each group.
+- data_binding.measures stays a SINGLE measure, counting or summing a field.
+- Set "presentation": {"bar_mode": "grouped"} — or "stacked" when the request
+  asks for the parts to be stacked into one bar rather than placed side by side.
+
+For "Show the number of male and female farmers in each district", with
+`district` and `respondant_gender` available:
+
+{
+  "id": "widget_1",
+  "type": "bar",
+  "title": "Male and Female Farmers by District",
+  "data_source_id": "source_1",
+  "layout": {"x": 0, "y": 0, "w": 6, "h": 4},
+  "presentation": {"bar_mode": "grouped"},
+  "data_binding": {
+    "dimensions": [
+      {"field": "district"},
+      {"field": "respondant_gender"}
+    ],
+    "measures": [
+      {"field": "id", "aggregation": "COUNT", "label": "Farmers"}
+    ],
+    "filters": []
+  }
+}
+
+WRONG, and the most common mistake: putting the compared field in `measures`.
+
+  "dimensions": [{"field": "district"}],
+  "measures": [{"field": "respondant_gender", "aggregation": "COUNT"}]
+
+That counts how many gender values each district has and draws ONE bar per
+district. It answers a different question from the one that was asked.
+
+Use a single dimension whenever nothing is being broken down — "farmers by
+district" on its own is one dimension and one measure, as it always was.
+
+============================================================
+LINE CHARTS WITH SEVERAL LINES
+============================================================
+
+A line chart that plots more than one quantity over the same axis — "monthly
+farmer count, total production and rice sold", "yield and area by season" —
+is ONE line widget with ONE dimension and SEVERAL measures. Not several
+widgets, and not a second dimension.
+
+- data_binding.dimensions holds exactly ONE field: the axis every line runs
+  along, usually a date, a month or a stage.
+- data_binding.measures holds one entry per line, each with its own field and
+  its own aggregation.
+- Give every measure a "label". It is what the legend shows, so write it the
+  way a reader would say it: "Total Production", not "total_production".
+- At most 6 measures on one line chart.
+
+For "Show monthly farmer count, total production and rice sold", with
+`month`, `id`, `total_production` and `rice_sold` available:
+
+{
+  "id": "widget_1",
+  "type": "line",
+  "title": "Farmers, Production and Rice Sold by Month",
+  "data_source_id": "source_1",
+  "layout": {"x": 0, "y": 0, "w": 6, "h": 4},
+  "data_binding": {
+    "dimensions": [
+      {"field": "month"}
+    ],
+    "measures": [
+      {"field": "id", "aggregation": "COUNT", "label": "Farmers"},
+      {"field": "total_production", "aggregation": "SUM", "label": "Total Production"},
+      {"field": "rice_sold", "aggregation": "SUM", "label": "Rice Sold"}
+    ],
+    "filters": []
+  }
+}
+
+WRONG: one widget per quantity, when the request asks for them together.
+WRONG: a second dimension. That breaks ONE quantity down by a second field,
+which is the grouped bar chart above, not several quantities side by side.
+
+A line chart asked for one quantity stays one measure, exactly as before.
+
+============================================================
 BUBBLE, HISTOGRAM, AND SCATTER WIDGETS
 ============================================================
 

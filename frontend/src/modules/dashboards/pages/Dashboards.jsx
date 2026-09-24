@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import { dataFor, getRenderer } from "../renderers/registry.js";
 import { prepareChartData } from "../renderers/prepareChartData.js";
@@ -6,10 +6,13 @@ import {
   BREAKPOINTS,
   COLUMNS,
   GRID,
+  columnsFor,
   defaultWidgetSize,
   widgetBounds,
   gridLayoutFor,
+  responsiveLayouts,
 } from "../layout.js";
+import { useGridWidth } from "../useGridWidth.js";
 import {
   COLOR_KEYS,
   PALETTES,
@@ -17,17 +20,74 @@ import {
   widgetColors,
 } from "../renderers/colors.js";
 
-import {
-  ResponsiveGridLayout,
-  useContainerWidth,
-  verticalCompactor,
-} from "react-grid-layout";
+import { ResponsiveGridLayout, verticalCompactor } from "react-grid-layout";
 
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 
 import { api } from "../api.js";
+import { formatKpiValue, kpiIconId } from "../kpi.js";
+import {
+  bindingForColumns,
+  columnsOf,
+  defaultLabel,
+  reorder,
+  valueOf,
+} from "../tableColumns.js";
+import {
+  AGGREGATION_LABELS,
+  BAR_MODES,
+  aggregationsFor,
+  barModeOf,
+  fieldLabel,
+  isComparingMode,
+  settleAggregation,
+} from "../chartConfig.js";
 import { useCapabilities } from "../../../core/auth.jsx";
+import {
+  MAX_LINE_SERIES,
+  blankSeries,
+  seriesFromForm,
+  seriesLabel,
+  seriesOf,
+} from "../lineSeries.js";
+import {
+  NUMERIC_TYPES,
+  bindingFor,
+  draftWidget,
+  updatedWidget,
+  widgetProblem,
+} from "../widgetDraft.js";
+
+/* The three things the "+" menu offers, in the words a dashboard reader uses.
+   Each is only a starting type for the one widget editor. */
+const ADD_MENU_CHOICES = [
+  { type: "table", label: "Make Table" },
+  { type: "kpi", label: "Make Card" },
+  { type: "bar", label: "Make Graph" },
+];
+
+/* What the editor calls a widget of each type; anything else is a graph. */
+const WIDGET_NOUNS = { table: "Table", kpi: "Card" };
+
+/* The editor's preview borrows an id no real widget has, so that nothing
+   keyed by widget id can confuse the two. */
+const PREVIEW_WIDGET_ID = "__preview__";
+
+/* Long enough that running down a dropdown with the arrow keys asks once,
+   short enough that a deliberate change feels immediate. */
+const PREVIEW_DEBOUNCE_MS = 250;
+
+const EMPTY_PREVIEW = { status: "idle", rows: [], numRows: null, error: "" };
+
+/* The tallest the preview card is drawn. A widget taller than this is shown
+   shorter than it will be; one shorter — a KPI is a single row — is drawn at
+   its own height rather than stretched to fill the panel. */
+const PREVIEW_MAX_HEIGHT = 320;
+
+/* Roughly how tall the open menu is, with its gap. Less room than this above
+   the button and it opens downward instead. */
+const ADD_MENU_HEIGHT = 170;
 
 export default function Dashboards() {
   const can = useCapabilities();
@@ -122,40 +182,84 @@ export default function Dashboards() {
   const [gridLayout, setGridLayout] = useState([]);
   const [savedGridLayout, setSavedGridLayout] = useState([]);
 
-  // allLayouts preserves RGL's derived layouts for every breakpoint.
-  // Initialised with only lg; RGL derives md/sm/etc. on first render and
-  // onLayoutChange keeps them in sync so they are never lost on re-render.
+  /* The arrangement, by breakpoint. `lg` — twelve columns — is the one that
+     is saved and the one every programmatic change writes; the narrower ones
+     are refitted from it unless the grid has reported its own (somebody
+     rearranged things on a narrow screen), which is kept while it lasts. */
   const [allLayouts, setAllLayouts] = useState({ lg: [] });
 
-  const {
-    width: gridWidth,
-    containerRef: gridContainerRef,
-    mounted: gridMounted,
-    measureWidth,
-  } = useContainerWidth({
-    initialWidth: 0,
-  });
+  const gridLayouts = useMemo(() => responsiveLayouts(allLayouts), [allLayouts]);
 
-  // Re-measure the container whenever the dashboard or edit state changes so
-  // that gridWidth always reflects the actual rendered width of the grid wrapper.
-  useEffect(() => {
-    if (!dashboard || !gridMounted) {
-      return;
-    }
-
-    requestAnimationFrame(() => {
-      measureWidth();
-    });
-  }, [dashboard, gridMounted, isEditMode, measureWidth]);
+  /* Measured from the grid's own wrapper, and re-measured whenever that
+     changes size — a zoom, a resize, the sidebar sliding away. See the hook
+     for why react-grid-layout's own measurement did not. Until the first
+     measurement, and in any environment without layout, the grid is drawn
+     for a desktop rather than for nothing. */
+  const { width: measuredGridWidth, containerRef: gridContainerRef } = useGridWidth();
+  const gridWidth = measuredGridWidth || COLUMNS.lg * 100;
 
   const [editingWidgetId, setEditingWidgetId] = useState(null);
 
   const [showAddWidget, setShowAddWidget] = useState(false);
 
+  /* The floating "+" at the foot of the grid and its three-way menu. The
+     menu normally opens upward, over the grid, so it is never pushed below
+     the bottom of the page; when the button sits too close to the top for
+     that (a dashboard with nothing on it yet) it opens downward instead. */
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
+  const [addMenuOpensUp, setAddMenuOpensUp] = useState(true);
+  const addMenuRef = useRef(null);
+
+  useEffect(() => {
+    if (!addMenuOpen) {
+      return undefined;
+    }
+
+    const closeIfOutside = (event) => {
+      if (addMenuRef.current && !addMenuRef.current.contains(event.target)) {
+        setAddMenuOpen(false);
+      }
+    };
+
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") {
+        setAddMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", closeIfOutside);
+    document.addEventListener("touchstart", closeIfOutside);
+    document.addEventListener("keydown", closeOnEscape);
+
+    return () => {
+      document.removeEventListener("mousedown", closeIfOutside);
+      document.removeEventListener("touchstart", closeIfOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [addMenuOpen]);
+
+  /* Which page of each table is on screen. Keyed by widget, because two
+     tables on one dashboard page independently. */
+  const [tablePages, setTablePages] = useState({});
+
+  /* What the editor's preview is showing: the rows it drew, or why it has
+     nothing to draw. Never mixed into `widgetData`, which belongs to the
+     widgets actually on the dashboard. */
+  const [preview, setPreview] = useState(EMPTY_PREVIEW);
+
+  /* Which preview request is the current one. An older answer arriving
+     late must not paint over a newer one. */
+  const previewTicket = useRef(0);
+
   const [widgetForm, setWidgetForm] = useState({
     title: "",
     type: "bar",
     dimension: "",
+    compareBy: "",
+    barMode: "single",
+    tableColumns: [],
+    tablePageSize: 10,
+    lineSeries: [],
     measure: "",
     aggregation: "COUNT",
     kpiFormat: "number",
@@ -440,6 +544,138 @@ export default function Dashboards() {
      LOAD DASHBOARD DATA
      ========================================================= */
 
+  /* Ten rows, as the table shows until somebody asks for more. */
+  const DEFAULT_TABLE_PAGE_SIZE = 10;
+
+  const TABLE_PAGE_SIZES = [10, 25, 50, 100];
+
+  /**
+   * Turn one table to another page.
+   *
+   * Only that widget is refetched, and only that page is read: the whole
+   * point is that the browser never holds more than a page of a large table.
+   */
+  const changeTablePage = async (widget, page, pageSize) => {
+    const source = selectedSource;
+    if (!source) return;
+
+    const size = pageSize || tablePages[widget.id]?.pageSize
+      || widget.presentation?.table_page_size || DEFAULT_TABLE_PAGE_SIZE;
+
+    setTablePages((current) => ({
+      ...current,
+      [widget.id]: { ...(current[widget.id] || {}), loading: true },
+    }));
+
+    const binding = {
+      ...widget.data_binding,
+      filters: [
+        ...(widget.data_binding?.filters || []),
+        ...dashboardFilters,
+      ],
+    };
+
+    try {
+      const result = await api.getDashboardData(source.name, binding, {
+        page,
+        page_size: size,
+      });
+
+      setWidgetData((current) => ({
+        ...current,
+        [widget.id]: { ...(current[widget.id] || {}), rows: result.rows || [], error: null },
+      }));
+
+      setTablePages((current) => ({
+        ...current,
+        [widget.id]: {
+          page: result.page ?? page,
+          pageSize: result.page_size ?? size,
+          totalRows: result.total_rows ?? 0,
+          totalPages: result.total_pages ?? 1,
+          loading: false,
+        },
+      }));
+    } catch (e) {
+      setTablePages((current) => ({
+        ...current,
+        [widget.id]: { ...(current[widget.id] || {}), loading: false },
+      }));
+
+      setWidgetData((current) => ({
+        ...current,
+        [widget.id]: {
+          ...(current[widget.id] || {}),
+          error: e.message || "This page could not be loaded.",
+        },
+      }));
+    }
+  };
+
+  /* One widget's rows, from the dashboard's own data endpoint.
+
+     Pulled out of the loop below so that the editor's preview can ask for a
+     widget's data the same way the grid does — same binding, same filters,
+     same paging rule, same endpoint. A preview that fetched its own way
+     would be a second answer to the same question. */
+  const fetchWidgetRows = async (widget, source, filters = []) => {
+    let binding = {
+      ...widget.data_binding,
+      filters: [...(widget.data_binding?.filters || []), ...filters],
+    };
+
+    /* A table asks for one page; the database returns that page and
+       nothing else. Every other widget reads its whole (aggregated,
+       small) result exactly as it always has. */
+    const paging =
+      widget.type === "table"
+        ? {
+            page: 1,
+            page_size:
+              widget.presentation?.table_page_size || DEFAULT_TABLE_PAGE_SIZE,
+          }
+        : null;
+
+    let numResult = null;
+
+    if (widget.type === "kpi" && widget.kpi?.format === "percentage") {
+      binding = {
+        ...binding,
+        measures: [
+          {
+            field: binding.measures[0]?.field || "id",
+            aggregation: "COUNT",
+            label: binding.measures[0]?.label || "Count",
+          },
+        ],
+      };
+
+      if (widget.kpi.numerator) {
+        const numBinding = {
+          ...binding,
+          filters: [...binding.filters, widget.kpi.numerator],
+        };
+
+        numResult = await api.getDashboardData(source.name, numBinding);
+      }
+    }
+
+    const result = await api.getDashboardData(source.name, binding, paging);
+
+    return {
+      rows: result.rows || [],
+      numRows: numResult ? numResult.rows || [] : null,
+      paging: paging
+        ? {
+            page: result.page ?? 1,
+            pageSize: result.page_size ?? paging.page_size,
+            totalRows: result.total_rows ?? 0,
+            totalPages: result.total_pages ?? 1,
+          }
+        : null,
+    };
+  };
+
   const loadDashboardData = async (
     generatedDashboard,
     sourceOverride = null,
@@ -462,47 +698,9 @@ export default function Dashboards() {
       // Each widget now carries its own outcome.
       const results = await Promise.allSettled(
         generatedDashboard.widgets.map(async (widget) => {
-          let binding = {
-            ...widget.data_binding,
-            filters: [
-              ...(widget.data_binding?.filters || []),
-              ...filtersOverride,
-            ],
-          };
+          const loaded = await fetchWidgetRows(widget, source, filtersOverride);
 
-          let numResult = null;
-
-          if (widget.type === "kpi" && widget.kpi?.format === "percentage") {
-            binding = {
-              ...binding,
-              measures: [
-                {
-                  field: binding.measures[0]?.field || "id",
-                  aggregation: "COUNT",
-                  label: binding.measures[0]?.label || "Count"
-                }
-              ]
-            };
-
-            if (widget.kpi.numerator) {
-              const numBinding = {
-                ...binding,
-                filters: [...binding.filters, widget.kpi.numerator]
-              };
-              numResult = await api.getDashboardData(source.name, numBinding);
-            }
-          }
-
-          const result = await api.getDashboardData(
-            source.name,
-            binding,
-          );
-
-          return {
-            widgetId: widget.id,
-            rows: result.rows || [],
-            numRows: numResult ? (numResult.rows || []) : null,
-          };
+          return { widgetId: widget.id, ...loaded };
         }),
       );
 
@@ -511,8 +709,12 @@ export default function Dashboards() {
 
       results.forEach((result, index) => {
         if (result.status === "fulfilled") {
-          const { widgetId, rows, numRows } = result.value;
+          const { widgetId, rows, numRows, paging } = result.value;
           dataByWidget[widgetId] = { rows, numRows };
+
+          if (paging) {
+            setTablePages((current) => ({ ...current, [widgetId]: paging }));
+          }
           return;
         }
 
@@ -632,15 +834,27 @@ const applyDashboardFilters = async () => {
      HANDLE DASHBOARD CHANGE LAYOUT
    ========================================================= */
 
-  // ResponsiveGridLayout passes (currentBreakpointLayout, allBreakpointLayouts).
-  // We persist both so that derived breakpoint layouts (md, sm, etc.) are never
-  // lost when the layouts prop is rebuilt on the next render.
+  /* ResponsiveGridLayout passes (currentBreakpointLayout, allBreakpointLayouts).
+
+     Only the twelve-column arrangement is the dashboard's: it is what is
+     saved, and every saved widget's x, y and w are written in twelve columns.
+     A change to it replaces the narrower arrangements too, so they are
+     refitted from the new one rather than kept from before the change. A
+     change made while the grid is narrower — nine columns or fewer — is kept
+     for as long as the screen is that narrow, and is not what gets saved:
+     writing nine-column coordinates as twelve-column ones would scatter the
+     widgets the next time the dashboard opened on a desktop. */
   const handleDashboardLayoutChange = (currentLayout, layouts) => {
     if (!isEditMode) {
       return;
     }
 
-    setGridLayout(currentLayout);
+    if (columnsFor(gridWidth) === COLUMNS.lg) {
+      setGridLayout(currentLayout);
+      setAllLayouts({ lg: currentLayout });
+      return;
+    }
+
     setAllLayouts(layouts);
   };
 
@@ -1107,7 +1321,7 @@ const applyDashboardFilters = async () => {
 
   /* Build one by hand instead: an empty specification over the chosen table,
      opened straight into edit mode with the graph editor showing. Everything
-     from here on — Add Graph, the layout, Save — is the same code a generated
+     from here on — the "+" menu, the layout, Save — is the same code a generated
      dashboard uses, so there is no second kind of dashboard to maintain. */
   const startManualDashboard = () => {
     if (!selectedSource || !fields?.length) {
@@ -1305,7 +1519,15 @@ const applyDashboardFilters = async () => {
       location: "📍",
       agriculture: "🌾",
       farm: "🚜",
-      calendar: "📅"
+      calendar: "📅",
+      // Added for KPIs, which pick an icon from their subject when nobody has
+      // chosen one. Every id here must also be an option in the Title Icon
+      // picker below, or a guessed icon could not be changed by hand.
+      male: "👨",
+      female: "👩",
+      land: "🗺️",
+      production: "📦",
+      percent: "％"
     };
     return icons[iconId] || null;
   };
@@ -1335,22 +1557,475 @@ const applyDashboardFilters = async () => {
     const Renderer = getRenderer(widget.type);
 
     /* The dashboard goes with the widget, so a palette set once reaches every
-       graph that has not chosen its own colours. */
-    return <Renderer widget={widget} data={chartData} dashboard={dashboard} />;
+       graph that has not chosen its own colours. `rows` as well as the
+       prepared data: a bar chart that compares within each group pivots the
+       rows itself, and the flattened pair is no use to it. */
+    return (
+      <Renderer
+        widget={widget}
+        data={chartData}
+        rows={rows}
+        dashboard={dashboard}
+      />
+    );
   };
 
   /* =========================================================
      WIDGET RENDERING
      ========================================================= */
 
-  const renderWidget = (widget) => {
+  /**
+   * The page numbers to offer, never all of them.
+   *
+   * A table of fifty thousand rows is five thousand pages; rendering a button
+   * for each would cost more than the rows did. First, last, and a window
+   * around where the reader is, with gaps marked.
+   */
+  const pageNumbers = (page, totalPages) => {
+    if (totalPages <= 7) {
+      return Array.from({ length: totalPages }, (_, index) => index + 1);
+    }
+
+    const window = new Set([1, totalPages, page, page - 1, page + 1]);
+
+    if (page <= 3) [2, 3, 4].forEach((n) => window.add(n));
+    if (page >= totalPages - 2) {
+      [totalPages - 3, totalPages - 2, totalPages - 1].forEach((n) => window.add(n));
+    }
+
+    const shown = [...window]
+      .filter((n) => n >= 1 && n <= totalPages)
+      .sort((a, b) => a - b);
+
+    const withGaps = [];
+    shown.forEach((number, index) => {
+      if (index > 0 && number - shown[index - 1] > 1) withGaps.push("gap");
+      withGaps.push(number);
+    });
+
+    return withGaps;
+  };
+
+  /* ── the table's columns, in the editor ──────────────────────────────── */
+
+  /* "None" is a table's own option — a raw column — and is not in the list of
+     calculations a field can take. It is kept whenever the field is changed. */
+  const tableAggregationFor = (field, aggregation) => {
+    if (!aggregation || aggregation === "NONE") return "NONE";
+    return settleAggregation(field, aggregation);
+  };
+
+  const setTableColumns = (next) =>
+    setWidgetForm((current) => ({
+      ...current,
+      tableColumns: typeof next === "function" ? next(current.tableColumns || []) : next,
+    }));
+
+  const updateTableColumn = (index, changes) =>
+    setTableColumns((columns) =>
+      columns.map((column, position) =>
+        position === index ? { ...column, ...changes } : column,
+      ),
+    );
+
+  const setLineSeries = (next) =>
+    setWidgetForm((current) => {
+      const series =
+        typeof next === "function" ? next(seriesFromForm(current)) : next;
+
+      const first = series[0];
+
+      return {
+        ...current,
+        lineSeries: series,
+        /* The first line is also the single measure every other chart type
+           reads, so changing it here and then switching to a bar chart
+           keeps what was chosen rather than reverting. */
+        ...(first?.field
+          ? { measure: first.field, aggregation: first.aggregation || "COUNT" }
+          : null),
+      };
+    });
+
+  const updateLineSeries = (index, changes) =>
+    setLineSeries((series) =>
+      series.map((entry, position) =>
+        position === index ? { ...entry, ...changes } : entry,
+      ),
+    );
+
+  /* The lines on a line chart: one card each, and a button for another.
+
+     The same three questions the editor has always asked — what to show and
+     how to calculate it, plus what to call the result — only asked once per
+     line instead of once per chart. */
+  const renderLineSeriesEditor = () => {
+    const series = seriesFromForm(widgetForm);
+
+    return (
+      <>
+        <label className="dash__edit-label" style={{ marginTop: 16 }}>
+          Series
+        </label>
+
+        <p className="tiny muted" style={{ marginBottom: 8 }}>
+          One line per series, all sharing the field above and one value axis.
+        </p>
+
+        {series.map((entry, index) => {
+          const chosen = fields?.find((f) => f.name === entry.field);
+
+          return (
+            <div key={index} className="dash__column-card">
+              <div className="dash__series-head">
+                <span className="dash__series-number">Series {index + 1}</span>
+
+                <button
+                  className="btn btn--tiny"
+                  type="button"
+                  aria-label={`Remove series ${index + 1}`}
+                  disabled={series.length === 1}
+                  onClick={() =>
+                    setLineSeries((current) =>
+                      current.filter((_, position) => position !== index),
+                    )
+                  }
+                >
+                  🗑
+                </button>
+              </div>
+
+              <div className="dash__column-row">
+                <label className="tiny muted">
+                  What to show
+                  <select
+                    className="control"
+                    value={entry.field || ""}
+                    aria-label={`Series ${index + 1} field`}
+                    onChange={(e) => {
+                      const next = fields?.find((f) => f.name === e.target.value);
+
+                      updateLineSeries(index, {
+                        field: e.target.value,
+                        // A calculation the new field cannot take would be
+                        // refused on save; it settles to Count instead.
+                        aggregation: settleAggregation(next, entry.aggregation),
+                      });
+                    }}
+                  >
+                    <option value="">Choose a field</option>
+
+                    {fields?.map((field) => (
+                      <option key={field.name} value={field.name}>
+                        {fieldLabel(field)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="tiny muted">
+                  Calculate
+                  <select
+                    className="control"
+                    value={entry.aggregation || "COUNT"}
+                    aria-label={`Series ${index + 1} calculation`}
+                    onChange={(e) =>
+                      updateLineSeries(index, { aggregation: e.target.value })
+                    }
+                  >
+                    {aggregationsFor(chosen).map((key) => (
+                      <option key={key} value={key}>
+                        {AGGREGATION_LABELS[key]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="tiny muted">
+                  Display name
+                  <input
+                    className="control"
+                    type="text"
+                    value={entry.label || ""}
+                    placeholder={seriesLabel({ ...entry, label: "" }, fields)}
+                    aria-label={`Series ${index + 1} display name`}
+                    onChange={(e) =>
+                      updateLineSeries(index, { label: e.target.value })
+                    }
+                  />
+                </label>
+              </div>
+            </div>
+          );
+        })}
+
+        <button
+          className="btn btn--sm"
+          type="button"
+          style={{ marginTop: 8 }}
+          disabled={series.length >= MAX_LINE_SERIES}
+          onClick={() => setLineSeries((current) => [...current, blankSeries()])}
+        >
+          + Add Series
+        </button>
+
+        {series.length >= MAX_LINE_SERIES && (
+          <p className="tiny muted" style={{ marginTop: 6 }}>
+            {MAX_LINE_SERIES} series is the most one chart shows.
+          </p>
+        )}
+      </>
+    );
+  };
+
+  const renderTableColumnsEditor = () => {
+    const columns = widgetForm.tableColumns || [];
+
+    return (
+      <>
+        <label className="dash__edit-label" style={{ marginTop: 16 }}>
+          Columns
+        </label>
+
+        <p className="tiny muted" style={{ marginBottom: 8 }}>
+          One row per column, in the order they appear in the table. Drag the
+          handle to reorder.
+        </p>
+
+        {columns.length === 0 && (
+          <p className="tiny muted">No columns yet — add one below.</p>
+        )}
+
+        {columns.map((column, index) => {
+          const chosen = fields?.find((f) => f.name === column.field);
+
+          return (
+            <div
+              key={index}
+              className="dash__column-card"
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.effectAllowed = "move";
+                e.dataTransfer.setData("text/plain", String(index));
+              }}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault();
+                const from = Number(e.dataTransfer.getData("text/plain"));
+                if (Number.isInteger(from)) {
+                  setTableColumns((current) => reorder(current, from, index));
+                }
+              }}
+            >
+              <div className="dash__column-head">
+                <span className="dash__column-grip" aria-hidden="true">⋮⋮</span>
+
+                <input
+                  className="control"
+                  type="text"
+                  value={column.label || ""}
+                  placeholder={defaultLabel(column, fields)}
+                  aria-label={`Column ${index + 1} display name`}
+                  onChange={(e) => updateTableColumn(index, { label: e.target.value })}
+                />
+
+                <button
+                  className="btn btn--tiny"
+                  type="button"
+                  aria-label={`Remove column ${index + 1}`}
+                  onClick={() =>
+                    setTableColumns((current) =>
+                      current.filter((_, position) => position !== index),
+                    )
+                  }
+                >
+                  🗑
+                </button>
+              </div>
+
+              <div className="dash__column-row">
+                <label className="tiny muted">
+                  Field
+                  <select
+                    className="control"
+                    value={column.field || ""}
+                    aria-label={`Column ${index + 1} field`}
+                    onChange={(e) => {
+                      const next = fields?.find((f) => f.name === e.target.value);
+
+                      updateTableColumn(index, {
+                        field: e.target.value,
+                        // A calculation the new field cannot take would be
+                        // refused on save; it settles to one it can.
+                        aggregation: tableAggregationFor(next, column.aggregation),
+                      });
+                    }}
+                  >
+                    <option value="">Choose a field</option>
+
+                    {fields?.map((field) => (
+                      <option key={field.name} value={field.name}>
+                        {fieldLabel(field)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="tiny muted">
+                  Calculate
+                  <select
+                    className="control"
+                    value={column.aggregation || "NONE"}
+                    aria-label={`Column ${index + 1} calculation`}
+                    onChange={(e) =>
+                      updateTableColumn(index, { aggregation: e.target.value })
+                    }
+                  >
+                    {/* None shows the value as it is stored; the rest are only
+                        what this field can actually be asked for. */}
+                    <option value="NONE">None</option>
+
+                    {aggregationsFor(chosen).map((key) => (
+                      <option key={key} value={key}>
+                        {AGGREGATION_LABELS[key]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            </div>
+          );
+        })}
+
+        <button
+          className="btn"
+          type="button"
+          style={{ marginTop: 10 }}
+          onClick={() =>
+            setTableColumns((current) => [
+              ...current,
+              { field: "", aggregation: "NONE", label: "" },
+            ])
+          }
+        >
+          + Add Column
+        </button>
+
+        <label className="dash__edit-label" htmlFor="widget-table-page-size" style={{ marginTop: 16 }}>
+          Rows per page
+        </label>
+
+        <select
+          id="widget-table-page-size"
+          className="control"
+          value={widgetForm.tablePageSize || DEFAULT_TABLE_PAGE_SIZE}
+          onChange={(e) =>
+            setWidgetForm((current) => ({
+              ...current,
+              tablePageSize: Number(e.target.value),
+            }))
+          }
+        >
+          {TABLE_PAGE_SIZES.map((size) => (
+            <option key={size} value={size}>{size}</option>
+          ))}
+        </select>
+      </>
+    );
+  };
+
+  const renderTablePager = (widget, pager) => {
+    const { page = 1, pageSize = DEFAULT_TABLE_PAGE_SIZE, totalRows = 0 } = pager;
+    const totalPages = Math.max(1, pager.totalPages || 1);
+
+    const first = totalRows === 0 ? 0 : (page - 1) * pageSize + 1;
+    const last = Math.min(page * pageSize, totalRows);
+
+    const go = (next) => {
+      if (next < 1 || next > totalPages || next === page || pager.loading) return;
+      changeTablePage(widget, next, pageSize);
+    };
+
+    return (
+      <div className="dash__pager">
+        <div className="dash__pager-left">
+          <label className="dash__pager-size">
+            Show
+            <select
+              className="control"
+              value={pageSize}
+              disabled={pager.loading}
+              /* A different page size means different pages, so reading
+                 starts again from the first one. */
+              onChange={(e) => changeTablePage(widget, 1, Number(e.target.value))}
+              aria-label="Rows per page"
+            >
+              {TABLE_PAGE_SIZES.map((size) => (
+                <option key={size} value={size}>{size}</option>
+              ))}
+            </select>
+            entries
+          </label>
+
+          <span className="tiny muted">
+            {pager.loading
+              ? "Loading..."
+              : `Showing ${first.toLocaleString()}–${last.toLocaleString()} of ${totalRows.toLocaleString()}`}
+          </span>
+        </div>
+
+        <div className="dash__pager-pages">
+          <button
+            className="btn btn--tiny"
+            type="button"
+            disabled={page <= 1 || pager.loading}
+            onClick={() => go(page - 1)}
+          >
+            ← Previous
+          </button>
+
+          {pageNumbers(page, totalPages).map((number, index) =>
+            number === "gap" ? (
+              <span key={`gap-${index}`} className="dash__pager-gap">…</span>
+            ) : (
+              <button
+                key={number}
+                className={`btn btn--tiny${number === page ? " btn--primary" : ""}`}
+                type="button"
+                disabled={pager.loading}
+                aria-current={number === page ? "page" : undefined}
+                onClick={() => go(number)}
+              >
+                {number.toLocaleString()}
+              </button>
+            ),
+          )}
+
+          <button
+            className="btn btn--tiny"
+            type="button"
+            disabled={page >= totalPages || pager.loading}
+            onClick={() => go(page + 1)}
+          >
+            Next →
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  /* `options.data` draws the widget from rows it is given rather than from
+     the dashboard's own, and `options.readOnly` leaves off the Edit and
+     Remove buttons. Both are for the editor's preview, which is this same
+     function so that a preview cannot drift from the widget it previews. */
+  const renderWidget = (widget, options = {}) => {
     const {
       rows = [],
       numRows = null,
       error: widgetError = null,
-    } = widgetData[widget.id] || {};
+    } = options.data || widgetData[widget.id] || {};
 
-    const editButton = isEditMode && (
+    const editButton = isEditMode && !options.readOnly && (
       <div className=" row1">
         <button
           className="btn1"
@@ -1421,67 +2096,76 @@ const applyDashboardFilters = async () => {
     }
 
     if (widget.type === "table") {
+      /* The arrangement the editor saved, or the binding's own order for a
+         table nobody has arranged — which is every table built before this
+         and every one the AI writes. */
+      const columns = columnsOf(widget, fields);
+      const pager = tablePages[widget.id] || null;
+
       return (
         <div className="dash__widget" style={widgetStyle}>
           {renderHeader()}
 
-
           {rows.length === 0 ? (
             <p className="muted">No data available.</p>
           ) : (
-            <div
-              className="dash__table-wrap"
-              style={colors.table.border ? { borderColor: colors.table.border } : undefined}
-            >
-              <table className="dash__table">
-                <thead>
-                  <tr>
-                    {Object.keys(rows[0]).map((column) => (
-                      <th
-                        key={column}
-                        /* Each part only when it was chosen, so an unstyled
-                           table is still the stylesheet's to decide. */
-                        style={{
-                          ...(colors.table.headerBackground
-                            ? { backgroundColor: colors.table.headerBackground }
-                            : {}),
-                          ...(colors.table.headerText
-                            ? { color: colors.table.headerText }
-                            : {}),
-                          ...(colors.table.border
-                            ? { borderBottomColor: colors.table.border }
-                            : {}),
-                        }}
-                      >
-                        {getColumnLabel(column, widget)}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {rows.map((row, index) => (
-                    <tr key={index}>
-                      {Object.keys(rows[0]).map((column) => (
-                        <td
-                          key={column}
+            <>
+              <div
+                className="dash__table-wrap"
+                style={colors.table.border ? { borderColor: colors.table.border } : undefined}
+              >
+                <table className="dash__table">
+                  <thead>
+                    <tr>
+                      {columns.map((column, index) => (
+                        <th
+                          key={`${column.field}-${column.aggregation}-${index}`}
+                          /* Each part only when it was chosen, so an unstyled
+                             table is still the stylesheet's to decide. */
                           style={{
-                            ...(colors.table.text
-                              ? { color: colors.table.text }
+                            ...(colors.table.headerBackground
+                              ? { backgroundColor: colors.table.headerBackground }
+                              : {}),
+                            ...(colors.table.headerText
+                              ? { color: colors.table.headerText }
                               : {}),
                             ...(colors.table.border
                               ? { borderBottomColor: colors.table.border }
                               : {}),
                           }}
                         >
-                          {String(row[column] ?? "")}
-                        </td>
+                          {column.label || defaultLabel(column, fields)}
+                        </th>
                       ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+
+                  <tbody>
+                    {rows.map((row, index) => (
+                      <tr key={index}>
+                        {columns.map((column, columnIndex) => (
+                          <td
+                            key={`${column.field}-${column.aggregation}-${columnIndex}`}
+                            style={{
+                              ...(colors.table.text
+                                ? { color: colors.table.text }
+                                : {}),
+                              ...(colors.table.border
+                                ? { borderBottomColor: colors.table.border }
+                                : {}),
+                            }}
+                          >
+                            {String(valueOf(row, column) ?? "")}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {pager && renderTablePager(widget, pager)}
+            </>
           )}
         </div>
       );
@@ -1521,20 +2205,63 @@ const applyDashboardFilters = async () => {
       } else {
         const measure = widget.data_binding?.measures?.[0];
         const measureAlias = measure ? `${measure.field}_${measure.aggregation.toLowerCase()}` : null;
-        displayValue = measureAlias ? String(firstRow[measureAlias] ?? "0") : String(Object.values(firstRow)[0] ?? "0");
+        // Formatted for reading, never rounded on the way in: the value the
+        // server calculated is what the widget still holds.
+        displayValue = formatKpiValue(
+          measureAlias ? firstRow[measureAlias] : Object.values(firstRow)[0],
+        );
       }
 
-      return (
-        <div className="dash__widget dash__kpi" style={widgetStyle}>
-          {renderHeader()}
+      const kpiSymbol = getIconSymbol(kpiIconId(widget));
 
-          {/* The number, not the card behind it: colouring a KPI's value
-              leaves its background exactly where it was. */}
-          <div
-            className="dash__kpi-value"
-            style={colors.value ? { color: colors.value } : undefined}
-          >
-            {displayValue}
+      return (
+        <div
+          className="dash__widget dash__kpi"
+          style={{
+            ...widgetStyle,
+            // A chosen background is a colour, and the card's default tint is a
+            // gradient — which would paint straight over it. Turning the
+            // gradient off hands the card back to whoever picked the colour.
+            ...(presentation.background_color ? { backgroundImage: "none" } : null),
+          }}
+        >
+          {editButton && <div className="dash__kpi-actions">{editButton}</div>}
+
+          <div className="dash__kpi-body">
+            {kpiSymbol && (
+              /* Decorative: the title beside it already says what this counts. */
+              <div className="dash__kpi-icon" aria-hidden="true">
+                {kpiSymbol}
+              </div>
+            )}
+
+            <div className="dash__kpi-text">
+              {/* Titled as well as shown: the card is a fixed band, so a long
+                  title is clamped to two lines and this is how the rest of it
+                  is read. */}
+              <div
+                className="dash__kpi-title"
+                style={headerTitleStyle}
+                title={widget.title}
+              >
+                {widget.title}
+              </div>
+
+              {presentation.subtitle && (
+                <div className="dash__kpi-subtitle" style={headerSubtitleStyle}>
+                  {presentation.subtitle}
+                </div>
+              )}
+
+              {/* The number, not the card behind it: colouring a KPI's value
+                  leaves its background exactly where it was. */}
+              <div
+                className="dash__kpi-value"
+                style={colors.value ? { color: colors.value } : undefined}
+              >
+                {displayValue}
+              </div>
+            </div>
           </div>
         </div>
       );
@@ -1579,15 +2306,7 @@ const applyDashboardFilters = async () => {
      WIDGET FORM HELPERS
      ========================================================= */
 
-  const numericTypes = [
-    "smallint",
-    "integer",
-    "bigint",
-    "numeric",
-    "decimal",
-    "real",
-    "double precision",
-  ];
+  const numericTypes = NUMERIC_TYPES;
 
   const getDefaultWidgetForm = () => {
     const availableFields = fields || [];
@@ -1605,6 +2324,10 @@ const applyDashboardFilters = async () => {
       dimension: firstField,
       measure: firstNumericField,
       aggregation: "COUNT",
+      /* Empty, not absent: a line chart with no series of its own shows the
+         measure above as its first one, so switching to Line arrives with a
+         series already filled in. */
+      lineSeries: [],
       presentation: {
         subtitle: "",
         title_icon: "",
@@ -1622,8 +2345,16 @@ const applyDashboardFilters = async () => {
     };
   };
 
-  const startAddWidget = () => {
-    setWidgetForm(getDefaultWidgetForm());
+  /* One entry point for every kind of widget. "Make Table", "Make Card" and
+     "Make Graph" differ only in the type the editor opens on; from there the
+     editor is the same one an Edit button opens, so a widget made here is
+     indistinguishable from one the AI made. A bare call (an event, or
+     nothing) means a graph, which is what "Build it myself" starts on. */
+  const startAddWidget = (type) => {
+    const chosen = typeof type === "string" ? type : "bar";
+    setPreview(EMPTY_PREVIEW);
+
+    setWidgetForm({ ...getDefaultWidgetForm(), type: chosen });
 
     setEditingWidgetId(null);
 
@@ -1632,7 +2363,23 @@ const applyDashboardFilters = async () => {
     setEditError("");
   };
 
+  const toggleAddMenu = () => {
+    if (!addMenuOpen && addMenuRef.current) {
+      const room = addMenuRef.current.getBoundingClientRect().top;
+      setAddMenuOpensUp(room >= ADD_MENU_HEIGHT);
+    }
+
+    setAddMenuOpen((open) => !open);
+  };
+
+  const chooseFromAddMenu = (type) => {
+    setAddMenuOpen(false);
+    startAddWidget(type);
+  };
+
   const startEditWidget = (widget) => {
+    setPreview(EMPTY_PREVIEW);
+
     const dimension =
       widget.data_binding?.dimensions?.[0]?.field || "";
 
@@ -1673,8 +2420,22 @@ const applyDashboardFilters = async () => {
       title: widget.title || "",
       type: widget.type || "bar",
       dimension,
+      // Read back from the binding, so a chart the AI generated with two
+      // dimensions opens here as the comparing chart it already is.
+      compareBy: widget.type === "bar"
+        ? widget.data_binding?.dimensions?.[1]?.field || ""
+        : "",
+      barMode: barModeOf(widget),
+      // Read from the arrangement, or from the binding for a table nobody has
+      // arranged — so an AI-generated table opens with all of its columns.
+      tableColumns: widget.type === "table" ? columnsOf(widget, fields) : [],
+      tablePageSize: p.table_page_size || 10,
       measure,
       aggregation,
+      /* Every measure the widget holds, which for a line chart is every
+         line on it. One measure reads back as one series, so a chart saved
+         before any of this opens exactly as it did. */
+      lineSeries: widget.type === "line" ? seriesOf(widget) : [],
       kpiFormat: widget.kpi?.format || "number",
       kpiNumeratorField: widget.kpi?.numerator?.field || "",
       kpiNumeratorOperator: widget.kpi?.numerator?.operator || "EQUALS",
@@ -1728,94 +2489,24 @@ const applyDashboardFilters = async () => {
      BUILD WIDGET BINDING
      ========================================================= */
 
-  const buildWidgetBinding = (form) => {
-    if (form.type === "map") {
-      const dimensions = [];
+  /* A table is its columns. An empty one would save a binding that asks for
+     nothing, which the query builder refuses. */
+  const tableColumnsProblem = (form) => {
+    const columns = (form.tableColumns || []).filter((column) => column.field);
 
-      if (form.dimension) {
-        dimensions.push({
-          field: form.dimension,
-        });
-      }
-
-      if (form.measure) {
-        dimensions.push({
-          field: form.measure,
-        });
-      }
-
-      return {
-        dimensions,
-        measures: [],
-        filters: [],
-      };
+    if (columns.length === 0) {
+      return "Add at least one column.";
     }
 
-    if (form.type === "bubble") {
-      const dimensions = form.bubbleX ? [{ field: form.bubbleX }] : [];
-      const measures = [];
-      if (form.bubbleY) {
-        const fieldDef = fields?.find(f => f.name === form.bubbleY);
-        const isYNumeric = fieldDef && numericTypes.includes(String(fieldDef.type).toLowerCase());
-        if (!isYNumeric) {
-          dimensions.push({ field: form.bubbleY });
-        } else {
-          measures.push({ field: form.bubbleY, aggregation: form.bubbleYAggregation });
-        }
-      }
-      if (form.bubbleSize) {
-        measures.push({ field: form.bubbleSize, aggregation: form.bubbleSizeAggregation });
-      }
-      return {
-        dimensions,
-        measures,
-        filters: [],
-      };
-    }
-
-    if (form.type === "histogram") {
-      return {
-        dimensions: [],
-        measures: form.histogramField ? [{ field: form.histogramField, aggregation: "NONE" }] : [],
-        filters: [],
-      };
-    }
-
-    if (form.type === "scatter") {
-      const measures = [];
-      if (form.scatterX) measures.push({ field: form.scatterX, aggregation: "NONE" });
-      if (form.scatterY) measures.push({ field: form.scatterY, aggregation: "NONE" });
-      
-      return {
-        dimensions: [],
-        measures,
-        filters: [],
-      };
-    }
-
-    const dimensions = (form.type !== "kpi" && form.dimension)
-      ? [
-          {
-            field: form.dimension,
-          },
-        ]
-      : [];
-
-    const measures = form.measure
-      ? [
-          {
-            field: form.measure,
-            aggregation: form.type === "kpi" && form.kpiFormat === "percentage" ? "COUNT" : form.aggregation,
-          },
-        ]
-      : [];
-
-    return {
-      dimensions,
-      measures,
-      filters: [],
-    };
+    return null;
   };
+
+  /* A comparing mode with nothing to compare would save as a single bar
+     chart and look like the setting had been ignored. */
+  const comparingWithoutField = (form) =>
+    form.type === "bar" && isComparingMode(form.barMode) && !form.compareBy;
+
+  const buildWidgetBinding = (form) => bindingFor(form, fields);
 
   /* =========================================================
      APPLY EXISTING WIDGET CHANGES
@@ -1823,11 +2514,6 @@ const applyDashboardFilters = async () => {
 
   const applyWidgetChanges = async () => {
     if (!dashboard) {
-      return;
-    }
-
-    if (!widgetForm.title.trim()) {
-      setEditError("Please enter a widget title.");
       return;
     }
 
@@ -1840,172 +2526,21 @@ const applyDashboardFilters = async () => {
       return;
     }
 
-    if (widgetForm.type === "map") {
-      if (!widgetForm.dimension) {
-        setEditError("Please select a latitude field.");
-        return;
-      }
+    const problem = widgetProblem(widgetForm);
 
-      if (!widgetForm.measure) {
-        setEditError("Please select a longitude field.");
-        return;
-      }
-    } else {
-      if (widgetForm.type === "bubble") {
-        if (!widgetForm.bubbleX) {
-          setEditError("Please select an X field.");
-          return;
-        }
-        if (!widgetForm.bubbleY) {
-          setEditError("Please select a Y measure.");
-          return;
-        }
-        if (!widgetForm.bubbleSize) {
-          setEditError("Please select a Size measure.");
-          return;
-        }
-      } else if (widgetForm.type === "histogram") {
-        if (!widgetForm.histogramField) {
-          setEditError("Please select a numeric field for the histogram.");
-          return;
-        }
-      } else if (widgetForm.type === "scatter") {
-        if (!widgetForm.scatterX) {
-          setEditError("Please select an X field for the scatter plot.");
-          return;
-        }
-        if (!widgetForm.scatterY) {
-          setEditError("Please select a Y field for the scatter plot.");
-          return;
-        }
-      } else if (widgetForm.type !== "kpi" && !widgetForm.dimension) {
-        setEditError("Please select a dimension.");
-        return;
-      }
-
-      if (widgetForm.type !== "histogram" && widgetForm.type !== "scatter" && !widgetForm.measure) {
-        setEditError("Please select a measure.");
-        return;
-      }
+    if (problem) {
+      setEditError(problem);
+      return;
     }
 
-    if (widgetForm.type === "kpi" && widgetForm.kpiFormat === "percentage") {
-      if (!widgetForm.kpiNumeratorField || !widgetForm.kpiNumeratorValue) {
-        setEditError("Please complete the numerator condition for the percentage KPI.");
-        return;
-      }
-    }
-
-    const updatedWidgets = dashboard.widgets.map((widget) => {
-      if (widget.id !== editingWidgetId) {
-        return widget;
-      }
-
-
-      const p = widgetForm.presentation || {};
-      const cleanPresentation = {};
-
-      if (p.subtitle) cleanPresentation.subtitle = p.subtitle;
-      if (p.title_icon) cleanPresentation.title_icon = p.title_icon;
-      if (p.background_color) cleanPresentation.background_color = p.background_color;
-
-      /* Colour, kept the same way as everything else here: a key that was
-         never set stays absent, so an unstyled widget saves exactly the
-         presentation it always did. */
-      COLOR_KEYS.forEach((key) => {
-        const value = p[key];
-
-        if (Array.isArray(value) ? value.length > 0 : Boolean(value)) {
-          cleanPresentation[key] = value;
-        }
-      });
-
-      const cleanTitleStyle = {};
-      if (p.title_style?.font_size) cleanTitleStyle.font_size = Number(p.title_style.font_size);
-      if (p.title_style?.bold) cleanTitleStyle.bold = p.title_style.bold;
-      if (p.title_style?.italic) cleanTitleStyle.italic = p.title_style.italic;
-      if (Object.keys(cleanTitleStyle).length > 0) cleanPresentation.title_style = cleanTitleStyle;
-
-      const cleanSubtitleStyle = {};
-      if (p.subtitle_style?.font_size) cleanSubtitleStyle.font_size = Number(p.subtitle_style.font_size);
-      if (p.subtitle_style?.bold) cleanSubtitleStyle.bold = p.subtitle_style.bold;
-      if (p.subtitle_style?.italic) cleanSubtitleStyle.italic = p.subtitle_style.italic;
-      if (Object.keys(cleanSubtitleStyle).length > 0) cleanPresentation.subtitle_style = cleanSubtitleStyle;
-
-      if (widgetForm.type === 'bar' || widgetForm.type === 'line') {
-        const cleanXAxis = {};
-        if (p.x_axis?.title) cleanXAxis.title = p.x_axis.title;
-        if (p.x_axis?.font_size) cleanXAxis.font_size = Number(p.x_axis.font_size);
-        if (p.x_axis?.bold) cleanXAxis.bold = p.x_axis.bold;
-        if (p.x_axis?.italic) cleanXAxis.italic = p.x_axis.italic;
-        if (Object.keys(cleanXAxis).length > 0) cleanPresentation.x_axis = cleanXAxis;
-
-        const cleanYAxis = {};
-        if (p.y_axis?.title) cleanYAxis.title = p.y_axis.title;
-        if (p.y_axis?.font_size) cleanYAxis.font_size = Number(p.y_axis.font_size);
-        if (p.y_axis?.bold) cleanYAxis.bold = p.y_axis.bold;
-        if (p.y_axis?.italic) cleanYAxis.italic = p.y_axis.italic;
-        if (Object.keys(cleanYAxis).length > 0) cleanPresentation.y_axis = cleanYAxis;
-      }
-
-      const widgetUpdate = {
-        ...widget,
-        type: widgetForm.type,
-        title: widgetForm.title.trim(),
-        data_binding: buildWidgetBinding(widgetForm)
-      };
-
-      if (widgetForm.type === "kpi" && widgetForm.kpiFormat === "percentage") {
-        widgetUpdate.kpi = {
-          format: "percentage",
-          numerator: {
-            field: widgetForm.kpiNumeratorField,
-            operator: widgetForm.kpiNumeratorOperator,
-            value: widgetForm.kpiNumeratorValue
-          }
-        };
-      } else {
-        delete widgetUpdate.kpi;
-      }
-
-      if (widgetForm.type === "bubble") {
-        widgetUpdate.bubble = {
-          x: widgetForm.bubbleX,
-          y: widgetForm.bubbleY,
-          y_aggregation: widgetForm.bubbleYAggregation,
-          size: widgetForm.bubbleSize,
-          size_aggregation: widgetForm.bubbleSizeAggregation
-        };
-      } else {
-        delete widgetUpdate.bubble;
-      }
-
-      if (widgetForm.type === "histogram") {
-        widgetUpdate.histogram = {
-          field: widgetForm.histogramField,
-          bins: parseInt(widgetForm.histogramBins) || 10
-        };
-      } else {
-        delete widgetUpdate.histogram;
-      }
-
-      if (widgetForm.type === "scatter") {
-        widgetUpdate.scatter = {
-          x: widgetForm.scatterX,
-          y: widgetForm.scatterY
-        };
-      } else {
-        delete widgetUpdate.scatter;
-      }
-
-      if (Object.keys(cleanPresentation).length > 0) {
-        widgetUpdate.presentation = cleanPresentation;
-      } else {
-        delete widgetUpdate.presentation;
-      }
-
-      return widgetUpdate;
-    });
+    /* The edited widget is rebuilt from the form, keeping its id, its data
+       source and its place on the grid. Same builder as the add button and
+       as the preview beside it. */
+    const updatedWidgets = dashboard.widgets.map((widget) =>
+      widget.id === editingWidgetId
+        ? updatedWidget(widget, widgetForm, { fields })
+        : widget,
+    );
 
     const updatedDashboard = {
       ...dashboard,
@@ -2030,38 +2565,11 @@ const applyDashboardFilters = async () => {
       return;
     }
 
-    if (!widgetForm.title.trim()) {
-      setEditError("Please enter a widget title.");
+    const problem = widgetProblem(widgetForm);
+
+    if (problem) {
+      setEditError(problem);
       return;
-    }
-
-    if (widgetForm.type === "map") {
-      if (!widgetForm.dimension) {
-        setEditError("Please select a latitude field.");
-        return;
-      }
-
-      if (!widgetForm.measure) {
-        setEditError("Please select a longitude field.");
-        return;
-      }
-    } else {
-      if (widgetForm.type !== "kpi" && !widgetForm.dimension) {
-        setEditError("Please select a dimension.");
-        return;
-      }
-
-      if (!widgetForm.measure) {
-        setEditError("Please select a measure.");
-        return;
-      }
-    }
-
-    if (widgetForm.type === "kpi" && widgetForm.kpiFormat === "percentage") {
-      if (!widgetForm.kpiNumeratorField || !widgetForm.kpiNumeratorValue) {
-        setEditError("Please complete the numerator condition for the percentage KPI.");
-        return;
-      }
     }
 
     const sourceId = dashboard.data_sources?.[0]?.id;
@@ -2086,60 +2594,12 @@ const applyDashboardFilters = async () => {
       0,
     );
 
-    const newWidget = {
+    const newWidget = draftWidget(widgetForm, {
       id: `widget_${Date.now()}_${widgetNumber}`,
-
-      type: widgetForm.type,
-
-      title: widgetForm.title.trim(),
-
-      data_source_id: sourceId,
-
-      data_binding:
-        buildWidgetBinding(widgetForm),
-
-      layout: {
-        x: 0,
-        y: bottomY,
-        w: defaultSize.w,
-        h: defaultSize.h,
-      },
-    };
-
-    if (widgetForm.type === "kpi" && widgetForm.kpiFormat === "percentage") {
-      newWidget.kpi = {
-        format: "percentage",
-        numerator: {
-          field: widgetForm.kpiNumeratorField,
-          operator: widgetForm.kpiNumeratorOperator,
-          value: widgetForm.kpiNumeratorValue
-        }
-      };
-    }
-
-    if (widgetForm.type === "bubble") {
-      newWidget.bubble = {
-        x: widgetForm.bubbleX,
-        y: widgetForm.bubbleY,
-        y_aggregation: widgetForm.bubbleYAggregation,
-        size: widgetForm.bubbleSize,
-        size_aggregation: widgetForm.bubbleSizeAggregation
-      };
-    }
-
-    if (widgetForm.type === "histogram") {
-      newWidget.histogram = {
-        field: widgetForm.histogramField,
-        bins: parseInt(widgetForm.histogramBins) || 10
-      };
-    }
-
-    if (widgetForm.type === "scatter") {
-      newWidget.scatter = {
-        x: widgetForm.scatterX,
-        y: widgetForm.scatterY
-      };
-    }
+      sourceId,
+      layout: { x: 0, y: bottomY, w: defaultSize.w, h: defaultSize.h },
+      fields,
+    });
 
     const updatedDashboard = {
       ...dashboard,
@@ -2539,12 +2999,198 @@ const applyDashboardFilters = async () => {
      ========================================================= */
 
   const closeWidgetEditor = () => {
+    setPreview(EMPTY_PREVIEW);
     setEditingWidgetId(null);
 
     setShowAddWidget(false);
 
     setEditError("");
   };
+
+  /* =========================================================
+     LIVE PREVIEW
+     ========================================================= */
+
+  const widgetEditorOpen = Boolean(editingWidgetId || showAddWidget);
+
+  /* The widget this configuration describes, built by the same function as
+     the one the Add and Apply buttons build. It is rebuilt on every
+     keystroke, which is what makes the title and the appearance settings
+     show up in the preview without asking the server anything. */
+  const previewWidget = useMemo(
+    () =>
+      draftWidget(widgetForm, {
+        id: PREVIEW_WIDGET_ID,
+        sourceId: dashboard?.data_sources?.[0]?.id,
+        fields,
+      }),
+    [widgetForm, dashboard, fields],
+  );
+
+  /* A preview does not need a title to be worth drawing — it is usually the
+     last thing typed — so it is the only check the preview skips. */
+  const previewProblem = widgetProblem({
+    ...widgetForm,
+    title: widgetForm.title.trim() || "Preview",
+  });
+
+  /* What the server is being asked. Deliberately not the whole widget: a
+     title, a colour or an axis label changes the picture without changing
+     the question, and re-asking on every keystroke would be a request per
+     letter. */
+  const previewQuery = JSON.stringify({
+    type: previewWidget.type,
+    /* The binding as a question, without the labels in it. A measure's label
+       is what the legend reads, not part of what is selected, and renaming a
+       line must not re-run the query behind it. */
+    data_binding: {
+      dimensions: previewWidget.data_binding?.dimensions || [],
+      measures: (previewWidget.data_binding?.measures || []).map((measure) => ({
+        field: measure.field,
+        aggregation: measure.aggregation,
+      })),
+      filters: previewWidget.data_binding?.filters || [],
+    },
+    kpi: previewWidget.kpi,
+    page_size: previewWidget.presentation?.table_page_size,
+    filters: dashboardFilters,
+    source: selectedSource?.name,
+  });
+
+  const previewWidgetRef = useRef(previewWidget);
+
+  useEffect(() => {
+    previewWidgetRef.current = previewWidget;
+  });
+
+  useEffect(() => {
+    if (!widgetEditorOpen || !selectedSource || previewProblem) {
+      return undefined;
+    }
+
+    const ticket = previewTicket.current + 1;
+    previewTicket.current = ticket;
+
+    setPreview((current) => ({ ...current, status: "loading" }));
+
+    // A short wait, so dragging through a dropdown asks once rather than
+    // once per option passed.
+    const timer = setTimeout(async () => {
+      try {
+        const loaded = await fetchWidgetRows(
+          previewWidgetRef.current,
+          selectedSource,
+          dashboardFilters,
+        );
+
+        if (ticket !== previewTicket.current) {
+          return;
+        }
+
+        setPreview({
+          status: "ready",
+          rows: loaded.rows,
+          numRows: loaded.numRows,
+          error: "",
+        });
+      } catch (error) {
+        if (ticket !== previewTicket.current) {
+          return;
+        }
+
+        setPreview({
+          status: "error",
+          rows: [],
+          numRows: null,
+          error: error?.message || "This configuration could not be drawn.",
+        });
+      }
+    }, PREVIEW_DEBOUNCE_MS);
+
+    return () => clearTimeout(timer);
+  }, [
+    previewQuery,
+    previewProblem,
+    widgetEditorOpen,
+    selectedSource,
+    dashboardFilters,
+  ]);
+
+  /* The right-hand panel. Everything it can show is a state of the same
+     widget: not yet answerable, being fetched, refused, empty, or drawn. */
+  const renderPreview = () => {
+    let body;
+
+    if (previewProblem) {
+      body = (
+        <p className="muted dash__preview-note">{previewProblem}</p>
+      );
+    } else if (preview.status === "loading" || preview.status === "idle") {
+      body = <div className="skeleton dash__preview-skeleton" />;
+    } else if (preview.status === "error") {
+      body = (
+        <div className="alert alert--bad dash__preview-note">
+          {preview.error}
+        </div>
+      );
+    } else if (!preview.rows.length) {
+      body = (
+        <p className="muted dash__preview-note">
+          No data available for this configuration.
+        </p>
+      );
+    } else {
+      /* The height this widget will have on the grid: the rows it is worth,
+         at the height a row is drawn. A KPI is one row, and stretching it to
+         fill the panel would preview a card that does not exist. */
+      const rows = editingWidgetId
+        ? dashboard?.widgets?.find((widget) => widget.id === editingWidgetId)
+            ?.layout?.h || defaultWidgetSize(widgetForm.type).h
+        : defaultWidgetSize(widgetForm.type).h;
+
+      const height = Math.min(
+        PREVIEW_MAX_HEIGHT,
+        rows * GRID.rowHeight + (rows - 1) * GRID.margin[1],
+      );
+
+      /* The dashboard's own widget card, drawn by the dashboard's own
+         renderer, from rows fetched through the dashboard's own endpoint.
+         There is no preview-only drawing code to disagree with it. */
+      body = (
+        <div
+          className="card card--pad dash__widget-card"
+          data-testid="preview-card"
+          style={{
+            height,
+            ...(previewWidget.presentation?.background_color
+              ? { backgroundColor: previewWidget.presentation.background_color }
+              : {}),
+          }}
+        >
+          {renderWidget(previewWidget, { data: preview, readOnly: true })}
+        </div>
+      );
+    }
+
+    return (
+      <div className="dash__builder-preview">
+        <h3 className="dash__preview-heading">Live Preview</h3>
+
+        <div className="dash__preview-stage">{body}</div>
+
+        <p className="tiny muted">
+          {editingWidgetId
+            ? "The graph as it will look once the changes are applied."
+            : "The graph as it will be added to the dashboard."}
+        </p>
+      </div>
+    );
+  };
+
+  /* What the editor calls the thing it is adding. The menu's words, so the
+     dialog "Make Card" opened says "Add Card"; it follows the type control,
+     so changing to a table mid-way relabels it too. */
+  const addWidgetLabel = `Add ${WIDGET_NOUNS[widgetForm.type] || "Graph"}`;
 
   /* =========================================================
      RENDER
@@ -3015,7 +3661,7 @@ const applyDashboardFilters = async () => {
               ref={dashboardRef}
               className="card card--pad dash__dashboard"
               style={{
-                marginTop: 24,
+                marginTop: 16,
               }}
             >
               {/* Dashboard header */}
@@ -3631,15 +4277,15 @@ const applyDashboardFilters = async () => {
                     className="dash__grid-wrapper"
                   >
                     <div className="dash__widget-grid">
-                      {gridMounted && (
+                      {(
                         <ResponsiveGridLayout
                           width={gridWidth}
-                          // allLayouts preserves every breakpoint's layout so
-                          // RGL never discards derived md/sm positions.
-                          layouts={allLayouts}
+                          layouts={gridLayouts}
                           breakpoints={BREAKPOINTS}
                           cols={COLUMNS}
-                          gridConfig={GRID}
+                          rowHeight={GRID.rowHeight}
+                          margin={GRID.margin}
+                          containerPadding={GRID.containerPadding}
                           dragConfig={{
                             enabled: isEditMode,
                             bounded: true,
@@ -3670,21 +4316,44 @@ const applyDashboardFilters = async () => {
                     </div>
                   </div>
 
-                  {/* Add Graph */}
+                  {/* Add a widget: a floating "+" where "+ Add Graph" stood,
+                      opening to the three things a dashboard is made of. */}
                   {isEditMode && (
-                    <div
-                      style={{
-                        marginTop: 20,
-                        display: "flex",
-                        justifyContent: "center",
-                      }}
-                    >
+                    <div className="dash__fab-wrap" ref={addMenuRef}>
+                      {addMenuOpen && (
+                        <div
+                          className={
+                            "dash__menu-body dash__fab-menu" +
+                            (addMenuOpensUp ? " dash__fab-menu--up" : "")
+                          }
+                          role="menu"
+                          aria-label="Add to dashboard"
+                        >
+                          {ADD_MENU_CHOICES.map((choice) => (
+                            <button
+                              key={choice.type}
+                              className="dash__menu-item"
+                              type="button"
+                              role="menuitem"
+                              onClick={() => chooseFromAddMenu(choice.type)}
+                            >
+                              {choice.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
                       <button
-                        className="btn"
+                        className="dash__fab"
                         type="button"
-                        onClick={startAddWidget}
+                        aria-label="Add to dashboard"
+                        aria-haspopup="menu"
+                        aria-expanded={addMenuOpen}
+                        onClick={toggleAddMenu}
                       >
-                        + Add Graph
+                        <span className="dash__fab-glyph" aria-hidden="true">
+                          +
+                        </span>
                       </button>
                     </div>
                   )}
@@ -3931,23 +4600,28 @@ const applyDashboardFilters = async () => {
       {(editingWidgetId || showAddWidget) && (
         <div className="modal-backdrop">
           <div
-            className="modal"
+            className="modal modal--builder"
             role="dialog"
             aria-modal="true"
             aria-labelledby="widget-editor-title"
-            style={{ maxHeight: "90vh", overflowY: "auto" }}
           >
             <h2 id="widget-editor-title">
-              {editingWidgetId ? "Edit Graph" : "Add Graph"}
+              {editingWidgetId ? "Edit Graph" : addWidgetLabel}
             </h2>
 
             <p className="muted">
               Configure the graph using the available fields.
             </p>
 
-            <label className="dash__edit-label">Widget Title</label>
+            <div className="dash__builder">
+              <div className="dash__builder-config">
+
+            <label className="dash__edit-label" htmlFor="widget-title">
+              Chart Title
+            </label>
 
             <input
+              id="widget-title"
               className="control"
               type="text"
               value={widgetForm.title}
@@ -3962,6 +4636,7 @@ const applyDashboardFilters = async () => {
 
             <label
               className="dash__edit-label"
+              htmlFor="widget-type"
               style={{
                 marginTop: 16,
               }}
@@ -3970,6 +4645,7 @@ const applyDashboardFilters = async () => {
             </label>
 
             <select
+              id="widget-type"
               className="control"
               value={widgetForm.type}
               onChange={(e) =>
@@ -4066,18 +4742,57 @@ const applyDashboardFilters = async () => {
                 </select>
               </>
             ) : (
+              widgetForm.type === "table" ? (
+                renderTableColumnsEditor()
+              ) : (
               widgetForm.type !== "kpi" && widgetForm.type !== "bubble" && widgetForm.type !== "histogram" && widgetForm.type !== "scatter" && (
                 <>
+                  {/* One chart type, three arrangements — not three types, so
+                      an existing bar chart stays the thing it already is. */}
+                  {widgetForm.type === "bar" && (
+                    <>
+                      <label className="dash__edit-label" htmlFor="widget-bar-mode" style={{ marginTop: 16 }}>
+                        Bar Mode
+                      </label>
+
+                      <select
+                        id="widget-bar-mode"
+                        className="control"
+                        value={widgetForm.barMode || "single"}
+                        onChange={(e) =>
+                          setWidgetForm((current) => ({
+                            ...current,
+                            barMode: e.target.value,
+                            // Leaving a comparing mode drops the second field:
+                            // it would otherwise be saved and silently turn the
+                            // chart back into a comparing one on reload.
+                            compareBy: isComparingMode(e.target.value)
+                              ? current.compareBy
+                              : "",
+                          }))
+                        }
+                      >
+                        {BAR_MODES.map(([value, label]) => (
+                          <option key={value} value={value}>
+                            {label}
+                          </option>
+                        ))}
+                      </select>
+                    </>
+                  )}
+
                   <label
+                    htmlFor="widget-group-by"
                     className="dash__edit-label"
                     style={{
                       marginTop: 16,
                     }}
                   >
-                    Dimension
+                    Group by
                   </label>
 
                   <select
+                    id="widget-group-by"
                     className="control"
                     value={widgetForm.dimension}
                     onChange={(e) =>
@@ -4087,58 +4802,106 @@ const applyDashboardFilters = async () => {
                       }))
                     }
                   >
-                    <option value="">Select dimension</option>
+                    <option value="">Choose a field</option>
 
                     {fields?.map((field) => (
                       <option key={field.name} value={field.name}>
-                        {field.name}
+                        {fieldLabel(field)}
                       </option>
                     ))}
                   </select>
+
+                  {/* Only where it means something: a single bar chart has
+                      nothing to compare within a group. */}
+                  {widgetForm.type === "bar" && isComparingMode(widgetForm.barMode) && (
+                    <>
+                      <label className="dash__edit-label" htmlFor="widget-compare-by" style={{ marginTop: 16 }}>
+                        Compare by
+                      </label>
+
+                      <select
+                        id="widget-compare-by"
+                        className="control"
+                        value={widgetForm.compareBy || ""}
+                        onChange={(e) =>
+                          setWidgetForm((current) => ({
+                            ...current,
+                            compareBy: e.target.value,
+                          }))
+                        }
+                      >
+                        <option value="">Choose a field</option>
+
+                        {fields
+                          ?.filter((field) => field.name !== widgetForm.dimension)
+                          .map((field) => (
+                            <option key={field.name} value={field.name}>
+                              {fieldLabel(field)}
+                            </option>
+                          ))}
+                      </select>
+
+                      <p className="tiny muted" style={{ marginTop: 6 }}>
+                        One bar per value of this field, inside every group.
+                      </p>
+                    </>
+                  )}
                 </>
+              )
               )
             )}
 
-            {widgetForm.type !== "map" && widgetForm.type !== "bubble" && widgetForm.type !== "histogram" && widgetForm.type !== "scatter" && (
+            {widgetForm.type === "line" && renderLineSeriesEditor()}
+
+            {widgetForm.type !== "map" && widgetForm.type !== "table" && widgetForm.type !== "line" && widgetForm.type !== "bubble" && widgetForm.type !== "histogram" && widgetForm.type !== "scatter" && (
               <>
                 <label
+                  htmlFor="widget-what-to-show"
                   className="dash__edit-label"
                   style={{
                     marginTop: 16,
                   }}
                 >
-                  Measure
+                  What to show
                 </label>
 
                 <select
+                  id="widget-what-to-show"
                   className="control"
                   value={widgetForm.measure}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    const chosen = fields?.find((f) => f.name === e.target.value);
+
                     setWidgetForm((current) => ({
                       ...current,
                       measure: e.target.value,
-                    }))
-                  }
+                      // A calculation the new field cannot take would be
+                      // refused on save; it settles to Count instead.
+                      aggregation: settleAggregation(chosen, current.aggregation),
+                    }));
+                  }}
                 >
-                  <option value="">Select measure</option>
+                  <option value="">Choose a field</option>
 
                   {fields?.map((field) => (
                     <option key={field.name} value={field.name}>
-                      {field.name}
+                      {fieldLabel(field)}
                     </option>
                   ))}
                 </select>
 
                 <label
+                  htmlFor="widget-calculate"
                   className="dash__edit-label"
                   style={{
                     marginTop: 16,
                   }}
                 >
-                  Aggregation
+                  Calculate
                 </label>
 
                 <select
+                  id="widget-calculate"
                   className="control"
                   value={widgetForm.aggregation}
                   disabled={widgetForm.type === "kpi" && widgetForm.kpiFormat === "percentage"}
@@ -4149,24 +4912,15 @@ const applyDashboardFilters = async () => {
                     }))
                   }
                 >
-                  <option value="COUNT">COUNT</option>
-                  <option value="COUNT_DISTINCT">COUNT DISTINCT</option>
-                  {(() => {
-                    const measureField = fields?.find(f => f.name === widgetForm.measure);
-                    const type = measureField?.type?.toLowerCase() || "";
-                    const isText = type === "text" || type.includes("character") || type.includes("varchar") || type === "string";
-                    if (!isText) {
-                      return (
-                        <>
-                          <option value="SUM">SUM</option>
-                          <option value="AVG">AVG</option>
-                          <option value="MIN">MIN</option>
-                          <option value="MAX">MAX</option>
-                        </>
-                      );
-                    }
-                    return null;
-                  })()}
+                  {/* Only what this field can actually be asked for — the
+                      server refuses a sum of a word, so it is not offered. */}
+                  {aggregationsFor(
+                    fields?.find((f) => f.name === widgetForm.measure),
+                  ).map((key) => (
+                    <option key={key} value={key}>
+                      {AGGREGATION_LABELS[key]}
+                    </option>
+                  ))}
                 </select>
               </>
             )}
@@ -4601,6 +5355,11 @@ const applyDashboardFilters = async () => {
               <option value="agriculture">🌾 Agriculture</option>
               <option value="farm">🚜 Farm</option>
               <option value="calendar">📅 Calendar</option>
+              <option value="male">👨 Male</option>
+              <option value="female">👩 Female</option>
+              <option value="land">🗺️ Land</option>
+              <option value="production">📦 Production</option>
+              <option value="percent">％ Percentage</option>
             </select>
 
             <label className="dash__edit-label">Title Font Size (px)</label>
@@ -4833,6 +5592,11 @@ const applyDashboardFilters = async () => {
               </>
             )}
 
+              </div>
+
+              {renderPreview()}
+            </div>
+
             {editError && (
               <div
                 className="alert alert--bad"
@@ -4861,7 +5625,7 @@ const applyDashboardFilters = async () => {
                 type="button"
                 onClick={editingWidgetId ? applyWidgetChanges : addWidget}
               >
-                {editingWidgetId ? "Apply Changes" : "Add Graph"}
+                {editingWidgetId ? "Apply Changes" : addWidgetLabel}
               </button>
             </div>
           </div>

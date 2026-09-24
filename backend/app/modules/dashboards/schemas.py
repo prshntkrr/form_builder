@@ -103,6 +103,11 @@ class DashboardDataRequest(BaseModel):
     table_name: str
     binding: DashboardDataBinding
 
+    # A table asks for one page; every other widget asks for its whole (small,
+    # aggregated) result and leaves these unset, which reads exactly as before.
+    page: Optional[int] = Field(default=None, ge=1)
+    page_size: Optional[int] = Field(default=None, ge=1, le=200)
+
 
 # ---------------------------------------------------------------------------
 # Widget layout
@@ -139,6 +144,21 @@ class AxisPresentation(BaseModel):
     italic: Optional[bool] = None
 
 
+class TableColumnPresentation(BaseModel):
+    """One column of a table: where its values come from, and its heading.
+
+    `field` and `aggregation` together name an entry of the binding —
+    aggregation "NONE" is a raw column, anything else an aggregate — so a
+    column can be reordered or renamed without touching what is queried.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    field: str = Field(min_length=1)
+    aggregation: AggregationType = "NONE"
+    label: Optional[str] = None
+
+
 class WidgetPresentation(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -151,6 +171,22 @@ class WidgetPresentation(BaseModel):
 
     x_axis: Optional[AxisPresentation] = None
     y_axis: Optional[AxisPresentation] = None
+
+    # How a bar chart that binds two dimensions is arranged: one bar per
+    # compared value side by side, or stacked into one. Presentation and not
+    # binding, because both draw the very same query — absent means the single
+    # bar chart every dashboard saved before this one.
+    bar_mode: Optional[Literal["single", "grouped", "stacked"]] = None
+
+    # A table's columns as the editor arranged them: which binding entry each
+    # one shows, in what order, under what heading. The binding is still what
+    # is queried — this only says how the result is presented, which is why a
+    # table saved before this (and one the AI writes) renders unchanged from
+    # the binding alone when the key is absent.
+    table_columns: Optional[List["TableColumnPresentation"]] = None
+
+    # How many rows a page of this table holds. Absent means the default.
+    table_page_size: Optional[int] = Field(default=None, ge=1, le=200)
 
     # Colour. Every one of these is optional, and absent means "as it was" —
     # a widget nobody has styled carries none of them and renders exactly as

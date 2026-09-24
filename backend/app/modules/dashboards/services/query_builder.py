@@ -19,9 +19,17 @@ SUPPORTED_AGGREGATIONS = {
 }
 
 
+# A page a table asks for. Capped so a caller cannot ask for the whole table
+# by naming a very large page: the point of paging is that the browser never
+# holds more than a screenful.
+MAX_PAGE_SIZE = 200
+
+
 def build_select_query(
     table_name: str,
     binding: DashboardDataBinding,
+    page: int = None,
+    page_size: int = None,
 ) -> Tuple[sql.Composed, List[Any]]:
     """
     Build a read-only PostgreSQL SELECT query from a validated
@@ -34,6 +42,12 @@ def build_select_query(
     Values are returned separately as bound parameters.
 
     This function never accepts raw SQL.
+
+    With `page` and `page_size`, the database returns that page and nothing
+    else — LIMIT and OFFSET, not a slice taken afterwards. Paging also adds an
+    ORDER BY over every selected column, because without one PostgreSQL may
+    return rows in a different order for each page and a row could appear on
+    two pages or on none. An unpaged query is built exactly as it always was.
     """
 
     if not table_name:
@@ -139,7 +153,47 @@ def build_select_query(
             sql.SQL(", ").join(group_by_parts)
         )
 
+    # ---------------------------------------------------------
+    # Paging
+    # ---------------------------------------------------------
+
+    if page is not None and page_size is not None:
+        size = max(1, min(int(page_size), MAX_PAGE_SIZE))
+        number = max(1, int(page))
+
+        # By position, so this orders by the same expressions the SELECT
+        # already computes rather than repeating them — and works for an
+        # aggregate column, which cannot be named in ORDER BY by its alias in
+        # every PostgreSQL version.
+        query += sql.SQL(" ORDER BY {}").format(
+            sql.SQL(", ").join(
+                sql.SQL(str(index + 1)) for index in range(len(select_parts))
+            )
+        )
+
+        query += sql.SQL(" LIMIT %s OFFSET %s")
+        params.append(size)
+        params.append((number - 1) * size)
+
     return query, params
+
+
+def build_count_query(
+    table_name: str,
+    binding: DashboardDataBinding,
+) -> Tuple[sql.Composed, List[Any]]:
+    """How many rows the same binding returns in total.
+
+    The very same query, wrapped — so the count is of the grouped, filtered
+    result the table is paging through, and not of the physical table. A
+    dashboard filter narrows both or neither.
+    """
+    inner, params = build_select_query(table_name, binding)
+
+    return (
+        sql.SQL("SELECT COUNT(*) AS total FROM ({}) AS counted").format(inner),
+        params,
+    )
 
 
 def build_filter_expression(

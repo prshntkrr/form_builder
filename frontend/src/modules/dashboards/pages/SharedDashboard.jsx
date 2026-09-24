@@ -1,16 +1,19 @@
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 
-import {
-  ResponsiveGridLayout,
-  useContainerWidth,
-  verticalCompactor,
-} from "react-grid-layout";
+import { ResponsiveGridLayout, verticalCompactor } from "react-grid-layout";
 
 import "react-grid-layout/css/styles.css";
 
 import { api } from "../api.js";
-import { BREAKPOINTS, COLUMNS, GRID, gridLayoutFor } from "../layout.js";
+import {
+  BREAKPOINTS,
+  COLUMNS,
+  GRID,
+  gridLayoutFor,
+  responsiveLayouts,
+} from "../layout.js";
+import { useGridWidth } from "../useGridWidth.js";
 import { dataFor, getRenderer } from "../renderers/registry.js";
 
 /**
@@ -32,10 +35,9 @@ import { dataFor, getRenderer } from "../renderers/registry.js";
 export default function SharedDashboard() {
   const { token } = useParams();
 
-  // The grid draws in pixels, so it has to know how wide its container is.
-  const { width: gridWidth, containerRef: gridContainerRef } = useContainerWidth({
-    initialWidth: 0,
-  });
+  // The grid draws in pixels, so it has to know how wide its container is —
+  // and follow it, so a shared link fits the window it is opened in.
+  const { width: gridWidth, containerRef: gridContainerRef } = useGridWidth();
 
   const [dashboard, setDashboard] = useState(null);
   const [widgetData, setWidgetData] = useState({});
@@ -122,7 +124,7 @@ export default function SharedDashboard() {
   }
 
   const widgets = dashboard?.dashboard_json?.widgets || [];
-  const layouts = { lg: gridLayoutFor(widgets, COLUMNS.lg) };
+  const layouts = responsiveLayouts({ lg: gridLayoutFor(widgets, COLUMNS.lg) });
 
   return (
     <main className="main dash__shared">
@@ -155,7 +157,9 @@ export default function SharedDashboard() {
               layouts={layouts}
               breakpoints={BREAKPOINTS}
               cols={COLUMNS}
-              gridConfig={GRID}
+              rowHeight={GRID.rowHeight}
+              margin={GRID.margin}
+              containerPadding={GRID.containerPadding}
               dragConfig={{ enabled: false }}
               resizeConfig={{ enabled: false }}
               compactor={verticalCompactor}

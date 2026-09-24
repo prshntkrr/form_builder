@@ -120,12 +120,15 @@ export const api = {
   // Dashboard data
   // -----------------------------
 
-  getDashboardData: (tableName, binding) =>
+  // `paging` is {page, page_size} and only a table sends it. Without it the
+  // server reads the whole result, which is what every other widget wants.
+  getDashboardData: (tableName, binding, paging = null) =>
     request('/dashboards/data', {
       method: 'POST',
       body: JSON.stringify({
         table_name: tableName,
         binding,
+        ...(paging || {}),
       }),
     }),
 }

@@ -18,7 +18,34 @@
  */
 
 /** The ramp the pie and doughnut charts have always generated. */
-export const defaultSliceColor = (index) => `hsl(${index * 55}, 55%, 45%)`;
+/** The ramp, as hex.
+ *
+ *  The very same colours this has always produced — it was written as `hsl()`,
+ *  which Highcharts reads happily and amCharts does not: `am5.color()` refuses
+ *  anything but hex or a number, and threw "Unknown color syntax" the first
+ *  time a bar chart asked for more than one colour, which unmounted the
+ *  dashboard. Hex is understood by both. */
+export const defaultSliceColor = (index) => hslToHex((index * 55) % 360, 55, 45);
+
+function hslToHex(hue, saturation, lightness) {
+  const s = saturation / 100;
+  const l = lightness / 100;
+
+  const chroma = (1 - Math.abs(2 * l - 1)) * s;
+  const second = chroma * (1 - Math.abs(((hue / 60) % 2) - 1));
+  const match = l - chroma / 2;
+
+  const [r, g, b] = (
+    hue < 60 ? [chroma, second, 0]
+      : hue < 120 ? [second, chroma, 0]
+        : hue < 180 ? [0, chroma, second]
+          : hue < 240 ? [0, second, chroma]
+            : hue < 300 ? [second, 0, chroma]
+              : [chroma, 0, second]
+  ).map((channel) => Math.round((channel + match) * 255));
+
+  return `#${[r, g, b].map((v) => v.toString(16).padStart(2, "0")).join("")}`;
+}
 
 /**
  * Palettes somebody can pick by name.
