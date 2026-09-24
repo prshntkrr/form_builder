@@ -44,6 +44,20 @@ import {
   settleAggregation,
 } from "../chartConfig.js";
 import { useCapabilities } from "../../../core/auth.jsx";
+import {
+  MAX_LINE_SERIES,
+  blankSeries,
+  seriesFromForm,
+  seriesLabel,
+  seriesOf,
+} from "../lineSeries.js";
+import {
+  NUMERIC_TYPES,
+  bindingFor,
+  draftWidget,
+  updatedWidget,
+  widgetProblem,
+} from "../widgetDraft.js";
 
 /* The three things the "+" menu offers, in the words a dashboard reader uses.
    Each is only a starting type for the one widget editor. */
@@ -55,6 +69,21 @@ const ADD_MENU_CHOICES = [
 
 /* What the editor calls a widget of each type; anything else is a graph. */
 const WIDGET_NOUNS = { table: "Table", kpi: "Card" };
+
+/* The editor's preview borrows an id no real widget has, so that nothing
+   keyed by widget id can confuse the two. */
+const PREVIEW_WIDGET_ID = "__preview__";
+
+/* Long enough that running down a dropdown with the arrow keys asks once,
+   short enough that a deliberate change feels immediate. */
+const PREVIEW_DEBOUNCE_MS = 250;
+
+const EMPTY_PREVIEW = { status: "idle", rows: [], numRows: null, error: "" };
+
+/* The tallest the preview card is drawn. A widget taller than this is shown
+   shorter than it will be; one shorter — a KPI is a single row — is drawn at
+   its own height rather than stretched to fill the panel. */
+const PREVIEW_MAX_HEIGHT = 320;
 
 /* Roughly how tall the open menu is, with its gap. Less room than this above
    the button and it opens downward instead. */
@@ -213,6 +242,15 @@ export default function Dashboards() {
      tables on one dashboard page independently. */
   const [tablePages, setTablePages] = useState({});
 
+  /* What the editor's preview is showing: the rows it drew, or why it has
+     nothing to draw. Never mixed into `widgetData`, which belongs to the
+     widgets actually on the dashboard. */
+  const [preview, setPreview] = useState(EMPTY_PREVIEW);
+
+  /* Which preview request is the current one. An older answer arriving
+     late must not paint over a newer one. */
+  const previewTicket = useRef(0);
+
   const [widgetForm, setWidgetForm] = useState({
     title: "",
     type: "bar",
@@ -221,6 +259,7 @@ export default function Dashboards() {
     barMode: "single",
     tableColumns: [],
     tablePageSize: 10,
+    lineSeries: [],
     measure: "",
     aggregation: "COUNT",
     kpiFormat: "number",
@@ -573,6 +612,70 @@ export default function Dashboards() {
     }
   };
 
+  /* One widget's rows, from the dashboard's own data endpoint.
+
+     Pulled out of the loop below so that the editor's preview can ask for a
+     widget's data the same way the grid does — same binding, same filters,
+     same paging rule, same endpoint. A preview that fetched its own way
+     would be a second answer to the same question. */
+  const fetchWidgetRows = async (widget, source, filters = []) => {
+    let binding = {
+      ...widget.data_binding,
+      filters: [...(widget.data_binding?.filters || []), ...filters],
+    };
+
+    /* A table asks for one page; the database returns that page and
+       nothing else. Every other widget reads its whole (aggregated,
+       small) result exactly as it always has. */
+    const paging =
+      widget.type === "table"
+        ? {
+            page: 1,
+            page_size:
+              widget.presentation?.table_page_size || DEFAULT_TABLE_PAGE_SIZE,
+          }
+        : null;
+
+    let numResult = null;
+
+    if (widget.type === "kpi" && widget.kpi?.format === "percentage") {
+      binding = {
+        ...binding,
+        measures: [
+          {
+            field: binding.measures[0]?.field || "id",
+            aggregation: "COUNT",
+            label: binding.measures[0]?.label || "Count",
+          },
+        ],
+      };
+
+      if (widget.kpi.numerator) {
+        const numBinding = {
+          ...binding,
+          filters: [...binding.filters, widget.kpi.numerator],
+        };
+
+        numResult = await api.getDashboardData(source.name, numBinding);
+      }
+    }
+
+    const result = await api.getDashboardData(source.name, binding, paging);
+
+    return {
+      rows: result.rows || [],
+      numRows: numResult ? numResult.rows || [] : null,
+      paging: paging
+        ? {
+            page: result.page ?? 1,
+            pageSize: result.page_size ?? paging.page_size,
+            totalRows: result.total_rows ?? 0,
+            totalPages: result.total_pages ?? 1,
+          }
+        : null,
+    };
+  };
+
   const loadDashboardData = async (
     generatedDashboard,
     sourceOverride = null,
@@ -595,67 +698,9 @@ export default function Dashboards() {
       // Each widget now carries its own outcome.
       const results = await Promise.allSettled(
         generatedDashboard.widgets.map(async (widget) => {
-          let binding = {
-            ...widget.data_binding,
-            filters: [
-              ...(widget.data_binding?.filters || []),
-              ...filtersOverride,
-            ],
-          };
+          const loaded = await fetchWidgetRows(widget, source, filtersOverride);
 
-          /* A table asks for one page; the database returns that page and
-             nothing else. Every other widget reads its whole (aggregated,
-             small) result exactly as it always has. */
-          const paging = widget.type === "table"
-            ? {
-                page: 1,
-                page_size:
-                  widget.presentation?.table_page_size || DEFAULT_TABLE_PAGE_SIZE,
-              }
-            : null;
-
-          let numResult = null;
-
-          if (widget.type === "kpi" && widget.kpi?.format === "percentage") {
-            binding = {
-              ...binding,
-              measures: [
-                {
-                  field: binding.measures[0]?.field || "id",
-                  aggregation: "COUNT",
-                  label: binding.measures[0]?.label || "Count"
-                }
-              ]
-            };
-
-            if (widget.kpi.numerator) {
-              const numBinding = {
-                ...binding,
-                filters: [...binding.filters, widget.kpi.numerator]
-              };
-              numResult = await api.getDashboardData(source.name, numBinding);
-            }
-          }
-
-          const result = await api.getDashboardData(
-            source.name,
-            binding,
-            paging,
-          );
-
-          return {
-            widgetId: widget.id,
-            rows: result.rows || [],
-            numRows: numResult ? (numResult.rows || []) : null,
-            paging: paging
-              ? {
-                  page: result.page ?? 1,
-                  pageSize: result.page_size ?? paging.page_size,
-                  totalRows: result.total_rows ?? 0,
-                  totalPages: result.total_pages ?? 1,
-                }
-              : null,
-          };
+          return { widgetId: widget.id, ...loaded };
         }),
       );
 
@@ -1583,6 +1628,156 @@ const applyDashboardFilters = async () => {
       ),
     );
 
+  const setLineSeries = (next) =>
+    setWidgetForm((current) => {
+      const series =
+        typeof next === "function" ? next(seriesFromForm(current)) : next;
+
+      const first = series[0];
+
+      return {
+        ...current,
+        lineSeries: series,
+        /* The first line is also the single measure every other chart type
+           reads, so changing it here and then switching to a bar chart
+           keeps what was chosen rather than reverting. */
+        ...(first?.field
+          ? { measure: first.field, aggregation: first.aggregation || "COUNT" }
+          : null),
+      };
+    });
+
+  const updateLineSeries = (index, changes) =>
+    setLineSeries((series) =>
+      series.map((entry, position) =>
+        position === index ? { ...entry, ...changes } : entry,
+      ),
+    );
+
+  /* The lines on a line chart: one card each, and a button for another.
+
+     The same three questions the editor has always asked — what to show and
+     how to calculate it, plus what to call the result — only asked once per
+     line instead of once per chart. */
+  const renderLineSeriesEditor = () => {
+    const series = seriesFromForm(widgetForm);
+
+    return (
+      <>
+        <label className="dash__edit-label" style={{ marginTop: 16 }}>
+          Series
+        </label>
+
+        <p className="tiny muted" style={{ marginBottom: 8 }}>
+          One line per series, all sharing the field above and one value axis.
+        </p>
+
+        {series.map((entry, index) => {
+          const chosen = fields?.find((f) => f.name === entry.field);
+
+          return (
+            <div key={index} className="dash__column-card">
+              <div className="dash__series-head">
+                <span className="dash__series-number">Series {index + 1}</span>
+
+                <button
+                  className="btn btn--tiny"
+                  type="button"
+                  aria-label={`Remove series ${index + 1}`}
+                  disabled={series.length === 1}
+                  onClick={() =>
+                    setLineSeries((current) =>
+                      current.filter((_, position) => position !== index),
+                    )
+                  }
+                >
+                  🗑
+                </button>
+              </div>
+
+              <div className="dash__column-row">
+                <label className="tiny muted">
+                  What to show
+                  <select
+                    className="control"
+                    value={entry.field || ""}
+                    aria-label={`Series ${index + 1} field`}
+                    onChange={(e) => {
+                      const next = fields?.find((f) => f.name === e.target.value);
+
+                      updateLineSeries(index, {
+                        field: e.target.value,
+                        // A calculation the new field cannot take would be
+                        // refused on save; it settles to Count instead.
+                        aggregation: settleAggregation(next, entry.aggregation),
+                      });
+                    }}
+                  >
+                    <option value="">Choose a field</option>
+
+                    {fields?.map((field) => (
+                      <option key={field.name} value={field.name}>
+                        {fieldLabel(field)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="tiny muted">
+                  Calculate
+                  <select
+                    className="control"
+                    value={entry.aggregation || "COUNT"}
+                    aria-label={`Series ${index + 1} calculation`}
+                    onChange={(e) =>
+                      updateLineSeries(index, { aggregation: e.target.value })
+                    }
+                  >
+                    {aggregationsFor(chosen).map((key) => (
+                      <option key={key} value={key}>
+                        {AGGREGATION_LABELS[key]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="tiny muted">
+                  Display name
+                  <input
+                    className="control"
+                    type="text"
+                    value={entry.label || ""}
+                    placeholder={seriesLabel({ ...entry, label: "" }, fields)}
+                    aria-label={`Series ${index + 1} display name`}
+                    onChange={(e) =>
+                      updateLineSeries(index, { label: e.target.value })
+                    }
+                  />
+                </label>
+              </div>
+            </div>
+          );
+        })}
+
+        <button
+          className="btn btn--sm"
+          type="button"
+          style={{ marginTop: 8 }}
+          disabled={series.length >= MAX_LINE_SERIES}
+          onClick={() => setLineSeries((current) => [...current, blankSeries()])}
+        >
+          + Add Series
+        </button>
+
+        {series.length >= MAX_LINE_SERIES && (
+          <p className="tiny muted" style={{ marginTop: 6 }}>
+            {MAX_LINE_SERIES} series is the most one chart shows.
+          </p>
+        )}
+      </>
+    );
+  };
+
   const renderTableColumnsEditor = () => {
     const columns = widgetForm.tableColumns || [];
 
@@ -1819,14 +2014,18 @@ const applyDashboardFilters = async () => {
     );
   };
 
-  const renderWidget = (widget) => {
+  /* `options.data` draws the widget from rows it is given rather than from
+     the dashboard's own, and `options.readOnly` leaves off the Edit and
+     Remove buttons. Both are for the editor's preview, which is this same
+     function so that a preview cannot drift from the widget it previews. */
+  const renderWidget = (widget, options = {}) => {
     const {
       rows = [],
       numRows = null,
       error: widgetError = null,
-    } = widgetData[widget.id] || {};
+    } = options.data || widgetData[widget.id] || {};
 
-    const editButton = isEditMode && (
+    const editButton = isEditMode && !options.readOnly && (
       <div className=" row1">
         <button
           className="btn1"
@@ -2107,15 +2306,7 @@ const applyDashboardFilters = async () => {
      WIDGET FORM HELPERS
      ========================================================= */
 
-  const numericTypes = [
-    "smallint",
-    "integer",
-    "bigint",
-    "numeric",
-    "decimal",
-    "real",
-    "double precision",
-  ];
+  const numericTypes = NUMERIC_TYPES;
 
   const getDefaultWidgetForm = () => {
     const availableFields = fields || [];
@@ -2133,6 +2324,10 @@ const applyDashboardFilters = async () => {
       dimension: firstField,
       measure: firstNumericField,
       aggregation: "COUNT",
+      /* Empty, not absent: a line chart with no series of its own shows the
+         measure above as its first one, so switching to Line arrives with a
+         series already filled in. */
+      lineSeries: [],
       presentation: {
         subtitle: "",
         title_icon: "",
@@ -2157,6 +2352,7 @@ const applyDashboardFilters = async () => {
      nothing) means a graph, which is what "Build it myself" starts on. */
   const startAddWidget = (type) => {
     const chosen = typeof type === "string" ? type : "bar";
+    setPreview(EMPTY_PREVIEW);
 
     setWidgetForm({ ...getDefaultWidgetForm(), type: chosen });
 
@@ -2182,6 +2378,8 @@ const applyDashboardFilters = async () => {
   };
 
   const startEditWidget = (widget) => {
+    setPreview(EMPTY_PREVIEW);
+
     const dimension =
       widget.data_binding?.dimensions?.[0]?.field || "";
 
@@ -2234,6 +2432,10 @@ const applyDashboardFilters = async () => {
       tablePageSize: p.table_page_size || 10,
       measure,
       aggregation,
+      /* Every measure the widget holds, which for a line chart is every
+         line on it. One measure reads back as one series, so a chart saved
+         before any of this opens exactly as it did. */
+      lineSeries: widget.type === "line" ? seriesOf(widget) : [],
       kpiFormat: widget.kpi?.format || "number",
       kpiNumeratorField: widget.kpi?.numerator?.field || "",
       kpiNumeratorOperator: widget.kpi?.numerator?.operator || "EQUALS",
@@ -2304,114 +2506,7 @@ const applyDashboardFilters = async () => {
   const comparingWithoutField = (form) =>
     form.type === "bar" && isComparingMode(form.barMode) && !form.compareBy;
 
-  const buildWidgetBinding = (form) => {
-    if (form.type === "map") {
-      const dimensions = [];
-
-      if (form.dimension) {
-        dimensions.push({
-          field: form.dimension,
-        });
-      }
-
-      if (form.measure) {
-        dimensions.push({
-          field: form.measure,
-        });
-      }
-
-      return {
-        dimensions,
-        measures: [],
-        filters: [],
-      };
-    }
-
-    if (form.type === "bubble") {
-      const dimensions = form.bubbleX ? [{ field: form.bubbleX }] : [];
-      const measures = [];
-      if (form.bubbleY) {
-        const fieldDef = fields?.find(f => f.name === form.bubbleY);
-        const isYNumeric = fieldDef && numericTypes.includes(String(fieldDef.type).toLowerCase());
-        if (!isYNumeric) {
-          dimensions.push({ field: form.bubbleY });
-        } else {
-          measures.push({ field: form.bubbleY, aggregation: form.bubbleYAggregation });
-        }
-      }
-      if (form.bubbleSize) {
-        measures.push({ field: form.bubbleSize, aggregation: form.bubbleSizeAggregation });
-      }
-      return {
-        dimensions,
-        measures,
-        filters: [],
-      };
-    }
-
-    if (form.type === "histogram") {
-      return {
-        dimensions: [],
-        measures: form.histogramField ? [{ field: form.histogramField, aggregation: "NONE" }] : [],
-        filters: [],
-      };
-    }
-
-    if (form.type === "scatter") {
-      const measures = [];
-      if (form.scatterX) measures.push({ field: form.scatterX, aggregation: "NONE" });
-      if (form.scatterY) measures.push({ field: form.scatterY, aggregation: "NONE" });
-      
-      return {
-        dimensions: [],
-        measures,
-        filters: [],
-      };
-    }
-
-    /* A table is a list of columns, and the binding follows from it. Every
-       other type still builds its binding from one dimension and one
-       measure, exactly as before. */
-    if (form.type === "table" && (form.tableColumns || []).length) {
-      return bindingForColumns(form.tableColumns, []);
-    }
-
-    const dimensions = (form.type !== "kpi" && form.dimension)
-      ? [
-          {
-            field: form.dimension,
-          },
-        ]
-      : [];
-
-    /* "Compare by" is a second dimension and nothing more exotic: the query
-       builder has always grouped by every dimension it is given, so a
-       comparing bar chart asks the server for exactly what it asked before.
-       The arrangement — side by side or stacked — is presentation. */
-    if (
-      form.type === "bar" &&
-      isComparingMode(form.barMode) &&
-      form.dimension &&
-      form.compareBy
-    ) {
-      dimensions.push({ field: form.compareBy });
-    }
-
-    const measures = form.measure
-      ? [
-          {
-            field: form.measure,
-            aggregation: form.type === "kpi" && form.kpiFormat === "percentage" ? "COUNT" : form.aggregation,
-          },
-        ]
-      : [];
-
-    return {
-      dimensions,
-      measures,
-      filters: [],
-    };
-  };
+  const buildWidgetBinding = (form) => bindingFor(form, fields);
 
   /* =========================================================
      APPLY EXISTING WIDGET CHANGES
@@ -2419,11 +2514,6 @@ const applyDashboardFilters = async () => {
 
   const applyWidgetChanges = async () => {
     if (!dashboard) {
-      return;
-    }
-
-    if (!widgetForm.title.trim()) {
-      setEditError("Please enter a widget title.");
       return;
     }
 
@@ -2436,213 +2526,21 @@ const applyDashboardFilters = async () => {
       return;
     }
 
-    if (widgetForm.type === "map") {
-      if (!widgetForm.dimension) {
-        setEditError("Please select a latitude field.");
-        return;
-      }
+    const problem = widgetProblem(widgetForm);
 
-      if (!widgetForm.measure) {
-        setEditError("Please select a longitude field.");
-        return;
-      }
-    } else {
-      if (widgetForm.type === "bubble") {
-        if (!widgetForm.bubbleX) {
-          setEditError("Please select an X field.");
-          return;
-        }
-        if (!widgetForm.bubbleY) {
-          setEditError("Please select a Y measure.");
-          return;
-        }
-        if (!widgetForm.bubbleSize) {
-          setEditError("Please select a Size measure.");
-          return;
-        }
-      } else if (widgetForm.type === "histogram") {
-        if (!widgetForm.histogramField) {
-          setEditError("Please select a numeric field for the histogram.");
-          return;
-        }
-      } else if (widgetForm.type === "scatter") {
-        if (!widgetForm.scatterX) {
-          setEditError("Please select an X field for the scatter plot.");
-          return;
-        }
-        if (!widgetForm.scatterY) {
-          setEditError("Please select a Y field for the scatter plot.");
-          return;
-        }
-      } else if (widgetForm.type === "table") {
-        const problem = tableColumnsProblem(widgetForm);
-        if (problem) {
-          setEditError(problem);
-          return;
-        }
-      } else if (widgetForm.type !== "kpi" && !widgetForm.dimension) {
-        setEditError("Choose a field to group by.");
-        return;
-      }
-
-      if (comparingWithoutField(widgetForm)) {
-        setEditError("Choose a field to compare by, or set Bar Mode to Single.");
-        return;
-      }
-
-      if (
-        widgetForm.type !== "histogram" &&
-        widgetForm.type !== "scatter" &&
-        widgetForm.type !== "table" &&
-        !widgetForm.measure
-      ) {
-        setEditError("Choose a field to show.");
-        return;
-      }
+    if (problem) {
+      setEditError(problem);
+      return;
     }
 
-    if (widgetForm.type === "kpi" && widgetForm.kpiFormat === "percentage") {
-      if (!widgetForm.kpiNumeratorField || !widgetForm.kpiNumeratorValue) {
-        setEditError("Please complete the numerator condition for the percentage KPI.");
-        return;
-      }
-    }
-
-    const updatedWidgets = dashboard.widgets.map((widget) => {
-      if (widget.id !== editingWidgetId) {
-        return widget;
-      }
-
-
-      const p = widgetForm.presentation || {};
-      const cleanPresentation = {};
-
-      if (p.subtitle) cleanPresentation.subtitle = p.subtitle;
-      if (p.title_icon) cleanPresentation.title_icon = p.title_icon;
-      if (p.background_color) cleanPresentation.background_color = p.background_color;
-
-      /* A table's columns: their order and their headings. Written only for a
-         table, so nothing else gains a key it never had. */
-      if (widgetForm.type === "table" && (widgetForm.tableColumns || []).length) {
-        cleanPresentation.table_columns = widgetForm.tableColumns.map((column) => ({
-          field: column.field,
-          aggregation: column.aggregation || "NONE",
-          label: column.label || undefined,
-        }));
-
-        if (widgetForm.tablePageSize) {
-          cleanPresentation.table_page_size = Number(widgetForm.tablePageSize);
-        }
-      }
-
-      /* How a comparing bar chart is arranged. Only ever written for a bar
-         chart that compares: "single" is the absence of the key, so every
-         widget saved before this one still saves the presentation it did. */
-      if (
-        widgetForm.type === "bar" &&
-        isComparingMode(widgetForm.barMode) &&
-        widgetForm.compareBy
-      ) {
-        cleanPresentation.bar_mode = widgetForm.barMode;
-      }
-
-      /* Colour, kept the same way as everything else here: a key that was
-         never set stays absent, so an unstyled widget saves exactly the
-         presentation it always did. */
-      COLOR_KEYS.forEach((key) => {
-        const value = p[key];
-
-        if (Array.isArray(value) ? value.length > 0 : Boolean(value)) {
-          cleanPresentation[key] = value;
-        }
-      });
-
-      const cleanTitleStyle = {};
-      if (p.title_style?.font_size) cleanTitleStyle.font_size = Number(p.title_style.font_size);
-      if (p.title_style?.bold) cleanTitleStyle.bold = p.title_style.bold;
-      if (p.title_style?.italic) cleanTitleStyle.italic = p.title_style.italic;
-      if (Object.keys(cleanTitleStyle).length > 0) cleanPresentation.title_style = cleanTitleStyle;
-
-      const cleanSubtitleStyle = {};
-      if (p.subtitle_style?.font_size) cleanSubtitleStyle.font_size = Number(p.subtitle_style.font_size);
-      if (p.subtitle_style?.bold) cleanSubtitleStyle.bold = p.subtitle_style.bold;
-      if (p.subtitle_style?.italic) cleanSubtitleStyle.italic = p.subtitle_style.italic;
-      if (Object.keys(cleanSubtitleStyle).length > 0) cleanPresentation.subtitle_style = cleanSubtitleStyle;
-
-      if (widgetForm.type === 'bar' || widgetForm.type === 'line') {
-        const cleanXAxis = {};
-        if (p.x_axis?.title) cleanXAxis.title = p.x_axis.title;
-        if (p.x_axis?.font_size) cleanXAxis.font_size = Number(p.x_axis.font_size);
-        if (p.x_axis?.bold) cleanXAxis.bold = p.x_axis.bold;
-        if (p.x_axis?.italic) cleanXAxis.italic = p.x_axis.italic;
-        if (Object.keys(cleanXAxis).length > 0) cleanPresentation.x_axis = cleanXAxis;
-
-        const cleanYAxis = {};
-        if (p.y_axis?.title) cleanYAxis.title = p.y_axis.title;
-        if (p.y_axis?.font_size) cleanYAxis.font_size = Number(p.y_axis.font_size);
-        if (p.y_axis?.bold) cleanYAxis.bold = p.y_axis.bold;
-        if (p.y_axis?.italic) cleanYAxis.italic = p.y_axis.italic;
-        if (Object.keys(cleanYAxis).length > 0) cleanPresentation.y_axis = cleanYAxis;
-      }
-
-      const widgetUpdate = {
-        ...widget,
-        type: widgetForm.type,
-        title: widgetForm.title.trim(),
-        data_binding: buildWidgetBinding(widgetForm)
-      };
-
-      if (widgetForm.type === "kpi" && widgetForm.kpiFormat === "percentage") {
-        widgetUpdate.kpi = {
-          format: "percentage",
-          numerator: {
-            field: widgetForm.kpiNumeratorField,
-            operator: widgetForm.kpiNumeratorOperator,
-            value: widgetForm.kpiNumeratorValue
-          }
-        };
-      } else {
-        delete widgetUpdate.kpi;
-      }
-
-      if (widgetForm.type === "bubble") {
-        widgetUpdate.bubble = {
-          x: widgetForm.bubbleX,
-          y: widgetForm.bubbleY,
-          y_aggregation: widgetForm.bubbleYAggregation,
-          size: widgetForm.bubbleSize,
-          size_aggregation: widgetForm.bubbleSizeAggregation
-        };
-      } else {
-        delete widgetUpdate.bubble;
-      }
-
-      if (widgetForm.type === "histogram") {
-        widgetUpdate.histogram = {
-          field: widgetForm.histogramField,
-          bins: parseInt(widgetForm.histogramBins) || 10
-        };
-      } else {
-        delete widgetUpdate.histogram;
-      }
-
-      if (widgetForm.type === "scatter") {
-        widgetUpdate.scatter = {
-          x: widgetForm.scatterX,
-          y: widgetForm.scatterY
-        };
-      } else {
-        delete widgetUpdate.scatter;
-      }
-
-      if (Object.keys(cleanPresentation).length > 0) {
-        widgetUpdate.presentation = cleanPresentation;
-      } else {
-        delete widgetUpdate.presentation;
-      }
-
-      return widgetUpdate;
-    });
+    /* The edited widget is rebuilt from the form, keeping its id, its data
+       source and its place on the grid. Same builder as the add button and
+       as the preview beside it. */
+    const updatedWidgets = dashboard.widgets.map((widget) =>
+      widget.id === editingWidgetId
+        ? updatedWidget(widget, widgetForm, { fields })
+        : widget,
+    );
 
     const updatedDashboard = {
       ...dashboard,
@@ -2667,49 +2565,11 @@ const applyDashboardFilters = async () => {
       return;
     }
 
-    if (!widgetForm.title.trim()) {
-      setEditError("Please enter a widget title.");
+    const problem = widgetProblem(widgetForm);
+
+    if (problem) {
+      setEditError(problem);
       return;
-    }
-
-    if (widgetForm.type === "map") {
-      if (!widgetForm.dimension) {
-        setEditError("Please select a latitude field.");
-        return;
-      }
-
-      if (!widgetForm.measure) {
-        setEditError("Please select a longitude field.");
-        return;
-      }
-    } else {
-      if (widgetForm.type === "table") {
-        const problem = tableColumnsProblem(widgetForm);
-        if (problem) {
-          setEditError(problem);
-          return;
-        }
-      } else if (widgetForm.type !== "kpi" && !widgetForm.dimension) {
-        setEditError("Choose a field to group by.");
-        return;
-      }
-
-      if (comparingWithoutField(widgetForm)) {
-        setEditError("Choose a field to compare by, or set Bar Mode to Single.");
-        return;
-      }
-
-      if (widgetForm.type !== "table" && !widgetForm.measure) {
-        setEditError("Choose a field to show.");
-        return;
-      }
-    }
-
-    if (widgetForm.type === "kpi" && widgetForm.kpiFormat === "percentage") {
-      if (!widgetForm.kpiNumeratorField || !widgetForm.kpiNumeratorValue) {
-        setEditError("Please complete the numerator condition for the percentage KPI.");
-        return;
-      }
     }
 
     const sourceId = dashboard.data_sources?.[0]?.id;
@@ -2734,84 +2594,12 @@ const applyDashboardFilters = async () => {
       0,
     );
 
-    const newWidget = {
+    const newWidget = draftWidget(widgetForm, {
       id: `widget_${Date.now()}_${widgetNumber}`,
-
-      type: widgetForm.type,
-
-      title: widgetForm.title.trim(),
-
-      data_source_id: sourceId,
-
-      data_binding:
-        buildWidgetBinding(widgetForm),
-
-      layout: {
-        x: 0,
-        y: bottomY,
-        w: defaultSize.w,
-        h: defaultSize.h,
-      },
-    };
-
-    if (widgetForm.type === "table" && (widgetForm.tableColumns || []).length) {
-      newWidget.presentation = {
-        table_columns: widgetForm.tableColumns.map((column) => ({
-          field: column.field,
-          aggregation: column.aggregation || "NONE",
-          label: column.label || undefined,
-        })),
-        ...(widgetForm.tablePageSize
-          ? { table_page_size: Number(widgetForm.tablePageSize) }
-          : {}),
-      };
-    }
-
-    /* How a comparing bar chart is arranged, on the same terms as the edit
-       path: written only when there is something to compare, so a widget that
-       does not compare carries no presentation it never had. */
-    if (
-      widgetForm.type === "bar" &&
-      isComparingMode(widgetForm.barMode) &&
-      widgetForm.compareBy
-    ) {
-      newWidget.presentation = { bar_mode: widgetForm.barMode };
-    }
-
-    if (widgetForm.type === "kpi" && widgetForm.kpiFormat === "percentage") {
-      newWidget.kpi = {
-        format: "percentage",
-        numerator: {
-          field: widgetForm.kpiNumeratorField,
-          operator: widgetForm.kpiNumeratorOperator,
-          value: widgetForm.kpiNumeratorValue
-        }
-      };
-    }
-
-    if (widgetForm.type === "bubble") {
-      newWidget.bubble = {
-        x: widgetForm.bubbleX,
-        y: widgetForm.bubbleY,
-        y_aggregation: widgetForm.bubbleYAggregation,
-        size: widgetForm.bubbleSize,
-        size_aggregation: widgetForm.bubbleSizeAggregation
-      };
-    }
-
-    if (widgetForm.type === "histogram") {
-      newWidget.histogram = {
-        field: widgetForm.histogramField,
-        bins: parseInt(widgetForm.histogramBins) || 10
-      };
-    }
-
-    if (widgetForm.type === "scatter") {
-      newWidget.scatter = {
-        x: widgetForm.scatterX,
-        y: widgetForm.scatterY
-      };
-    }
+      sourceId,
+      layout: { x: 0, y: bottomY, w: defaultSize.w, h: defaultSize.h },
+      fields,
+    });
 
     const updatedDashboard = {
       ...dashboard,
@@ -3211,11 +2999,192 @@ const applyDashboardFilters = async () => {
      ========================================================= */
 
   const closeWidgetEditor = () => {
+    setPreview(EMPTY_PREVIEW);
     setEditingWidgetId(null);
 
     setShowAddWidget(false);
 
     setEditError("");
+  };
+
+  /* =========================================================
+     LIVE PREVIEW
+     ========================================================= */
+
+  const widgetEditorOpen = Boolean(editingWidgetId || showAddWidget);
+
+  /* The widget this configuration describes, built by the same function as
+     the one the Add and Apply buttons build. It is rebuilt on every
+     keystroke, which is what makes the title and the appearance settings
+     show up in the preview without asking the server anything. */
+  const previewWidget = useMemo(
+    () =>
+      draftWidget(widgetForm, {
+        id: PREVIEW_WIDGET_ID,
+        sourceId: dashboard?.data_sources?.[0]?.id,
+        fields,
+      }),
+    [widgetForm, dashboard, fields],
+  );
+
+  /* A preview does not need a title to be worth drawing — it is usually the
+     last thing typed — so it is the only check the preview skips. */
+  const previewProblem = widgetProblem({
+    ...widgetForm,
+    title: widgetForm.title.trim() || "Preview",
+  });
+
+  /* What the server is being asked. Deliberately not the whole widget: a
+     title, a colour or an axis label changes the picture without changing
+     the question, and re-asking on every keystroke would be a request per
+     letter. */
+  const previewQuery = JSON.stringify({
+    type: previewWidget.type,
+    /* The binding as a question, without the labels in it. A measure's label
+       is what the legend reads, not part of what is selected, and renaming a
+       line must not re-run the query behind it. */
+    data_binding: {
+      dimensions: previewWidget.data_binding?.dimensions || [],
+      measures: (previewWidget.data_binding?.measures || []).map((measure) => ({
+        field: measure.field,
+        aggregation: measure.aggregation,
+      })),
+      filters: previewWidget.data_binding?.filters || [],
+    },
+    kpi: previewWidget.kpi,
+    page_size: previewWidget.presentation?.table_page_size,
+    filters: dashboardFilters,
+    source: selectedSource?.name,
+  });
+
+  const previewWidgetRef = useRef(previewWidget);
+
+  useEffect(() => {
+    previewWidgetRef.current = previewWidget;
+  });
+
+  useEffect(() => {
+    if (!widgetEditorOpen || !selectedSource || previewProblem) {
+      return undefined;
+    }
+
+    const ticket = previewTicket.current + 1;
+    previewTicket.current = ticket;
+
+    setPreview((current) => ({ ...current, status: "loading" }));
+
+    // A short wait, so dragging through a dropdown asks once rather than
+    // once per option passed.
+    const timer = setTimeout(async () => {
+      try {
+        const loaded = await fetchWidgetRows(
+          previewWidgetRef.current,
+          selectedSource,
+          dashboardFilters,
+        );
+
+        if (ticket !== previewTicket.current) {
+          return;
+        }
+
+        setPreview({
+          status: "ready",
+          rows: loaded.rows,
+          numRows: loaded.numRows,
+          error: "",
+        });
+      } catch (error) {
+        if (ticket !== previewTicket.current) {
+          return;
+        }
+
+        setPreview({
+          status: "error",
+          rows: [],
+          numRows: null,
+          error: error?.message || "This configuration could not be drawn.",
+        });
+      }
+    }, PREVIEW_DEBOUNCE_MS);
+
+    return () => clearTimeout(timer);
+  }, [
+    previewQuery,
+    previewProblem,
+    widgetEditorOpen,
+    selectedSource,
+    dashboardFilters,
+  ]);
+
+  /* The right-hand panel. Everything it can show is a state of the same
+     widget: not yet answerable, being fetched, refused, empty, or drawn. */
+  const renderPreview = () => {
+    let body;
+
+    if (previewProblem) {
+      body = (
+        <p className="muted dash__preview-note">{previewProblem}</p>
+      );
+    } else if (preview.status === "loading" || preview.status === "idle") {
+      body = <div className="skeleton dash__preview-skeleton" />;
+    } else if (preview.status === "error") {
+      body = (
+        <div className="alert alert--bad dash__preview-note">
+          {preview.error}
+        </div>
+      );
+    } else if (!preview.rows.length) {
+      body = (
+        <p className="muted dash__preview-note">
+          No data available for this configuration.
+        </p>
+      );
+    } else {
+      /* The height this widget will have on the grid: the rows it is worth,
+         at the height a row is drawn. A KPI is one row, and stretching it to
+         fill the panel would preview a card that does not exist. */
+      const rows = editingWidgetId
+        ? dashboard?.widgets?.find((widget) => widget.id === editingWidgetId)
+            ?.layout?.h || defaultWidgetSize(widgetForm.type).h
+        : defaultWidgetSize(widgetForm.type).h;
+
+      const height = Math.min(
+        PREVIEW_MAX_HEIGHT,
+        rows * GRID.rowHeight + (rows - 1) * GRID.margin[1],
+      );
+
+      /* The dashboard's own widget card, drawn by the dashboard's own
+         renderer, from rows fetched through the dashboard's own endpoint.
+         There is no preview-only drawing code to disagree with it. */
+      body = (
+        <div
+          className="card card--pad dash__widget-card"
+          data-testid="preview-card"
+          style={{
+            height,
+            ...(previewWidget.presentation?.background_color
+              ? { backgroundColor: previewWidget.presentation.background_color }
+              : {}),
+          }}
+        >
+          {renderWidget(previewWidget, { data: preview, readOnly: true })}
+        </div>
+      );
+    }
+
+    return (
+      <div className="dash__builder-preview">
+        <h3 className="dash__preview-heading">Live Preview</h3>
+
+        <div className="dash__preview-stage">{body}</div>
+
+        <p className="tiny muted">
+          {editingWidgetId
+            ? "The graph as it will look once the changes are applied."
+            : "The graph as it will be added to the dashboard."}
+        </p>
+      </div>
+    );
   };
 
   /* What the editor calls the thing it is adding. The menu's words, so the
@@ -4631,11 +4600,10 @@ const applyDashboardFilters = async () => {
       {(editingWidgetId || showAddWidget) && (
         <div className="modal-backdrop">
           <div
-            className="modal"
+            className="modal modal--builder"
             role="dialog"
             aria-modal="true"
             aria-labelledby="widget-editor-title"
-            style={{ maxHeight: "90vh", overflowY: "auto" }}
           >
             <h2 id="widget-editor-title">
               {editingWidgetId ? "Edit Graph" : addWidgetLabel}
@@ -4644,6 +4612,9 @@ const applyDashboardFilters = async () => {
             <p className="muted">
               Configure the graph using the available fields.
             </p>
+
+            <div className="dash__builder">
+              <div className="dash__builder-config">
 
             <label className="dash__edit-label" htmlFor="widget-title">
               Chart Title
@@ -4665,6 +4636,7 @@ const applyDashboardFilters = async () => {
 
             <label
               className="dash__edit-label"
+              htmlFor="widget-type"
               style={{
                 marginTop: 16,
               }}
@@ -4673,6 +4645,7 @@ const applyDashboardFilters = async () => {
             </label>
 
             <select
+              id="widget-type"
               className="control"
               value={widgetForm.type}
               onChange={(e) =>
@@ -4878,7 +4851,9 @@ const applyDashboardFilters = async () => {
               )
             )}
 
-            {widgetForm.type !== "map" && widgetForm.type !== "table" && widgetForm.type !== "bubble" && widgetForm.type !== "histogram" && widgetForm.type !== "scatter" && (
+            {widgetForm.type === "line" && renderLineSeriesEditor()}
+
+            {widgetForm.type !== "map" && widgetForm.type !== "table" && widgetForm.type !== "line" && widgetForm.type !== "bubble" && widgetForm.type !== "histogram" && widgetForm.type !== "scatter" && (
               <>
                 <label
                   htmlFor="widget-what-to-show"
@@ -5616,6 +5591,11 @@ const applyDashboardFilters = async () => {
                 </div>
               </>
             )}
+
+              </div>
+
+              {renderPreview()}
+            </div>
 
             {editError && (
               <div

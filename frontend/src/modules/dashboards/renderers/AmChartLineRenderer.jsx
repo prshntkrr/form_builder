@@ -2,18 +2,25 @@ import React, { useLayoutEffect, useRef, useId } from "react";
 
 import * as am5 from "@amcharts/amcharts5";
 
-import { widgetColors } from "./colors.js";
+import { paletteFor, widgetColors } from "./colors.js";
+import { lineSeriesData } from "./prepareChartData.js";
 import * as am5xy from "@amcharts/amcharts5/xy";
 import am5themes_Animated from "@amcharts/amcharts5/themes/Animated";
 
 /**
  * Line chart rendered with AmCharts 5.
  *
+ * One line or several: several lines is several measures on one binding,
+ * and `lineSeriesData` hands back the same shape either way — the rows for
+ * the category axis, and the key and name of each line to draw from them.
+ *
  * Props:
  *   widget — the DashboardWidget object
  *   data   — [{ name, value }, …] from prepareChartData
+ *   rows   — the rows as the server returned them, which is where a chart
+ *            with more than one measure reads its other lines from
  */
-export default function AmChartLineRenderer({ widget, data, dashboard }) {
+export default function AmChartLineRenderer({ widget, data, rows, dashboard }) {
   const chartRef = useRef(null);
   const rootRef = useRef(null);
 
@@ -72,7 +79,13 @@ export default function AmChartLineRenderer({ widget, data, dashboard }) {
       maxWidth: 120,
     });
 
-    xAxis.data.setAll(data);
+    const { rows: categories, series: lines } = lineSeriesData(
+      widget,
+      data,
+      rows,
+    );
+
+    xAxis.data.setAll(categories);
 
     if (widget.presentation?.x_axis?.title) {
       xAxis.children.push(am5.Label.new(root, {
@@ -112,7 +125,6 @@ export default function AmChartLineRenderer({ widget, data, dashboard }) {
     }
 
     // ── Series ─────────────────────────────────────────────────
-    const measure = widget.data_binding?.measures?.[0];
 
     /* The colour this widget was given, or the app's accent as before. */
     const chosen = widgetColors(widget, dashboard).series;
@@ -123,58 +135,88 @@ export default function AmChartLineRenderer({ widget, data, dashboard }) {
         .getPropertyValue("--accent")
         .trim();
 
-    const series = chart.series.push(
-      am5xy.LineSeries.new(root, {
-        name: measure?.label || "Value",
-        xAxis,
-        yAxis,
-        valueYField: "value",
-        categoryXField: "name",
-        tooltip: am5.Tooltip.new(root, {
-          labelText: "{categoryX}: {valueY}",
-        }),
-      })
-    );
+    /* One line keeps the colour it always had. Several take the widget's
+       palette, so each is told apart from the others without anybody
+       choosing six colours by hand. */
+    const shades =
+      lines.length > 1
+        ? paletteFor(lines.length, widgetColors(widget, dashboard).palette)
+        : [accent];
 
-    series.strokes.template.setAll({
-      strokeWidth: 2,
+    lines.forEach((line, index) => {
+      const shade = shades[index] || accent;
+
+      const series = chart.series.push(
+        am5xy.LineSeries.new(root, {
+          name: line.name,
+          xAxis,
+          yAxis,
+          valueYField: line.key,
+          categoryXField: "name",
+          tooltip: am5.Tooltip.new(root, {
+            labelText:
+              lines.length > 1
+                ? "{name}, {categoryX}: {valueY}"
+                : "{categoryX}: {valueY}",
+          }),
+        })
+      );
+
+      series.strokes.template.setAll({
+        strokeWidth: 2,
+      });
+
+      if (shade) {
+        series.strokes.template.setAll({
+          stroke: am5.color(shade),
+        });
+        series.fills?.template.setAll({
+          fill: am5.color(shade),
+        });
+      }
+
+      // Bullets (dots on data points).
+      series.bullets.push(() =>
+        am5.Bullet.new(root, {
+          sprite: am5.Circle.new(root, {
+            radius: 4,
+            fill: shade ? am5.color(shade) : series.get("fill"),
+            strokeWidth: 2,
+            stroke: root.interfaceColors.get("background"),
+          }),
+        })
+      );
+
+      series.data.setAll(categories);
+      series.appear(1000);
     });
 
-    if (accent) {
-      series.strokes.template.setAll({
-        stroke: am5.color(accent),
-      });
-      series.fills?.template.setAll({
-        fill: am5.color(accent),
-      });
+    /* Which line is which, once there is more than one. */
+    if (lines.length > 1) {
+      const legend = chart.children.push(
+        am5.Legend.new(root, {
+          centerX: am5.p50,
+          x: am5.p50,
+          marginTop: 2,
+          paddingTop: 0,
+          paddingBottom: 0,
+        })
+      );
+
+      legend.data.setAll(chart.series.values);
     }
-
-    // Bullets (dots on data points).
-    series.bullets.push(() =>
-      am5.Bullet.new(root, {
-        sprite: am5.Circle.new(root, {
-          radius: 4,
-          fill: accent ? am5.color(accent) : series.get("fill"),
-          strokeWidth: 2,
-          stroke: root.interfaceColors.get("background"),
-        }),
-      })
-    );
-
-    series.data.setAll(data);
 
     // ── Cursor ─────────────────────────────────────────────────
     chart.set("cursor", am5xy.XYCursor.new(root, { behavior: "none" }));
 
     // Initial animation.
-    series.appear(1000);
     chart.appear(1000, 100);
 
     return () => {
       root.dispose();
       rootRef.current = null;
     };
-  }, [data, widget, dashboard, chartId]);
+  }, [data, rows, widget, dashboard, chartId]);
 
   return (
     <div

@@ -412,6 +412,51 @@ Use a single dimension whenever nothing is being broken down — "farmers by
 district" on its own is one dimension and one measure, as it always was.
 
 ============================================================
+LINE CHARTS WITH SEVERAL LINES
+============================================================
+
+A line chart that plots more than one quantity over the same axis — "monthly
+farmer count, total production and rice sold", "yield and area by season" —
+is ONE line widget with ONE dimension and SEVERAL measures. Not several
+widgets, and not a second dimension.
+
+- data_binding.dimensions holds exactly ONE field: the axis every line runs
+  along, usually a date, a month or a stage.
+- data_binding.measures holds one entry per line, each with its own field and
+  its own aggregation.
+- Give every measure a "label". It is what the legend shows, so write it the
+  way a reader would say it: "Total Production", not "total_production".
+- At most 6 measures on one line chart.
+
+For "Show monthly farmer count, total production and rice sold", with
+`month`, `id`, `total_production` and `rice_sold` available:
+
+{
+  "id": "widget_1",
+  "type": "line",
+  "title": "Farmers, Production and Rice Sold by Month",
+  "data_source_id": "source_1",
+  "layout": {"x": 0, "y": 0, "w": 6, "h": 4},
+  "data_binding": {
+    "dimensions": [
+      {"field": "month"}
+    ],
+    "measures": [
+      {"field": "id", "aggregation": "COUNT", "label": "Farmers"},
+      {"field": "total_production", "aggregation": "SUM", "label": "Total Production"},
+      {"field": "rice_sold", "aggregation": "SUM", "label": "Rice Sold"}
+    ],
+    "filters": []
+  }
+}
+
+WRONG: one widget per quantity, when the request asks for them together.
+WRONG: a second dimension. That breaks ONE quantity down by a second field,
+which is the grouped bar chart above, not several quantities side by side.
+
+A line chart asked for one quantity stays one measure, exactly as before.
+
+============================================================
 BUBBLE, HISTOGRAM, AND SCATTER WIDGETS
 ============================================================
 

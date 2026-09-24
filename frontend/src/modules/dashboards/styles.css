@@ -1050,3 +1050,124 @@
 @media print {
   body.dash-printing .dash__fab-wrap { display: none !important; }
 }
+
+/* --- the graph builder ---------------------------------------------------
+   The editor with its preview beside it. Two panels on a desktop, one above
+   the other when there is not the width for two, and each scrolling on its
+   own so a long configuration never pushes the buttons off the screen. */
+.modal--builder {
+  width: min(1120px, calc(100vw - 32px));
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.dash__builder {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+  gap: 20px;
+  align-items: start;
+
+  /* The panels scroll, the modal does not. */
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-top: 4px;
+}
+
+.dash__builder-config {
+  min-width: 0;
+  max-height: 62vh;
+  overflow-y: auto;
+  /* Room for the scrollbar, so a select is not under it. */
+  padding-right: 10px;
+}
+
+.dash__builder-preview {
+  min-width: 0;
+  position: sticky;
+  top: 0;
+}
+
+.dash__preview-heading {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+
+/* A definite height, because a chart drawn at 100% of nothing is nothing. */
+.dash__preview-stage {
+  height: 340px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--paper);
+}
+
+/* The widget inside the stage is the height it will be on the grid, which
+   the panel sets; the stage only centres it. */
+.dash__preview-stage > .dash__widget-card {
+  flex: 0 0 auto;
+  min-height: 0;
+  width: 100%;
+}
+
+.dash__preview-note {
+  margin: 0;
+  text-align: center;
+}
+
+.dash__preview-skeleton {
+  flex: 1 1 auto;
+  min-height: 0;
+  border-radius: var(--r-sm);
+}
+
+@media (max-width: 900px) {
+  .dash__builder {
+    grid-template-columns: 1fr;
+  }
+
+  .dash__builder-config {
+    max-height: none;
+    overflow-y: visible;
+    padding-right: 0;
+  }
+
+  .dash__builder-preview {
+    position: static;
+  }
+
+  /* One column now, so the modal is what scrolls. */
+  .modal--builder {
+    overflow-y: auto;
+  }
+
+  .dash__preview-stage {
+    height: 280px;
+  }
+}
+
+/* --- a line chart's series ----------------------------------------------
+   The same card the table's columns use, with a number instead of a drag
+   handle: lines are drawn in the order they are listed, and reordering them
+   changes nothing anybody can see. */
+.dash__series-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.dash__series-number {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2);
+}

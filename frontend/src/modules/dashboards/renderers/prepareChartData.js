@@ -97,3 +97,44 @@ export function categoryRowsFor(compared, data) {
 
   return data;
 }
+
+/**
+ * A line chart's lines, whether there is one of them or six.
+ *
+ * One measure is the shape the renderer has always drawn: the prepared
+ * `{ name, value }` pairs, under the measure's own label. More than one is
+ * the same rows read by every measure's alias at once — the server returns
+ * one row per category with a column per measure, so nothing is pivoted and
+ * nothing extra is asked for.
+ *
+ *   returns  { rows: [{ name, <key>: number, … }],
+ *              series: [{ key, name }, …] }
+ */
+export function lineSeriesData(widget, data, rows) {
+  const measures = widget?.data_binding?.measures || [];
+  const dimension = widget?.data_binding?.dimensions?.[0];
+
+  if (measures.length <= 1 || !dimension) {
+    return {
+      rows: data || [],
+      series: [{ key: 'value', name: measures[0]?.label || 'Value' }],
+    };
+  }
+
+  const series = measures.map((measure) => ({
+    key: `${measure.field}_${String(measure.aggregation).toLowerCase()}`,
+    name: measure.label || measure.field,
+  }));
+
+  const categories = (rows || []).map((row) => {
+    const entry = { name: row[dimension.field] };
+
+    for (const line of series) {
+      entry[line.key] = Number(row[line.key]) || 0;
+    }
+
+    return entry;
+  });
+
+  return { rows: categories, series };
+}
