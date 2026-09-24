@@ -159,9 +159,13 @@ describe('a country question', () => {
     // second one, out of date the moment ISO changes anything.
     const renderer = await import('./components/FormRenderer.jsx?raw')
       .then((m) => m.default)
+    // The fetching moved out of the renderer when the condition editor needed
+    // the same lists; the point of this test did not move with it.
+    const source = await import('./dynamicOptions.js?raw').then((m) => m.default)
 
     expect(renderer).not.toMatch(/Mexico|Zimbabwe|Afghanistan/)
-    expect(renderer).toMatch(/standardOptions/)
+    expect(source).not.toMatch(/Mexico|Zimbabwe|Afghanistan/)
+    expect(source).toMatch(/standardOptions/)
   })
 })
 

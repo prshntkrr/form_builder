@@ -795,3 +795,29 @@
 
 /* A question kept in the definition but out of the form. */
 .frow__hidden { background: var(--amber-wash, #fdf3e0); color: var(--amber, #a76b12); }
+
+/* Previewing a form, on a screen with room to spare.
+ *
+ * The workspace tabs take the whole width already; Preview fell back to the
+ * 1000px page measure, which on a wide monitor drew a column of single boxes
+ * down the middle with both margins empty. Wider, but still bounded: a text box
+ * the width of a 27" screen is not a form, it is a banner.
+ *
+ * Doubled class for the same reason as `.main--builder` above — this stylesheet
+ * is bundled before core's, so a single class loses the cap on source order. */
+.main.main--preview { max-width: 1400px; }
+
+/* Work this browser kept while it was not saved. A notice with two answers,
+   not a dialog: it must not stand between somebody and the form they came to
+   edit — the questions on screen are still theirs either way. */
+.recover {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap; margin-bottom: 14px;
+}
+.recover__said { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.recover__acts { display: flex; gap: 8px; flex-shrink: 0; }
+
+/* Whether the server has the draft. Quiet when it does, amber when it does not
+   — a failed autosave must be noticeable without stopping anybody typing. */
+.autosave { color: var(--ink-3, var(--ink-2)); margin: 0 0 10px; }
+.autosave--stale { color: var(--amber); }

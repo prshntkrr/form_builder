@@ -4,9 +4,8 @@ import { useLocation } from '../useLocation.js'
 import { api } from '../api.js'
 import { defaultLanguage, languageChoices, translateForm } from '../translate.js'
 import { hidden } from '../conditions.js'
-import { resolveLayout } from '../formLayout.js'
-
-const FULL_WIDTH = new Set(['textarea', 'multiselect', 'radio', 'location'])
+import { FULL_WIDTH, resolveLayout } from '../formLayout.js'
+import { useDynamicOptions } from '../dynamicOptions.js'
 
 /**
  * The form's questions, in the order the builder shows them.
@@ -52,96 +51,6 @@ function group(formJson) {
   }
 
   return groups.filter((g) => g.fields.length)
-}
-
-/**
- * Choices for the fields that do not carry their own.
- *
- * A field with `options_from` says where its choices live rather than listing
- * them, so they are read when the form is drawn. Two sources: the imported crop
- * ontologies, and the client's own catalogs. A dependent one — crop features,
- * which only mean anything once a crop is chosen; municipalities, which only
- * mean anything once a state is — is read again whenever that answer changes.
- *
- * Everything comes from this application's own API. Nothing reaches out to
- * cropontology.org, and nothing here makes up a value the source did not give.
- */
-// Which endpoint serves each standard a field may draw from. A lookup, not a
-// path built from the field: what a form names cannot reach an address.
-const STANDARDS = { ISO_3166_1: 'iso3166' }
-
-function useDynamicOptions(fields, values, language) {
-  const [loaded, setLoaded] = useState({})
-
-  // What to fetch, as a string, so the effect only runs when it really changes.
-  const wanted = (fields || [])
-    .filter((f) => f.options_from)
-    .map((f) => {
-      const from = f.options_from
-      const on = from.depends_on
-      return [
-        f.name,
-        from.source,
-        from.kind || from.catalog || from.standard || '',
-        on ? values?.[on] ?? '' : '',
-        on ? 'dependent' : '',
-        // Which of the catalogue's values this field offers, when it offers
-        // only some. Part of the key so changing it refetches.
-        (from.allowed_values || []).join(','),
-        // Which of a standard's code sets the answer is stored as. Part of the
-        // key, so changing it refetches: the labels are the same countries and
-        // the values are not.
-        from.code_type || '',
-      ].join('|')
-    })
-    .join(';')
-
-  useEffect(() => {
-    if (!wanted) return
-    let cancelled = false
-    // `language` is in the dependency list below, so switching language fetches
-    // the same choices worded differently. The codes do not move, so whatever
-    // was chosen stays chosen.
-
-    const fetchAll = async () => {
-      const next = {}
-      for (const entry of wanted.split(';')) {
-        const [name, source, what, dependsOnValue, dependent, allowed, codeType] =
-          entry.split('|')
-        if (!name || !what) continue
-
-        // A dependent field has nothing to offer until its dependency is
-        // answered — an empty list is the honest state, not an error.
-        if (dependent && !dependsOnValue) {
-          next[name] = []
-          continue
-        }
-
-        try {
-          if (source === 'client_catalog') {
-            next[name] = await api.clientCatalogOptions(
-              what, dependsOnValue, language, allowed ? allowed.split(',') : [])
-          } else if (source === 'data_standard') {
-            // A published standard's own values — ISO 3166-1's countries and
-            // whatever is added beside them. The list lives in the standards
-            // database; there is no copy of it in this application.
-            next[name] = await api.standardOptions(STANDARDS[what] || what,
-                                                   codeType || 'alpha_2')
-          } else {
-            next[name] = await api.cropOntologyOptions(what, dependsOnValue)
-          }
-        } catch {
-          next[name] = []
-        }
-      }
-      if (!cancelled) setLoaded(next)
-    }
-
-    fetchAll()
-    return () => { cancelled = true }
-  }, [wanted, language])
-
-  return loaded
 }
 
 /**

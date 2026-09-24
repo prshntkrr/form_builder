@@ -76,6 +76,12 @@ class Settings(BaseSettings):
     s3_url_seconds: int = 900
     media_max_mb: int = 25
 
+    # How deep a parent/child chain of forms may go. Farmer -> Plot -> Crop
+    # season is three; this is a cost ceiling, not a safety one — walking a
+    # chain costs one query per level, and cycles are caught by the walk
+    # itself rather than by this number.
+    forms_max_relationship_depth: int = 25
+
     # MCDC, the multi-channel collection layer a published form can be exported
     # to. Without a base URL this installation has nowhere to send a
     # configuration and says so rather than inventing an address; the key is
@@ -116,7 +122,10 @@ class Settings(BaseSettings):
     external_db_databricks_wait_seconds: int = 300
     # The most rows, and bytes of result, one import copies. Over either, the
     # import is refused and nothing is written.
-    external_db_databricks_max_rows: int = 500000
+    # Rows are not what an import is really bounded by — one chunk is held at a
+    # time, so bytes and the clock below are the real ceilings. This is a
+    # sanity limit; 500,000 was low enough to refuse ordinary tables.
+    external_db_databricks_max_rows: int = 20000000
     external_db_databricks_max_bytes: int = 1024 * 1024 * 1024
     # How long downloading and inserting every chunk may take, in total.
     external_db_databricks_import_seconds: int = 1800

@@ -956,7 +956,19 @@ def _normalize_layout(raw: Any, fields: List[Dict[str, Any]]) -> Optional[Dict[s
 
         sections.append(section)
 
-    return {"sections": sections} if sections else None
+    if not sections:
+        return None
+
+    layout: Dict[str, Any] = {"sections": sections}
+
+    # Whether the builder derived this layout from the form's own sections
+    # rather than somebody arranging it. A derived one is rebuilt when the
+    # sections change; an arranged one is left alone. Absent means arranged,
+    # which is what every layout saved before this was.
+    if raw.get("auto") is True:
+        layout["auto"] = True
+
+    return layout
 
 
 RELATIONSHIP_TYPES = ("independent", "child")

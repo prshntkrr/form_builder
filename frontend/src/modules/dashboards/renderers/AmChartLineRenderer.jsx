@@ -44,6 +44,12 @@ export default function AmChartLineRenderer({ widget, data, rows, dashboard }) {
 
     root.setThemes([am5themes_Animated.new(root)]);
 
+    /* Every number this chart draws — axis ticks and tooltips alike — reads
+       the way it does on a stat tile: grouped, and no more decimals than it
+       deserves. An average arrives as 420.0111111111111. */
+    root.numberFormatter.setAll({ numberFormat: "#,###.##" });
+
+
     const chart = root.container.children.push(
       am5xy.XYChart.new(root, {
         panX: false,
