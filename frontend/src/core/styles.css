@@ -204,7 +204,16 @@ a:hover { text-decoration: underline; }
   font-size: 15px; cursor: pointer;
 }
 
-.main { width: 100%; max-width: 1000px; margin: 0 auto; padding: 34px 30px 80px; }
+/* The page measure.
+ *
+ * 1000px left a third of a 1080p screen empty on either side of a table that
+ * wanted the room — the lists, the settings tabs and the review queue are read
+ * across, not down. Wide, but still bounded: text that runs the width of a 27"
+ * monitor is unreadable, whatever it is in.
+ *
+ * `--narrow` is the other half of the decision and is unchanged: a form being
+ * filled in, a wizard, a page of prose keeps a reading measure. */
+.main { width: 100%; max-width: 1440px; margin: 0 auto; padding: 34px 30px 80px; }
 .main--narrow { max-width: 720px; }
 
 /* ══ surfaces ═════════════════════════════════════════════════════════════ */

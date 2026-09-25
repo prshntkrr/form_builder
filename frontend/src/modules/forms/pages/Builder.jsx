@@ -4,7 +4,7 @@ import { api } from '../api.js'
 import { formsChanged } from '../../../core/events.js'
 import FieldEditor from '../components/FieldEditor.jsx'
 import { defaultLanguage, languageChoices } from '../translate.js'
-import { applicable } from '../conditions.js'
+import { applicable, removeFieldFromRules, renameFieldInRules } from '../conditions.js'
 import { MAX_IDENTIFIER, fieldHidden, identifier } from '../fieldTypes.js'
 import { generateLayout, layoutIsStale, removeFromLayout, withFieldReplaced } from '../formLayout.js'
 import * as recovery from '../draftRecovery.js'
@@ -207,6 +207,9 @@ export default function Builder() {
   const [autoSavedId, setAutoSavedId] = useState(null)
   // When the server last took a copy, and whether the last attempt got there.
   const [autoSaved, setAutoSaved] = useState(null)
+  /* The payload the server last took, so a form nobody has touched since is not
+     sent again. Cleared on a failure, so the next tick retries. */
+  const sentRef = useRef(null)
 
   const view = editing ? section : draftTab
 
@@ -316,45 +319,91 @@ export default function Builder() {
         formsChanged()
       }
 
-      setAutoSaved({ at: Date.now(), ok: true })
+      /* The server has it, so the browser's copy has nothing left to offer.
+         Dropping it here is what keeps a stale snapshot from being offered
+         later: one can only survive a tick if the save failed, which is
+         exactly when it is worth having. No clocks to compare, and no way to
+         be offered an older copy of your own form.
+
+         Nothing is lost by dropping it — the local write happens first in the
+         same tick, so the server is as fresh as the snapshot would have been,
+         and `beforeunload` writes one again on the way out. */
+      recovery.drop(editing ? formId : null)
+      setRecovered(false)
+
+      sentRef.current = JSON.stringify(payload)
+      setAutoSaved({ at: Date.now(), ok: true, why: '' })
       return true
-    } catch {
-      // Silent on purpose. See above.
-      setAutoSaved((was) => ({ at: was?.at || null, ok: false }))
+    } catch (e) {
+      /* Quiet, but not vague. A refused form and an unreachable server are
+         different problems with different answers, and reporting the first as
+         the second sent somebody looking at their network while the form on
+         screen was the thing that could not be saved. */
+      sentRef.current = null            // so the next tick tries again
+      setAutoSaved((was) => ({
+        at: was?.at || null,
+        ok: false,
+        why: e?.fieldErrors?.length || e?.status === 422 ? explain(e) : '',
+      }))
       return false
     }
   }
 
-  useEffect(() => {
+  /* What a tick should do, rebuilt every render so it always sees the current
+     form — but held in a ref rather than in the effect's dependencies.
+
+     The effect below used to depend on `form`, which meant every keystroke tore
+     the timer down and started a fresh minute. Somebody adding ten questions
+     without pausing never got a single autosave: the interval only fired after
+     a full minute of not typing, which is the one time nothing needs saving. */
+  const tickRef = useRef(() => {})
+  const keepRef = useRef(() => {})
+
+  tickRef.current = () => {
     if (!form || !unsaved) return
 
+    keepRef.current()
+
+    /* A form nobody has chosen a channel for cannot be created — the server
+       refuses it, and rightly. It is still kept in the browser.
+
+       Nor one nobody has named yet. The server would take it happily, and that
+       is the problem: creating it fixes its table name as `untitled_form` for
+       good, silently, a minute after somebody started typing. The browser keeps
+       it safe meanwhile; the first manual save asks about the name. */
+    if (!editing && (!form.channel || unnamed())) return
+    // Never while a manual save, publish or AI call is in flight: two writes
+    // to one form racing each other is nobody's idea of a safety net.
+    if (busy) return
+    // Nothing has changed since the server last took it. An idle builder should
+    // not send the same form every minute for an afternoon.
+    if (JSON.stringify(untag(form)) === sentRef.current) return
+
+    autosave()
+  }
+
+  keepRef.current = () => {
+    if (!form || !unsaved) return
     /* Tagged, so `_orig` — which is how a save knows a question was renamed —
        survives the reload. `_uid` is dropped on the way back in. The id the
        server gave this draft rides along, so a reload cannot end up creating a
        second form beside the one autosave already made. */
-    const locally = () => recovery.keep(editing ? formId : null, form, autoSavedId)
+    recovery.keep(editing ? formId : null, form, autoSavedId)
+  }
 
-    /* A form nobody has chosen a channel for cannot be created — the server
-       refuses it, and rightly. It is still kept in the browser. */
-    const worthSending = editing || Boolean(form.channel)
-
-    const tick = () => {
-      locally()
-      // Never while a manual save, publish or AI call is in flight: two writes
-      // to one form racing each other is nobody's idea of a safety net.
-      if (worthSending && !busy) autosave()
-    }
-
-    const timer = setInterval(tick, recovery.EVERY_MS)
+  /* One timer for the life of the builder, ticking whatever is being typed. */
+  useEffect(() => {
+    const timer = setInterval(() => tickRef.current(), recovery.EVERY_MS)
     // A reload is the case this exists for, and it does not wait for a timer.
     // Only the local half: an unload is no time to start a request.
-    window.addEventListener('beforeunload', locally)
+    const onUnload = () => keepRef.current()
+    window.addEventListener('beforeunload', onUnload)
 
     return () => {
       clearInterval(timer)
-      window.removeEventListener('beforeunload', locally)
+      window.removeEventListener('beforeunload', onUnload)
     }
-  }, [form, unsaved, editing, formId, autoSavedId, busy])
+  }, [])
 
   /* What this browser held when the builder opened.
      Offered, never applied: replacing what the server has with an older copy
@@ -500,8 +549,47 @@ export default function Builder() {
 
   // `saveAs`, not `status` — that name belongs to the state above, and shadowing
   // it here would be a trap for the next person to read this.
+  /* The first save is what fixes this form's table names, for good.
+   *
+   * A form's title is display text and can change whenever; its table name is
+   * an address. Renaming the form later moves nothing — `update_form` keeps the
+   * name the table was created with, because renaming it would mean renaming
+   * the answers table, the reporting mirror, the sequence, and every dashboard
+   * and import pointing at them, with no safe way to fail halfway.
+   *
+   * So a form saved while it is still called "Untitled form" collects its
+   * answers in `untitled_form` forever, and every other one after it lands in
+   * `untitled_form_2`, `untitled_form_3` — a set of tables nobody can read.
+   *
+   * Refused rather than confirmed. This was a "save it anyway?" question, and a
+   * question with a way past it gets clicked through; the cost lands months
+   * later on whoever opens the database. Naming a form takes a moment and is
+   * the only moment it can be done. */
+  const unnamed = () => {
+    const name = (form?.title || '').trim()
+    return !name || name.toLowerCase() === 'untitled form'
+  }
+
+  const titleRef = useRef(null)
+
+  const namedOnPurpose = () => {
+    // Already named, or already saved — in the second case the tables exist and
+    // the answer can no longer change anything.
+    if (!unnamed() || draftId) return true
+
+    setError(
+      'Give this form a name before saving it. Its answers are stored in a '
+      + 'table named after it, and that name is permanent — renaming the form '
+      + 'later does not change it.',
+    )
+    titleRef.current?.focus()
+    titleRef.current?.select()
+    return false
+  }
+
   const save = (saveAs = 'Active') =>
     run('save', async () => {
+      if (!namedOnPurpose()) return
       const renames = {}
       for (const f of form.fields) if (f._orig && f._orig !== f.name) renames[f._orig] = f.name
 
@@ -616,7 +704,11 @@ export default function Builder() {
     // the rename in the same update — the server refuses a configuration that
     // names a question the form no longer has.
     const replaced = withFieldReplaced(form, i, next, from)
-    setForm(next.name ? renameInWhatsApp(replaced, from, next.name) : replaced)
+    // Conditional logic refers to questions by name too, and for the same
+    // reason follows the rename in the same update.
+    const rules = next.name ? renameFieldInRules(replaced.rules, from, next.name) : replaced.rules
+    const withRules = rules === replaced.rules ? replaced : { ...replaced, rules }
+    setForm(next.name ? renameInWhatsApp(withRules, from, next.name) : withRules)
   }
   const knownAs = useRef({})
 
@@ -673,12 +765,25 @@ export default function Builder() {
       setChosen(near ? near.name : null)
     }
     const kept = layout === form.layout ? { ...form, fields } : { ...form, fields, layout }
+    /* …nor in the conditional logic. A rule about a question the form no longer
+       has is refused by the server, and refused for the whole form — so a
+       deleted question used to make everything after it unsaveable, and the
+       error named a question nobody could see to fix. */
+    const rules = removeFieldFromRules(form.rules, form.fields[i]?.name)
+    if (rules !== form.rules) kept.rules = rules
     // …nor in the WhatsApp conversation.
     setForm(removeFromWhatsApp(kept, form.fields[i]?.name))
   }
 
   const add = () => {
-    const n = form.fields.length + 1
+    /* Past the highest `question_N` this form has ever shown, not the number of
+       questions it has now. Deleting three and adding one used to produce
+       `question_1` again — the same key a rule from the deleted set might still
+       name, which silently re-attaches old logic to a new question. */
+    const n = Math.max(
+      form.fields.length,
+      ...form.fields.map((f) => Number(/^question_(\d+)$/.exec(f.name || '')?.[1] || 0)),
+    ) + 1
     const made = {
       _uid: uid(),
       name: `question_${n}`, label: '', type: 'text', required: false,
@@ -769,8 +874,7 @@ export default function Builder() {
   const chosenField = chosenIndex < 0 ? null : form.fields[chosenIndex]
 
   return (
-    <main className={`main${workspace ? ' main--builder' : ''}`
-                     + (pane === 'preview' ? ' main--preview' : '')}>
+    <main className={`main${workspace ? ' main--builder' : ''}`}>
      <div className={workspace ? 'workspace' : undefined}>
       <div className={workspace ? 'workspace__main' : undefined}>
       {/* Work this browser kept when the page last closed. Offered rather than
@@ -803,9 +907,13 @@ export default function Builder() {
         <p className={`tiny autosave${autoSaved.ok ? '' : ' autosave--stale'}`} role="status">
           {autoSaved.ok
             ? `Draft saved automatically at ${new Date(autoSaved.at).toLocaleTimeString()}`
-            : autoSaved.at
-              ? `Could not reach the server — last saved at ${new Date(autoSaved.at).toLocaleTimeString()}. Your questions are kept in this browser.`
-              : 'Could not reach the server. Your questions are kept in this browser.'}
+            : `${autoSaved.why
+                  ? `This form cannot be saved yet — ${autoSaved.why}`
+                  : 'Could not reach the server.'}`
+              + (autoSaved.at
+                  ? ` Last saved at ${new Date(autoSaved.at).toLocaleTimeString()};`
+                  : '')
+              + ' your questions are kept in this browser.'}
         </p>
       )}
 
@@ -937,6 +1045,7 @@ export default function Builder() {
             <div className="editor__top">
               <div className="grow">
                 <input
+                  ref={titleRef}
                   className="name-input"
                   value={form.title}
                   placeholder="Untitled form"

@@ -100,8 +100,10 @@ function winner(classes, property) {
 const BUILDER = ['main', 'main--builder']
 
 describe('the builder page fills the window', () => {
-  test('the 1000px page cap does not apply to it', () => {
-    expect(winner(['main'], 'max-width')).toBe('1000px')
+  test('the page measure does not apply to it', () => {
+    // The number is a design decision and has moved once; what this is testing
+    // is that whatever it is, the builder's `none` wins over it.
+    expect(winner(['main'], 'max-width')).toMatch(/^\d+px$/)
     expect(winner(BUILDER, 'max-width')).toBe('none')
   })
 

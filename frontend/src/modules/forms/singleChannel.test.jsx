@@ -288,6 +288,9 @@ describe('switching an unsaved draft', () => {
     await user.click(screen.getByRole('button', { name: 'Start blank' }))
     await user.click(screen.getByRole('radio', { name: /WhatsApp/ }))
     await user.click(screen.getByRole('button', { name: 'Add a question' }))
+    // A form has to be named before it can be saved: its table is named after
+    // it, and that name is settled here and never again.
+    await user.type(screen.getByPlaceholderText('Untitled form'), 'Farmer signup')
 
     await user.click(screen.getByRole('button', { name: 'Publish' }))
 
