@@ -174,6 +174,44 @@ class RouteRequest(BaseModel):
     project_id: Optional[str] = None
     enabled: Optional[bool] = None
     metadata: Optional[Dict[str, Any]] = None
+    # The WhatsApp number the keyword has to arrive on. Empty is any number,
+    # which is what every route configured before this had.
+    receiver_number: Optional[str] = None
+
+
+class WhatsAppRouteRequest(BaseModel):
+    """One form's WhatsApp route, as the Form Builder configures it.
+
+    The builder knows a form, a number and a keyword; it does not know a route
+    id. This is the same `channel_form_route` row the routing screen edits —
+    there is no second store — addressed by the form instead.
+
+    The welcome and consent messages are deliberately *not* here: they are
+    conversation content that refers to the questions, so they live in
+    `form_json.channel_config.whatsapp` and are saved with the form, versioned
+    and rolled back with it.
+
+    Nor is the project: a route belongs to whichever project owns the form, and
+    the server reads that from the form itself. Letting a caller name it meant
+    the builder had to know, and it got it wrong — while editing a saved form it
+    sent no project at all, so the route was scoped to the system and vanished
+    from the project's routing page. A value only one side can be right about
+    should only be asked of that side.
+    """
+    receiver_number: str = ""
+    keyword: str
+    enabled: Optional[bool] = None
+
+
+class WhatsAppSettingsRequest(BaseModel):
+    """How the WhatsApp channel is operated in one project.
+
+    `api_token` left out means "leave the stored one alone", which is what a
+    screen that never showed it must send. An empty string clears it; anything
+    else replaces it — that is what Rotate does.
+    """
+    session_timeout_seconds: Optional[int] = None
+    api_token: Optional[str] = None
 
 
 class IdentityRequest(BaseModel):

@@ -7,6 +7,8 @@ by those same field names:
     "channel_config": {
       "whatsapp": {
         "welcome_message":    "Welcome to the farmer survey",
+        "consent_message":    "Would you like to continue?",
+        "decline_message":    "No problem. Send FARMER again any time.",
         "order":              ["farmer_name", "crop", "area"],
         "fields": {
           "crop": {"prompt": "What crop do you grow?", "interaction": "list"}
@@ -22,6 +24,13 @@ a catalogue question still reads its catalogue. And nothing here may hold
 anything else — no numbers, no tokens, no provider settings: those belong to the
 gateway, never to a definition that is published and handed out.
 
+**The keyword and the WhatsApp number are not here either.** They are the route
+(`channel_form_route`), which is operational and not versioned: moving a form to
+a new number is not a new version of the questions. What *is* here is everything
+the conversation says, because it refers to the questions being asked and has to
+publish and roll back with them — a session collecting against version 3 must
+keep asking version 3's consent question, whatever version 4 says.
+
 `normalize` cleans the shape but keeps every field reference as it was given, so
 `problems` can refuse one that names a question the form does not have, rather
 than quietly forgetting it.
@@ -33,6 +42,15 @@ from app.modules.forms.channels import _flag
 #: WhatsApp's own limit on a message body carrying buttons or a list.
 MAX_MESSAGE = 1024
 
+#: What the conversation says around the questions, in the order it says it.
+#:
+#: `consent_message` is asked before the first question and answered yes or no.
+#: A form that sets none is not asking for consent, and the conversation goes
+#: straight from the welcome to the first question — so this changes nothing for
+#: the forms that already exist.
+MESSAGES = ("welcome_message", "consent_message", "decline_message",
+            "completion_message")
+
 
 def _text(raw: Any) -> str:
     return str(raw).strip()[:MAX_MESSAGE] if isinstance(raw, (str, int, float)) else ""
@@ -43,7 +61,7 @@ def _normalize_whatsapp(raw: Any) -> Optional[Dict[str, Any]]:
         return None
 
     config: Dict[str, Any] = {}
-    for key in ("welcome_message", "completion_message"):
+    for key in MESSAGES:
         text = _text(raw.get(key))
         if text:
             config[key] = text

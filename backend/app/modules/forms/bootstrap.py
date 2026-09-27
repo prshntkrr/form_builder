@@ -336,6 +336,93 @@ def ensure_routing_permissions() -> int:
     return granted
 
 
+def ensure_route_receiver_number() -> bool:
+    """Give `channel_form_route` the number a keyword has to arrive on.
+
+    Existing routes come out of this with `''`, which means "any number" — so
+    every keyword configured before numbers existed keeps reaching its form
+    exactly as it did, from wherever it arrives.
+
+    **This owns the two unique indexes as well as the column**, and both halves
+    run on a fresh database as much as on an old one. `schema.sql` cannot
+    declare them: it re-runs whole whenever any of the module's tables is
+    missing, and on a database that already has this table the CREATE TABLE is a
+    no-op — so an index naming `receiver_number` fails on a column that is not
+    there yet and rolls back the whole file, taking the other tables with it.
+
+    The uniqueness key gains the number because the same keyword on two
+    different WhatsApp numbers is two meanings, not a clash. An index of the old
+    shape is dropped and rebuilt rather than left alone: it carries the same
+    name, so `IF NOT EXISTS` would quietly keep refusing the second number.
+
+    Idempotent in both halves, and returns whether it changed anything.
+    """
+    from psycopg2 import sql
+
+    changed = False
+
+    with transaction() as cur:
+        if not table_exists(cur, "channel_form_route"):
+            return False                      # schema.sql will create it first
+
+        cur.execute(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_schema = %s AND table_name = 'channel_form_route' "
+            "  AND column_name = 'receiver_number'",
+            (settings.db_schema,),
+        )
+        if cur.fetchone() is None:
+            cur.execute(sql.SQL(
+                "ALTER TABLE {}.channel_form_route "
+                "ADD COLUMN receiver_number VARCHAR(32) NOT NULL DEFAULT ''"
+            ).format(sql.Identifier(settings.db_schema)))
+
+            # A number the first webhook kept in `metadata` moves onto the
+            # column, so nothing configured before this is lost.
+            cur.execute(
+                "UPDATE channel_form_route "
+                "   SET receiver_number = LEFT(COALESCE("
+                "         metadata ->> 'receiver_number', "
+                "         metadata ->> 'phone_number', ''), 32) "
+                " WHERE metadata ? 'receiver_number' OR metadata ? 'phone_number'"
+            )
+            logger.info("channel_form_route gained receiver_number")
+            changed = True
+
+        # The indexes, whatever the column's history. Read their definitions
+        # rather than assuming: an index of the old shape has the same name.
+        wanted = {
+            "uq_route_project": (
+                "CREATE UNIQUE INDEX uq_route_project ON {}.channel_form_route "
+                "(channel, route_key_norm, project_id, receiver_number) "
+                "WHERE enabled"),
+            "uq_route_global": (
+                "CREATE UNIQUE INDEX uq_route_global ON {}.channel_form_route "
+                "(channel, route_key_norm, receiver_number) "
+                "WHERE enabled AND project_id IS NULL"),
+        }
+
+        cur.execute(
+            "SELECT indexname, indexdef FROM pg_indexes "
+            "WHERE schemaname = %s AND tablename = 'channel_form_route'",
+            (settings.db_schema,),
+        )
+        have = {r["indexname"]: r["indexdef"] for r in cur.fetchall()}
+
+        for name, statement in wanted.items():
+            if "receiver_number" in (have.get(name) or ""):
+                continue
+            if name in have:
+                cur.execute(sql.SQL("DROP INDEX {}.{}").format(
+                    sql.Identifier(settings.db_schema), sql.Identifier(name)))
+            cur.execute(sql.SQL(statement).format(
+                sql.Identifier(settings.db_schema)))
+            logger.info("Rebuilt %s to include the WhatsApp number", name)
+            changed = True
+
+    return changed
+
+
 def ensure_export_columns() -> List[str]:
     """Bring `form_export` up to the shape an export record needs.
 

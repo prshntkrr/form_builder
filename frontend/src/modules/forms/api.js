@@ -391,6 +391,25 @@ export const api = {
 
   deleteRoute: (routeId) => request(`/mcdc/routes/${routeId}`, { method: 'DELETE' }),
 
+  // The same `channel_form_route` row, addressed by the form instead of by a
+  // route id — which is what the Form Builder knows. Not a second store: a
+  // route saved here is the one the routing screen lists and can change.
+  whatsappRoute: (formId) => request(`/mcdc/forms/${formId}/whatsapp-route`),
+
+  saveWhatsappRoute: (formId, route) =>
+    request(`/mcdc/forms/${formId}/whatsapp-route`,
+            { method: 'PUT', body: JSON.stringify(route) }),
+
+  // How the channel is operated here: the timeout, and whether a token is set.
+  // The token itself is never returned — only `token_set` and its last four
+  // characters, which is all the screen shows.
+  whatsappSettings: (project) =>
+    request(`/mcdc/whatsapp/settings${project ? `?project=${project}` : ''}`),
+
+  saveWhatsappSettings: (project, settings) =>
+    request(`/mcdc/whatsapp/settings${project ? `?project=${project}` : ''}`,
+            { method: 'PUT', body: JSON.stringify(settings) }),
+
   // --- one form's submissions hanging off another's ---
   // What this form is attached to, and what is attached to it.
   formRelationship: (formId) => request(`/forms/${formId}/relationship`),

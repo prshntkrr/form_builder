@@ -197,6 +197,13 @@ export default function Builder() {
   // channel.
   const [newChannel, setNewChannel] = useState(location.state?.channel || null)
 
+  /* How this form is reached on WhatsApp: the number and the keyword.
+     Not part of the form — it is the `channel_form_route` row the project's
+     Channel routing screen lists — so it is held beside the form here and saved
+     alongside it. Editing it in either place changes the same row. */
+  const [waRoute, setWaRoute] = useState({ receiver_number: '', keyword: '' })
+  const [waRouteError, setWaRouteError] = useState('')
+
   // A draft kept in this browser, offered when the builder opens on work that
   // never reached the server. See draftRecovery.js.
   const [recovered, setRecovered] = useState(null)
@@ -228,6 +235,8 @@ export default function Builder() {
     setRecovered(null)
     setAutoSavedId(null)
     setAutoSaved(null)
+    setWaRoute({ receiver_number: '', keyword: '' })
+    setWaRouteError('')
 
     if (!formId) {
       // A copy of a saved form, made for another channel ("Copy as …").
@@ -268,6 +277,16 @@ export default function Builder() {
       })
       .catch((e) => setError(e.message))
       .finally(() => setBusy(null))
+
+    /* Whatever route already reaches this form. A form that has none — or a
+       reader who cannot manage routing — simply shows the fields empty; it is
+       not an error worth interrupting the builder for. */
+    api.whatsappRoute(formId)
+      .then(({ route }) => route && setWaRoute({
+        receiver_number: route.receiver_number || '',
+        keyword: route.route_key || '',
+      }))
+      .catch(() => {})
   }, [formId])
 
   /* Write the draft down every minute, and again on the way out.
@@ -587,6 +606,32 @@ export default function Builder() {
     return false
   }
 
+  /** The form's WhatsApp route, stored on the same row the routing screen edits.
+   *
+   *  Only for a WhatsApp form, and only once there is a keyword: a form with no
+   *  keyword yet has nothing to route, and sending an empty one would be
+   *  refused rather than ignored.
+   */
+  const saveRoute = async (id, saveAs) => {
+    setWaRouteError('')
+    if (!id || formChannel(form) !== 'whatsapp' || !waRoute.keyword.trim()) return
+
+    try {
+      /* No project: the server takes it from the form, which is the only side
+         that reliably knows. `buildingIn` is null while editing a saved form,
+         so sending it scoped the route to the system and it disappeared from
+         its project's routing page. */
+      await api.saveWhatsappRoute(id, {
+        receiver_number: waRoute.receiver_number.trim(),
+        keyword: waRoute.keyword.trim(),
+      })
+    } catch (e) {
+      // The questions are saved. Say what did not take, and where to fix it.
+      setWaRouteError(
+        `The form is saved, but its WhatsApp keyword was not: ${e.message}`)
+    }
+  }
+
   const save = (saveAs = 'Active') =>
     run('save', async () => {
       if (!namedOnPurpose()) return
@@ -605,6 +650,13 @@ export default function Builder() {
       if (draftId && !editing && saveAs !== 'Draft') {
         await api.setStatus(draftId, saveAs)
       }
+
+      /* The route, after the form exists and after its status is settled — the
+         server stores it switched off until the form is published, and reads
+         the status to decide. A route that is refused (a keyword already taken
+         on that number) is reported without losing the save: the questions are
+         stored either way, and the keyword is the thing to go and fix. */
+      await saveRoute(result.form_id || draftId, saveAs)
 
       formsChanged()
 
@@ -967,6 +1019,13 @@ export default function Builder() {
 
       {error && form && <div className="note note--bad" style={{ marginBottom: 16 }}>{error}</div>}
 
+      {/* The questions were saved and the keyword was not. Said separately from
+          `error`, because half of it worked and the half that did not is a
+          keyword to change rather than a save to retry. */}
+      {waRouteError && (
+        <div className="note note--bad" style={{ marginBottom: 16 }}>{waRouteError}</div>
+      )}
+
       {saved && (
         <div className="note note--good" style={{ marginBottom: 16 }}>
           <strong>Changes saved as version {saved.version_no}.</strong>
@@ -1125,6 +1184,8 @@ export default function Builder() {
                   onSelect={setChosen}
                   onChange={setForm}
                   onAdd={add}
+                  route={waRoute}
+                  onRoute={(patch) => setWaRoute({ ...waRoute, ...patch })}
                 />
               )}
 

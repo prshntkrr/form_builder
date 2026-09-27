@@ -744,4 +744,36 @@ def set_status(form_id: str, status: str) -> Dict[str, Any]:
         row = cur.fetchone()
         if not row:
             raise FormNotFound(f"Form {form_id} not found")
-        return _row_to_form(dict(row))
+
+    form = _row_to_form(dict(row))
+    _follow_status_on_channels(form_id, status)
+    return form
+
+
+def _follow_status_on_channels(form_id: str, status: str) -> None:
+    """Take a form off the air with itself, and bring it back with itself.
+
+    A keyword pointing at a form nobody may fill in any more is answered as
+    unmatched by `routing.resolve` whatever this does — the published check is
+    there too, and it is the one that actually protects a caller. This is so
+    the routing screen tells the truth: a route for an unpublished form shows
+    as off rather than as on-but-silently-refusing.
+
+    Nothing is deleted. The keyword, the number and the scope are kept, so
+    republishing brings the same route back instead of asking for it again.
+
+    Outside the transaction that changed the status, and deliberately: routing
+    is another module's table by ownership if not by directory, and a form must
+    still change status if its routes cannot be updated. A failure is logged.
+    """
+    from app.modules.forms import routing
+
+    try:
+        moved = routing.set_enabled_for_form(form_id, status == "Active")
+    except Exception:
+        logger.exception("Could not follow %s's status onto its routes", form_id)
+        return
+
+    if moved:
+        logger.info("%s %d route(s) for %s",
+                    "Enabled" if status == "Active" else "Disabled", moved, form_id)

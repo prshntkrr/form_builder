@@ -756,6 +756,14 @@
 .wa__build { display: grid; gap: 12px; min-width: 0; }
 .wa__title { font-size: 15px; margin: 0; }
 .wa__message { display: grid; gap: 4px; }
+/* The number and the keyword: the route, not the form. Set apart from the
+   messages below it, which are part of the definition. */
+.wa__route {
+  display: grid; gap: 10px;
+  border: 1px solid var(--line); border-left: 3px solid #075e54;
+  border-radius: 8px; padding: 10px 12px;
+}
+.wa__routefield { display: grid; gap: 3px; }
 .wa__steps { margin: 0; padding-left: 22px; display: grid; gap: 8px; }
 .wa__step { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
 .wa__step.is-selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-wash); }
