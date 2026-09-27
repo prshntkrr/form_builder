@@ -214,10 +214,10 @@ def get_route(route_id: int) -> Optional[Dict[str, Any]]:
     return _shown(dict(row)) if row else None
 
 
-def _clashes(channel: str, key_norm: str, project_id: Optional[str],
-             enabled: bool, receiver_number: str = "",
-             ignoring: Optional[int] = None) -> bool:
-    """Whether an enabled route already answers to this, in this scope.
+def _clashes_on(cur, channel: str, key_norm: str, project_id: Optional[str],
+                enabled: bool, receiver_number: str = "",
+                ignoring: Optional[int] = None) -> bool:
+    """Whether an enabled route already answers to this, on this cursor.
 
     Only enabled routes clash: a keyword can be retired and the same keyword
     given to another form, which is the ordinary way these change hands.
@@ -231,21 +231,96 @@ def _clashes(channel: str, key_norm: str, project_id: Optional[str],
     if not enabled:
         return False
 
-    with transaction() as cur:
-        cur.execute(
-            """
-            SELECT receiver_number FROM channel_form_route
-            WHERE channel = %s AND route_key_norm = %s AND enabled
-              AND project_id IS NOT DISTINCT FROM %s
-              AND (%s::int IS NULL OR route_id <> %s)
-            """,
-            (channel, key_norm, project_id, ignoring, ignoring),
-        )
-        others = [r["receiver_number"] or "" for r in cur.fetchall()]
+    cur.execute(
+        """
+        SELECT receiver_number FROM channel_form_route
+        WHERE channel = %s AND route_key_norm = %s AND enabled
+          AND project_id IS NOT DISTINCT FROM %s
+          AND (%s::int IS NULL OR route_id <> %s)
+        """,
+        (channel, key_norm, project_id, ignoring, ignoring),
+    )
+    others = [r["receiver_number"] or "" for r in cur.fetchall()]
 
     wanted = normalize_number(receiver_number)
     return any(not other or not wanted or same_number(other, wanted)
                for other in others)
+
+
+def _clashes(channel: str, key_norm: str, project_id: Optional[str],
+             enabled: bool, receiver_number: str = "",
+             ignoring: Optional[int] = None) -> bool:
+    """`_clashes_on` in a transaction of its own, for the standalone callers."""
+    with transaction() as cur:
+        return _clashes_on(cur, channel, key_norm, project_id, enabled,
+                           receiver_number, ignoring)
+
+
+def upsert_form_route(cur, *, channel: str, form_id: str,
+                      project_id: Optional[str], route_key: str,
+                      receiver_number: str = "", enabled: bool = True,
+                      created_by: str = "") -> Dict[str, Any]:
+    """The one route a form is reached by, written on the caller's cursor.
+
+    For saving a form and its keyword **in one transaction**: either the form,
+    its version, its tables and its route are all stored, or none of them are.
+    Two requests — create the form, then give it a keyword — is how a form came
+    to exist with no way to reach it, twice, because the second could fail on
+    its own and the first had already committed.
+
+    Deliberately does **not** check that the form is published, unlike
+    `create_route`. It is called from inside the transaction that is creating or
+    updating that very form, so nothing outside can see the row yet and asking
+    would get the wrong answer. The caller knows the status it is writing and
+    passes `enabled` accordingly.
+
+    Everything else is the same rule as the standalone path: the same key
+    normalisation, the same clash check, the same columns.
+    """
+    key = check_key(channel, route_key)
+    key_norm = normalize_key(channel, key)
+    number = normalize_number(receiver_number)
+
+    cur.execute(
+        "SELECT route_id FROM channel_form_route "
+        "WHERE form_id = %s AND channel = %s ORDER BY enabled DESC, route_id LIMIT 1",
+        (form_id, channel),
+    )
+    found = cur.fetchone()
+    route_id = found["route_id"] if found else None
+
+    if _clashes_on(cur, channel, key_norm, project_id, enabled, number,
+                   ignoring=route_id):
+        raise RoutingError(
+            f"'{key}' already reaches another form on {channel} here. Give this "
+            "one a different keyword, or disable the other route first.")
+
+    if route_id is None:
+        cur.execute(
+            """
+            INSERT INTO channel_form_route
+                (channel, route_key, route_key_norm, form_id, project_id,
+                 enabled, receiver_number, created_by)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING *
+            """,
+            (channel, key, key_norm, form_id, project_id, enabled, number,
+             created_by),
+        )
+    else:
+        cur.execute(
+            """
+            UPDATE channel_form_route
+               SET route_key = %s, route_key_norm = %s, project_id = %s,
+                   enabled = %s, receiver_number = %s,
+                   updated_on = CURRENT_TIMESTAMP
+             WHERE route_id = %s
+             RETURNING *
+            """,
+            (key, key_norm, project_id, enabled, number, route_id),
+        )
+
+    return _shown(dict(cur.fetchone()))
 
 
 def create_route(channel: str, route_key: str, form_id: str,

@@ -203,7 +203,11 @@ export const api = {
   // is what every form did before projects existed. The backend checks that
   // this account may build in that project, so sending somebody else's id
   // fails there rather than succeeding here.
-  createForm: (formJson, createdBy, status, projectId) =>
+  /* `whatsapp` is {number, keyword}. Sent with the form so the route row is
+     written in the same transaction: a WhatsApp form and the keyword that
+     reaches it are stored together or not at all. Left out means "leave
+     routing alone". */
+  createForm: (formJson, createdBy, status, projectId, whatsapp) =>
     request('/forms', {
       method: 'POST',
       body: JSON.stringify({
@@ -211,13 +215,17 @@ export const api = {
         created_by: createdBy,
         form_status: status,
         ...(projectId ? { project_id: projectId } : {}),
+        ...(whatsapp ? { whatsapp } : {}),
       }),
     }),
 
-  updateForm: (formId, formJson, updatedBy, renames) =>
+  updateForm: (formId, formJson, updatedBy, renames, whatsapp) =>
     request(`/forms/${formId}`, {
       method: 'PUT',
-      body: JSON.stringify({ form_json: formJson, updated_by: updatedBy, renames }),
+      body: JSON.stringify({
+        form_json: formJson, updated_by: updatedBy, renames,
+        ...(whatsapp ? { whatsapp } : {}),
+      }),
     }),
 
   // Check stored responses against the current definition; fix re-coerces what it can.

@@ -23,6 +23,25 @@ class GeneratedForm(BaseModel):
     prompt: Optional[str] = None
 
 
+class WhatsAppRouting(BaseModel):
+    """The number and keyword that reach a form, saved with the form itself.
+
+    Sent inside the create/update request so the `channel_form_route` row is
+    written in the **same transaction** as the questions: a WhatsApp form and
+    the way somebody reaches it are stored together or not at all. Doing it as
+    a second request is how a form came to exist with no way to reach it.
+
+    Not part of `form_json`. It is still its own row, because resolution needs
+    to look a keyword up without reading every form, and uniqueness is a
+    database constraint. This is only how it arrives.
+
+    No project: it belongs to whichever project owns the form, and the server
+    reads that rather than trusting a caller who cannot reliably know it.
+    """
+    number: str = ""
+    keyword: str = ""
+
+
 class CreateFormRequest(BaseModel):
     form_json: Dict[str, Any]
     created_by: Optional[str] = None
@@ -33,6 +52,9 @@ class CreateFormRequest(BaseModel):
     # is a system-level form, reachable through the account-wide form
     # permissions exactly as every form was before projects existed.
     project_id: Optional[str] = None
+    # Optional, and only meaningful for a form built for WhatsApp. Absent means
+    # "leave routing alone", which is every caller written before this.
+    whatsapp: Optional[WhatsAppRouting] = None
 
 
 class UpdateFormRequest(BaseModel):
@@ -42,6 +64,7 @@ class UpdateFormRequest(BaseModel):
     # old field key -> new field key, for fields renamed by hand. Stored answers
     # are moved with them so existing responses keep matching the definition.
     renames: Optional[Dict[str, str]] = None
+    whatsapp: Optional[WhatsAppRouting] = None
 
 
 class RevalidateRequest(BaseModel):
