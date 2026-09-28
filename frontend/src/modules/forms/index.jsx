@@ -1,6 +1,6 @@
 import React from 'react'
 import { Navigate, useParams } from 'react-router-dom'
-import FormsNav, { FormsPanel } from './Nav.jsx'
+import { FormsPanel } from './Nav.jsx'
 import Builder from './pages/Builder.jsx'
 import Catalogues from './pages/Catalogues.jsx'
 import Dictionary from './pages/Dictionary.jsx'
@@ -36,8 +36,26 @@ export default {
   name: 'forms',
   label: 'Forms',
   order: 10,
-  Nav: FormsNav,
   List: FormsPanel,
+  /* Where this module's links sit in the system navigation. Core assembles the
+     groups, because a group holds links from more than one module — see
+     `NAV_GROUPS` in core/registry.js. `requires` is the same capability flag
+     as on the route behind it, so the link and the screen cannot disagree. */
+  navItems: [
+    { group: 'configuration', label: 'New form', to: '/builder',
+      requires: 'build_any_forms' },
+    { group: 'configuration', label: 'Standard forms', to: '/library',
+      requires: 'build_forms' },
+    { group: 'configuration', label: 'Data dictionary', to: '/dictionary',
+      requires: 'use_dictionary' },
+    { group: 'configuration', label: 'Catalogue', to: '/catalogues',
+      requires: 'use_client_catalogs' },
+    // Three separate vocabularies behind one screen, so one flag cannot gate it.
+    { group: 'configuration', label: 'Standards', to: '/standards',
+      requires: (can) => can.use_standards || can.use_ontology || can.use_crop_ontology },
+    { group: 'data', label: 'Channel routing', to: '/routing',
+      requires: 'manage_routing' },
+  ],
   // /forms shows whichever context is active, so it is the right landing
   // place for a project member as much as for a builder.
   home: (can) => ((can.build_any_forms || can.use_projects) ? '/forms' : '/fill'),

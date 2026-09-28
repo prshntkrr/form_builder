@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from app.core import auth_service
 from app.modules.forms import form_service
+from app.modules.forms.form_schema import parent_form_id
 from app.modules.forms import submission_service
 from app.modules.forms import translations
 from app.modules.forms import view_service
@@ -217,6 +218,12 @@ def fillable_forms(project: Optional[str], user: Dict[str, Any],
             "default_language": translations.default_language(f["form_json"] or {}),
             "languages": translations.form_languages(f["form_json"] or {}),
             "updated_on": f["updated_on"],
+            # Which form's submissions this one's hang off, or null. Read from
+            # the definition where the relationship is declared — this invents
+            # nothing and changes no behaviour. Additive: a client that does not
+            # know the key is unaffected, and one that does can show the list as
+            # the tree it already is.
+            "parent_form_id": parent_form_id(f["form_json"] or {}),
             # Where the complete, renderable definition is.
             "package_url": f"/api/forms/{f['form_id']}/package",
             "project_id": where.get(f["form_id"]),

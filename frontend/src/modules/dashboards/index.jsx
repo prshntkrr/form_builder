@@ -1,5 +1,4 @@
 import React from 'react'
-import DashboardsNav from './Nav.jsx'
 import Dashboards from './pages/Dashboards.jsx'
 import SharedDashboard from './pages/SharedDashboard.jsx'
 import './styles.css'
@@ -16,7 +15,10 @@ export default {
   name: 'dashboards',
   label: 'Dashboards',
   order: 20,
-  Nav: DashboardsNav,
+  navItems: [
+    { group: 'analytics', label: 'Dashboards', to: '/dashboards',
+      requires: 'view_dashboards' },
+  ],
   home: () => null,        // forms still decides where people land
   routes: [
     { path: '/dashboards', element: <Dashboards />, requires: 'view_dashboards' },

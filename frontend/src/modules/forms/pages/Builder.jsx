@@ -505,24 +505,51 @@ export default function Builder() {
     needsDescription && prompt.trim() && prompt.trim().length < 5 && 'Describe the form in a little more detail.',
   ].filter(Boolean)
 
+  /* Everything a draft accumulates while it is worked on, cleared when it is
+     replaced by another one.
+   *
+   * "Start over" replaced the form and left the rest: the inspector still open
+   * on a question from the previous draft, its dry-run result still on screen,
+   * the layout of a form that no longer exists, the snapshot autosave kept, and
+   * the id the server had already given the last draft — which would have made
+   * the next save overwrite it. The form was new; nothing around it was. */
+  const clearDraft = () => {
+    setChosen(null)
+    setError('')
+    setSaved(null)
+    setCheck(null)
+    setDict(null)
+    setTrial({})
+    setTrialResult(null)
+    setWording(null)
+    setDraftTab('questions')
+
+    /* The new draft is nobody's draft yet: it has never been saved, so it must
+       not inherit the last one's id or the browser copy kept for it. */
+    recovery.drop(null)
+    setRecovered(false)
+    setAutoSavedId(null)
+    setAutoSaved(null)
+    sentRef.current = null
+  }
+
   const create = () =>
     run('make', async () => {
       const res = await api.generate(prompt)
+      clearDraft()
       setForm(prep({ ...res.form_json, channel: newChannel }))
       // The dictionary still shapes the draft — it just does not announce it.
       // Nobody asked it to run, so a report here is noise on top of a new form.
-      setTrial({}); setDraftTab('questions')
     })
 
   /** A form with no questions yet, built by hand — no prompt, no model. */
   const startBlank = () => {
     if (form?.fields?.length && !window.confirm('Replace the current draft with a blank form?')) return
-    setError('')
+    clearDraft()
     setForm(prep({
       title: 'Untitled form', description: '', table_name: 'untitled_form',
       fields: [], sections: [], rules: [], channel: newChannel,
     }))
-    setTrial({}); setTrialResult(null); setDraftTab('questions')
   }
 
   /**

@@ -5,6 +5,7 @@ call them live in access.py, so this file can be read as "what a project is"
 without the authorization mixed through it.
 """
 import logging
+import unicodedata
 import re
 from typing import Any, Dict, List, Optional
 
@@ -47,8 +48,8 @@ def _next_id(cur, table: str, column: str, prefix: str) -> str:
 # --------------------------------------------------------------------------- #
 # projects
 # --------------------------------------------------------------------------- #
-def check_name(name: str) -> str:
-    """A project name somebody can read, or a refusal saying what is wrong.
+def check_name(name: str, what: str = "project") -> str:
+    """A name somebody can read, or a refusal saying what is wrong.
 
     Names were taking anything at all — `",;'@#$%^&*()"` was a project. A name
     is a heading in a sidebar, a word in a sentence ("Creating a form in: …"),
@@ -63,39 +64,49 @@ def check_name(name: str) -> str:
     text = _text(name)
 
     if not text:
-        raise ProjectError("A project needs a name.")
+        raise ProjectError(f"A {what} needs a name.")
     if len(text) < 2:
-        raise ProjectError("A project name needs at least two characters.")
+        raise ProjectError(f"A {what} name needs at least two characters.")
     if len(text) > 200:
-        raise ProjectError("A project name cannot be longer than 200 characters.")
+        raise ProjectError(
+            f"A {what} name cannot be longer than 200 characters.")
     # At least one letter or digit, so punctuation alone is not a name.
     if not any(ch.isalnum() for ch in text):
         raise ProjectError(
-            "A project name needs letters or numbers in it, not only punctuation.")
+            f"A {what} name needs letters or numbers in it, not only punctuation.")
     # Letters, digits, spaces, and the few marks that appear in real names —
     # Nepal-Maize, CIMMYT (Mexico), BOOST — and nothing else.
+    #
+    # `unicodedata` category M covers combining marks, which `isalnum` calls
+    # false: the vowel signs in किसान परियोजना are marks, and without this a
+    # perfectly ordinary Hindi name was refused a character at a time.
     bad = {ch for ch in text
-           if not (ch.isalnum() or ch.isspace() or ch in "-_.,'&()/")}
+           if not (ch.isalnum()
+                   or unicodedata.category(ch).startswith("M")
+                   or ch.isspace()
+                   or ch in "-_.,'&()/")}
     if bad:
         raise ProjectError(
-            "A project name cannot contain "
+            f"A {what} name cannot contain "
             + " ".join(sorted(f"'{ch}'" for ch in bad))
             + ". Use letters, numbers, spaces and - _ . , ' & ( ) /")
 
     return text
 
 
-def check_description(description: str) -> str:
-    """A description, which a project has to have.
+def check_description(description: str, what: str = "project") -> str:
+    """A description, which a project and a group both have to have.
 
-    Made required because a list of projects with nothing but names under them
-    tells a new member nothing about which one they are in.
+    Made required because a list of names with nothing under them tells a new
+    member nothing about which one they are in — or, for a group, who is
+    supposed to be in it.
     """
     text = _text(description)
     if not text:
-        raise ProjectError("A project needs a description.")
+        raise ProjectError(f"A {what} needs a description.")
     if len(text) < 5:
-        raise ProjectError("A project description needs at least five characters.")
+        raise ProjectError(
+            f"A {what} description needs at least five characters.")
     return text
 
 
@@ -415,9 +426,11 @@ def list_groups(project_id: str) -> List[Dict[str, Any]]:
 
 def create_group(project_id: str, name: str, description: str = "",
                  created_by: str = "") -> Dict[str, Any]:
-    name = _text(name)
-    if not name:
-        raise ProjectError("A group needs a name.")
+    # Held to the same rules as a project's own name and description: a group
+    # is a heading somebody picks from when assigning a form, and "," is not a
+    # heading. See `check_name`.
+    name = check_name(name, what="group")
+    description = check_description(description, what="group")
 
     with transaction() as cur:
         cur.execute("SELECT 1 FROM project WHERE project_id = %s", (project_id,))
