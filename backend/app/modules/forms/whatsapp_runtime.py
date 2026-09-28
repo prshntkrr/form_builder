@@ -34,6 +34,10 @@ never reinterprets a conversation halfway through.
 import logging
 from typing import Any, Dict, List, Optional, Tuple
 
+from app.modules.forms.channel_capabilities import (
+    BUTTONS, LIST, NUMBERED, TEXT_REPLY,
+)
+
 from app.modules.forms import (
     channel_capabilities as caps,
     channel_config,
@@ -57,6 +61,11 @@ MENU_WORDS = {"menu", "start", "hi", "hello", "help"}
 
 YES_WORDS = {"yes", "y", "1", "ok", "okay", "agree", "accept", "continue", "haan", "ha"}
 NO_WORDS = {"no", "n", "2", "stop", "decline", "nahi", "nahin"}
+
+#: The consent question's two buttons. The values are what a tapped button
+#: sends back, and both are already in the word lists above — so a tap and a
+#: typed "yes" arrive as the same answer and only one of them has to be read.
+CONSENT_CHOICES = [("Yes", "yes"), ("No", "no")]
 
 #: Said to a number this installation does not recognise, and to a keyword that
 #: reaches nothing. Deliberately the same sentence: an unlinked number must not
@@ -182,12 +191,53 @@ def _choices(field: Dict[str, Any]) -> List[Tuple[str, str]]:
     return [c for c in found if c[1]]
 
 
-def render(field: Dict[str, Any], config: Dict[str, Any]) -> str:
+def say(text: str, interaction: str = TEXT_REPLY,
+        choices: Optional[List[Tuple[str, str]]] = None,
+        title: str = "") -> Dict[str, Any]:
+    """One outgoing message, in the shape the transport needs.
+
+    `text` is always complete on its own — it carries the choices written out
+    and numbered even when `choices` asks for buttons or a list. That is
+    deliberate: if the provider cannot render an interactive message (the
+    window has closed, the account is not approved for it, the payload is
+    refused), the person still gets a question they can answer by replying with
+    a number. A channel that degrades to nothing is a conversation that stops.
+    """
+    return {"text": text, "interaction": interaction,
+            "choices": list(choices or []), "title": title}
+
+
+def _how_to_ask(field: Dict[str, Any], config: Dict[str, Any]) -> str:
+    """The interaction this question is asked with.
+
+    What the author chose in the builder, when the question can still be asked
+    that way — a list that has grown past ten rows since cannot, and falls back
+    rather than being sent and refused. Otherwise the registry's own preference
+    (`default_whatsapp_interaction`), which is buttons for two or three choices,
+    a list up to ten, and a numbered menu beyond that.
+    """
+    allowed = caps.whatsapp_interactions(field)
+    if not allowed:
+        return TEXT_REPLY
+
+    name = field_name(field)
+    chosen = ((config.get("fields") or {}).get(name) or {}).get("interaction")
+    if chosen in allowed:
+        return chosen
+    return caps.default_whatsapp_interaction(field) or TEXT_REPLY
+
+
+def render(field: Dict[str, Any], config: Dict[str, Any]) -> Dict[str, Any]:
     """One question as a WhatsApp message.
 
     The prompt the author wrote, or the question's label. Then, for a question
-    with choices, the choices numbered — which is the presentation every
-    interaction degrades to in plain text, and the one the adapter reads back.
+    with choices, the choices — as buttons, as a list, or numbered in the text,
+    according to what the builder chose and what WhatsApp allows for that many
+    choices.
+
+    The numbered text is written out **whatever the interaction is**, so the
+    message stands on its own if the interactive part does not arrive. See
+    `say`.
 
     The hint at the end is what the *type* needs, taken from the capability
     registry's reason where there is one, so a date says how to write a date
@@ -198,16 +248,23 @@ def render(field: Dict[str, Any], config: Dict[str, Any]) -> str:
     prompt = _tidy(entry.get("prompt")) or field.get("label") or name
 
     lines = [f"*{prompt}*"]
-
     choices = _choices(field)
+    interaction = _how_to_ask(field, config)
+    spec = get_type(field.get("type") or "text")
+
     if choices:
         lines.append("")
         lines.extend(f"{i}. {label}" for i, (label, _) in enumerate(choices, 1))
-        spec = get_type(field.get("type") or "text")
         lines.append("")
-        lines.append("_Reply with the number"
-                     + (" — several separated by commas, e.g. 1,3_" if spec.multi
-                        else ", or type the option_"))
+        if spec.multi:
+            # Several answers cannot be tapped: a button or a list row sends one
+            # reply and closes. A multi-select is a numbered menu, always.
+            interaction = NUMBERED
+            lines.append("_Reply with the numbers, separated by commas — e.g. 1,3_")
+        elif interaction in (BUTTONS, LIST):
+            lines.append("_Tap a choice above, or reply with the number._")
+        else:
+            lines.append("_Reply with the number, or type the option._")
     else:
         hint = caps.capability("whatsapp", field.get("type") or "text").reason
         if hint:
@@ -216,7 +273,8 @@ def render(field: Dict[str, Any], config: Dict[str, Any]) -> str:
     if not field.get("required"):
         lines.append("\n_Reply SKIP to leave this blank._")
 
-    return "\n".join(lines)
+    return say("\n".join(lines), interaction, choices if choices else None,
+               title=field.get("label") or name)
 
 
 # --------------------------------------------------------------------------- #
@@ -286,9 +344,9 @@ def reply(identity: str, receiver: str, text: str) -> Optional[str]:
     if word in CANCEL_WORDS:
         if session:
             sessions.finish(session["session_id"], sessions.EXPIRED)
-            return ("Stopped. Nothing further has been recorded. Send the "
-                    "keyword again when you are ready.")
-        return "There is nothing in progress."
+            return say("Stopped. Nothing further has been recorded. Send "
+                       "the keyword again when you are ready.")
+        return say("There is nothing in progress.")
 
     caller = _caller(identity)
     if caller is None:
@@ -297,7 +355,7 @@ def reply(identity: str, receiver: str, text: str) -> Optional[str]:
             # The link was removed mid-conversation. Stop rather than carry on
             # collecting for an account that no longer claims this number.
             sessions.finish(session["session_id"], sessions.EXPIRED)
-        return UNAVAILABLE
+        return say(UNAVAILABLE)
 
     if session:
         return _continue(session, caller, text)
@@ -327,10 +385,10 @@ def _begin(identity: str, receiver: str, caller: Dict[str, Any],
         resolved = routing.resolve("whatsapp", keyword, caller, receiver=receiver)
     except routing.Ambiguous as exc:
         logger.warning("Ambiguous WhatsApp keyword from a caller: %s", exc)
-        return ("That word means more than one thing here. Please check with "
-                "your programme contact.")
+        return say("That word means more than one thing here. Please check "
+                   "with your programme contact.")
     except routing.RoutingError:
-        return UNAVAILABLE
+        return say(UNAVAILABLE)
 
     if not resolved.get("matched"):
         return _menu(caller, receiver)
@@ -342,7 +400,7 @@ def _begin(identity: str, receiver: str, caller: Dict[str, Any],
     form_json = _definition(session)
     if form_json is None:
         sessions.finish(session["session_id"], sessions.EXPIRED)
-        return UNAVAILABLE
+        return say(UNAVAILABLE)
 
     return _welcome_and_consent(session, form_json, resolved["form_title"])
 
@@ -361,13 +419,13 @@ def _menu(caller: Dict[str, Any], receiver: str) -> str:
         offers = []
 
     if not offers:
-        return UNAVAILABLE
+        return say(UNAVAILABLE)
 
     lines = ["*Available surveys*", ""]
     lines += [f"{i}. {o['form_title']} — send *{o['route_key']}*"
               for i, o in enumerate(offers, 1)]
     lines += ["", "_Send the keyword for the one you want._"]
-    return "\n".join(lines)
+    return say("\n".join(lines))
 
 
 def _welcome_and_consent(session: Dict[str, Any], form_json: Dict[str, Any],
@@ -388,7 +446,11 @@ def _welcome_and_consent(session: Dict[str, Any], form_json: Dict[str, Any],
     if not consent:
         return _start_questions(session, form_json, preamble=welcome)
 
-    return f"{welcome}\n\n{consent}\n\n_Reply YES to continue, or NO to stop._"
+    # Two buttons, for the same reason a two-choice question gets them: tapping
+    # Yes is one action, and typing it is three. The text still says what to
+    # reply, so the message works if the buttons do not arrive.
+    return say(f"{welcome}\n\n{consent}\n\n_Tap a button, or reply YES or NO._",
+               BUTTONS, CONSENT_CHOICES)
 
 
 def _start_questions(session: Dict[str, Any], form_json: Dict[str, Any],
@@ -406,10 +468,14 @@ def _start_questions(session: Dict[str, Any], form_json: Dict[str, Any],
         session["session_id"], _timeout(session.get("project_id")),
         state=sessions.QUESTIONS, consent=True, current_field=field_name(field))
     if not updated:
-        return UNAVAILABLE
+        return say(UNAVAILABLE)
 
     question = render(field, _whatsapp_config(form_json))
-    return f"{preamble}\n\n{question}" if preamble else question
+    if preamble:
+        # One message, not two: two deliveries can arrive in either order, and
+        # a question landing before its welcome reads as a non-sequitur.
+        question = {**question, "text": f"{preamble}\n\n{question['text']}"}
+    return question
 
 
 def _continue(session: Dict[str, Any], caller: Dict[str, Any], text: str) -> str:
@@ -417,7 +483,7 @@ def _continue(session: Dict[str, Any], caller: Dict[str, Any], text: str) -> str
     form_json = _definition(session)
     if form_json is None:
         sessions.finish(session["session_id"], sessions.EXPIRED)
-        return UNAVAILABLE
+        return say(UNAVAILABLE)
 
     if session["state"] == sessions.CONSENT:
         return _consent_reply(session, form_json, text)
@@ -431,11 +497,13 @@ def _consent_reply(session: Dict[str, Any], form_json: Dict[str, Any],
 
     if word in NO_WORDS:
         sessions.finish(session["session_id"], sessions.DECLINED)
-        return _tidy(config.get("decline_message")) or DEFAULT_DECLINE
+        return say(_tidy(config.get("decline_message")) or DEFAULT_DECLINE)
 
     if word not in YES_WORDS:
         consent = _tidy(config.get("consent_message")) or DEFAULT_CONSENT
-        return f"Sorry, I did not understand that.\n\n{consent}\n\n_Reply YES or NO._"
+        return say(f"Sorry, I did not understand that.\n\n{consent}\n\n"
+                   "_Tap a button, or reply YES or NO._",
+                   BUTTONS, CONSENT_CHOICES)
 
     return _start_questions(session, form_json)
 
@@ -467,7 +535,11 @@ def _answer(session: Dict[str, Any], form_json: Dict[str, Any], text: str) -> st
                 form_json, name, _one_value(field, _tidy(text)), answers)
         except submission_service.ValidationFailed as failed:
             problem = failed.errors.get(name) or "That answer cannot be used."
-            return f"⚠️ {problem}\n\n{render(field, config)}"
+            # Asked again exactly as it was asked the first time, buttons and
+            # all: a correction should not be harder to answer than the
+            # question was.
+            again = render(field, config)
+            return {**again, "text": f"⚠️ {problem}\n\n{again['text']}"}
         except KeyError:
             return _start_questions(session, form_json)
         answers[name] = value
@@ -481,7 +553,7 @@ def _answer(session: Dict[str, Any], form_json: Dict[str, Any], text: str) -> st
         session["session_id"], _timeout(session.get("project_id")),
         answers=answers, current_field=field_name(following))
     if not updated:
-        return UNAVAILABLE
+        return say(UNAVAILABLE)
 
     return render(following, config)
 
@@ -516,14 +588,15 @@ def _submit(session: Dict[str, Any], form_json: Dict[str, Any]) -> str:
         logger.warning("WhatsApp submission refused for %s: %s",
                        session["session_id"], failed.errors)
         first = next(iter(failed.errors.values()), "That could not be saved.")
-        return f"⚠️ {first}\n\nReply CANCEL to stop, or send the keyword to start again."
+        return say(f"⚠️ {first}\n\nReply CANCEL to stop, or send the "
+                   "keyword to start again.")
     except Exception:
         logger.exception("WhatsApp submission failed for %s", session["session_id"])
-        return ("Sorry, something went wrong saving your answers. Please try "
-                "again shortly.")
+        return say("Sorry, something went wrong saving your answers. Please "
+                   "try again shortly.")
 
     sessions.finish(session["session_id"], sessions.COMPLETED,
                     survey_id=stored.get("survey_id"))
 
     config = _whatsapp_config(form_json)
-    return _tidy(config.get("completion_message")) or DEFAULT_COMPLETION
+    return say(_tidy(config.get("completion_message")) or DEFAULT_COMPLETION)

@@ -54,15 +54,70 @@ _sweeper: Optional[asyncio.Task] = None
 # --------------------------------------------------------------------------- #
 # sending
 # --------------------------------------------------------------------------- #
-async def send(number: str, message: str, application: Any,
+# How an interactive message is asked for, in Picky Assist's own vocabulary.
+#
+# ⚠️ **Unverified against Picky Assist's documentation.** Nothing in this
+# repository described their interactive payload, so these three keys are the
+# one guess in the file. If buttons do not appear, this mapping is the only
+# thing to correct — the conversation above it decides *what* to offer and is
+# provider-agnostic.
+#
+# It is written to be safe when wrong: `message` always carries the choices
+# numbered in the text (see `whatsapp_runtime.say`), so a provider that ignores
+# these keys sends a question that can still be answered by replying with a
+# number. That is exactly the behaviour this replaced, so the worst case is no
+# worse than before.
+PICKY_INTERACTIVE = {"buttons": "button", "list": "list"}
+#: WhatsApp's own limits on what it will render. Beyond them it refuses the
+#: message outright, so the numbered text is sent on its own instead.
+MAX_BUTTON_TITLE = 20
+MAX_ROW_TITLE = 24
+
+
+def _interactive(message: Dict[str, Any]) -> Dict[str, Any]:
+    """The provider-specific half of one outgoing message, or nothing.
+
+    Nothing for a plain message, and nothing when a title is too long for
+    WhatsApp to render — a refused interactive message would lose the question
+    altogether, and the numbered text says the same thing.
+    """
+    kind = PICKY_INTERACTIVE.get(message.get("interaction") or "")
+    choices = message.get("choices") or []
+    if not kind or not choices:
+        return {}
+
+    limit = MAX_BUTTON_TITLE if kind == "button" else MAX_ROW_TITLE
+    if any(len(str(label)) > limit for label, _ in choices):
+        logger.info("Choices too long for a %s; sending the numbered text", kind)
+        return {}
+
+    return {
+        "type": kind,
+        # The id is the option's own value, so a tapped choice comes back as
+        # the thing that gets stored rather than as something to map again.
+        "options": [{"id": str(value), "title": str(label)}
+                    for label, value in choices],
+        "header": message.get("title") or "",
+    }
+
+
+async def send(number: str, message: Any, application: Any,
                project_id: Optional[str] = None) -> None:
     """One message out, on the account configured for this scope.
+
+    `message` is what `whatsapp_runtime` produced: `{text, interaction,
+    choices, title}`. A plain string is still accepted, so a caller that only
+    has words to say does not have to build a dict.
 
     The token is fetched here rather than held anywhere: rotating it in the
     settings screen takes effect on the next message without a restart. It is
     never logged — not at debug, not in an error — and the message body is
     logged by length only, because it quotes back what somebody answered.
     """
+    if isinstance(message, str):
+        message = {"text": message}
+    text = message.get("text") or ""
+
     token = channel_settings.token(project_id)
     if not token:
         logger.error(
@@ -71,17 +126,20 @@ async def send(number: str, message: str, application: Any,
             project_id or "the system")
         return
 
+    one = {"number": number, "message": text}
+    one.update(_interactive(message))
+
     payload = {
         "token": token,
         "application": application,
-        "data": [{"number": number, "message": message}],
+        "data": [one],
     }
 
     try:
         async with httpx.AsyncClient(timeout=PUSH_TIMEOUT_SECONDS) as client:
             response = await client.post(PUSH_API_URL, json=payload)
         logger.info("WhatsApp push to %s: %s (%d chars)",
-                    _masked(number), response.status_code, len(message))
+                    _masked(number), response.status_code, len(text))
     except Exception:
         # Never `logger.exception(payload)` — the token is in it.
         logger.exception("WhatsApp push to %s failed", _masked(number))
@@ -181,8 +239,7 @@ async def webhook(request: Request, background: BackgroundTasks):
     except Exception:
         logger.exception("The WhatsApp conversation failed for %s",
                          _masked(message["identity"]))
-        answer = ("Sorry, something went wrong. Please try again in a "
-                  "moment.")
+        answer = "Sorry, something went wrong. Please try again in a moment."
 
     if answer:
         background.add_task(send, message["identity"], answer,

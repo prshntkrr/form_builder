@@ -95,6 +95,17 @@ export default function WhatsAppSettings({ projectId }) {
               autoComplete="off"
               placeholder="Paste the new token"
               value={token}
+              // Focused on appearing, and Enter saves. Pasting a token and
+              // pressing Enter is what everybody does; without this it did
+              // nothing at all and the token looked as though it had been
+              // accepted when nothing had been sent.
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && token.trim() && !busy) {
+                  e.preventDefault()
+                  save({ api_token: token.trim() })
+                }
+              }}
               onChange={(e) => setToken(e.target.value)}
             />
           ) : (
@@ -114,6 +125,12 @@ export default function WhatsAppSettings({ projectId }) {
               {busy && <span className="spin" />}
               Save token
             </button>
+            {/* Said where it is easy to miss: typing a token changes nothing
+                until this is pressed, and the field being filled in is not
+                the same as the token being stored. */}
+            {token.trim() && !busy && (
+              <span className="tiny muted">Not saved yet</span>
+            )}
             <button className="btn btn--quiet btn--sm" disabled={busy}
                     onClick={() => { setRotating(false); setToken('') }}>
               Cancel
