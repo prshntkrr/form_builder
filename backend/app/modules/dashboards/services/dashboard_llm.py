@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from openai import OpenAIError
 from pydantic import BaseModel, ConfigDict, Field
@@ -871,6 +871,56 @@ Return ONLY the JSON response.
 """
 
 
+# ---------------------------------------------------------------------------
+# One widget at a time
+# ---------------------------------------------------------------------------
+
+WIDGET_OPERATION_PROMPT = SYSTEM_PROMPT + """
+
+============================================================
+YOU ARE WORKING ON ONE WIDGET
+============================================================
+
+This request is not for a dashboard. It is for a single operation on a
+dashboard that already exists and that you must not otherwise disturb.
+
+Answer with the same two properties as always — "intent" and "dashboard" —
+plus one more:
+
+{
+  "operation": "add_widget" | "update_widget" | "delete_widget",
+  "intent": {...},
+  "dashboard": {...}
+}
+
+"dashboard.widgets" MUST contain EXACTLY ONE widget: the one being added, or
+the replacement for the one being changed. Never list the widgets that are
+already on the dashboard. They are not yours to touch, and anything you put
+beside your one widget is discarded.
+
+MODE: add
+  The user wants a new visualization. "operation" is "add_widget".
+
+MODE: update
+  The user wants the selected widget changed. Its current specification is in
+  the context below. "operation" is "update_widget", and the widget you
+  return is what it should become — the whole widget, not a patch. Keep what
+  the user did not ask to change, including its title unless they asked for a
+  different one.
+
+  If, and only if, the user is asking for the selected widget to be removed
+  ("delete this", "remove this graph", "get rid of this"), answer with
+  "operation": "delete_widget" and a "dashboard" holding no widgets at all.
+
+"intent.requested_visualizations" MUST list the type of the one widget you
+return — the existing checks refuse a visualization that was not declared.
+For a deletion it is empty.
+
+The "id" and "layout" you give a widget are ignored: which widget this is and
+where it sits on the grid are the dashboard's to decide, not yours.
+"""
+
+
 def _build_user_prompt(
     table_name: str,
     source_type: str,
@@ -1356,6 +1406,21 @@ def generate_dashboard(
             "Dashboard AI returned an invalid response."
         ) from exc
 
+    return _repaired_and_validated(ai_response, fields)
+
+
+def _repaired_and_validated(
+    ai_response: DashboardAIResponse,
+    fields: List[Dict[str, Any]],
+) -> DashboardSpecification:
+    """Every repair pass and every check, in order.
+
+    Pulled out of `generate_dashboard` so that a single-widget operation goes
+    through exactly the same pipeline as a whole dashboard. The repairs here
+    were each written for a way the model gets a widget wrong; a second path
+    that skipped them would fail in all the same ways again.
+    """
+
     specification = ai_response.dashboard
     specification = _normalize_table_bindings(specification)
     specification = _normalize_map_bindings(specification, fields)
@@ -1382,20 +1447,26 @@ def generate_dashboard(
         fields,
     )
 
-    available_sources = {
+    validate_dashboard_spec(
+        specification,
+        available_sources_for(fields),
+    )
+
+    return specification
+
+
+def available_sources_for(
+    fields: List[Dict[str, Any]],
+) -> Dict[str, Dict[str, str]]:
+    """The one data source a dashboard reads, as the validator wants it."""
+
+    return {
         "source_1": {
             str(field.get("name")): str(field.get("type", ""))
             for field in fields
             if field.get("name")
         }
     }
-
-    validate_dashboard_spec(
-        specification,
-        available_sources,
-    )
-
-    return specification
 
 
 def _validate_intent(
@@ -1516,3 +1587,180 @@ def _validate_fields(
                 )
 
     return specification
+
+
+def generate_widget_operation(
+    table_name: str,
+    fields: List[Dict[str, Any]],
+    prompt: str,
+    mode: str,
+    selected_widget: Optional[Dict[str, Any]] = None,
+    source_type: str = "postgresql_tabular",
+) -> Tuple[str, Optional[Dict[str, Any]]]:
+    """One widget to add, or one to put in place of another.
+
+    Returns the operation and the widget it carries — `None` for a deletion.
+    The widget is put through the very same repairs and checks a generated
+    dashboard is, by handing the model's answer to the existing pipeline as a
+    one-widget specification.
+
+    What this function will not do is return more than one widget. The model
+    is told to send one; if it sends several, the first is the answer and the
+    rest are dropped. That is the guarantee the dashboard rests on, and it is
+    here rather than in the prompt.
+    """
+
+    if not table_name or not table_name.strip():
+        raise LLMError("A data source is required.")
+
+    if not fields:
+        raise LLMError("No fields are available for this data source.")
+
+    if not prompt or not prompt.strip():
+        raise LLMError("Describe the change you want before generating.")
+
+    if mode not in ("add", "update"):
+        raise LLMError(f"Unknown operation mode: {mode}")
+
+    if mode == "update" and not selected_widget:
+        raise LLMError("Select a widget to change first.")
+
+    user_content = _build_widget_prompt(
+        table_name=table_name,
+        source_type=source_type,
+        fields=fields,
+        prompt=prompt,
+        mode=mode,
+        selected_widget=selected_widget,
+    )
+
+    client = get_client()
+
+    try:
+        response = client.chat.completions.create(
+            model=settings.openai_model,
+            messages=[
+                {"role": "system", "content": WIDGET_OPERATION_PROMPT},
+                {"role": "user", "content": user_content},
+            ],
+            temperature=0.2,
+            response_format={"type": "json_object"},
+        )
+
+    except OpenAIError as exc:
+        logger.exception("Dashboard widget OpenAI request failed")
+
+        raise LLMError(f"Dashboard AI request failed: {exc}") from exc
+
+    content = (response.choices[0].message.content or "").strip()
+
+    if not content:
+        raise LLMError("Dashboard AI returned an empty response.")
+
+    try:
+        raw = json.loads(content)
+
+    except json.JSONDecodeError as exc:
+        logger.error("Dashboard AI returned invalid JSON: %s", content[:500])
+
+        raise LLMError("Dashboard AI did not return valid JSON.") from exc
+
+    return read_widget_operation(raw, fields, mode)
+
+
+def read_widget_operation(
+    raw: Any,
+    fields: List[Dict[str, Any]],
+    mode: str,
+) -> Tuple[str, Optional[Dict[str, Any]]]:
+    """The model's answer, read as an operation on one widget.
+
+    Separate from the request so it can be exercised without an API key: this
+    is where the answer is narrowed to one widget and put through the
+    existing repairs and validation.
+    """
+
+    if not isinstance(raw, dict):
+        raise LLMError("Dashboard AI returned an invalid response.")
+
+    raw = dict(raw)
+
+    # Not part of the specification, so it comes off before the envelope is
+    # validated — `extra="forbid"` would refuse it otherwise.
+    operation = raw.pop("operation", None)
+
+    if mode == "update" and operation == "delete_widget":
+        return "delete_widget", None
+
+    operation = "add_widget" if mode == "add" else "update_widget"
+
+    raw = _lift_widget_configs(raw)
+
+    try:
+        ai_response = DashboardAIResponse.model_validate(raw)
+
+    except Exception as exc:
+        logger.error(
+            "Dashboard AI returned an invalid widget response: %s", exc
+        )
+
+        raise LLMError("Dashboard AI returned an invalid response.") from exc
+
+    if not ai_response.dashboard.widgets:
+        raise LLMError("Dashboard AI did not return a visualization.")
+
+    specification = _repaired_and_validated(ai_response, fields)
+
+    # One widget, whatever arrived. The dashboard is never the model's to
+    # replace, so anything past the first is dropped here.
+    return operation, specification.widgets[0].model_dump()
+
+
+def _build_widget_prompt(
+    table_name: str,
+    source_type: str,
+    fields: List[Dict[str, Any]],
+    prompt: str,
+    mode: str,
+    selected_widget: Optional[Dict[str, Any]],
+) -> str:
+    """The context for one widget: the schema, and the widget being changed.
+
+    The selected widget is included so the model can keep what the user did
+    not ask about. No other widget is, because no other widget is on offer.
+    """
+
+    context = {
+        "data_source": {
+            "id": "source_1",
+            "type": source_type,
+            "name": table_name,
+        },
+        "available_fields": [
+            {"name": field.get("name"), "type": field.get("type")}
+            for field in fields
+        ],
+        "mode": mode,
+        "user_request": prompt.strip(),
+    }
+
+    if selected_widget:
+        context["selected_widget"] = selected_widget
+
+    lead = (
+        "Create ONE new visualization for this dashboard."
+        if mode == "add"
+        else "Change the selected widget, and only that widget."
+    )
+
+    return (
+        f"{lead}\n\n"
+        "Return exactly one widget in dashboard.widgets.\n\n"
+        "IMPORTANT:\n"
+        "- Never silently substitute a requested field.\n"
+        "- Never silently substitute a requested visualization.\n"
+        "- If a requested field does not exist, keep that field in "
+        "intent.requested_fields.\n\n"
+        "Application context:\n"
+        f"{json.dumps(context, ensure_ascii=False, indent=2)}"
+    )

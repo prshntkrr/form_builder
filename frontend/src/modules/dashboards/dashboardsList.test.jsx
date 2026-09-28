@@ -333,39 +333,36 @@ describe('two ways to start one', () => {
 })
 
 
-describe('changing an open dashboard with a prompt', () => {
+describe('the AI assistant on an open dashboard', () => {
   async function intoEdit(user) {
     await user.click(screen.getByRole('button', { name: 'Farmer Dashboard' }))
     const edit = await screen.findByRole('button',
       { name: /Edit Dashboard|Continue Editing/ })
     await user.click(edit)
-    return screen.findByPlaceholderText(/drop the KPI row/)
+    return screen.findByLabelText('AI prompt')
   }
 
-  test('the prompt regenerates the graphs on it', async () => {
+  test('it offers to add a visualization, or to change the selected one', async () => {
     const user = userEvent.setup()
     await draw()
+    await intoEdit(user)
 
-    const box = await intoEdit(user)
-    await user.type(box, 'show average yield by district')
-    await user.click(screen.getByRole('button', { name: 'Update with AI' }))
-
-    await waitFor(() => expect(calls).toContainEqual(
-      ['generate', 'farmer_registration', 'show average yield by district']))
+    // It used to be one prompt that replaced every graph on the dashboard.
+    expect(screen.getByRole('button', { name: 'Add visualization' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Modify selected' })).toBeTruthy()
+    expect(screen.getByText('None')).toBeTruthy()
   })
 
-  test('and it keeps the name it is saved under', async () => {
+  test('a change needs a widget to change', async () => {
     const user = userEvent.setup()
     await draw()
 
     const box = await intoEdit(user)
-    await user.type(box, 'add a map')
-    await user.click(screen.getByRole('button', { name: 'Update with AI' }))
+    await user.click(screen.getByRole('button', { name: 'Modify selected' }))
+    await user.type(box, 'make this a line chart')
 
-    await waitFor(() => expect(calls.some(([k]) => k === 'generate')).toBe(true))
-    // The AI named its answer something else; this dashboard is not renamed.
-    await waitFor(() =>
-      expect(screen.queryByText('Something The AI Named')).toBeNull())
+    expect(screen.getByText(/Select a widget from the dashboard first/)).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Generate with AI' }).disabled).toBe(true)
   })
 
   test('nothing is asked for on an empty prompt', async () => {
@@ -373,9 +370,16 @@ describe('changing an open dashboard with a prompt', () => {
     await draw()
 
     await intoEdit(user)
-    const update = screen.getByRole('button', { name: 'Update with AI' })
 
-    expect(update.disabled).toBe(true)
+    expect(screen.getByRole('button', { name: 'Generate with AI' }).disabled).toBe(true)
+  })
+
+  test('and the whole-dashboard regeneration is gone', async () => {
+    const user = userEvent.setup()
+    await draw()
+    await intoEdit(user)
+
+    expect(screen.queryByRole('button', { name: 'Update with AI' })).toBeNull()
   })
 
   test('the fields it can be told about are listed beside the prompt',

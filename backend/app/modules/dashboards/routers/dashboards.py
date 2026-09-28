@@ -28,9 +28,11 @@ from app.modules.dashboards.schemas import (
     DashboardDataRequest,
     DashboardGenerateRequest,
     SharedDataRequest,
+    WidgetOperationRequest,
 )
 from app.modules.dashboards.services.query_service import (
     count_dashboard_rows,
+    distinct_field_values,
     execute_dashboard_query,
 )
 
@@ -56,7 +58,19 @@ from app.modules.dashboards.services.data_source_service import (
     list_table_columns,
 )
 
-from app.modules.dashboards.services.dashboard_llm import generate_dashboard
+from app.modules.dashboards.services.dashboard_llm import (
+    available_sources_for,
+    generate_dashboard,
+    generate_widget_operation,
+)
+from app.modules.dashboards.services.dashboard_validator import (
+    validate_dashboard_spec,
+)
+from app.modules.dashboards.services.widget_operations import (
+    WidgetOperationError,
+    apply_widget_operation,
+    find_widget,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -163,6 +177,51 @@ def get_data_source(
         # the builder as "Internal Server Error", which named neither the
         # table nor the reason.
         raise HTTPException(status_code=404, detail=str(exc))
+
+@router.get("/data-sources/{table_name}/filter-options")
+def get_filter_options(
+    table_name: str,
+    field: str,
+    user: Dict[str, Any] = Depends(needs(DASHBOARDS_VIEW)),
+):
+    """The values a dashboard filter on this column can be set to.
+
+    Checked the same way the data endpoint checks a binding: the table has
+    to be a dashboard source, and the field has to be one of its columns.
+    Nothing from the request reaches the SQL as text — the column is an
+    identifier and the cap is a bound parameter.
+    """
+
+    table = (table_name or "").strip()
+
+    if not table.endswith("_tabular"):
+        raise HTTPException(
+            status_code=400,
+            detail="Only tabular dashboard data sources are supported.",
+        )
+
+    columns = list_table_columns(
+        table_name=table,
+        schema_name=settings.db_schema,
+    )
+
+    if not columns:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Data source '{table}' was not found.",
+        )
+
+    if field not in {column["name"] for column in columns}:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Unknown filter field: {field}",
+        )
+
+    return {
+        "field": field,
+        "values": distinct_field_values(table, field),
+    }
+
 
 @router.get("/{dashboard_id}")
 def get_dashboard_route(
@@ -375,6 +434,104 @@ def generate_dashboard_route(
         ) from exc
 
     return dashboard.model_dump()
+
+
+@router.post("/widget-operation")
+def widget_operation_route(
+    req: WidgetOperationRequest,
+    user: Dict[str, Any] = Depends(needs(DASHBOARDS_VIEW)),
+):
+    """Add one widget, or change the one that is selected.
+
+    The dashboard the caller sent is the dashboard the operation is applied
+    to, here on the server: the reply carries both the candidate widget, for
+    the preview, and the whole specification with the operation applied and
+    validated. A generated widget can therefore never reach a dashboard
+    without passing the same checks a generated dashboard does, and no
+    operation can touch a widget other than the one named.
+    """
+
+    table_name = req.table_name.strip()
+
+    if not table_name:
+        raise HTTPException(status_code=422, detail="A data source is required.")
+
+    if not table_name.endswith("_tabular"):
+        raise HTTPException(
+            status_code=400,
+            detail="Only tabular dashboard data sources are supported.",
+        )
+
+    if not req.prompt.strip():
+        raise HTTPException(
+            status_code=422,
+            detail="Describe the change you want before generating.",
+        )
+
+    if req.mode == "update":
+        if not req.widget_id:
+            raise HTTPException(
+                status_code=422,
+                detail="Select a widget from the dashboard first.",
+            )
+
+        if find_widget(req.dashboard, req.widget_id) is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Widget '{req.widget_id}' is not on this dashboard.",
+            )
+
+    fields = list_table_columns(
+        table_name=table_name,
+        schema_name=settings.db_schema,
+    )
+
+    if not fields:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Data source '{table_name}' was not found.",
+        )
+
+    selected = (
+        find_widget(req.dashboard, req.widget_id).model_dump()
+        if req.mode == "update"
+        else None
+    )
+
+    try:
+        operation, widget = generate_widget_operation(
+            table_name=table_name,
+            fields=fields,
+            prompt=req.prompt,
+            mode=req.mode,
+            selected_widget=selected,
+        )
+
+        updated = apply_widget_operation(
+            req.dashboard,
+            operation,
+            widget=widget,
+            widget_id=req.widget_id,
+        )
+
+        # The dashboard as it would be, checked as a whole: a widget the
+        # generator produced is held to what every other widget is held to.
+        validate_dashboard_spec(updated, available_sources_for(fields))
+
+    except (LLMError, DashboardValidationError, WidgetOperationError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    applied = find_widget(
+        updated,
+        updated.widgets[-1].id if operation == "add_widget" else req.widget_id,
+    )
+
+    return {
+        "operation": operation,
+        "widget_id": applied.id if applied else req.widget_id,
+        "widget": applied.model_dump() if applied else None,
+        "dashboard": updated.model_dump(),
+    }
 
 
 @router.post("/data")

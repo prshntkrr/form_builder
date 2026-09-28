@@ -55,6 +55,22 @@ def validate_dashboard_spec(
         for source in specification.data_sources
     }
 
+    # A configured filter has to name a column that exists somewhere in the
+    # dashboard's own sources. It carries no source of its own — a dashboard
+    # reads one table — so the union is what it is checked against.
+    if specification.filter_fields:
+        known = set()
+
+        for fields in available_sources.values():
+            known.update(fields)
+
+        for entry in specification.filter_fields:
+            if entry.field not in known:
+                raise DashboardValidationError(
+                    f"Filter field '{entry.field}' is not a column of this "
+                    f"dashboard's data source."
+                )
+
     for widget in specification.widgets:
         validate_widget_layout(widget)
 
