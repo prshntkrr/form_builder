@@ -11,7 +11,13 @@ from typing import Any, Dict, Optional
 from openai import OpenAI, OpenAIError
 
 from app.core.config import settings
+from app.modules.forms.conditions import OPERATORS as _OPERATORS
 from app.modules.forms.field_types import SUPPORTED_TYPES
+
+# The comparisons the rules engine can actually evaluate. Taken from the
+# engine rather than written out, so a model is never offered one that
+# `normalize_rules` would drop.
+SUPPORTED_OPERATORS = sorted(_OPERATORS)
 
 logger = logging.getLogger(__name__)
 
@@ -102,6 +108,23 @@ Rules:
   Give the field an empty "options" list and let the application fill it.
 - Never write placeholder choices such as "Feature 1", "Option 2" or "Item 3".
   A choice nobody can act on is worse than none: leave options empty instead.
+- Conditional logic goes in "rules", and a form that needs none has "rules": [].
+  A rule shows or hides one question, one whole section, or the rest of the form,
+  depending on an answer given earlier. Write one whenever the request implies a
+  question only applies sometimes — "if they use irrigation, ask which type",
+  "only for female-headed households", "if yes, ask how many".
+    "target" is {{"type": "field", "name": "..."}} for one question,
+             {{"type": "section", "key": "..."}} for a whole section,
+             or {{"type": "form"}} for the rest of the questionnaire.
+    "action" is "show" or "hide".
+    "logic" is "AND" or "OR" across the conditions.
+    "operator" is one of: {", ".join(SUPPORTED_OPERATORS)}.
+  "is_empty" and "is_not_empty" take no "value"; every other operator needs one.
+- A rule may only name questions this form actually has, and a question must not
+  decide whether it is asked itself. Read an earlier question, never a later one:
+  the answer has to exist before the rule can be evaluated. A rule naming
+  something that is not on the form is dropped, so the logic would silently
+  vanish rather than work.
 - Output raw JSON only. No markdown fences, no commentary."""
 
 REFINE_PROMPT = """You are editing an EXISTING form definition. Apply the requested change and

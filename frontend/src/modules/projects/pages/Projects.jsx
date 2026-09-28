@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 
 import { useAuth } from '../../../core/auth.jsx'
 import { api } from '../api.js'
-import { useProjects } from '../active.js'
+import { projectsChanged, useProjects } from '../active.js'
 
 const when = (value) => (value ? String(value).slice(0, 10) : '—')
 
@@ -16,7 +16,7 @@ const when = (value) => (value ? String(value).slice(0, 10) : '—')
  */
 export default function Projects() {
   const { can } = useAuth()
-  const { projects, error, activeId, choose, reload } = useProjects()
+  const { projects, error, activeId, choose } = useProjects()
   const [making, setMaking] = useState(false)
 
   // Creating a project is an account-wide permission; everything *inside* one
@@ -109,7 +109,9 @@ export default function Projects() {
           onMade={(project) => {
             setMaking(false)
             choose(project.project_id)
-            reload()
+            // Every list of projects, not only this page's: the sidebar
+            // selector keeps its own and used to need a refresh to see it.
+            projectsChanged()
           }}
         />
       )}
@@ -157,14 +159,19 @@ function NewProject({ onClose, onMade }) {
           <label className="cat__field">
             <span className="minilabel">Description</span>
             <textarea className="control" rows={2} value={description}
+                      placeholder="What this project collects, and for whom"
                       onChange={(e) => setDescription(e.target.value)} />
+            <span className="tiny muted">
+              Required. A list of project names with nothing under them tells a
+              new member nothing about which one they are in.
+            </span>
           </label>
         </div>
 
         <div className="sheet__foot">
           <button className="btn btn--quiet" onClick={onClose}>Cancel</button>
           <button className="btn btn--primary" onClick={save}
-                  disabled={busy || !name.trim()}>
+                  disabled={busy || !name.trim() || !description.trim()}>
             {busy && <span className="spin" />}
             Create project
           </button>

@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { Link, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../auth.jsx'
+import PasswordField from '../PasswordField.jsx'
 
 export default function Login() {
   const { user, signIn, expired } = useAuth()
@@ -55,8 +56,8 @@ export default function Login() {
 
         <label className="col" style={{ marginTop: 12 }}>
           <span className="minilabel">Password</span>
-          <input className="control" type="password" autoComplete="current-password" required
-                 value={password} onChange={(e) => setPassword(e.target.value)} />
+          <PasswordField autoComplete="current-password" required
+                         value={password} onChange={(e) => setPassword(e.target.value)} />
         </label>
 
         <button className="btn btn--primary" type="submit" disabled={busy}

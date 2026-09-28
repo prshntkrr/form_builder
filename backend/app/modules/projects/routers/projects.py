@@ -182,7 +182,8 @@ def update_member(project_id: str, member_id: int, req: UpdateMemberRequest,
                   user: Dict[str, Any] = Depends(
                       access.needs_in_project(PROJECT_MEMBERS_MANAGE))):
     try:
-        return project_service.update_member(project_id, member_id, _sent(req))
+        return project_service.update_member(
+            project_id, member_id, _sent(req), acting_user_id=user.get("user_id"))
     except (project_service.ProjectError, project_service.NotFound) as exc:
         _handle(exc)
 
@@ -191,7 +192,12 @@ def update_member(project_id: str, member_id: int, req: UpdateMemberRequest,
 def remove_member(project_id: str, member_id: int,
                   user: Dict[str, Any] = Depends(
                       access.needs_in_project(PROJECT_MEMBERS_MANAGE))):
-    if not project_service.remove_member(project_id, member_id):
+    try:
+        removed = project_service.remove_member(
+            project_id, member_id, acting_user_id=user.get("user_id"))
+    except (project_service.ProjectError, project_service.NotFound) as exc:
+        _handle(exc)
+    if not removed:
         raise HTTPException(status_code=404, detail=f"No member {member_id} in {project_id}")
     return {"member_id": member_id, "removed": True}
 

@@ -47,10 +47,61 @@ def _next_id(cur, table: str, column: str, prefix: str) -> str:
 # --------------------------------------------------------------------------- #
 # projects
 # --------------------------------------------------------------------------- #
-def create_project(name: str, description: str = "", created_by: str = "") -> Dict[str, Any]:
-    name = _text(name)
-    if not name:
+def check_name(name: str) -> str:
+    """A project name somebody can read, or a refusal saying what is wrong.
+
+    Names were taking anything at all — `",;'@#$%^&*()"` was a project. A name
+    is a heading in a sidebar, a word in a sentence ("Creating a form in: …"),
+    and how somebody tells two projects apart, so it has to be made of the
+    things names are made of.
+
+    Deliberately permissive about *which* letters: accents, ñ, Devanagari and
+    Arabic are all letters, and a rule that only allowed A-Z would refuse half
+    the installations this runs in. What it refuses is a name with no letter or
+    digit in it at all, and the punctuation that has no business in one.
+    """
+    text = _text(name)
+
+    if not text:
         raise ProjectError("A project needs a name.")
+    if len(text) < 2:
+        raise ProjectError("A project name needs at least two characters.")
+    if len(text) > 200:
+        raise ProjectError("A project name cannot be longer than 200 characters.")
+    # At least one letter or digit, so punctuation alone is not a name.
+    if not any(ch.isalnum() for ch in text):
+        raise ProjectError(
+            "A project name needs letters or numbers in it, not only punctuation.")
+    # Letters, digits, spaces, and the few marks that appear in real names —
+    # Nepal-Maize, CIMMYT (Mexico), BOOST — and nothing else.
+    bad = {ch for ch in text
+           if not (ch.isalnum() or ch.isspace() or ch in "-_.,'&()/")}
+    if bad:
+        raise ProjectError(
+            "A project name cannot contain "
+            + " ".join(sorted(f"'{ch}'" for ch in bad))
+            + ". Use letters, numbers, spaces and - _ . , ' & ( ) /")
+
+    return text
+
+
+def check_description(description: str) -> str:
+    """A description, which a project has to have.
+
+    Made required because a list of projects with nothing but names under them
+    tells a new member nothing about which one they are in.
+    """
+    text = _text(description)
+    if not text:
+        raise ProjectError("A project needs a description.")
+    if len(text) < 5:
+        raise ProjectError("A project description needs at least five characters.")
+    return text
+
+
+def create_project(name: str, description: str = "", created_by: str = "") -> Dict[str, Any]:
+    name = check_name(name)
+    description = check_description(description)
 
     with transaction() as cur:
         project_id = _next_id(cur, "project", "project_id", PROJECT_ID_PREFIX)
@@ -59,7 +110,7 @@ def create_project(name: str, description: str = "", created_by: str = "") -> Di
             INSERT INTO project (project_id, name, description, created_by)
             VALUES (%s, %s, %s, %s)
             """,
-            (project_id, name, _text(description), _text(created_by)),
+            (project_id, name, description, _text(created_by)),
         )
 
     logger.info("Created project %s (%s)", project_id, name)
@@ -123,15 +174,14 @@ def update_project(project_id: str, changes: Dict[str, Any]) -> Dict[str, Any]:
     sets, params = [], []
 
     if "name" in changes:
-        name = _text(changes["name"])
-        if not name:
-            raise ProjectError("A project needs a name.")
         sets.append("name = %s")
-        params.append(name)
+        params.append(check_name(changes["name"]))
 
     if "description" in changes:
+        # Held to the same rule as creating one: a project that has a
+        # description must not be able to lose it by being edited.
         sets.append("description = %s")
-        params.append(_text(changes["description"]))
+        params.append(check_description(changes["description"]))
 
     if "status" in changes:
         status = _text(changes["status"])
@@ -213,7 +263,87 @@ def add_member(project_id: str, user_id: str, role_id: str,
     return {"project_id": project_id, "user_id": user_id, "role_id": role_id}
 
 
-def update_member(project_id: str, member_id: int, changes: Dict[str, Any]) -> Dict[str, Any]:
+def _guard_member_change(cur, project_id: str, member_id: int, acting_user_id: str,
+                         *, removing: bool, to_status: str = "",
+                         to_role: str = "") -> None:
+    """Refuse a change that would lock somebody out — themselves, or everybody.
+
+    Two ways a project becomes unmanageable, and both have happened to somebody
+    somewhere:
+
+      your own row    suspending or removing yourself takes away the permission
+                      you would need to undo it, and there may be nobody else
+                      holding it
+      the last one    a project with no active manager has nobody who can add
+                      one, so it can only be repaired from the database
+
+    Checked here rather than in the route because both writes go through this
+    module, and a rule enforced in one caller is a rule the next caller forgets.
+    """
+    cur.execute(
+        "SELECT user_id, role_id, status FROM project_member "
+        " WHERE project_id = %s AND member_id = %s",
+        (project_id, member_id),
+    )
+    row = cur.fetchone()
+    if not row:
+        raise NotFound(f"No member {member_id} in {project_id}")
+
+    losing_them = removing or to_status == "Suspended"
+
+    if losing_them and acting_user_id and row["user_id"] == acting_user_id:
+        raise ProjectError(
+            "You cannot remove or suspend your own membership. Ask another "
+            "manager of this project to do it."
+            if removing else
+            "You cannot suspend your own membership. Ask another manager of "
+            "this project to do it.")
+
+    # Would this leave the project with no active manager?
+    from app.modules.projects.permissions import PROJECT_MEMBERS_MANAGE
+
+    cur.execute(
+        """
+        SELECT 1 FROM app_role r
+         WHERE r.role_id = %s
+           AND EXISTS (SELECT 1 FROM role_permission p
+                        WHERE p.role_id = r.role_id AND p.permission = %s)
+        """,
+        (row["role_id"], PROJECT_MEMBERS_MANAGE),
+    )
+    manages = bool(cur.fetchone()) and row["status"] == "Active"
+    if not manages:
+        return
+
+    # A role change that keeps the permission is not a loss.
+    if to_role:
+        cur.execute(
+            "SELECT 1 FROM role_permission WHERE role_id = %s AND permission = %s",
+            (to_role, PROJECT_MEMBERS_MANAGE),
+        )
+        if cur.fetchone():
+            return
+    elif not losing_them:
+        return
+
+    cur.execute(
+        """
+        SELECT COUNT(*) AS n
+          FROM project_member m
+          JOIN role_permission p ON p.role_id = m.role_id AND p.permission = %s
+         WHERE m.project_id = %s AND m.status = 'Active' AND m.member_id <> %s
+        """,
+        (PROJECT_MEMBERS_MANAGE, project_id, member_id),
+    )
+    if int(cur.fetchone()["n"]) == 0:
+        raise ProjectError(
+            "This is the only person who can manage this project. Give somebody "
+            "else a role that can manage members first, or the project would be "
+            "left with nobody able to run it.")
+
+
+def update_member(project_id: str, member_id: int, changes: Dict[str, Any],
+                  acting_user_id: str = "") -> Dict[str, Any]:
     with transaction() as cur:
         cur.execute(
             "SELECT 1 FROM project_member WHERE project_id = %s AND member_id = %s",
@@ -221,6 +351,11 @@ def update_member(project_id: str, member_id: int, changes: Dict[str, Any]) -> D
         )
         if not cur.fetchone():
             raise NotFound(f"No member {member_id} in {project_id}")
+
+        _guard_member_change(
+            cur, project_id, member_id, acting_user_id, removing=False,
+            to_status=str(changes.get("status") or ""),
+            to_role=str(changes.get("role_id") or ""))
 
         sets, params = [], []
 
@@ -249,8 +384,9 @@ def update_member(project_id: str, member_id: int, changes: Dict[str, Any]) -> D
     return {"project_id": project_id, "member_id": member_id, **changes}
 
 
-def remove_member(project_id: str, member_id: int) -> bool:
+def remove_member(project_id: str, member_id: int, acting_user_id: str = "") -> bool:
     with transaction() as cur:
+        _guard_member_change(cur, project_id, member_id, acting_user_id, removing=True)
         cur.execute(
             "DELETE FROM project_member WHERE project_id = %s AND member_id = %s",
             (project_id, member_id),

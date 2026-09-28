@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import { api } from '../api.js'
 import { useAuth } from '../auth.jsx'
+import PasswordField from '../PasswordField.jsx'
 
 const when = (value) =>
   value ? new Date(value).toLocaleString(undefined, {
@@ -59,9 +60,9 @@ function AddPerson({ roles, onAdded, onClose }) {
           <div className="frow__grid" style={{ paddingRight: 0, marginTop: 14 }}>
             <label className="col">
               <span className="minilabel">Temporary password</span>
-              <input className="control" type="text" required minLength={8}
-                     value={form.password} onChange={set('password')}
-                     placeholder="at least 8 characters" />
+              <PasswordField required minLength={8} autoComplete="new-password"
+                             value={form.password} onChange={set('password')}
+                             placeholder="at least 8 characters" />
             </label>
             <label className="col">
               <span className="minilabel">Role</span>
