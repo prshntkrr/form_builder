@@ -28,6 +28,27 @@ export const api = {
       method: 'DELETE',
     }),
 
+  /* One AI operation on one widget.
+
+     The dashboard is sent whole: the server applies the operation to it and
+     validates the result, so the reply carries both the candidate widget to
+     preview and the specification it would produce. */
+  widgetOperation: (payload) =>
+    request('/dashboards/widget-operation', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  /* The values a configured dashboard filter can be set to.
+
+     DISTINCT over one column of the dashboard's own data source, checked
+     and capped by the server. The browser never sees the whole table. */
+  getFilterOptions: (tableName, field) =>
+    request(
+      `/dashboards/data-sources/${encodeURIComponent(tableName)}` +
+        `/filter-options?field=${encodeURIComponent(field)}`,
+    ),
+
   // -----------------------------
   // Version management
   // -----------------------------

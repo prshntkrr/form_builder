@@ -45,6 +45,17 @@ import {
 } from "../chartConfig.js";
 import { useCapabilities } from "../../../core/auth.jsx";
 import {
+  CHIP_LIMIT,
+  bindingFilters,
+  configuredFields,
+  fieldProblem,
+  filterLabel,
+  matchingOptions,
+  removeValue,
+  selectionSummary,
+  toggleValue,
+} from "../filterFields.js";
+import {
   MAX_LINE_SERIES,
   blankSeries,
   seriesFromForm,
@@ -165,7 +176,44 @@ export default function Dashboards() {
   const [widgetData, setWidgetData] = useState({});
   const [dataLoading, setDataLoading] = useState(false);
   const [dataError, setDataError] = useState("");
+  /* The filters that are actually applied — the shape the binding has
+     always carried, which is what every widget's request already merges in.
+     Written only by Search and Reset. */
   const [dashboardFilters, setDashboardFilters] = useState([]);
+
+  /* What has been picked but not yet applied, keyed by field. Nothing is
+     queried until Search: selecting a value should not set the whole
+     dashboard running. */
+  const [filterSelections, setFilterSelections] = useState({});
+
+  /* The values each filter can be set to, fetched once per field when its
+     dropdown is first opened: { status, values, error }. */
+  const [filterOptions, setFilterOptions] = useState({});
+
+  /* Which dropdown is open, and what has been typed into its search box. */
+  const [openFilter, setOpenFilter] = useState(null);
+  const [filterSearch, setFilterSearch] = useState({});
+
+  /* The filter-field manager: its own working copy, so Cancel leaves the
+     dashboard exactly as it was. */
+  /* Which widget an AI operation is aimed at. One at a time, and only
+     while the dashboard is being edited. */
+  const [selectedWidgetId, setSelectedWidgetId] = useState(null);
+
+  /* Add a visualization, or change the selected one. */
+  const [aiMode, setAiMode] = useState("add");
+
+  /* What the AI proposed, before anybody has agreed to it:
+     { operation, widget_id, widget, dashboard } as the server applied it,
+     plus the rows its preview is drawn from. */
+  const [aiCandidate, setAiCandidate] = useState(null);
+  const [candidateData, setCandidateData] = useState(EMPTY_PREVIEW);
+
+  const [showFilterFields, setShowFilterFields] = useState(false);
+  const [filterDraft, setFilterDraft] = useState([]);
+  const [filterDraftError, setFilterDraftError] = useState("");
+
+  const filterBarRef = useRef(null);
 
   /* =========================================================
      DASHBOARD EDITING STATE
@@ -752,85 +800,177 @@ export default function Dashboards() {
     }
   };
 
-  const addDashboardFilter = async () => {
-  if (!dashboard || !selectedSource) {
-    return;
-  }
+  /* =========================================================
+     DASHBOARD FILTERS
+     ========================================================= */
 
-  const defaultField = fields?.[0]?.name || "";
+  /* What a reader picked belongs to the dashboard they were reading. Kept
+     out of the next one, along with the values fetched for its columns. */
+  const clearRuntimeFilters = () => {
+    setSelectedWidgetId(null);
+    setAiCandidate(null);
+    setCandidateData(EMPTY_PREVIEW);
+    setFilterSelections({});
+    setFilterOptions({});
+    setFilterSearch({});
+    setOpenFilter(null);
+    setDashboardFilters([]);
+  };
 
-  if (!defaultField) {
-    return;
-  }
+  /* The values one filter can be set to.
 
-  const nextFilters = [
-    ...dashboardFilters,
-    {
-      field: defaultField,
-      operator: "EQUALS",
-      value: "",
-    },
-  ];
+     Asked for once per field, the first time its dropdown is opened, and
+     kept — a filter's options do not change while somebody is picking from
+     them. A failure is held against that one filter: the dashboard behind
+     it stays exactly as usable as it was. */
+  const loadFilterOptions = async (field) => {
+    if (!selectedSource || filterOptions[field]?.status === "ready") {
+      return;
+    }
 
-  setDashboardFilters(nextFilters);
-};
+    setFilterOptions((current) => ({
+      ...current,
+      [field]: { status: "loading", values: [], error: "" },
+    }));
 
-const updateDashboardFilter = async (index, changes) => {
-  const nextFilters = dashboardFilters.map((filter, filterIndex) =>
-    filterIndex === index
-      ? { ...filter, ...changes }
-      : filter,
-  );
+    try {
+      const answer = await api.getFilterOptions(selectedSource.name, field);
 
-  setDashboardFilters(nextFilters);
-};
+      setFilterOptions((current) => ({
+        ...current,
+        [field]: {
+          status: "ready",
+          values: answer.values || [],
+          error: "",
+        },
+      }));
+    } catch (error) {
+      setFilterOptions((current) => ({
+        ...current,
+        [field]: {
+          status: "error",
+          values: [],
+          error: error?.message || "These values could not be loaded.",
+        },
+      }));
+    }
+  };
 
-const removeDashboardFilter = async (index) => {
-  const nextFilters = dashboardFilters.filter(
-    (_, filterIndex) => filterIndex !== index,
-  );
+  const toggleFilterDropdown = (field) => {
+    setOpenFilter((current) => {
+      if (current === field) {
+        return null;
+      }
 
-  setDashboardFilters(nextFilters);
+      loadFilterOptions(field);
+      return field;
+    });
+  };
 
-  if (dashboard) {
-    await loadDashboardData(
-      dashboard,
-      null,
-      nextFilters,
+  const toggleFilterValue = (field, value) =>
+    setFilterSelections((current) => toggleValue(current, field, value));
+
+  const clearFilterValue = (field, value) =>
+    setFilterSelections((current) => removeValue(current, field, value));
+
+  /* Nothing is queried until this. Selections are turned into the ordinary
+     `IN` filters the binding already carries, and every widget reloads
+     through the path it always used — including a table, whose row count is
+     recounted over the same filtered query. */
+  const applyDashboardFilters = async () => {
+    if (!dashboard) {
+      return;
+    }
+
+    setOpenFilter(null);
+
+    const applied = bindingFilters(
+      filterSelections,
+      configuredFields(dashboard),
     );
-  }
-};
 
-const applyDashboardFilters = async () => {
-  if (!dashboard) {
-    return;
-  }
+    setDashboardFilters(applied);
 
-  const validFilters = dashboardFilters.filter((filter) => {
-    if (!filter.field || !filter.operator) {
-      return false;
+    await loadDashboardData(dashboard, null, applied);
+  };
+
+  /* Clears what has been picked, not what has been configured: the filters
+     on offer are the dashboard's, the selections are the reader's. */
+  const resetDashboardFilters = async () => {
+    setOpenFilter(null);
+    setFilterSearch({});
+    setFilterSelections({});
+    setDashboardFilters([]);
+
+    if (dashboard) {
+      await loadDashboardData(dashboard, null, []);
+    }
+  };
+
+  /* ── configuring which filters the dashboard offers ──────────────── */
+
+  const openFilterFields = () => {
+    setFilterDraft(configuredFields(dashboard).map((entry) => ({ ...entry })));
+    setFilterDraftError("");
+    setShowFilterFields(true);
+  };
+
+  const updateFilterDraft = (index, changes) =>
+    setFilterDraft((current) =>
+      current.map((entry, position) =>
+        position === index ? { ...entry, ...changes } : entry,
+      ),
+    );
+
+  const addFilterDraftField = () =>
+    setFilterDraft((current) => [...current, { field: "", label: "" }]);
+
+  const removeFilterDraftField = (index) =>
+    setFilterDraft((current) =>
+      current.filter((_, position) => position !== index),
+    );
+
+  const saveFilterFields = () => {
+    for (let index = 0; index < filterDraft.length; index += 1) {
+      const problem = fieldProblem(
+        filterDraft[index].field,
+        filterDraft,
+        index,
+      );
+
+      if (problem) {
+        setFilterDraftError(problem);
+        return;
+      }
     }
 
-    if (
-      filter.operator === "IS_NULL" ||
-      filter.operator === "IS_NOT_NULL"
-    ) {
-      return true;
-    }
+    const configured = filterDraft.map((entry) => ({
+      field: entry.field,
+      ...(String(entry.label || "").trim()
+        ? { label: entry.label.trim() }
+        : {}),
+    }));
 
-    return filter.value !== "";
-  });
+    setDashboard((current) =>
+      current ? { ...current, filter_fields: configured } : current,
+    );
 
-  setDashboardFilters(validFilters);
+    /* A value picked for a filter that has just been removed would go on
+       narrowing the dashboard with nothing on screen to say so. */
+    const kept = new Set(configured.map((entry) => entry.field));
 
-  await loadDashboardData(
-    dashboard,
-    null,
-    validFilters,
-  );
-};
+    setFilterSelections((current) =>
+      Object.fromEntries(
+        Object.entries(current).filter(([field]) => kept.has(field)),
+      ),
+    );
+
+    setShowFilterFields(false);
+    setFilterDraftError("");
+  };
 
   /* =========================================================
+     HANDLE DASHBOARD CHANGE LAYOUT  /* =========================================================
      HANDLE DASHBOARD CHANGE LAYOUT
    ========================================================= */
 
@@ -975,6 +1115,8 @@ const applyDashboardFilters = async () => {
         }
       }
 
+      clearRuntimeFilters();
+
       setDashboard(openDashboard);
       setCurrentVersionNo(targetVersion);
 
@@ -1020,6 +1162,7 @@ const applyDashboardFilters = async () => {
   /* Start a new dashboard: the source picker, with nothing loaded. */
   const startNewDashboard = () => {
     setView("builder");
+    clearRuntimeFilters();
     setDashboard(null);
     setSavedDashboardId(null);
     setSelectedSource(null);
@@ -1034,6 +1177,7 @@ const applyDashboardFilters = async () => {
   /* Back to the list, leaving nothing half-open behind. */
   const backToList = () => {
     setView("list");
+    clearRuntimeFilters();
     setDashboard(null);
     setSavedDashboardId(null);
     setSelectedSource(null);
@@ -1365,75 +1509,122 @@ const applyDashboardFilters = async () => {
     startAddWidget();
   };
 
-  /* Change an open dashboard by describing the change.
+  /* =========================================================
+     AI WIDGET OPERATIONS
+     ========================================================= */
 
-     This is the same endpoint the first generation uses, and it returns a
-     whole specification — so the graphs are replaced rather than merged. What
-     the dashboard keeps is its identity: the id it is saved under, its name
-     and its version history. Nothing is written until Save, so a regeneration
-     that comes back wrong costs a Cancel. */
-  const regenerateWithPrompt = async () => {
+  /* One widget at a time.
+
+     This used to be "Change with a prompt", which asked the generator for a
+     whole dashboard and adopted whatever came back — so "add a KPI for the
+     number of states" answered with one KPI and the other graphs were gone.
+     Nothing was wrong with the generator: there was no operation smaller
+     than a dashboard. There is now, and the dashboard is never replaced.
+
+     The server applies the operation to the specification sent to it and
+     validates the result, so what comes back is both the candidate widget
+     to look at and the dashboard it would produce. Neither is adopted until
+     somebody presses Apply. */
+  const selectedWidget =
+    dashboard?.widgets?.find((widget) => widget.id === selectedWidgetId) || null;
+
+  const aiProblem = () => {
+    if (!editPrompt.trim()) {
+      return "Describe the change you want.";
+    }
+
+    if (aiMode === "update" && !selectedWidget) {
+      return "Select a widget from the dashboard first.";
+    }
+
+    return null;
+  };
+
+  const discardCandidate = () => {
+    setAiCandidate(null);
+    setCandidateData(EMPTY_PREVIEW);
+  };
+
+  const generateWidgetOperation = async () => {
     const table = selectedSource?.name || dashboard?.data_sources?.[0]?.name;
 
-    if (!dashboard || !editPrompt.trim() || !table) {
+    if (!dashboard || !table || aiProblem()) {
       return;
     }
 
     setRegenerating(true);
     setEditError("");
+    discardCandidate();
 
     try {
-      const result = await api.generateDashboard(table, editPrompt.trim());
+      const result = await api.widgetOperation({
+        table_name: table,
+        prompt: editPrompt.trim(),
+        mode: aiMode,
+        widget_id: aiMode === "update" ? selectedWidgetId : null,
+        dashboard,
+      });
 
-      const initialLayout = buildInitialGridLayout(result?.widgets || []);
+      setAiCandidate(result);
 
-      const next = {
-        ...result,
+      /* Drawn from rows fetched the way every widget's are — same binding,
+         same filters, same endpoint — so the preview is the widget. */
+      if (result.widget) {
+        setCandidateData({ status: "loading", rows: [], numRows: null, error: "" });
 
-        dashboard: {
-          ...result.dashboard,
-
-          /* Keep the name it is saved under. The AI names a fresh dashboard
-             every time, which would quietly rename this one. */
-          name:
-            editDashboardName
-            || dashboard.dashboard?.name
-            || result.dashboard?.name,
-        },
-
-        widgets: (result.widgets || []).map((widget) => {
-          const layoutItem = initialLayout.find(
-            (item) => item.i === widget.id,
+        try {
+          const loaded = await fetchWidgetRows(
+            result.widget,
+            selectedSource || { name: table },
+            dashboardFilters,
           );
 
-          return layoutItem
-            ? {
-                ...widget,
-
-                layout: {
-                  ...widget.layout,
-                  x: layoutItem.x,
-                  y: layoutItem.y,
-                  w: layoutItem.w,
-                  h: layoutItem.h,
-                },
-              }
-            : widget;
-        }),
-      };
-
-      setDashboard(next);
-      setGridLayout(initialLayout);
-      setSavedGridLayout(initialLayout);
-      setAllLayouts({ lg: initialLayout });
-      setEditPrompt("");
-
-      await loadDashboardData(next, selectedSource || { name: table });
-    } catch (e) {
-      setEditError(e.message || "That change could not be generated.");
+          setCandidateData({
+            status: "ready",
+            rows: loaded.rows,
+            numRows: loaded.numRows,
+            error: "",
+          });
+        } catch (error) {
+          setCandidateData({
+            status: "error",
+            rows: [],
+            numRows: null,
+            error: error?.message || "This widget could not be drawn.",
+          });
+        }
+      }
+    } catch (error) {
+      setEditError(error?.message || "The AI could not make that change.");
     } finally {
       setRegenerating(false);
     }
+  };
+
+  /* Adopt the specification the server built. Nothing is saved: this is the
+     draft the existing Save Changes writes, and versioning is unchanged. */
+  const applyCandidate = async () => {
+    if (!aiCandidate?.dashboard) {
+      return;
+    }
+
+    const next = aiCandidate.dashboard;
+    const nextLayout = buildGridLayout(next.widgets || []);
+
+    setDashboard(next);
+    setGridLayout(nextLayout);
+    setAllLayouts({ lg: nextLayout });
+
+    if (aiCandidate.operation === "delete_widget") {
+      setSelectedWidgetId(null);
+    } else if (aiCandidate.operation === "add_widget") {
+      setSelectedWidgetId(aiCandidate.widget_id);
+    }
+
+    setEditPrompt("");
+    discardCandidate();
+
+    await loadDashboardData(next);
   };
 
   /* =========================================================
@@ -2025,8 +2216,26 @@ const applyDashboardFilters = async () => {
       error: widgetError = null,
     } = options.data || widgetData[widget.id] || {};
 
+    const chosen = widget.id === selectedWidgetId;
+
     const editButton = isEditMode && !options.readOnly && (
       <div className=" row1">
+        {/* Which widget an AI change is aimed at. A button rather than the
+            card itself: the card is draggable, and a drag that ends in a
+            click would select something nobody meant to. */}
+        <button
+          className={"btn1" + (chosen ? " btn1--on" : "")}
+          type="button"
+          aria-pressed={chosen}
+          onClick={() =>
+            setSelectedWidgetId((current) =>
+              current === widget.id ? null : widget.id,
+            )
+          }
+        >
+          {chosen ? "Selected" : "Select"}
+        </button>
+
         <button
           className="btn1"
           type="button"
@@ -2648,6 +2857,11 @@ const applyDashboardFilters = async () => {
      ========================================================= */
 
   const removeWidget = async (widgetId) => {
+    if (selectedWidgetId === widgetId) {
+      setSelectedWidgetId(null);
+      discardCandidate();
+    }
+
     if (!dashboard) {
       return;
     }
@@ -3005,6 +3219,296 @@ const applyDashboardFilters = async () => {
     setShowAddWidget(false);
 
     setEditError("");
+  };
+
+  useEffect(() => {
+    if (!openFilter) {
+      return undefined;
+    }
+
+    const closeIfOutside = (event) => {
+      if (filterBarRef.current && !filterBarRef.current.contains(event.target)) {
+        setOpenFilter(null);
+      }
+    };
+
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") {
+        setOpenFilter(null);
+      }
+    };
+
+    document.addEventListener("mousedown", closeIfOutside);
+    document.addEventListener("keydown", closeOnEscape);
+
+    return () => {
+      document.removeEventListener("mousedown", closeIfOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [openFilter]);
+
+  /* What the AI proposed, drawn before anybody agrees to it.
+
+     For a change, the widget as it is and as it would be, side by side. For
+     an addition, the new widget on its own. For a deletion, what would go.
+     Drawn by `renderWidget` from rows fetched the ordinary way — the same
+     preview machinery the graph builder uses, not a second one. */
+  const renderCandidate = () => {
+    if (!aiCandidate) {
+      return null;
+    }
+
+    const { operation, widget } = aiCandidate;
+    const target = selectedWidget;
+
+    const stage = (body) => (
+      <div className="dash__preview-stage dash__candidate-stage">{body}</div>
+    );
+
+    const drawn = (item, data) => {
+      if (!item) {
+        return <p className="muted dash__preview-note">Nothing to draw.</p>;
+      }
+
+      if (data.status === "loading") {
+        return <div className="skeleton dash__preview-skeleton" />;
+      }
+
+      if (data.status === "error") {
+        return (
+          <div className="alert alert--bad dash__preview-note">{data.error}</div>
+        );
+      }
+
+      if (!data.rows?.length) {
+        return (
+          <p className="muted dash__preview-note">
+            No data available for this configuration.
+          </p>
+        );
+      }
+
+      return (
+        <div className="card card--pad dash__widget-card dash__candidate-card">
+          {renderWidget(item, { data, readOnly: true })}
+        </div>
+      );
+    };
+
+    return (
+      <div className="dash__candidate">
+        <h4 className="dash__preview-heading">
+          {operation === "delete_widget"
+            ? "Proposed: remove this widget"
+            : operation === "add_widget"
+              ? "Proposed: new visualization"
+              : "Proposed change"}
+        </h4>
+
+        {operation === "delete_widget" ? (
+          <p className="tiny muted">
+            <strong>{target?.title || "This widget"}</strong> would be removed
+            from the dashboard. Nothing else changes.
+          </p>
+        ) : operation === "update_widget" ? (
+          <div className="dash__candidate-pair">
+            <div>
+              <p className="tiny muted">Current</p>
+              {stage(drawn(target, widgetData[target?.id] || EMPTY_PREVIEW))}
+            </div>
+
+            <div>
+              <p className="tiny muted">Proposed</p>
+              {stage(drawn(widget, candidateData))}
+            </div>
+          </div>
+        ) : (
+          stage(drawn(widget, candidateData))
+        )}
+
+        <div className="row" style={{ marginTop: 10 }}>
+          <span className="spacer" />
+
+          <button className="btn" type="button" onClick={discardCandidate}>
+            Cancel
+          </button>
+
+          <button
+            className="btn btn--primary"
+            type="button"
+            onClick={applyCandidate}
+          >
+            {operation === "add_widget"
+              ? "Add Visualization"
+              : operation === "delete_widget"
+                ? "Remove Widget"
+                : "Apply Changes"}
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  /* The filter bar: one control per configured filter, and the two buttons
+     that decide when the dashboard is asked anything. */
+  const renderFilterBar = () => {
+    const configured = configuredFields(dashboard);
+
+    return (
+      <div className="dash__filters" ref={filterBarRef}>
+        <div className="row">
+          <div>
+            <h3>Dashboard Filters</h3>
+
+            <p className="muted">
+              {configured.length
+                ? "Narrow every widget on this dashboard."
+                : "Choose the fields this dashboard can be filtered by."}
+            </p>
+          </div>
+
+          <span className="spacer" />
+
+          <button
+            className="btn"
+            type="button"
+            onClick={openFilterFields}
+            disabled={!fields?.length}
+          >
+            + Add Filter Fields
+          </button>
+        </div>
+
+        {configured.length > 0 && (
+          <div className="dash__filter-bar">
+            {configured.map((entry) => renderFilterControl(entry))}
+
+            <div className="dash__filter-actions">
+              <button
+                className="btn btn--primary"
+                type="button"
+                onClick={applyDashboardFilters}
+              >
+                Search
+              </button>
+
+              <button
+                className="btn"
+                type="button"
+                onClick={resetDashboardFilters}
+              >
+                Reset
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  /* One filter: what it is called, what is picked, and the values to pick
+     from. The values are fetched when it is first opened, never before. */
+  const renderFilterControl = (entry) => {
+    const label = filterLabel(entry, fields);
+    const picked = filterSelections[entry.field] || [];
+    const open = openFilter === entry.field;
+    const options = filterOptions[entry.field];
+    const search = filterSearch[entry.field] || "";
+
+    return (
+      <div className="dash__filter-control" key={entry.field}>
+        <button
+          className="control dash__filter-trigger"
+          type="button"
+          aria-haspopup="true"
+          aria-expanded={open}
+          onClick={() => toggleFilterDropdown(entry.field)}
+        >
+          <span className="dash__filter-name">{label}</span>
+
+          <span
+            className={
+              "dash__filter-summary" +
+              (picked.length ? " dash__filter-summary--set" : "")
+            }
+          >
+            {selectionSummary(picked)}
+          </span>
+
+          <span aria-hidden="true">▾</span>
+        </button>
+
+        {/* Few enough to name, so each can be taken off on its own. */}
+        {picked.length > 0 && picked.length <= CHIP_LIMIT && (
+          <div className="dash__filter-chips">
+            {picked.map((value) => (
+              <span className="dash__filter-chip" key={value}>
+                {value}
+
+                <button
+                  type="button"
+                  aria-label={`Remove ${value} from ${label}`}
+                  onClick={() => clearFilterValue(entry.field, value)}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+
+        {open && (
+          <div
+            className="dash__filter-pop"
+            role="group"
+            aria-label={`${label} values`}
+          >
+            <input
+              className="control"
+              type="search"
+              value={search}
+              placeholder={`Search ${label}...`}
+              aria-label={`Search ${label} values`}
+              onChange={(e) =>
+                setFilterSearch((current) => ({
+                  ...current,
+                  [entry.field]: e.target.value,
+                }))
+              }
+            />
+
+            <div className="dash__filter-options">
+              {!options || options.status === "loading" ? (
+                <p className="tiny muted">Loading {label} values...</p>
+              ) : options.status === "error" ? (
+                <p className="tiny dash__filter-error">{options.error}</p>
+              ) : options.values.length === 0 ? (
+                <p className="tiny muted">No values available.</p>
+              ) : (
+                (() => {
+                  const shown = matchingOptions(options.values, search);
+
+                  if (!shown.length) {
+                    return <p className="tiny muted">Nothing matches.</p>;
+                  }
+
+                  return shown.map((value) => (
+                    <label className="dash__filter-option" key={value}>
+                      <input
+                        type="checkbox"
+                        checked={picked.includes(value)}
+                        onChange={() => toggleFilterValue(entry.field, value)}
+                      />
+                      <span>{value}</span>
+                    </label>
+                  ));
+                })()
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    );
   };
 
   /* =========================================================
@@ -3937,131 +4441,7 @@ const applyDashboardFilters = async () => {
               )}
 
               {/* Dashboard Filters */}
-              <div className="dash__filters">
-                <div className="row">
-                  <div>
-                    <h3>Dashboard Filters</h3>
-                    <p className="muted">
-                      Filter all dashboard widgets by a field value.
-                    </p>
-                  </div>
-
-                  <span className="spacer" />
-
-                  <button
-                    className="btn"
-                    type="button"
-                    onClick={addDashboardFilter}
-                    disabled={!fields?.length}
-                  >
-                    + Add Filter
-                  </button>
-                </div>
-
-                {dashboardFilters.length > 0 && (
-                  <div className="dash__filter-list">
-                    {dashboardFilters.map((filter, index) => (
-                      <div
-                        key={index}
-                        className="dash__filter-row"
-                      >
-                        <select
-                          className="control"
-                          value={filter.field}
-                          onChange={(e) =>
-                            updateDashboardFilter(index, {
-                              field: e.target.value,
-                            })
-                          }
-                        >
-                          {fields?.map((field) => (
-                            <option
-                              key={field.name}
-                              value={field.name}
-                            >
-                              {field.name}
-                            </option>
-                          ))}
-                        </select>
-
-                        <select
-                          className="control"
-                          value={filter.operator}
-                          onChange={(e) =>
-                            updateDashboardFilter(index, {
-                              operator: e.target.value,
-                            })
-                          }
-                        >
-                          <option value="EQUALS">Equals</option>
-                          <option value="NOT_EQUALS">Not equals</option>
-                          <option value="GREATER_THAN">Greater than</option>
-                          <option value="GREATER_THAN_OR_EQUAL">
-                            Greater than or equal
-                          </option>
-                          <option value="LESS_THAN">Less than</option>
-                          <option value="LESS_THAN_OR_EQUAL">
-                            Less than or equal
-                          </option>
-                          <option value="IN">In</option>
-                          <option value="IS_NULL">Is null</option>
-                          <option value="IS_NOT_NULL">Is not null</option>
-                        </select>
-
-                        {!["IS_NULL", "IS_NOT_NULL"].includes(
-                          filter.operator,
-                        ) && (
-                          <input
-                            className="control"
-                            type="text"
-                            placeholder={
-                              filter.operator === "IN"
-                                ? "Delhi, Uttar Pradesh"
-                                : "Value"
-                            }
-                            value={
-                              Array.isArray(filter.value)
-                                ? filter.value.join(", ")
-                                : filter.value
-                            }
-                            onChange={(e) =>
-                              updateDashboardFilter(index, {
-                                value:
-                                  filter.operator === "IN"
-                                    ? e.target.value
-                                        .split(",")
-                                        .map((value) => value.trim())
-                                        .filter(Boolean)
-                                    : e.target.value,
-                              })
-                            }
-                          />
-                        )}
-
-                        <button
-                          className="btn"
-                          type="button"
-                          onClick={() => removeDashboardFilter(index)}
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ))}
-
-                    <div className="row" style={{ marginTop: 12 }}>
-                      <span className="spacer" />
-
-                      <button
-                        className="btn btn--primary"
-                        type="button"
-                        onClick={applyDashboardFilters}
-                      >
-                        Apply Filters
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
+              {renderFilterBar()}
 
               {/* Dashboard edit panel */}
               {isEditMode && (
@@ -4138,25 +4518,71 @@ const applyDashboardFilters = async () => {
                     </span>
                   )}
 
-                  <label className="dash__edit-label">Change with a prompt</label>
+                  <label className="dash__edit-label">
+                    AI Dashboard Assistant
+                  </label>
+
+                  <div className="dash__ai-modes" role="group" aria-label="AI operation">
+                    <button
+                      className={
+                        "btn btn--sm" + (aiMode === "add" ? " btn--primary" : "")
+                      }
+                      type="button"
+                      aria-pressed={aiMode === "add"}
+                      onClick={() => {
+                        setAiMode("add");
+                        setEditError("");
+                        discardCandidate();
+                      }}
+                    >
+                      Add visualization
+                    </button>
+
+                    <button
+                      className={
+                        "btn btn--sm" + (aiMode === "update" ? " btn--primary" : "")
+                      }
+                      type="button"
+                      aria-pressed={aiMode === "update"}
+                      onClick={() => {
+                        setAiMode("update");
+                        setEditError("");
+                        discardCandidate();
+                      }}
+                    >
+                      Modify selected
+                    </button>
+                  </div>
+
+                  <p className="tiny muted dash__ai-selected">
+                    Selected widget:{" "}
+                    <strong>{selectedWidget?.title || "None"}</strong>
+                  </p>
+
+                  {aiMode === "update" && !selectedWidget && (
+                    <p className="tiny muted">
+                      Select a widget from the dashboard first.
+                    </p>
+                  )}
 
                   <textarea
                     className="control"
                     rows={3}
+                    aria-label="AI prompt"
                     value={editPrompt}
                     onChange={(e) => setEditPrompt(e.target.value)}
-                    placeholder="Example: drop the KPI row and show average yield by district instead."
+                    placeholder={
+                      aiMode === "add"
+                        ? "Example: create a KPI showing the total number of states."
+                        : "Example: change this to a stacked bar chart."
+                    }
                   />
 
-                  <div
-                    className="row"
-                    style={{
-                      marginTop: 8,
-                    }}
-                  >
+                  <div className="row" style={{ marginTop: 8 }}>
                     <span className="tiny muted">
-                      Replaces the graphs on this dashboard. Nothing is saved
-                      until you save your changes.
+                      {aiMode === "add"
+                        ? "Adds one visualization. Everything already on the dashboard stays."
+                        : "Changes only the selected widget."}
                     </span>
 
                     <span className="spacer" />
@@ -4164,12 +4590,14 @@ const applyDashboardFilters = async () => {
                     <button
                       className="btn"
                       type="button"
-                      disabled={!editPrompt.trim() || regenerating}
-                      onClick={regenerateWithPrompt}
+                      disabled={Boolean(aiProblem()) || regenerating}
+                      onClick={generateWidgetOperation}
                     >
-                      {regenerating ? "Generating..." : "Update with AI"}
+                      {regenerating ? "Generating..." : "Generate with AI"}
                     </button>
                   </div>
+
+                  {aiCandidate && renderCandidate()}
 
                   {editError && (
                     <div
@@ -4305,7 +4733,12 @@ const applyDashboardFilters = async () => {
                           {dashboard.widgets.map((widget) => (
                             <div
                               key={widget.id}
-                              className="card card--pad dash__widget-card"
+                              className={
+                                "card card--pad dash__widget-card" +
+                                (widget.id === selectedWidgetId
+                                  ? " dash__widget-card--chosen"
+                                  : "")
+                              }
                               style={widget.presentation?.background_color ? { backgroundColor: widget.presentation.background_color } : {}}
                             >
                               {renderWidget(widget)}
@@ -4587,6 +5020,123 @@ const applyDashboardFilters = async () => {
                 onClick={handleDelete}
               >
                 {deleting ? "Deleting..." : "Delete Dashboard"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =====================================================
+          FILTER FIELDS — which filters the dashboard offers
+          ===================================================== */}
+
+      {showFilterFields && (
+        <div className="modal-backdrop">
+          <div
+            className="modal modal--filters"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="filter-fields-title"
+          >
+            <h2 id="filter-fields-title">Add Filter Fields</h2>
+
+            <p className="muted">
+              The columns this dashboard can be filtered by. The alias is what
+              a reader sees; the column is what is queried.
+            </p>
+
+            {filterDraft.length === 0 && (
+              <p className="tiny muted" style={{ marginTop: 12 }}>
+                No filter fields yet — add one below.
+              </p>
+            )}
+
+            <div className="dash__filter-fields">
+              {filterDraft.map((entry, index) => (
+                <div className="dash__filter-field-row" key={index}>
+                  <label className="tiny muted">
+                    Column
+                    <select
+                      className="control"
+                      value={entry.field}
+                      aria-label={`Filter field ${index + 1} column`}
+                      onChange={(e) => {
+                        setFilterDraftError("");
+                        updateFilterDraft(index, { field: e.target.value });
+                      }}
+                    >
+                      <option value="">Select column</option>
+
+                      {fields?.map((field) => (
+                        <option key={field.name} value={field.name}>
+                          {field.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="tiny muted">
+                    Alias name
+                    <input
+                      className="control"
+                      type="text"
+                      value={entry.label || ""}
+                      placeholder={filterLabel({ field: entry.field }, fields)}
+                      aria-label={`Filter field ${index + 1} alias`}
+                      onChange={(e) =>
+                        updateFilterDraft(index, { label: e.target.value })
+                      }
+                    />
+                  </label>
+
+                  <button
+                    className="btn btn--tiny"
+                    type="button"
+                    aria-label={`Remove filter field ${index + 1}`}
+                    onClick={() => {
+                      setFilterDraftError("");
+                      removeFilterDraftField(index);
+                    }}
+                  >
+                    🗑
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <button
+              className="btn btn--sm"
+              type="button"
+              style={{ marginTop: 8 }}
+              onClick={addFilterDraftField}
+            >
+              + Add Field
+            </button>
+
+            {filterDraftError && (
+              <div
+                className="alert alert--bad"
+                style={{ marginTop: 12 }}
+              >
+                {filterDraftError}
+              </div>
+            )}
+
+            <div className="dash__modal-actions">
+              <button
+                className="btn"
+                type="button"
+                onClick={() => setShowFilterFields(false)}
+              >
+                Cancel
+              </button>
+
+              <button
+                className="btn btn--primary"
+                type="button"
+                onClick={saveFilterFields}
+              >
+                Save
               </button>
             </div>
           </div>

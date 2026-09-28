@@ -1171,3 +1171,231 @@
   font-weight: 600;
   color: var(--ink-2);
 }
+
+/* --- the dashboard's filters --------------------------------------------
+   One control per configured filter, wrapping onto as many rows as the
+   width allows, with Search and Reset at the end of them. Nothing is
+   queried until Search: a control only changes what is picked. */
+.dash__filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.dash__filter-control {
+  position: relative;
+  min-width: 0;
+  flex: 0 1 220px;
+}
+
+.dash__filter-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.dash__filter-name {
+  flex: 0 0 auto;
+  font-weight: 550;
+}
+
+/* The part that changes, and is quiet until it does. */
+.dash__filter-summary {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+.dash__filter-summary--set {
+  color: var(--accent);
+}
+
+.dash__filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 5px;
+}
+
+.dash__filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--accent-wash);
+  font-size: 12px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.dash__filter-chip button {
+  border: 0;
+  background: none;
+  padding: 0 4px;
+  font: inherit;
+  line-height: 1;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.dash__filter-chip button:hover { color: var(--rose); }
+
+/* The values, over the dashboard rather than pushing it down. */
+.dash__filter-pop {
+  position: absolute;
+  z-index: 50;
+  top: calc(100% + 6px);
+  left: 0;
+  width: max(100%, 240px);
+  max-width: 90vw;
+  padding: 8px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  box-shadow: var(--shadow);
+}
+
+.dash__filter-options {
+  max-height: 220px;
+  overflow-y: auto;
+  margin-top: 8px;
+}
+
+.dash__filter-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  border-radius: var(--r-sm);
+  font-size: 13px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.dash__filter-option:hover { background: var(--accent-wash); }
+.dash__filter-option input { accent-color: var(--accent); flex: none; }
+
+.dash__filter-error { color: var(--rose); margin: 0; }
+
+.dash__filter-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-left: auto;
+}
+
+/* --- configuring which filters there are -------------------------------- */
+.modal--filters {
+  width: min(640px, calc(100vw - 32px));
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.dash__filter-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.dash__filter-field-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.dash__filter-field-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+@media (max-width: 767px) {
+  .dash__filter-field-row {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .dash__filter-control {
+    flex: 1 1 100%;
+  }
+
+  .dash__filter-actions {
+    margin-left: 0;
+    width: 100%;
+  }
+}
+
+/* --- the AI assistant ----------------------------------------------------
+   Two modes, the widget being worked on, and what the AI proposed before
+   anybody has agreed to it. */
+.dash__ai-modes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 6px 0 2px;
+}
+
+.dash__ai-selected {
+  margin: 6px 0 8px;
+}
+
+.dash__candidate {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--paper);
+}
+
+/* Side by side where there is room for two, stacked where there is not. */
+.dash__candidate-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+
+.dash__candidate-stage {
+  height: 240px;
+  background: var(--card);
+}
+
+.dash__candidate-card {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  width: 100%;
+}
+
+/* The widget an AI change is aimed at. A ring, not a redesign. */
+.dash__widget-card--chosen {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.btn1--on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+@media (max-width: 767px) {
+  .dash__candidate-pair {
+    grid-template-columns: 1fr;
+  }
+}
+

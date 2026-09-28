@@ -1,6 +1,6 @@
 from typing import List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 # ---------------------------------------------------------------------------
@@ -301,6 +301,24 @@ class DashboardInfo(BaseModel):
 # Complete dashboard specification
 # ---------------------------------------------------------------------------
 
+class FilterFieldConfig(BaseModel):
+    """A column the dashboard offers as a filter, and what it is called.
+
+    Configuration, not a selection: this says *which* filters a reader is
+    given, and persists with the dashboard. What they then pick is sent with
+    each data request as an ordinary `IN` filter and is never stored here.
+
+    `label` is the owner's own wording. The field is what is queried, and it
+    is the only part the database ever sees.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    field: str = Field(min_length=1)
+
+    label: Optional[str] = None
+
+
 class DashboardSpecification(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -320,10 +338,60 @@ class DashboardSpecification(BaseModel):
         default_factory=DashboardLayout
     )
 
+    # Absent in every dashboard saved before filters could be configured,
+    # which is why it defaults to none rather than being required.
+    filter_fields: List[FilterFieldConfig] = Field(
+        default_factory=list
+    )
+
+    @field_validator("filter_fields")
+    @classmethod
+    def _no_repeated_field(cls, value):
+        """One filter per column.
+
+        Two filters on the same column would be ANDed together, so the
+        second could only ever narrow the first — and the reader would be
+        given the same list twice with no way to tell them apart.
+        """
+        seen = set()
+
+        for entry in value:
+            if entry.field in seen:
+                raise ValueError(
+                    f"'{entry.field}' is already a filter field."
+                )
+
+            seen.add(entry.field)
+
+        return value
+
 
 class DashboardGenerateRequest(BaseModel):
     table_name: str
     prompt: str
+
+
+class WidgetOperationRequest(BaseModel):
+    """One AI operation on one widget of a dashboard that already exists.
+
+    The dashboard is sent whole so the server can check that the selected
+    widget is really on it, apply the operation itself, and validate the
+    result — rather than trusting the browser to do any of that.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    table_name: str
+
+    prompt: str
+
+    mode: Literal["add", "update"]
+
+    # Which widget the person selected. Required in "update" mode; the
+    # generated widget's own id is never used.
+    widget_id: Optional[str] = None
+
+    dashboard: DashboardSpecification
 
 
 class SharedDataRequest(BaseModel):

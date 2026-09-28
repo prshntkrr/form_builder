@@ -25,6 +25,13 @@ SUPPORTED_AGGREGATIONS = {
 MAX_PAGE_SIZE = 200
 
 
+# How many values a filter dropdown is offered. A filter is something you
+# pick from, so a column with thousands of distinct values is the wrong
+# column to filter by — and the browser should not be handed all of them
+# either way.
+MAX_FILTER_OPTIONS = 500
+
+
 def build_select_query(
     table_name: str,
     binding: DashboardDataBinding,
@@ -283,3 +290,34 @@ def build_filter_expression(
     raise ValueError(
         f"Unsupported filter operator: {operator}"
     )
+
+def build_distinct_query(
+    table_name: str,
+    field: str,
+    limit: int = MAX_FILTER_OPTIONS,
+) -> Tuple[sql.Composed, List[Any]]:
+    """The values a filter on this column can be set to.
+
+    One column, one row per distinct value, in order, capped. The column is
+    an Identifier like every other identifier here — the caller has already
+    checked that it belongs to the table, and this makes sure a name that
+    somehow got through cannot be anything but a name.
+
+    Blanks are left out: a filter offering an empty choice narrows nothing,
+    and the row that has no value is not something anybody picks.
+    """
+
+    if not table_name:
+        raise ValueError("Table name is required")
+
+    if not field:
+        raise ValueError("A field is required")
+
+    column = sql.Identifier(field)
+
+    query = sql.SQL(
+        "SELECT DISTINCT {column} AS value FROM {table} "
+        "WHERE {column} IS NOT NULL ORDER BY 1 LIMIT %s"
+    ).format(column=column, table=sql.Identifier(table_name))
+
+    return query, [max(1, min(int(limit), MAX_FILTER_OPTIONS))]

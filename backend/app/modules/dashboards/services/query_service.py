@@ -3,7 +3,9 @@ from typing import Any, Dict, List
 from app.core.database import fetch_all
 from app.modules.dashboards.schemas import DashboardDataBinding
 from app.modules.dashboards.services.query_builder import (
+    MAX_FILTER_OPTIONS,
     build_count_query,
+    build_distinct_query,
     build_select_query,
 )
 
@@ -70,3 +72,25 @@ def count_dashboard_rows(
     rows = fetch_all(rendered_query, params)
 
     return int(rows[0]["total"]) if rows else 0
+
+
+def distinct_field_values(
+    table_name: str,
+    field: str,
+    limit: int = MAX_FILTER_OPTIONS,
+) -> List[Any]:
+    """The values a dashboard filter on this column can be set to.
+
+    The caller validates that the field belongs to the table; this asks the
+    database for the values themselves. Read-only, one column, capped.
+    """
+    query, params = build_distinct_query(table_name, field, limit=limit)
+
+    from app.core.database import get_connection
+
+    with get_connection() as conn:
+        rendered_query = query.as_string(conn)
+
+    rows = normalize_rows(fetch_all(rendered_query, params))
+
+    return [row["value"] for row in rows if row.get("value") not in (None, "")]
