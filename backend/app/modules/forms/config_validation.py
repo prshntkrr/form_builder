@@ -294,6 +294,10 @@ class WhatsAppConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     welcome_message: str = Field(default="", max_length=1024)
+    # Asked before the first question, and answered yes or no. A form that sets
+    # none is not asking for consent and goes straight to the questions.
+    consent_message: str = Field(default="", max_length=1024)
+    decline_message: str = Field(default="", max_length=1024)
     completion_message: str = Field(default="", max_length=1024)
     review: bool = Field(default=False, strict=True)
     order: List[str] = Field(default_factory=list)

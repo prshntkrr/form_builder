@@ -756,6 +756,14 @@
 .wa__build { display: grid; gap: 12px; min-width: 0; }
 .wa__title { font-size: 15px; margin: 0; }
 .wa__message { display: grid; gap: 4px; }
+/* The number and the keyword: the route, not the form. Set apart from the
+   messages below it, which are part of the definition. */
+.wa__route {
+  display: grid; gap: 10px;
+  border: 1px solid var(--line); border-left: 3px solid #075e54;
+  border-radius: 8px; padding: 10px 12px;
+}
+.wa__routefield { display: grid; gap: 3px; }
 .wa__steps { margin: 0; padding-left: 22px; display: grid; gap: 8px; }
 .wa__step { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
 .wa__step.is-selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-wash); }
@@ -796,16 +804,6 @@
 /* A question kept in the definition but out of the form. */
 .frow__hidden { background: var(--amber-wash, #fdf3e0); color: var(--amber, #a76b12); }
 
-/* Previewing a form, on a screen with room to spare.
- *
- * The workspace tabs take the whole width already; Preview fell back to the
- * 1000px page measure, which on a wide monitor drew a column of single boxes
- * down the middle with both margins empty. Wider, but still bounded: a text box
- * the width of a 27" screen is not a form, it is a banner.
- *
- * Doubled class for the same reason as `.main--builder` above — this stylesheet
- * is bundled before core's, so a single class loses the cap on source order. */
-.main.main--preview { max-width: 1400px; }
 
 /* Work this browser kept while it was not saved. A notice with two answers,
    not a dialog: it must not stand between somebody and the form they came to

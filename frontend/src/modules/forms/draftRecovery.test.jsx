@@ -205,3 +205,89 @@ describe('a draft the server has already taken', () => {
     expect(held(null).form).toEqual(FORM)
   })
 })
+
+
+// --------------------------------------------------------------------------- //
+/**
+ * The timer has to outlive the typing.
+ *
+ * The autosave effect used to list `form` among its dependencies, so every
+ * keystroke tore the interval down and started a fresh minute. Somebody adding
+ * ten questions without pausing never got a single autosave — it fired only
+ * after a full minute of not typing, which is the one time nothing needs saving.
+ *
+ * Read from the source because that is where the bug was: a rendered assertion
+ * would have passed happily either way.
+ */
+describe('the autosave interval', () => {
+  const source = () =>
+    require('node:fs').readFileSync('src/modules/forms/pages/Builder.jsx', 'utf8')
+
+  test('is set up once and never rebuilt by an edit', () => {
+    const builder = source()
+    const at = builder.indexOf('setInterval(() => tickRef.current()')
+    expect(at).toBeGreaterThan(-1)
+
+    // The dependency list that closes this effect.
+    const after = builder.slice(at, at + 800)
+    expect(after).toMatch(/\}, \[\]\)/)
+  })
+
+  test('what a tick does is read fresh each time, not captured', () => {
+    // A stable timer is only safe if what it calls sees the current form.
+    expect(source()).toMatch(/tickRef\.current = \(\) => \{/)
+    expect(source()).toMatch(/keepRef\.current = \(\) => \{/)
+  })
+
+  test('an unchanged form is not sent again every minute', () => {
+    expect(source()).toContain('sentRef.current')
+  })
+})
+
+
+// --------------------------------------------------------------------------- //
+/**
+ * Naming a form before its tables are made.
+ *
+ * The first save fixes the table name for good: `update_form` keeps the name
+ * the table was created with, because renaming it would mean renaming the
+ * answers table, the reporting mirror, the sequence, and every dashboard and
+ * import pointing at them. So a form saved while still called "Untitled form"
+ * collects its answers in `untitled_form` forever.
+ */
+describe('a form nobody has named', () => {
+  const source = () =>
+    require('node:fs').readFileSync('src/modules/forms/pages/Builder.jsx', 'utf8')
+
+  test('the first manual save is refused until it has a name', () => {
+    const builder = source()
+
+    expect(builder).toMatch(/const unnamed = \(\) => \{/)
+    expect(builder).toContain('name is permanent')
+    expect(builder).toContain('if (!namedOnPurpose()) return')
+    // Refused, not confirmed: a question with a way past it gets clicked
+    // through, and the cost lands on whoever reads the database later.
+    expect(builder).not.toContain('Save it anyway')
+    expect(builder).not.toMatch(/namedOnPurpose[\s\S]{0,200}window\.confirm/)
+  })
+
+  test('it puts the cursor where the answer goes', () => {
+    // An error with no way to act on it is a dead end.
+    const builder = source()
+    expect(builder).toContain('titleRef.current?.focus()')
+    expect(builder).toContain('ref={titleRef}')
+  })
+
+  test('autosave will not create it and settle the name silently', () => {
+    // The server would take an unnamed form happily, which is the problem:
+    // a minute after somebody starts typing, the name is decided for them.
+    expect(source()).toContain('if (!editing && (!form.channel || unnamed())) return')
+  })
+
+  test('a form that already exists is never asked about again', () => {
+    // Its tables are already made; the question has no answer left to change.
+    const builder = source()
+    const at = builder.indexOf('const namedOnPurpose')
+    expect(builder.slice(at, at + 400)).toContain('draftId')
+  })
+})

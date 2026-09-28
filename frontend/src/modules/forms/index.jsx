@@ -12,6 +12,7 @@ import LiveForms from './pages/LiveForms.jsx'
 import PublicForm from './pages/PublicForm.jsx'
 import PublicShare from './pages/PublicShare.jsx'
 import Routing from './pages/Routing.jsx'
+import WhatsAppRoutes from './pages/WhatsAppRoutes.jsx'
 import './styles.css'
 
 /** Old links that used to mean something else. */
@@ -57,6 +58,9 @@ export default {
     { path: '/catalogues', element: <Catalogues />, requires: 'use_client_catalogs' },
     { path: '/standards', element: <Standards />, requires: 'use_standards' },
     { path: '/routing', element: <Routing />, requires: 'manage_routing' },
+    /* WhatsApp's own operational list: every WhatsApp form and the keyword
+       that reaches it, including the ones with no keyword yet. */
+    { path: '/routing/whatsapp', element: <WhatsAppRoutes />, requires: 'manage_routing' },
     { path: '/forms/:formId', element: <Moved to="questions" />, requires: 'build_any_forms' },
     { path: '/forms/:formId/edit', element: <Moved to="questions" />, requires: 'build_any_forms' },
     { path: '/forms/:formId/data', element: <Moved to="responses" />, requires: 'build_any_forms' },

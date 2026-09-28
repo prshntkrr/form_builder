@@ -186,3 +186,92 @@ export function applicable(formJson, values) {
   }
   return kept
 }
+
+
+/* ── a question that is renamed or deleted ──────────────────────────────────
+ *
+ * A rule refers to questions by name: the one it controls (`target`) and the
+ * ones it reads (`conditions[].field`). The builder already carries a rename
+ * into the layout and the WhatsApp conversation, and drops both when a question
+ * goes — but rules were left behind, so deleting a question left a rule about a
+ * question that no longer existed and the server refused the whole form:
+ *
+ *     rules.0.target: This rule controls 'gender', which is not a question
+ *     on this form.
+ *
+ * From then on nothing could be saved. The form on screen and the form in the
+ * database drifted apart, and a reload looked like lost work.
+ */
+
+/** Is this rule's target the named question? Sections and the form are not. */
+const controls = (rule, name) =>
+  rule?.target?.type === 'field' && text(rule.target.name) === text(name)
+
+/**
+ * The rules, with one question's name changed everywhere it appears.
+ *
+ * Returns the same array when nothing refers to it, so a caller can tell
+ * cheaply that there was nothing to do.
+ */
+export function renameFieldInRules(rules, from, to) {
+  if (!Array.isArray(rules) || !from || !to || from === to) return rules
+
+  let changed = false
+
+  const next = rules.map((rule) => {
+    if (!rule) return rule
+
+    const conditions = (rule.conditions || []).map((condition) => {
+      if (text(condition?.field) !== text(from)) return condition
+      changed = true
+      return { ...condition, field: to }
+    })
+
+    if (!controls(rule, from)) {
+      return changed ? { ...rule, conditions } : rule
+    }
+
+    changed = true
+    return { ...rule, conditions, target: { ...rule.target, name: to } }
+  })
+
+  return changed ? next : rules
+}
+
+/**
+ * The rules, with every reference to one question removed.
+ *
+ * A rule that controlled it goes entirely — there is nothing left to show or
+ * hide. A rule that merely read it loses that condition, and goes too if it was
+ * the only one: a rule with nothing to test would never fire, and its target
+ * would disappear for good. That is the same reasoning `ConditionEditor` uses
+ * when the last condition is removed by hand.
+ */
+export function removeFieldFromRules(rules, name) {
+  if (!Array.isArray(rules) || !name) return rules
+
+  let changed = false
+
+  const next = []
+  for (const rule of rules) {
+    if (!rule) continue
+
+    if (controls(rule, name)) {
+      changed = true
+      continue
+    }
+
+    const conditions = (rule.conditions || [])
+      .filter((condition) => text(condition?.field) !== text(name))
+
+    if (conditions.length === (rule.conditions || []).length) {
+      next.push(rule)
+      continue
+    }
+
+    changed = true
+    if (conditions.length) next.push({ ...rule, conditions })
+  }
+
+  return changed ? next : rules
+}

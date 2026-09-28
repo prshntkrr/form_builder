@@ -477,14 +477,59 @@ def diff_versions(form_id: str, from_no: Optional[int], to_no: Optional[int]) ->
 # --------------------------------------------------------------------------- #
 # writes
 # --------------------------------------------------------------------------- #
+def _route_in_transaction(cur, form_id: str, project_id: Optional[str],
+                          status: str, whatsapp: Optional[Dict[str, Any]],
+                          created_by: str) -> Optional[Dict[str, Any]]:
+    """Write the form's WhatsApp keyword beside the form, in its transaction.
+
+    `whatsapp` is `{"number": …, "keyword": …}` as the builder sends it, or
+    None for a form that is not configuring one. A blank keyword is nothing to
+    route and is skipped rather than refused — a WhatsApp form is perfectly
+    valid before anybody has decided what word reaches it.
+
+    The route is enabled only for a live form. A draft's keyword is stored
+    switched off and comes on when the form is published; see
+    `_follow_status_on_channels`.
+
+    Raising here rolls the form back with it, which is the point: a form saved
+    without the keyword somebody typed is the failure this replaced.
+    """
+    if not whatsapp:
+        return None
+
+    keyword = str(whatsapp.get("keyword") or "").strip()
+    if not keyword:
+        return None
+
+    from app.modules.forms import routing
+
+    return routing.upsert_form_route(
+        cur,
+        channel="whatsapp",
+        form_id=form_id,
+        project_id=project_id,
+        route_key=keyword,
+        receiver_number=str(whatsapp.get("number") or "").strip(),
+        enabled=status == "Active",
+        created_by=created_by,
+    )
+
+
 def create_form(
     form_json: Dict[str, Any],
     created_by: Optional[str] = None,
     form_type: str = "parent",
     parent_id: Optional[str] = None,
     status: str = "Active",
+    project_id: Optional[str] = None,
+    whatsapp: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """Persist a new form, open version 1, and provision its data table."""
+    """Persist a new form, open version 1, and provision its data table.
+
+    `whatsapp` is the number and keyword that reach it, written into
+    `channel_form_route` in the same transaction — so a WhatsApp form and the
+    way somebody reaches it are stored together or not at all.
+    """
     if status not in FORM_STATUSES:
         raise FormServiceError(f"Unknown status '{status}'")
     if form_type not in FORM_TYPES:
@@ -537,6 +582,12 @@ def create_form(
             (form_id, 1, Json(definition)),
         )
 
+        # The keyword that reaches it, in the same transaction as the form. The
+        # project comes from the request rather than the row: `set_form_project`
+        # runs after this, so the row does not know yet.
+        route = _route_in_transaction(cur, form_id, project_id, status,
+                                      whatsapp, author)
+
         table_report = sync_table(cur, definition)
         tabular_report = tabular_service.sync(cur, definition)
 
@@ -549,6 +600,8 @@ def create_form(
     result = _row_to_form(row, version=1)
     result["table"] = table_report
     result["tabular"] = tabular_report
+    if route:
+        result["whatsapp_route"] = route
     return result
 
 
@@ -591,12 +644,17 @@ def update_form(
     updated_by: Optional[str] = None,
     status: Optional[str] = None,
     renames: Optional[Dict[str, str]] = None,
+    whatsapp: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Save a new revision.
 
     Bumps the version and appends to `form_version`. If fields were renamed,
     `renames` maps old key -> new key and the stored answers are moved with them
     so existing responses keep matching the definition.
+
+    `whatsapp` is the number and keyword that reach it, written in this same
+    transaction — so an edit that changes the keyword either stores both the
+    questions and the keyword, or neither.
     """
     definition = normalize_form(form_json)
 
@@ -698,6 +756,15 @@ def update_form(
                 (form_id, version_no, Json(definition)),
             )
 
+        # The keyword that reaches it, beside the questions it asks. The project
+        # is the form's own, read from the row rather than taken from a caller:
+        # a route may only be scoped where its form is, and only this side
+        # reliably knows where that is.
+        route = _route_in_transaction(
+            cur, form_id, row.get("project_id"),
+            status or row.get("form_status") or "Active",
+            whatsapp, definition["updated_by"])
+
         table_report = sync_table(cur, definition)
 
         # Move stored answers to their new keys, in the same transaction as the
@@ -715,6 +782,8 @@ def update_form(
     result["table"] = table_report
     result["tabular"] = tabular_report
     result["renamed"] = moved
+    if route:
+        result["whatsapp_route"] = route
     return result
 
 
@@ -744,4 +813,36 @@ def set_status(form_id: str, status: str) -> Dict[str, Any]:
         row = cur.fetchone()
         if not row:
             raise FormNotFound(f"Form {form_id} not found")
-        return _row_to_form(dict(row))
+
+    form = _row_to_form(dict(row))
+    _follow_status_on_channels(form_id, status)
+    return form
+
+
+def _follow_status_on_channels(form_id: str, status: str) -> None:
+    """Take a form off the air with itself, and bring it back with itself.
+
+    A keyword pointing at a form nobody may fill in any more is answered as
+    unmatched by `routing.resolve` whatever this does — the published check is
+    there too, and it is the one that actually protects a caller. This is so
+    the routing screen tells the truth: a route for an unpublished form shows
+    as off rather than as on-but-silently-refusing.
+
+    Nothing is deleted. The keyword, the number and the scope are kept, so
+    republishing brings the same route back instead of asking for it again.
+
+    Outside the transaction that changed the status, and deliberately: routing
+    is another module's table by ownership if not by directory, and a form must
+    still change status if its routes cannot be updated. A failure is logged.
+    """
+    from app.modules.forms import routing
+
+    try:
+        moved = routing.set_enabled_for_form(form_id, status == "Active")
+    except Exception:
+        logger.exception("Could not follow %s's status onto its routes", form_id)
+        return
+
+    if moved:
+        logger.info("%s %d route(s) for %s",
+                    "Enabled" if status == "Active" else "Disabled", moved, form_id)

@@ -11,6 +11,7 @@ from app.modules.forms import llm
 from app.modules.forms import connectors
 from app.modules.forms import publishing
 from app.modules.forms import relationships
+from app.modules.forms import routing
 from app.modules.forms import standard_library
 from app.core.deps import current_user, needs
 from app.modules.forms.permissions import (
@@ -445,7 +446,13 @@ def create(req: CreateFormRequest, user: Dict[str, Any] = Depends(_could_build_s
             form_type=req.form_type,
             parent_id=req.parent_id,
             status=req.form_status,
+            project_id=req.project_id,
+            whatsapp=req.whatsapp.model_dump() if req.whatsapp else None,
         )
+    except routing.RoutingError as exc:
+        # The keyword is taken. Nothing was written — the form rolled back with
+        # it — so this is a 400 to fix and send again, not a half-saved form.
+        raise HTTPException(status_code=400, detail=str(exc))
     except ConfigValidationError as exc:
         raise HTTPException(status_code=422, detail=exc.as_payload())
     except FormSchemaError as exc:
@@ -545,7 +552,12 @@ def update(form_id: str, req: UpdateFormRequest,
             updated_by=auth_service.display_name(user),
             status=req.form_status,
             renames=req.renames,
+            whatsapp=req.whatsapp.model_dump() if req.whatsapp else None,
         )
+    except routing.RoutingError as exc:
+        # The keyword is taken. The edit rolled back with it, so the form is
+        # exactly as it was — a 400 to fix, not a half-saved revision.
+        raise HTTPException(status_code=400, detail=str(exc))
     except form_service.FormNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     except ConfigValidationError as exc:
