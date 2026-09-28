@@ -197,6 +197,12 @@ export default function Builder() {
   // channel.
   const [newChannel, setNewChannel] = useState(location.state?.channel || null)
 
+  /* How this form is reached on WhatsApp: the number and the keyword.
+     Not part of the form — it is the `channel_form_route` row the project's
+     Channel routing screen lists — so it is held beside the form here and saved
+     alongside it. Editing it in either place changes the same row. */
+  const [waRoute, setWaRoute] = useState({ receiver_number: '', keyword: '' })
+
   // A draft kept in this browser, offered when the builder opens on work that
   // never reached the server. See draftRecovery.js.
   const [recovered, setRecovered] = useState(null)
@@ -228,6 +234,7 @@ export default function Builder() {
     setRecovered(null)
     setAutoSavedId(null)
     setAutoSaved(null)
+    setWaRoute({ receiver_number: '', keyword: '' })
 
     if (!formId) {
       // A copy of a saved form, made for another channel ("Copy as …").
@@ -268,6 +275,16 @@ export default function Builder() {
       })
       .catch((e) => setError(e.message))
       .finally(() => setBusy(null))
+
+    /* Whatever route already reaches this form. A form that has none — or a
+       reader who cannot manage routing — simply shows the fields empty; it is
+       not an error worth interrupting the builder for. */
+    api.whatsappRoute(formId)
+      .then(({ route }) => route && setWaRoute({
+        receiver_number: route.receiver_number || '',
+        keyword: route.route_key || '',
+      }))
+      .catch(() => {})
   }, [formId])
 
   /* Write the draft down every minute, and again on the way out.
@@ -300,7 +317,7 @@ export default function Builder() {
         const renames = {}
         for (const f of form.fields) if (f._orig && f._orig !== f.name) renames[f._orig] = f.name
 
-        await api.updateForm(draftId, payload, undefined, renames)
+        await api.updateForm(draftId, payload, undefined, renames, whatsappRouting())
 
         /* The renames have happened, so the next autosave must not send them
            again — `_orig` would then name a column that no longer exists.
@@ -313,7 +330,8 @@ export default function Builder() {
           }))
         }
       } else {
-        const made = await api.createForm(payload, undefined, 'Draft', buildingIn)
+        const made = await api.createForm(payload, undefined, 'Draft', buildingIn,
+                                          whatsappRouting())
         setAutoSavedId(made.form_id)
         setStatus('Draft')
         formsChanged()
@@ -587,6 +605,25 @@ export default function Builder() {
     return false
   }
 
+  /** The number and keyword to send *with* the form, or undefined.
+   *
+   *  Only for a WhatsApp form, and only once there is a keyword: a form with no
+   *  keyword yet has nothing to route, and sending an empty one would be
+   *  refused rather than ignored.
+   *
+   *  The server writes the route in the same transaction as the questions, so
+   *  there is no longer a second request that can fail on its own and leave a
+   *  form nobody can reach. A keyword already taken fails the whole save, which
+   *  is the honest outcome: nothing was stored, and the message says why.
+   */
+  const whatsappRouting = () => {
+    if (formChannel(form) !== 'whatsapp' || !waRoute.keyword.trim()) return undefined
+    return {
+      number: waRoute.receiver_number.trim(),
+      keyword: waRoute.keyword.trim(),
+    }
+  }
+
   const save = (saveAs = 'Active') =>
     run('save', async () => {
       if (!namedOnPurpose()) return
@@ -599,8 +636,8 @@ export default function Builder() {
          and creating it again would leave two. Publishing one autosave made is
          an update plus a status change, because the row already exists. */
       const result = draftId
-        ? await api.updateForm(draftId, payload, undefined, renames)
-        : await api.createForm(payload, undefined, saveAs, buildingIn)
+        ? await api.updateForm(draftId, payload, undefined, renames, whatsappRouting())
+        : await api.createForm(payload, undefined, saveAs, buildingIn, whatsappRouting())
 
       if (draftId && !editing && saveAs !== 'Draft') {
         await api.setStatus(draftId, saveAs)
@@ -1125,6 +1162,8 @@ export default function Builder() {
                   onSelect={setChosen}
                   onChange={setForm}
                   onAdd={add}
+                  route={waRoute}
+                  onRoute={(patch) => setWaRoute({ ...waRoute, ...patch })}
                 />
               )}
 

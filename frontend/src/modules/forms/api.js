@@ -203,7 +203,11 @@ export const api = {
   // is what every form did before projects existed. The backend checks that
   // this account may build in that project, so sending somebody else's id
   // fails there rather than succeeding here.
-  createForm: (formJson, createdBy, status, projectId) =>
+  /* `whatsapp` is {number, keyword}. Sent with the form so the route row is
+     written in the same transaction: a WhatsApp form and the keyword that
+     reaches it are stored together or not at all. Left out means "leave
+     routing alone". */
+  createForm: (formJson, createdBy, status, projectId, whatsapp) =>
     request('/forms', {
       method: 'POST',
       body: JSON.stringify({
@@ -211,13 +215,17 @@ export const api = {
         created_by: createdBy,
         form_status: status,
         ...(projectId ? { project_id: projectId } : {}),
+        ...(whatsapp ? { whatsapp } : {}),
       }),
     }),
 
-  updateForm: (formId, formJson, updatedBy, renames) =>
+  updateForm: (formId, formJson, updatedBy, renames, whatsapp) =>
     request(`/forms/${formId}`, {
       method: 'PUT',
-      body: JSON.stringify({ form_json: formJson, updated_by: updatedBy, renames }),
+      body: JSON.stringify({
+        form_json: formJson, updated_by: updatedBy, renames,
+        ...(whatsapp ? { whatsapp } : {}),
+      }),
     }),
 
   // Check stored responses against the current definition; fix re-coerces what it can.
@@ -390,6 +398,25 @@ export const api = {
             { method: 'PUT', body: JSON.stringify(route) }),
 
   deleteRoute: (routeId) => request(`/mcdc/routes/${routeId}`, { method: 'DELETE' }),
+
+  // The same `channel_form_route` row, addressed by the form instead of by a
+  // route id — which is what the Form Builder knows. Not a second store: a
+  // route saved here is the one the routing screen lists and can change.
+  whatsappRoute: (formId) => request(`/mcdc/forms/${formId}/whatsapp-route`),
+
+  saveWhatsappRoute: (formId, route) =>
+    request(`/mcdc/forms/${formId}/whatsapp-route`,
+            { method: 'PUT', body: JSON.stringify(route) }),
+
+  // How the channel is operated here: the timeout, and whether a token is set.
+  // The token itself is never returned — only `token_set` and its last four
+  // characters, which is all the screen shows.
+  whatsappSettings: (project) =>
+    request(`/mcdc/whatsapp/settings${project ? `?project=${project}` : ''}`),
+
+  saveWhatsappSettings: (project, settings) =>
+    request(`/mcdc/whatsapp/settings${project ? `?project=${project}` : ''}`,
+            { method: 'PUT', body: JSON.stringify(settings) }),
 
   // --- one form's submissions hanging off another's ---
   // What this form is attached to, and what is attached to it.

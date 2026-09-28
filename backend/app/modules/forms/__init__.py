@@ -10,17 +10,18 @@ from app.core.registry import Module
 
 from . import bootstrap, permissions  # noqa: F401  (importing registers the permissions)
 from .routers import (dictionary, forms, mcdc, public_forms, standard_forms,
-                      submissions)
+                      submissions, whatsapp_webhook)
 
 MODULE = Module(
     name="forms",
     label="Forms",
     routers=[forms.router, standard_forms.router, submissions.router,
-             dictionary.router, mcdc.router, public_forms.router],
+             dictionary.router, mcdc.router, public_forms.router, whatsapp_webhook.router],
     tables=["forms", "form_version", "standard_form_library", "form_view",
             "data_dictionary", "form_media", "form_survey_progress",
             "form_export", "submission_channel", "submission_receipt",
-            "channel_form_route", "channel_identity"],
+            "channel_form_route", "channel_identity", "channel_settings",
+            "whatsapp_session"],
     schema_file=Path(__file__).resolve().parent / "schema.sql",
     migrations=[
         bootstrap.ensure_status_values,
@@ -31,5 +32,6 @@ MODULE = Module(
         bootstrap.ensure_export_permission,
         bootstrap.ensure_routing_permissions,
         bootstrap.ensure_public_share_columns,
+        bootstrap.ensure_route_receiver_number,
     ],
 )

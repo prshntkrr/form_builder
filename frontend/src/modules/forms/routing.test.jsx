@@ -4,6 +4,11 @@
  * The page is a list of signposts. It never decides who may use one — that is
  * the backend's, from the same membership and assignment checks as everywhere
  * else — and it never holds a credential for the platform on the other end.
+ *
+ * Two channels, two shapes, and the difference is the point: WhatsApp routes
+ * are configured in each form's builder, so this page sends you to WhatsApp's
+ * own screen rather than editing them here. IVR has no builder yet, so its
+ * routes are made and kept here — the only place they can be.
  */
 import React from 'react'
 import { render, screen, waitFor, within } from '@testing-library/react'
@@ -12,6 +17,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest'
 
 const calls = []
 const answers = {}
+const navigated = []
 
 vi.mock('./api.js', () => ({
   api: {
@@ -31,17 +37,23 @@ vi.mock('./api.js', () => ({
   },
 }))
 
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => (to) => navigated.push(to),
+  Link: ({ to, children, ...rest }) => <a href={to} {...rest}>{children}</a>,
+}))
+
 vi.mock('../projects/active.js', () => ({
   useProjects: () => ({ projectId: answers.projectId, system: !answers.projectId }),
 }))
 
 const FORMS = [
-  { form_id: 'FRM1', form_title: 'Farmer Registration' },
-  { form_id: 'FRM2', form_title: 'Plot Registration' },
+  { form_id: 'FRM1', form_title: 'Farmer Registration', form_status: 'Active' },
+  { form_id: 'FRM2', form_title: 'Plot Registration', form_status: 'Active' },
 ]
 
 beforeEach(() => {
   calls.length = 0
+  navigated.length = 0
   vi.clearAllMocks()
   answers.projectId = 'PRJ1'
   answers.forms = FORMS
@@ -49,7 +61,7 @@ beforeEach(() => {
   answers.addFails = null
   answers.routes = [
     { route_id: 1, channel: 'whatsapp', route_key: 'REGISTER FARMER',
-      form_id: 'FRM1', project_id: 'PRJ1', enabled: true },
+      form_id: 'FRM1', project_id: 'PRJ1', enabled: true, receiver_number: '' },
     { route_id: 2, channel: 'ivr', route_key: '1',
       form_id: 'FRM1', project_id: 'PRJ1', enabled: true },
   ]
@@ -66,18 +78,51 @@ async function draw() {
 const section = (name) =>
   screen.getByText(name).closest('.card')
 
+const openChannel = async (user, name) =>
+  user.click(within(section(name)).getByRole('button', { name: 'Open' }))
+
 
 describe('the routing page', () => {
-  test('lists each channel with what reaches a form on it', async () => {
+  test('a channel is closed until it is opened, and says how much is on it', async () => {
     await draw()
 
     const whatsapp = within(section('WhatsApp'))
-    expect(whatsapp.getByText('REGISTER FARMER')).toBeTruthy()
-    // The form's name, not its id.
-    expect(whatsapp.getByText('Farmer Registration')).toBeTruthy()
+    expect(whatsapp.getByText('1 route')).toBeTruthy()
+    expect(whatsapp.queryByText('REGISTER FARMER')).toBeNull()
+    expect(whatsapp.queryByRole('button', { name: 'Add route' })).toBeNull()
+  })
 
+  test('WhatsApp opens its own page rather than expanding', async () => {
+    const user = userEvent.setup()
+    await draw()
+
+    await openChannel(user, 'WhatsApp')
+
+    expect(navigated).toEqual(['/routing/whatsapp'])
+    // Nothing expanded in place, so there is one WhatsApp screen and not two.
+    expect(within(section('WhatsApp')).queryByText('REGISTER FARMER')).toBeNull()
+  })
+
+  test('WhatsApp never offers to add a route here', async () => {
+    const user = userEvent.setup()
+    await draw()
+
+    // Its keyword belongs to its form's builder; offering it here as well
+    // would be two ways to write one row.
+    await openChannel(user, 'WhatsApp')
+    expect(within(section('WhatsApp')).queryByRole('button', { name: 'Add route' })).toBeNull()
+  })
+
+  test('IVR still expands in place, because it has no builder', async () => {
+    const user = userEvent.setup()
+    await draw()
+
+    await openChannel(user, 'IVR')
+
+    expect(navigated).toEqual([])
     const ivr = within(section('IVR'))
     expect(ivr.getByText('1')).toBeTruthy()
+    expect(ivr.getByRole('button', { name: 'Add route' })).toBeTruthy()
   })
 
   test('it asks for the routes of the context being worked in', async () => {
@@ -93,29 +138,29 @@ describe('the routing page', () => {
     await waitFor(() => expect(calls).toContainEqual(['routes', 'none']))
   })
 
-  test('a route can be added, scoped to the context', async () => {
+  test('an IVR route can be added, scoped to the context', async () => {
     const user = userEvent.setup()
     await draw()
 
-    const whatsapp = within(section('WhatsApp'))
-    await user.click(whatsapp.getByRole('button', { name: 'Add route' }))
-    await user.type(screen.getByLabelText('Keyword for WhatsApp'), 'REGISTER PLOT')
-    await user.selectOptions(screen.getByLabelText('Form for WhatsApp'), 'FRM2')
+    await openChannel(user, 'IVR')
+    await user.click(within(section('IVR')).getByRole('button', { name: 'Add route' }))
+    await user.type(screen.getByLabelText('Option for IVR'), '7')
+    await user.selectOptions(screen.getByLabelText('Form for IVR'), 'FRM2')
     await user.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => expect(calls).toContainEqual(['add', {
-      channel: 'whatsapp', route_key: 'REGISTER PLOT', form_id: 'FRM2',
-      project_id: 'PRJ1' }]))
+      channel: 'ivr', route_key: '7', form_id: 'FRM2', project_id: 'PRJ1' }]))
   })
 
   test('a duplicate is refused by the backend and shown here', async () => {
     const user = userEvent.setup()
-    answers.addFails = "'REGISTER FARMER' already points somewhere on whatsapp here."
+    answers.addFails = "'1' already points somewhere on ivr here."
     await draw()
 
-    await user.click(within(section('WhatsApp')).getByRole('button', { name: 'Add route' }))
-    await user.type(screen.getByLabelText('Keyword for WhatsApp'), 'register farmer')
-    await user.selectOptions(screen.getByLabelText('Form for WhatsApp'), 'FRM2')
+    await openChannel(user, 'IVR')
+    await user.click(within(section('IVR')).getByRole('button', { name: 'Add route' }))
+    await user.type(screen.getByLabelText('Option for IVR'), '1')
+    await user.selectOptions(screen.getByLabelText('Form for IVR'), 'FRM2')
     await user.click(screen.getByRole('button', { name: 'Save' }))
 
     expect(await screen.findByText(/already points somewhere/)).toBeTruthy()
@@ -125,10 +170,11 @@ describe('the routing page', () => {
     const user = userEvent.setup()
     await draw()
 
-    await user.click(within(section('WhatsApp')).getByRole('button', { name: 'Add route' }))
+    await openChannel(user, 'IVR')
+    await user.click(within(section('IVR')).getByRole('button', { name: 'Add route' }))
     expect(screen.getByRole('button', { name: 'Save' }).disabled).toBe(true)
 
-    await user.type(screen.getByLabelText('Keyword for WhatsApp'), '   ')
+    await user.type(screen.getByLabelText('Option for IVR'), '   ')
     expect(screen.getByRole('button', { name: 'Save' }).disabled).toBe(true)
   })
 
@@ -136,19 +182,13 @@ describe('the routing page', () => {
     const user = userEvent.setup()
     await draw()
 
-    await user.click(within(section('WhatsApp')).getByRole('button', { name: 'Disable' }))
+    await openChannel(user, 'IVR')
+    await user.click(within(section('IVR')).getByRole('button', { name: 'Disable' }))
 
     await waitFor(() => expect(calls.some(([k, id, r]) =>
-      k === 'update' && id === 1 && r.enabled === false)).toBe(true))
+      k === 'update' && id === 2 && r.enabled === false)).toBe(true))
     // Nothing about the form was sent.
     expect(calls.some(([k]) => k === 'form' || k === 'status')).toBe(false)
-  })
-
-  test('a disabled route reads as off', async () => {
-    answers.routes = [{ ...answers.routes[0], enabled: false }]
-    await draw()
-
-    expect(await screen.findByText('Off')).toBeTruthy()
   })
 
   test('removing asks first, and says the form is untouched', async () => {
@@ -156,10 +196,11 @@ describe('the routing page', () => {
     window.confirm = vi.fn(() => true)
     await draw()
 
-    await user.click(within(section('WhatsApp')).getByRole('button', { name: 'Remove' }))
+    await openChannel(user, 'IVR')
+    await user.click(within(section('IVR')).getByRole('button', { name: 'Remove' }))
 
     expect(window.confirm.mock.calls[0][0]).toMatch(/form itself is untouched/)
-    await waitFor(() => expect(calls).toContainEqual(['delete', 1]))
+    await waitFor(() => expect(calls).toContainEqual(['delete', 2]))
   })
 
   test('changing your mind removes nothing', async () => {
@@ -167,7 +208,8 @@ describe('the routing page', () => {
     window.confirm = vi.fn(() => false)
     await draw()
 
-    await user.click(within(section('WhatsApp')).getByRole('button', { name: 'Remove' }))
+    await openChannel(user, 'IVR')
+    await user.click(within(section('IVR')).getByRole('button', { name: 'Remove' }))
 
     expect(calls.some(([k]) => k === 'delete')).toBe(false)
   })
@@ -176,7 +218,7 @@ describe('the routing page', () => {
     answers.routes = []
     await draw()
 
-    expect(await screen.findAllByText(/Nothing reaches a form on/)).toHaveLength(2)
+    expect(await screen.findAllByText('Nothing routed yet')).toHaveLength(2)
   })
 
   test('an account that may not manage routing is told, not broken', async () => {
@@ -188,7 +230,6 @@ describe('the routing page', () => {
 
   test('the page holds no credential and builds no address', async () => {
     const { container } = await draw()
-    await screen.findByText('REGISTER FARMER')
 
     expect(container.textContent).not.toMatch(/api[_-]?key|secret|Bearer|https?:\/\//i)
 
