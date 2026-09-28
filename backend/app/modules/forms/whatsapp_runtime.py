@@ -170,16 +170,43 @@ def _next_question(form_json: Dict[str, Any],
 # --------------------------------------------------------------------------- #
 # writing a question out
 # --------------------------------------------------------------------------- #
-def _choices(field: Dict[str, Any]) -> List[Tuple[str, str]]:
-    """The choices to number, as `(label, value)`.
+def _choices(field: Dict[str, Any],
+             answers: Optional[Dict[str, Any]] = None) -> List[Tuple[str, str]]:
+    """The choices to offer, as `(label, value)`.
 
-    Yes/No for a boolean is this module's own: the definition has no options for
-    one, because "true" and "false" are how it is *stored*, not how a person is
-    asked. Everything else is the field's own list, exactly as stored — a
-    catalogue-backed question has none written down and is answered by typing.
+    Three sources, and only the first is this module's own:
+
+        Yes/No      for a boolean. The definition has no options for one,
+                    because `true`/`false` is how it is *stored*, not how a
+                    person is asked.
+        a catalogue when the question carries `options_from` rather than a
+                    list. Resolved now, through `mobile_package.options_for` —
+                    the same dispatch the mobile package uses, narrowed by the
+                    answer to whatever it depends on.
+        its own     otherwise, exactly as stored.
+
+    A catalogue question used to fall through with nothing, so it was sent as a
+    bare prompt and every reply was refused as "not an available option" — the
+    choices existed, and the conversation had simply never asked for them.
     """
     if resolve_type(field.get("type") or "text") == "boolean":
         return [("Yes", "yes"), ("No", "no")]
+
+    source = field.get("options_from") or {}
+    if source:
+        from app.modules.forms import mobile_package
+
+        parent = source.get("depends_on")
+        try:
+            resolved = mobile_package.options_for(
+                field, parent_value=(answers or {}).get(parent) if parent else None)
+        except Exception:
+            logger.exception("Could not resolve the choices for %s",
+                             field_name(field))
+            resolved = []
+        return [(str(o.get("label") or o.get("value") or ""),
+                 str(o.get("value") or ""))
+                for o in resolved if o.get("value") not in (None, "")]
 
     found = []
     for option in field.get("options") or []:
@@ -207,7 +234,8 @@ def say(text: str, interaction: str = TEXT_REPLY,
             "choices": list(choices or []), "title": title}
 
 
-def _how_to_ask(field: Dict[str, Any], config: Dict[str, Any]) -> str:
+def _how_to_ask(field: Dict[str, Any], config: Dict[str, Any],
+                choices: Optional[List[Tuple[str, str]]] = None) -> str:
     """The interaction this question is asked with.
 
     What the author chose in the builder, when the question can still be asked
@@ -220,14 +248,25 @@ def _how_to_ask(field: Dict[str, Any], config: Dict[str, Any]) -> str:
     if not allowed:
         return TEXT_REPLY
 
+    # The registry can only offer `numbered` for a catalogue question, because
+    # when the form was built nobody knew how long the list would be. Now it is
+    # resolved, so a short one can be tapped after all.
+    if choices and field.get("options_from"):
+        if len(choices) <= caps.MAX_BUTTONS:
+            allowed = [BUTTONS, LIST, NUMBERED]
+        elif len(choices) <= caps.MAX_LIST_ROWS:
+            allowed = [LIST, NUMBERED]
+
     name = field_name(field)
     chosen = ((config.get("fields") or {}).get(name) or {}).get("interaction")
     if chosen in allowed:
         return chosen
-    return caps.default_whatsapp_interaction(field) or TEXT_REPLY
+    return allowed[0] if allowed else (
+        caps.default_whatsapp_interaction(field) or TEXT_REPLY)
 
 
-def render(field: Dict[str, Any], config: Dict[str, Any]) -> Dict[str, Any]:
+def render(field: Dict[str, Any], config: Dict[str, Any],
+           answers: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """One question as a WhatsApp message.
 
     The prompt the author wrote, or the question's label. Then, for a question
@@ -248,8 +287,8 @@ def render(field: Dict[str, Any], config: Dict[str, Any]) -> Dict[str, Any]:
     prompt = _tidy(entry.get("prompt")) or field.get("label") or name
 
     lines = [f"*{prompt}*"]
-    choices = _choices(field)
-    interaction = _how_to_ask(field, config)
+    choices = _choices(field, answers)
+    interaction = _how_to_ask(field, config, choices)
     spec = get_type(field.get("type") or "text")
 
     if choices:
@@ -280,7 +319,8 @@ def render(field: Dict[str, Any], config: Dict[str, Any]) -> Dict[str, Any]:
 # --------------------------------------------------------------------------- #
 # reading a reply back
 # --------------------------------------------------------------------------- #
-def _one_value(field: Dict[str, Any], text: str) -> Any:
+def _one_value(field: Dict[str, Any], text: str,
+               answers: Optional[Dict[str, Any]] = None) -> Any:
     """One reply, as a value the form's own validation can judge.
 
     The mapping from "2" to the second choice is `ingestion`'s — the WhatsApp
@@ -294,6 +334,21 @@ def _one_value(field: Dict[str, Any], text: str) -> Any:
         word = _word(text)
         if word.isdigit() and 1 <= int(word) <= len(choices):
             return choices[int(word) - 1][1]
+        return text
+
+    # A catalogue question's choices are not on the field, so the adapter has
+    # nothing to map against. Read against the list that was actually offered,
+    # by the same three rules: the number, the label, or the value.
+    if field.get("options_from"):
+        choices = _choices(field, answers)
+        if choices:
+            word = _tidy(text)
+            if word.isdigit() and 1 <= int(word) <= len(choices):
+                return choices[int(word) - 1][1]
+            folded = word.casefold()
+            for label, value in choices:
+                if folded in (label.strip().casefold(), str(value).strip().casefold()):
+                    return value
         return text
 
     spec = get_type(field.get("type") or "text")
@@ -470,7 +525,7 @@ def _start_questions(session: Dict[str, Any], form_json: Dict[str, Any],
     if not updated:
         return say(UNAVAILABLE)
 
-    question = render(field, _whatsapp_config(form_json))
+    question = render(field, _whatsapp_config(form_json), answers)
     if preamble:
         # One message, not two: two deliveries can arrive in either order, and
         # a question landing before its welcome reads as a non-sequitur.
@@ -532,13 +587,13 @@ def _answer(session: Dict[str, Any], form_json: Dict[str, Any], text: str) -> st
     else:
         try:
             value = submission_service.validate_field(
-                form_json, name, _one_value(field, _tidy(text)), answers)
+                form_json, name, _one_value(field, _tidy(text), answers), answers)
         except submission_service.ValidationFailed as failed:
             problem = failed.errors.get(name) or "That answer cannot be used."
             # Asked again exactly as it was asked the first time, buttons and
             # all: a correction should not be harder to answer than the
             # question was.
-            again = render(field, config)
+            again = render(field, config, answers)
             return {**again, "text": f"⚠️ {problem}\n\n{again['text']}"}
         except KeyError:
             return _start_questions(session, form_json)
@@ -555,7 +610,7 @@ def _answer(session: Dict[str, Any], form_json: Dict[str, Any], text: str) -> st
     if not updated:
         return say(UNAVAILABLE)
 
-    return render(following, config)
+    return render(following, config, answers)
 
 
 def _submit(session: Dict[str, Any], form_json: Dict[str, Any]) -> str:

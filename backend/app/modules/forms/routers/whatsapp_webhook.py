@@ -35,7 +35,9 @@ from typing import Any, Dict, Optional
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Request
 
-from app.modules.forms import channel_settings, whatsapp_runtime, whatsapp_session
+from app.modules.forms import (
+    channel_settings, routing, whatsapp_runtime, whatsapp_session,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/integrations/whatsapp", tags=["whatsapp-webhook"])
@@ -122,8 +124,11 @@ async def send(number: str, message: Any, application: Any,
     if not token:
         logger.error(
             "No WhatsApp token configured for %s, so nothing can be sent. "
-            "Set one in Channel routing → WhatsApp → Settings.",
-            project_id or "the system")
+            "Set one in Channel routing > WhatsApp > Settings, in that "
+            "context. A token saved against another project is not used here; "
+            "one saved against the System context is inherited by all.",
+            project_id or "the system (no project routes the number this "
+                          "message arrived on)")
         return
 
     one = {"number": number, "message": text}
@@ -186,6 +191,43 @@ def _ensure_sweeping() -> None:
 # --------------------------------------------------------------------------- #
 # the webhook
 # --------------------------------------------------------------------------- #
+#: Where the number the message *arrived on* might be, in order.
+#:
+#: **Picky Assist does not send one.** An observed inbound payload carries only:
+#:
+#:     application, direction, message-in, message_in_raw, name, number,
+#:     project-id, type, unique-id
+#:
+#: `number` is the sender. Which of your numbers it reached is identified by
+#: `application` — their account id — and not by a phone number at all. So a
+#: route's `receiver_number` cannot pick the account to answer on with this
+#: provider, and `_scope_of` falls through to the conversation or the system.
+#:
+#: Kept, and still tried first, because it costs nothing and another provider
+#: (or a later version of this one) may send it. `_read` logs the keys it could
+#: not place, which is how the list above was established.
+#:
+#: To support several Picky Assist accounts on one installation, map
+#: `application` to a project in `channel_settings` and resolve on that. Not
+#: built: one account, configured once in the System context, is inherited by
+#: every project and needs no mapping.
+RECEIVER_KEYS = ("receiver", "to", "receiver_number", "business_number",
+                 "bot_number", "channel_number", "did", "account_number",
+                 "from_number", "recipient")
+
+SENDER_KEYS = ("number", "sender", "from", "mobile", "msisdn", "contact_number")
+
+MESSAGE_KEYS = ("message-in", "text", "message", "body", "message_in")
+
+
+def _first(body: Dict[str, Any], keys) -> str:
+    for key in keys:
+        value = body.get(key)
+        if value not in (None, "", []):
+            return str(value).strip()
+    return ""
+
+
 def _read(body: Dict[str, Any]) -> Dict[str, str]:
     """A Picky Assist delivery, in the three things the runtime needs.
 
@@ -193,10 +235,21 @@ def _read(body: Dict[str, Any]) -> Dict[str, str]:
     versions and its test console. Unknown keys are ignored rather than
     rejected: a webhook that 400s makes a provider retry forever.
     """
-    sender = str(body.get("number") or body.get("sender") or "").strip()
-    receiver = str(body.get("receiver") or body.get("to") or "").strip()
-    raw = str(body.get("message-in") or body.get("text")
-              or body.get("message") or "").strip()
+    sender = _first(body, SENDER_KEYS)
+    receiver = _first(body, RECEIVER_KEYS)
+    raw = _first(body, MESSAGE_KEYS)
+
+    if not receiver:
+        # Which number this arrived on decides whose provider account answers
+        # it (`_scope_of`), so not finding it is worth saying out loud. The
+        # keys are logged, never the values: the values are phone numbers and
+        # whatever somebody typed.
+        # Expected with Picky Assist, which identifies the account by
+        # `application` rather than by a number. Debug, not a warning: it is
+        # normal, and at warning level it buried the lines that matter.
+        logger.debug(
+            "No receiver number in the inbound payload; its keys were: %s",
+            ", ".join(sorted(str(k) for k in body)) or "(none)")
 
     return {
         "identity": sender,
@@ -228,9 +281,9 @@ async def webhook(request: Request, background: BackgroundTasks):
     if not message["identity"] or not message["text"]:
         return {"status": "ok"}
 
-    logger.info("WhatsApp in from %s on %s (%d chars)",
+    logger.info("WhatsApp in from %s on %s (app %s, %d chars)",
                 _masked(message["identity"]), _masked(message["receiver"]),
-                len(message["text"]))
+                message["application"], len(message["text"]))
 
     try:
         answer = await asyncio.to_thread(
@@ -243,23 +296,41 @@ async def webhook(request: Request, background: BackgroundTasks):
 
     if answer:
         background.add_task(send, message["identity"], answer,
-                            message["application"], _scope_of(message["identity"]))
+                            message["application"],
+                            _scope_of(message["identity"], message["receiver"]))
 
     return {"status": "ok"}
 
 
-def _scope_of(identity: str) -> Optional[str]:
+def _scope_of(identity: str, receiver: str = "") -> Optional[str]:
     """Which project's Picky Assist account to answer on.
 
-    The conversation's own, when there is one — a reply about a project's form
-    goes out on that project's account. Otherwise the system account, which is
-    what an unrecognised number and a menu are answered on.
+    In order:
+
+        the conversation's own      mid-survey, the project whose form is
+                                    being answered
+        the number it arrived on    before there is a conversation — the
+                                    project that routes a form on that number
+        the system                  neither, so the installation's own account
+
+    The middle step is the one that matters and was missing. A welcome, a
+    consent question and "there is nothing to fill in here" are all sent before
+    any session exists, so they fell to the system scope — and an installation
+    whose token is configured per project had none there and could send
+    nothing. The symptom was `No WhatsApp token configured for the system`
+    while a token was plainly saved against the project.
     """
     try:
         session = whatsapp_session.live(identity) \
             or whatsapp_session.recently_finished(identity)
-        return session.get("project_id") if session else None
+        if session and session.get("project_id"):
+            return session["project_id"]
     except Exception:
-        logger.exception("Could not tell which account to answer %s on",
+        logger.exception("Could not read the conversation for %s",
                          _masked(identity))
+
+    try:
+        return routing.project_for_receiver(receiver)
+    except Exception:
+        logger.exception("Could not tell whose number %s is", _masked(receiver))
         return None

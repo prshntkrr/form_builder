@@ -447,15 +447,43 @@ def link_identity(channel: str, identity: str, user_id: str,
 
 
 def user_for_identity(channel: str, identity: str) -> Optional[Dict[str, Any]]:
-    """The account behind a channel identity, with its permissions loaded."""
+    """The account behind a channel identity, with its permissions loaded.
+
+    Matched exactly first, then as a phone number. The two are not the same
+    string: a number is written `+919876543210` when somebody types it into
+    this application and `919876543210` when a provider sends it, and an exact
+    comparison reads the second as a number nobody has linked — which is
+    answered identically to an unknown keyword, so the symptom is a survey that
+    politely refuses to start and gives no reason at all.
+
+    The phone comparison is `same_number`, the same rule routing already uses
+    for the number a keyword arrived on, so linking is forgiving in exactly the
+    way the rest of the channel is and no more.
+    """
     from app.core import auth_service
+
+    channel = (channel or "").strip().lower()
+    wanted = str(identity or "").strip()
+    if not wanted:
+        return None
 
     with transaction() as cur:
         cur.execute(
             "SELECT user_id FROM channel_identity WHERE channel = %s AND identity = %s",
-            ((channel or "").strip().lower(), str(identity or "").strip()),
+            (channel, wanted),
         )
         row = cur.fetchone()
+
+        if row is None:
+            # Read as a phone number instead. The table holds one row per
+            # person per channel, so this is a short list to walk rather than
+            # something to index.
+            cur.execute(
+                "SELECT identity, user_id FROM channel_identity WHERE channel = %s",
+                (channel,),
+            )
+            row = next((r for r in cur.fetchall()
+                        if same_number(r["identity"], wanted)), None)
 
     if row is None:
         return None
@@ -642,6 +670,41 @@ def offered(channel: str, user: Dict[str, Any],
         if resolved.get("matched"):
             offers.append(resolved)
     return offers
+
+
+def project_for_receiver(receiver: str,
+                         channel: str = "whatsapp") -> Optional[str]:
+    """Whose account answers a message that arrived on this number.
+
+    The project that routes a form on it. A number belongs to whoever set it up
+    against their forms, so a message arriving there is answered on their
+    provider account and with their credential — not on the installation's.
+
+    This is asked **before** there is a conversation, which is why it reads the
+    number rather than a session: the welcome, the consent question and the
+    "nothing to fill in here" reply all go out before any session exists, and
+    answering those on the system account meant an installation whose tokens are
+    all per-project could not send at all.
+
+    None when no route claims the number, which is the system scope — a route
+    with no number of its own is deliberately not matched here, because it
+    answers anywhere and says nothing about whose line this is.
+    """
+    if not receiver:
+        return None
+
+    with transaction() as cur:
+        cur.execute(
+            "SELECT project_id, receiver_number FROM channel_form_route "
+            "WHERE channel = %s AND enabled AND receiver_number <> ''",
+            (channel,),
+        )
+        rows = [dict(r) for r in cur.fetchall()]
+
+    for row in rows:
+        if same_number(row["receiver_number"], receiver):
+            return row["project_id"]
+    return None
 
 
 def route_for_form(form_id: str, channel: str = "whatsapp") -> Optional[Dict[str, Any]]:
