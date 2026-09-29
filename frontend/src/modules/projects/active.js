@@ -16,6 +16,25 @@ import { api } from './api.js'
 const KEY = 'ea_active_project'
 const CHANGED = 'ea_active_project_changed'
 
+/* "The projects themselves changed" — one was created, or somebody was added to
+   or removed from one. Separate from CHANGED above, which is only about *which*
+   project is active.
+
+   Every `useProjects()` listens, so the sidebar selector and the projects page
+   are never showing different lists. Creating a project used to reload only the
+   page that created it; the selector kept its own copy until a refresh, and a
+   member count went stale the same way. */
+const LIST_CHANGED = 'ea_projects_changed'
+
+/* A project also carries a form count, and forms are created somewhere else
+   entirely — the builder, which already announces itself. Listening to both
+   here is cheaper than teaching the builder about projects. */
+const FORMS_CHANGED = 'ea_forms_changed'
+
+export function projectsChanged() {
+  window.dispatchEvent(new Event(LIST_CHANGED))
+}
+
 // The application works in one of two contexts, and the selector chooses
 // between them. SYSTEM is not a project: it is the forms that belong to no
 // project, which behave under the account's own permissions exactly as they did
@@ -81,6 +100,18 @@ export function useProjects() {
 
   useEffect(load, [load])
 
+  // A project created, or a membership changed, anywhere in the application.
+  useEffect(() => {
+    for (const event of [LIST_CHANGED, FORMS_CHANGED]) {
+      window.addEventListener(event, load)
+    }
+    return () => {
+      for (const event of [LIST_CHANGED, FORMS_CHANGED]) {
+        window.removeEventListener(event, load)
+      }
+    }
+  }, [load])
+
   return {
     projects,
     error,
@@ -124,6 +155,20 @@ export function useProject(projectId) {
   }, [projectId])
 
   useEffect(load, [load])
+
+  /* The same event the list follows. This hook holds one project, and the
+     member count is on it — so adding somebody updated the Members tab and left
+     the Overview showing the number it loaded with. */
+  useEffect(() => {
+    for (const event of [LIST_CHANGED, FORMS_CHANGED]) {
+      window.addEventListener(event, load)
+    }
+    return () => {
+      for (const event of [LIST_CHANGED, FORMS_CHANGED]) {
+        window.removeEventListener(event, load)
+      }
+    }
+  }, [load])
 
   const held = project?.your_permissions || []
 

@@ -256,3 +256,60 @@ function Landed({ on, seen }) {
   seen.push(on)
   return <div>landed {on}</div>
 }
+
+
+// --------------------------------------------------------------------------- //
+/**
+ * Counts that live on the project, changed from somewhere else.
+ *
+ * The member count is on the project; adding a member happens on the Members
+ * tab; the number is read on Overview. Three screens, one fact — so the fact
+ * has to be announced rather than each screen reloading when it feels like it.
+ *
+ * Reported: a member was added and the Overview kept the number it loaded with.
+ * The list hook had been wired to the event and the single-project hook had not.
+ */
+describe('a project whose numbers changed', () => {
+  let active
+
+  beforeEach(async () => {
+    for (const key of Object.keys(responses)) delete responses[key]
+    vi.resetModules()
+    active = await import('./active.js')
+  })
+
+  test('both hooks follow the event, not just the list', async () => {
+    // Read from the source: what broke was one hook listening and one not, and
+    // a rendered assertion would pass with either one wired.
+    const source = require('node:fs')
+      .readFileSync('src/modules/projects/active.js', 'utf8')
+
+    // Once in each hook: the list, and the single project.
+    const listens = source.split('addEventListener(event, load)').length - 1
+    expect(listens).toBe(2)
+
+    // Both hooks are there to be wired.
+    expect(source).toContain('export function useProjects')
+    expect(source).toContain('export function useProject(')
+  })
+
+  test('announcing a change is a plain event anyone can listen for', async () => {
+    const heard = vi.fn()
+    window.addEventListener('ea_projects_changed', heard)
+
+    active.projectsChanged()
+
+    expect(heard).toHaveBeenCalledTimes(1)
+    window.removeEventListener('ea_projects_changed', heard)
+  })
+
+  test('a form created in the builder counts too', () => {
+    // `form_count` is on the project and forms are created elsewhere, so the
+    // hooks follow the builder's own announcement as well.
+    const source = require('node:fs')
+      .readFileSync('src/modules/projects/active.js', 'utf8')
+
+    expect(source).toContain("const FORMS_CHANGED = 'ea_forms_changed'")
+    expect(source.split('FORMS_CHANGED]').length - 1).toBeGreaterThanOrEqual(4)
+  })
+})

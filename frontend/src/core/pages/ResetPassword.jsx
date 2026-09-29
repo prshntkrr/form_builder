@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../api.js'
+import PasswordField from '../PasswordField.jsx'
 
 const MIN_LENGTH = 8
 
@@ -70,17 +71,17 @@ export default function ResetPassword() {
 
             <label className="col">
               <span className="minilabel">New password</span>
-              <input className={`control${tooShort ? ' control--bad' : ''}`} type="password"
-                     autoComplete="new-password" required autoFocus
-                     value={password} onChange={(e) => setPassword(e.target.value)} />
+              <PasswordField className={`control${tooShort ? ' control--bad' : ''}`}
+                             autoComplete="new-password" required autoFocus
+                             value={password} onChange={(e) => setPassword(e.target.value)} />
               {tooShort && <span className="field__bad">At least {MIN_LENGTH} characters</span>}
             </label>
 
             <label className="col" style={{ marginTop: 12 }}>
               <span className="minilabel">Repeat it</span>
-              <input className={`control${mismatch ? ' control--bad' : ''}`} type="password"
-                     autoComplete="new-password" required
-                     value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+              <PasswordField className={`control${mismatch ? ' control--bad' : ''}`}
+                             autoComplete="new-password" required
+                             value={confirm} onChange={(e) => setConfirm(e.target.value)} />
               {mismatch && <span className="field__bad">These do not match</span>}
             </label>
 

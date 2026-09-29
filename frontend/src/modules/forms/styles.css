@@ -819,3 +819,13 @@
    — a failed autosave must be noticeable without stopping anybody typing. */
 .autosave { color: var(--ink-3, var(--ink-2)); margin: 0 0 10px; }
 .autosave--stale { color: var(--amber); }
+
+/* A map that cannot be drawn — no key, or Google refused the one it has. The
+   boundary itself is unaffected, so this says that rather than looking broken. */
+.poly__nomap {
+  height: 100%; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 4px;
+  padding: 18px; text-align: center;
+  background: var(--wash, #f4f5f3); border-radius: 8px;
+}
+.poly__nomap p { margin: 0; max-width: 46ch; }

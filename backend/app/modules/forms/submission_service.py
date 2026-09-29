@@ -747,8 +747,19 @@ def _write(cur, form, form_json, table_name, clean, version, created_by,
 # reads
 # --------------------------------------------------------------------------- #
 def list_submissions(
-    form: Dict[str, Any], limit: int = 50, offset: int = 0
+    form: Dict[str, Any], limit: int = 50, offset: int = 0,
+    only_by: Optional[str] = None,
 ) -> Dict[str, Any]:
+    """The stored responses to one form, a page at a time.
+
+    `only_by` narrows to the ones that account collected — for somebody who may
+    fill a form in but was never given "see every submission in the project".
+    They used to see everybody's, which on a shared form is other people's
+    fieldwork.
+
+    Narrowed in SQL, not after: the count has to mean the same thing as the
+    rows, or a pager offers pages that are not there.
+    """
     form_json = form["form_json"] or {}
     table_name = form_json.get("table_name")
     columns = [
@@ -779,9 +790,13 @@ def list_submissions(
         qualified = sql.SQL("{}.{}").format(
             sql.Identifier(settings.db_schema), sql.Identifier(table_name)
         )
+        mine = sql.SQL(" AND created_by = %s") if only_by else sql.SQL("")
+        scope = [form["form_id"]] + ([only_by] if only_by else [])
+
         cur.execute(
-            sql.SQL("SELECT COUNT(*) AS n FROM {} WHERE form_id = %s").format(qualified),
-            (form["form_id"],),
+            sql.SQL("SELECT COUNT(*) AS n FROM {} WHERE form_id = %s{}").format(
+                qualified, mine),
+            tuple(scope),
         )
         total = int(cur.fetchone()["n"])
 
@@ -789,12 +804,12 @@ def list_submissions(
             sql.SQL(
                 """
                 SELECT survey_id, form_data, created_on, form_version, created_by{}
-                FROM {} WHERE form_id = %s
+                FROM {} WHERE form_id = %s{}
                 ORDER BY created_on DESC, survey_id DESC
                 LIMIT %s OFFSET %s
                 """
-            ).format(_parent_select(cur, table_name), qualified),
-            (form["form_id"], limit, offset),
+            ).format(_parent_select(cur, table_name), qualified, mine),
+            tuple(scope + [limit, offset]),
         )
         rows = [dict(r) for r in cur.fetchall()]
 

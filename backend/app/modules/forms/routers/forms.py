@@ -323,6 +323,10 @@ def generate(req: GenerateRequest, user: Dict[str, Any] = Depends(_could_build_s
             "dynamic_options": dynamic["dynamic"],
             "prompt": req.prompt,
         }
+    except llm.PromptRefused as exc:
+        # The prompt, not the service: 422 and a message worth reading.
+        # Before the LLMError arm, which it inherits from.
+        raise HTTPException(status_code=422, detail=str(exc))
     except llm.LLMError as exc:
         raise HTTPException(status_code=502, detail=str(exc))
     except FormSchemaError as exc:

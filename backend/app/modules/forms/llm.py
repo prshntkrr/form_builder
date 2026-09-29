@@ -5,13 +5,20 @@ from a follow-up prompt. Both return raw JSON — `form_schema.normalize_form` i
 what makes it trustworthy.
 """
 import json
+import re
 import logging
 from typing import Any, Dict, Optional
 
 from openai import OpenAI, OpenAIError
 
 from app.core.config import settings
+from app.modules.forms.conditions import OPERATORS as _OPERATORS
 from app.modules.forms.field_types import SUPPORTED_TYPES
+
+# The comparisons the rules engine can actually evaluate. Taken from the
+# engine rather than written out, so a model is never offered one that
+# `normalize_rules` would drop.
+SUPPORTED_OPERATORS = sorted(_OPERATORS)
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +27,75 @@ _client: Optional[OpenAI] = None
 
 class LLMError(RuntimeError):
     pass
+
+
+class PromptRefused(LLMError):
+    """The request itself cannot be built from — nothing reached the model.
+
+    Its own class because the answer is a different one: an `LLMError` means
+    the service failed and the caller should try again, which is a 502. This
+    means what was typed says nothing, which is a 422 and a message worth
+    reading.
+    """
+
+
+#: The shortest prompt that can describe a form. "farmer registration" is 19
+#: characters and is a perfectly good request; anything much below that is not
+#: describing anything.
+MIN_PROMPT = 12
+
+#: How many word-like things a description has to have. One word names a topic;
+#: it takes a couple to say what is wanted.
+MIN_WORDS = 2
+
+
+def check_prompt(prompt: str) -> str:
+    """A request a form could be built from, or a refusal saying what is missing.
+
+    Checked here rather than left to the model, because the model does not
+    refuse: give it `=======, -09976466` and it invents a plausible-looking
+    farmer survey out of nothing, and somebody then has to work out why the form
+    they were shown has no relation to what they typed. A prompt that says
+    nothing should be answered, not answered creatively.
+
+    Deliberately about *shape*, not subject. Judging whether a request is
+    agricultural enough would refuse the perfectly good prompts this platform
+    has never seen before — and that judgement is the model's job, not a regular
+    expression's.
+    """
+    text = str(prompt or "").strip()
+
+    if not text:
+        raise PromptRefused("Describe the form you need, and one will be drafted for you.")
+
+    # Letters, in any script: Devanagari, Arabic and Spanish are all words.
+    letters = [ch for ch in text if ch.isalpha()]
+    if not letters:
+        raise PromptRefused(
+            "That prompt has no words in it. Describe the form in a sentence — "
+            "for example, “a farmer registration form with name, village, "
+            "land holding and main crops”.")
+
+    if len(text) < MIN_PROMPT:
+        raise PromptRefused(
+            "That is too short to build a form from. Say what the form is for "
+            "and what it should collect — a sentence is enough.")
+
+    # Words, rather than a single token repeated or one long identifier.
+    words = [w for w in re.findall(r"[^\W\d_]+", text, flags=re.UNICODE) if len(w) > 1]
+    if len(set(w.lower() for w in words)) < MIN_WORDS:
+        raise PromptRefused(
+            "That prompt does not describe a form. Say what it is for and what "
+            "it should collect — for example, “a soil sampling form for "
+            "kharif plots with pH, NPK and a photo”.")
+
+    # Mostly punctuation or digits, with a stray word in it.
+    if len(letters) < len(text) / 3:
+        raise PromptRefused(
+            "That prompt is mostly symbols or numbers. Describe the form in "
+            "words and one will be drafted for you.")
+
+    return text
 
 
 def get_client() -> OpenAI:
@@ -102,6 +178,23 @@ Rules:
   Give the field an empty "options" list and let the application fill it.
 - Never write placeholder choices such as "Feature 1", "Option 2" or "Item 3".
   A choice nobody can act on is worse than none: leave options empty instead.
+- Conditional logic goes in "rules", and a form that needs none has "rules": [].
+  A rule shows or hides one question, one whole section, or the rest of the form,
+  depending on an answer given earlier. Write one whenever the request implies a
+  question only applies sometimes — "if they use irrigation, ask which type",
+  "only for female-headed households", "if yes, ask how many".
+    "target" is {{"type": "field", "name": "..."}} for one question,
+             {{"type": "section", "key": "..."}} for a whole section,
+             or {{"type": "form"}} for the rest of the questionnaire.
+    "action" is "show" or "hide".
+    "logic" is "AND" or "OR" across the conditions.
+    "operator" is one of: {", ".join(SUPPORTED_OPERATORS)}.
+  "is_empty" and "is_not_empty" take no "value"; every other operator needs one.
+- A rule may only name questions this form actually has, and a question must not
+  decide whether it is asked itself. Read an earlier question, never a later one:
+  the answer has to exist before the rule can be evaluated. A rule naming
+  something that is not on the form is dropped, so the logic would silently
+  vanish rather than work.
 - Output raw JSON only. No markdown fences, no commentary."""
 
 REFINE_PROMPT = """You are editing an EXISTING form definition. Apply the requested change and
@@ -143,8 +236,9 @@ def _chat(messages: list, temperature: float = 0.3) -> Dict[str, Any]:
 
 def generate_form(prompt: str, language: Optional[str] = None) -> Dict[str, Any]:
     """Prompt -> raw form definition."""
-    if not prompt or not prompt.strip():
-        raise LLMError("Describe the form you want before generating.")
+    # Refused here rather than sent: the model does not decline a meaningless
+    # request, it invents something plausible for it. See `check_prompt`.
+    prompt = check_prompt(prompt)
 
     user_content = f"Build a form for this request:\n\n{prompt.strip()}"
     if language:

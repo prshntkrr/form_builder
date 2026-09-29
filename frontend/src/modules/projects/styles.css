@@ -89,3 +89,20 @@
   /* The indent costs width a phone has not got; the rail still says it. */
   .forms__child > td:first-child { padding-left: 16px !important; }
 }
+
+/* Find somebody: one field that offers its matches underneath, rather than a
+   search box and then a second dropdown asking the same question again. */
+.find { position: relative; }
+.find__list {
+  list-style: none; margin: 6px 0 0; padding: 4px;
+  max-height: 220px; overflow-y: auto;
+  border: 1px solid var(--line); border-radius: 8px;
+  background: var(--card); box-shadow: var(--shadow);
+}
+.find__hit {
+  display: flex; flex-direction: column; gap: 1px; width: 100%;
+  padding: 7px 10px; border: 0; border-radius: 6px;
+  background: none; text-align: left; cursor: pointer; font: inherit;
+}
+.find__hit:hover { background: rgba(0, 0, 0, .045); }
+.find__hit:focus-visible { outline: 2px solid var(--accent-deep); outline-offset: -2px; }

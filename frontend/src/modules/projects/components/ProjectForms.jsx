@@ -247,7 +247,7 @@ export function AssignmentEditor({ projectId, form, onClose }) {
                     <div key={a.assignment_id} className="asg__row">
                       <span className="pill">{a.kind}</span>
                       <span className="grow">
-                        {a.kind === 'everyone' && 'Everyone in this project'}
+                        {a.kind === 'everyone' && 'Everyone who fills forms here'}
                         {a.kind === 'user' && (a.full_name || a.email)}
                         {a.kind === 'group' && a.group_name}
                       </span>
@@ -264,7 +264,7 @@ export function AssignmentEditor({ projectId, form, onClose }) {
               )}
 
               <label className="cat__field" style={{ marginTop: 18 }}>
-                <span className="minilabel">Everyone in the project</span>
+                <span className="minilabel">Everyone who fills forms here</span>
                 <button
                   className="btn btn--sm"
                   style={{ alignSelf: 'flex-start' }}
@@ -274,6 +274,12 @@ export function AssignmentEditor({ projectId, form, onClose }) {
                 >
                   {everyone ? 'Already assigned to everyone' : 'Assign to everyone'}
                 </button>
+                <span className="tiny muted">
+                  Reaches every member whose role in this project can fill forms
+                  in — a project manager or a surveyor. A reviewer is not
+                  included: reading the project's work is not collecting it, and
+                  the role decides that, not the assignment.
+                </span>
               </label>
 
               <label className="cat__field">

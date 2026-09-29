@@ -114,6 +114,11 @@ export default function FormRecords() {
 
   const pages = Math.max(1, Math.ceil(data.total / PAGE))
   const paused = data.form_status !== 'Active'
+  /* Whether this account collects on this form at all. A reviewer reads a
+     project's work without adding to it, and the submit route refuses them —
+     so offering the button would only be offering an error. Absent on an older
+     response means yes, which is what it always was. */
+  const mayAdd = data.may_fill !== false
 
   return (
     <main className="main">
@@ -126,10 +131,12 @@ export default function FormRecords() {
             {data.total} record{data.total === 1 ? '' : 's'}
           </p>
         </div>
-        <Link className="btn btn--primary" to={`/f/${formId}/new`}
-              title={paused ? 'This form is paused' : 'Add a new record'}>
-          New record
-        </Link>
+        {mayAdd && (
+          <Link className="btn btn--primary" to={`/f/${formId}/new`}
+                title={paused ? 'This form is paused' : 'Add a new record'}>
+            New record
+          </Link>
+        )}
       </div>
 
       {paused && (
@@ -142,13 +149,21 @@ export default function FormRecords() {
         <div className="blank">
           <h2>Nothing to show</h2>
           <p>No columns have been made visible for this form yet.</p>
-          <Link className="btn btn--primary" to={`/f/${formId}/new`}>Add a record</Link>
+          {mayAdd && (
+            <Link className="btn btn--primary" to={`/f/${formId}/new`}>Add a record</Link>
+          )}
         </div>
       ) : !data.rows.length ? (
         <div className="blank">
           <h2>No records yet</h2>
-          <p>Add the first one and it will appear here.</p>
-          <Link className="btn btn--primary" to={`/f/${formId}/new`}>New record</Link>
+          <p>
+            {mayAdd
+              ? 'Add the first one and it will appear here.'
+              : 'Nothing has been submitted to this form yet.'}
+          </p>
+          {mayAdd && (
+            <Link className="btn btn--primary" to={`/f/${formId}/new`}>New record</Link>
+          )}
         </div>
       ) : (
         <>
