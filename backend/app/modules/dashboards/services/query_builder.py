@@ -25,6 +25,11 @@ SUPPORTED_AGGREGATIONS = {
 MAX_PAGE_SIZE = 200
 
 
+# What a table shows when nobody has said otherwise. The builder's own
+# default, written here so a shared table and an edited one agree.
+DEFAULT_TABLE_PAGE_SIZE = 10
+
+
 # How many values a filter dropdown is offered. A filter is something you
 # pick from, so a column with thousands of distinct values is the wrong
 # column to filter by — and the browser should not be handed all of them

@@ -206,6 +206,10 @@ export default function LeafletMapRenderer({ widget, data, dashboard }) {
         <TileLayer
           attribution='&copy; OpenStreetMap contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          /* Asked for as a cross-origin image, which the tile server allows.
+             Without it the tiles cannot be read back out of the page, and an
+             exported map is blank. Nothing about the map on screen changes. */
+          crossOrigin="anonymous"
         />
 
         <MapResizeHandler />

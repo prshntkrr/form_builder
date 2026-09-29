@@ -1,6 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import { dataFor, getRenderer } from "../renderers/registry.js";
+import { flattenTransforms } from "../exportClone.js";
+import KpiRenderer from "../renderers/KpiRenderer.jsx";
+import TableRenderer from "../renderers/TableRenderer.jsx";
 import { prepareChartData } from "../renderers/prepareChartData.js";
 import {
   BREAKPOINTS,
@@ -26,7 +29,7 @@ import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 
 import { api } from "../api.js";
-import { formatKpiValue, kpiIconId } from "../kpi.js";
+import { formatKpiValue, iconSymbol, kpiIconId } from "../kpi.js";
 import {
   bindingForColumns,
   columnsOf,
@@ -90,6 +93,11 @@ const PREVIEW_WIDGET_ID = "__preview__";
 const PREVIEW_DEBOUNCE_MS = 250;
 
 const EMPTY_PREVIEW = { status: "idle", rows: [], numRows: null, error: "" };
+
+/* Shared, because a fresh `[]` on every render is a fresh identity, and an
+   amCharts renderer rebuilds its whole chart when one of its props changes
+   identity. See `preparedData`. */
+const NO_ROWS = [];
 
 /* The tallest the preview card is drawn. A widget taller than this is shown
    shorter than it will be; one shorter — a KPI is a single row — is drawn at
@@ -1256,28 +1264,51 @@ export default function Dashboards() {
   /* Export the open dashboard as an image.
 
      html2canvas is loaded only when somebody actually asks for a picture, so
-     the weight of it never lands on anyone who does not. It rasterises what is
-     on screen: charts come out as drawn, but map tiles are served from another
-     origin and the canvas cannot read them back, so a map widget will be
-     blank. The PDF path keeps maps, which is why both exist. */
+     the weight of it never lands on anyone who does not.
+
+     It does not photograph the screen. It clones the document and paints
+     the clone — and a widget the grid has moved with a transform comes out
+     of that as an empty card, which is why an exported dashboard used to be
+     one widget and a page of blank boxes. `flattenTransforms` gives the
+     clone the same positions written as `left` and `top`, which html2canvas
+     paints properly. The live grid keeps its transforms.
+
+     The dashboard also goes into export mode for the moment it takes, which
+     is a class that leaves the editing controls out of the picture — the
+     open Export menu among them. It is taken off again in every path. */
   const exportImage = async () => {
     const node = dashboardRef.current;
 
-    if (!node) {
+    if (!node || imaging) {
       return;
     }
 
     setImaging(true);
     setExportError("");
 
+    // The menu was clicked to get here, and a <details> stays open.
+    setOpenFilter(null);
+    document.querySelectorAll(".dash__menu[open]").forEach((menu) => {
+      menu.removeAttribute("open");
+    });
+
+    document.body.classList.add("dash-exporting");
+
     try {
       const { default: html2canvas } = await import("html2canvas");
+
+      // After the class has been painted, so the controls are already gone
+      // from the boxes the charts are measured in.
+      await new Promise((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(resolve));
+      });
 
       const canvas = await html2canvas(node, {
         backgroundColor: "#ffffff",
         useCORS: true,
         // Twice the pixels, so the image is still readable zoomed in.
         scale: 2,
+        onclone: (clonedDocument) => flattenTransforms(clonedDocument),
       });
 
       const name = `${fileStem(dashboard?.dashboard?.name)}.png`;
@@ -1300,6 +1331,7 @@ export default function Dashboards() {
     } catch (e) {
       setExportError("That image could not be created. Please try again.");
     } finally {
+      document.body.classList.remove("dash-exporting");
       setImaging(false);
     }
   };
@@ -1699,37 +1731,22 @@ export default function Dashboards() {
     return formatColumnLabel(column);
   };
 
-  const getIconSymbol = (iconId) => {
-    const icons = {
-      users: "👥",
-      user: "👤",
-      students: "🎓",
-      school: "🏫",
-      chart: "📊",
-      money: "💰",
-      location: "📍",
-      agriculture: "🌾",
-      farm: "🚜",
-      calendar: "📅",
-      // Added for KPIs, which pick an icon from their subject when nobody has
-      // chosen one. Every id here must also be an option in the Title Icon
-      // picker below, or a guessed icon could not be changed by hand.
-      male: "👨",
-      female: "👩",
-      land: "🗺️",
-      production: "📦",
-      percent: "％"
-    };
-    return icons[iconId] || null;
-  };
+  const getIconSymbol = (iconId) => iconSymbol(iconId);
 
   /* =========================================================
      CHART RENDERING
      ========================================================= */
 
-  const renderChart = (widget, rows) => {
-    let chartData = rows;
-    if (widget.type !== "histogram" && widget.type !== "scatter") {
+  const renderChart = (widget, rows, prepared) => {
+    /* Prepared above for a widget on the dashboard; worked out here for one
+       being previewed, which is drawn from rows of its own. */
+    let chartData = prepared !== undefined ? prepared : rows;
+
+    if (
+      prepared === undefined &&
+      widget.type !== "histogram" &&
+      widget.type !== "scatter"
+    ) {
       chartData = prepareChartData(widget, rows);
     }
 
@@ -2211,7 +2228,7 @@ export default function Dashboards() {
      function so that a preview cannot drift from the widget it previews. */
   const renderWidget = (widget, options = {}) => {
     const {
-      rows = [],
+      rows = NO_ROWS,
       numRows = null,
       error: widgetError = null,
     } = options.data || widgetData[widget.id] || {};
@@ -2305,174 +2322,34 @@ export default function Dashboards() {
     }
 
     if (widget.type === "table") {
-      /* The arrangement the editor saved, or the binding's own order for a
-         table nobody has arranged — which is every table built before this
-         and every one the AI writes. */
-      const columns = columnsOf(widget, fields);
       const pager = tablePages[widget.id] || null;
 
       return (
         <div className="dash__widget" style={widgetStyle}>
           {renderHeader()}
 
-          {rows.length === 0 ? (
-            <p className="muted">No data available.</p>
-          ) : (
-            <>
-              <div
-                className="dash__table-wrap"
-                style={colors.table.border ? { borderColor: colors.table.border } : undefined}
-              >
-                <table className="dash__table">
-                  <thead>
-                    <tr>
-                      {columns.map((column, index) => (
-                        <th
-                          key={`${column.field}-${column.aggregation}-${index}`}
-                          /* Each part only when it was chosen, so an unstyled
-                             table is still the stylesheet's to decide. */
-                          style={{
-                            ...(colors.table.headerBackground
-                              ? { backgroundColor: colors.table.headerBackground }
-                              : {}),
-                            ...(colors.table.headerText
-                              ? { color: colors.table.headerText }
-                              : {}),
-                            ...(colors.table.border
-                              ? { borderBottomColor: colors.table.border }
-                              : {}),
-                          }}
-                        >
-                          {column.label || defaultLabel(column, fields)}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-
-                  <tbody>
-                    {rows.map((row, index) => (
-                      <tr key={index}>
-                        {columns.map((column, columnIndex) => (
-                          <td
-                            key={`${column.field}-${column.aggregation}-${columnIndex}`}
-                            style={{
-                              ...(colors.table.text
-                                ? { color: colors.table.text }
-                                : {}),
-                              ...(colors.table.border
-                                ? { borderBottomColor: colors.table.border }
-                                : {}),
-                            }}
-                          >
-                            {String(valueOf(row, column) ?? "")}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {pager && renderTablePager(widget, pager)}
-            </>
-          )}
+          <TableRenderer
+            widget={widget}
+            rows={rows}
+            fields={fields}
+            dashboard={dashboard}
+            /* The builder's own pager, which moves between pages. A shared
+               dashboard draws the same table without one. */
+            pager={pager ? renderTablePager(widget, pager) : null}
+          />
         </div>
       );
     }
 
     if (widget.type === "kpi") {
-      const firstRow = rows[0];
-
-      if (!firstRow) {
-        return (
-          <div className="dash__widget" style={widgetStyle}>
-            <div className="dash__widget-header">
-              <h3>{widget.title}</h3>
-
-              {editButton}
-            </div>
-
-            <p className="muted">No data available.</p>
-          </div>
-        );
-      }
-
-      let displayValue;
-      if (widget.kpi?.format === "percentage" && widget.kpi.numerator) {
-        const measure = widget.data_binding?.measures?.[0];
-        const denomAlias = measure ? `${measure.field}_count` : null;
-        const denomValue = denomAlias ? Number(firstRow[denomAlias] || 0) : Number(Object.values(firstRow)[0] || 0);
-
-        const numRow = numRows ? numRows[0] : null;
-        const numValue = (numRow && denomAlias) ? Number(numRow[denomAlias] || 0) : (numRow ? Number(Object.values(numRow)[0] || 0) : 0);
-
-        if (denomValue === 0) {
-          displayValue = "0%";
-        } else {
-          displayValue = Math.round((numValue / denomValue) * 100) + "%";
-        }
-      } else {
-        const measure = widget.data_binding?.measures?.[0];
-        const measureAlias = measure ? `${measure.field}_${measure.aggregation.toLowerCase()}` : null;
-        // Formatted for reading, never rounded on the way in: the value the
-        // server calculated is what the widget still holds.
-        displayValue = formatKpiValue(
-          measureAlias ? firstRow[measureAlias] : Object.values(firstRow)[0],
-        );
-      }
-
-      const kpiSymbol = getIconSymbol(kpiIconId(widget));
-
       return (
-        <div
-          className="dash__widget dash__kpi"
-          style={{
-            ...widgetStyle,
-            // A chosen background is a colour, and the card's default tint is a
-            // gradient — which would paint straight over it. Turning the
-            // gradient off hands the card back to whoever picked the colour.
-            ...(presentation.background_color ? { backgroundImage: "none" } : null),
-          }}
-        >
-          {editButton && <div className="dash__kpi-actions">{editButton}</div>}
-
-          <div className="dash__kpi-body">
-            {kpiSymbol && (
-              /* Decorative: the title beside it already says what this counts. */
-              <div className="dash__kpi-icon" aria-hidden="true">
-                {kpiSymbol}
-              </div>
-            )}
-
-            <div className="dash__kpi-text">
-              {/* Titled as well as shown: the card is a fixed band, so a long
-                  title is clamped to two lines and this is how the rest of it
-                  is read. */}
-              <div
-                className="dash__kpi-title"
-                style={headerTitleStyle}
-                title={widget.title}
-              >
-                {widget.title}
-              </div>
-
-              {presentation.subtitle && (
-                <div className="dash__kpi-subtitle" style={headerSubtitleStyle}>
-                  {presentation.subtitle}
-                </div>
-              )}
-
-              {/* The number, not the card behind it: colouring a KPI's value
-                  leaves its background exactly where it was. */}
-              <div
-                className="dash__kpi-value"
-                style={colors.value ? { color: colors.value } : undefined}
-              >
-                {displayValue}
-              </div>
-            </div>
-          </div>
-        </div>
+        <KpiRenderer
+          widget={widget}
+          rows={rows}
+          numRows={numRows}
+          dashboard={dashboard}
+          actions={editButton}
+        />
       );
     }
 
@@ -2502,7 +2379,11 @@ export default function Dashboards() {
           {renderHeader()}
 
           <div className="dash__chart-area">
-            {renderChart(widget, rows)}
+            {renderChart(
+              widget,
+              rows,
+              options.data ? undefined : preparedData.get(widget.id),
+            )}
           </div>
         </div>
       );
@@ -3348,6 +3229,71 @@ export default function Dashboards() {
       </div>
     );
   };
+
+  /* The data each chart is drawn from, prepared once.
+
+     `prepareChartData` maps the rows into a new array, so calling it while
+     rendering handed every chart a prop with a new identity on every render
+     of this page — and an amCharts renderer treats that as a reason to
+     dispose its chart and build another, which then animates in over a
+     second from nothing.
+
+     Clicking Export image is a state change like any other, so every bar and
+     line chart was torn down and rebuilt at the moment the picture was
+     taken, and came out of it blank. Preparing the data here instead means
+     the charts are rebuilt when the data or the dashboard changes, which is
+     when they should be, and not when something elsewhere on the page
+     does. */
+  const preparedData = useMemo(() => {
+    const prepared = new Map();
+
+    for (const item of dashboard?.widgets || []) {
+      prepared.set(item.id, dataFor(item, widgetData[item.id]?.rows || NO_ROWS));
+    }
+
+    return prepared;
+  }, [dashboard, widgetData]);
+
+  /* What each widget is worth on a printed page.
+
+     The grid positions every widget absolutely, in pixels worked out from
+     the width of this window, and print can do nothing with either: an
+     absolutely positioned box is not in the flow a printer paginates, and a
+     pixel width does not shrink to the paper. So the print stylesheet lays
+     the same widgets out as a twelve-column grid in normal flow, and these
+     three properties are what it lays them out by — the columns a widget
+     spans, the height it has here, and where it comes in reading order.
+
+     They are custom properties, so they mean nothing at all on screen. */
+  const printHints = useMemo(() => {
+    const placed = gridLayout.length
+      ? gridLayout
+      : (dashboard?.widgets || []).map((widget) => ({
+          i: widget.id,
+          ...(widget.layout || { x: 0, y: 0, w: 4, h: 4 }),
+        }));
+
+    // Down the page, then across it: the order somebody reads them in.
+    const order = new Map(
+      [...placed]
+        .sort((a, b) => a.y - b.y || a.x - b.x)
+        .map((item, rank) => [item.i, rank]),
+    );
+
+    const hints = new Map();
+
+    for (const item of placed) {
+      hints.set(item.i, {
+        "--print-cols": item.w,
+        "--print-height": `${
+          item.h * GRID.rowHeight + (item.h - 1) * GRID.margin[1]
+        }px`,
+        "--print-order": order.get(item.i) ?? 0,
+      });
+    }
+
+    return hints;
+  }, [gridLayout, dashboard]);
 
   /* The filter bar: one control per configured filter, and the two buttons
      that decide when the dashboard is asked anything. */
@@ -4739,7 +4685,12 @@ export default function Dashboards() {
                                   ? " dash__widget-card--chosen"
                                   : "")
                               }
-                              style={widget.presentation?.background_color ? { backgroundColor: widget.presentation.background_color } : {}}
+                              style={{
+                                ...(widget.presentation?.background_color
+                                  ? { backgroundColor: widget.presentation.background_color }
+                                  : {}),
+                                ...(printHints.get(widget.id) || {}),
+                              }}
                             >
                               {renderWidget(widget)}
                             </div>

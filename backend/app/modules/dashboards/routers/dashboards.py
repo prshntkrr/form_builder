@@ -30,6 +30,9 @@ from app.modules.dashboards.schemas import (
     SharedDataRequest,
     WidgetOperationRequest,
 )
+from app.modules.dashboards.services.query_builder import (
+    DEFAULT_TABLE_PAGE_SIZE,
+)
 from app.modules.dashboards.services.query_service import (
     count_dashboard_rows,
     distinct_field_values,
@@ -761,7 +764,60 @@ def shared_dashboard_data(token: str, req: SharedDataRequest):
 
     try:
         binding = DashboardDataBinding(**(widget.get("data_binding") or {}))
-        rows = execute_dashboard_query(table_name, binding)
+
+        answer: Dict[str, Any] = {}
+
+        """A table is paged here rather than by the caller.
+
+        The request still names nothing but a widget: which page and how big
+        it is are read from the widget's own presentation, exactly as the
+        builder reads them. A shared table therefore shows its first page and
+        says how many rows there are, instead of sending every row of a table
+        of fifty thousand to whoever opened the link.
+        """
+        if widget.get("type") == "table":
+            page_size = (
+                (widget.get("presentation") or {}).get("table_page_size")
+                or DEFAULT_TABLE_PAGE_SIZE
+            )
+
+            rows = execute_dashboard_query(
+                table_name, binding, page=1, page_size=page_size,
+            )
+
+            total_rows = count_dashboard_rows(table_name, binding)
+
+            answer["page"] = 1
+            answer["page_size"] = page_size
+            answer["total_rows"] = total_rows
+            answer["total_pages"] = max(1, -(-total_rows // page_size))
+        else:
+            rows = execute_dashboard_query(table_name, binding)
+
+        answer["rows"] = rows
+
+        """A percentage KPI is two queries, as it is for a signed-in reader:
+        the count, and the count of the rows its numerator condition keeps.
+        Without the second one a shared percentage card has nothing to divide
+        by and would read 0%."""
+        kpi = widget.get("kpi") or {}
+
+        if (
+            widget.get("type") == "kpi"
+            and kpi.get("format") == "percentage"
+            and kpi.get("numerator")
+        ):
+            numerator = DashboardDataBinding(
+                **{
+                    **(widget.get("data_binding") or {}),
+                    "filters": [
+                        *((widget.get("data_binding") or {}).get("filters") or []),
+                        kpi["numerator"],
+                    ],
+                }
+            )
+
+            answer["num_rows"] = execute_dashboard_query(table_name, numerator)
 
     except Exception as exc:
         logger.exception(
@@ -774,4 +830,4 @@ def shared_dashboard_data(token: str, req: SharedDataRequest):
             detail="Unable to execute dashboard data query.",
         ) from exc
 
-    return {"rows": rows}
+    return answer
