@@ -14,7 +14,13 @@ import {
   responsiveLayouts,
 } from "../layout.js";
 import { useGridWidth } from "../useGridWidth.js";
-import { dataFor, getRenderer } from "../renderers/registry.js";
+import {
+  dataFor,
+  drawsOwnHeader,
+  getRenderer,
+  needsChartArea,
+} from "../renderers/registry.js";
+import { StaticTableFooter } from "../renderers/TableRenderer.jsx";
 
 /**
  * A dashboard behind a public link.
@@ -69,7 +75,20 @@ export default function SharedDashboard() {
           widgets.map(async (widget) => {
             try {
               const answer = await api.getSharedData(token, widget.id);
-              return [widget.id, { rows: answer.rows || [] }];
+
+              /* Rows, and what else the widget needs: a percentage KPI's
+                 numerator, and which page of a table this is. */
+              return [widget.id, {
+                rows: answer.rows || [],
+                numRows: answer.num_rows || null,
+                paging: answer.total_rows === undefined
+                  ? null
+                  : {
+                      page: answer.page ?? 1,
+                      pageSize: answer.page_size ?? 10,
+                      totalRows: answer.total_rows ?? 0,
+                    },
+              }];
             } catch (_e) {
               return [widget.id, { failed: true }];
             }
@@ -171,6 +190,39 @@ export default function SharedDashboard() {
                 const titleStyle = presentation.title_style || {};
                 const subtitleStyle = presentation.subtitle_style || {};
 
+                /* Every widget is drawn by the renderer registered for its
+                   type, which since a KPI and a table were added to it is
+                   every type the application supports. What differs between
+                   them is only the frame: a KPI is the whole card and carries
+                   its own title, a table brings its own scrolling, and a
+                   chart fills a box of a fixed height. */
+                const drawn = (
+                  <Renderer
+                    widget={widget}
+                    /* Summarised or raw, by type — the same rule the
+                       builder follows. A histogram handed summarised
+                       rows draws nothing, which is what this page used
+                       to do to it. */
+                    data={dataFor(widget, held.rows || [])}
+                    rows={held.rows || []}
+                    /* A percentage KPI divides by this. */
+                    numRows={held.numRows || null}
+                    /* Read-only, so a table says which rows these are and
+                       offers no way to turn the page. */
+                    pager={
+                      held.paging ? (
+                        <StaticTableFooter
+                          {...held.paging}
+                          shown={(held.rows || []).length}
+                        />
+                      ) : null
+                    }
+                    /* So a dashboard-wide palette reaches a shared
+                       dashboard too, not only the one being edited. */
+                    dashboard={dashboard?.dashboard_json}
+                  />
+                );
+
                 return (
                   <div
                     key={widget.id}
@@ -181,60 +233,61 @@ export default function SharedDashboard() {
                         : {}
                     }
                   >
-                    <div className="dash__widget">
-                      <div className="dash__widget-header">
-                        <div>
-                          <h3
-                            style={{
-                              margin: 0,
-                              ...(titleStyle.font_size
-                                ? { fontSize: `${titleStyle.font_size}px` }
-                                : {}),
-                              ...(titleStyle.bold ? { fontWeight: "bold" } : {}),
-                              ...(titleStyle.italic ? { fontStyle: "italic" } : {}),
-                            }}
-                          >
-                            {widget.title}
-                          </h3>
+                    {held.failed ? (
+                      <div className="dash__widget">
+                        <div className="dash__widget-header">
+                          <h3>{widget.title}</h3>
+                        </div>
 
-                          {presentation.subtitle && (
-                            <div
-                              className="dash__widget-subtitle"
+                        <p className="muted tiny">
+                          This graph could not be loaded.
+                        </p>
+                      </div>
+                    ) : drawsOwnHeader(widget.type) ? (
+                      drawn
+                    ) : (
+                      <div className="dash__widget">
+                        <div className="dash__widget-header">
+                          <div>
+                            <h3
                               style={{
-                                marginTop: 4,
-                                color: "var(--text-muted, #666)",
-                                ...(subtitleStyle.font_size
-                                  ? { fontSize: `${subtitleStyle.font_size}px` }
+                                margin: 0,
+                                ...(titleStyle.font_size
+                                  ? { fontSize: `${titleStyle.font_size}px` }
                                   : {}),
-                                ...(subtitleStyle.bold ? { fontWeight: "bold" } : {}),
-                                ...(subtitleStyle.italic ? { fontStyle: "italic" } : {}),
+                                ...(titleStyle.bold ? { fontWeight: "bold" } : {}),
+                                ...(titleStyle.italic ? { fontStyle: "italic" } : {}),
                               }}
                             >
-                              {presentation.subtitle}
-                            </div>
-                          )}
-                        </div>
-                      </div>
+                              {widget.title}
+                            </h3>
 
-                      {held.failed ? (
-                        <p className="muted tiny">This graph could not be loaded.</p>
-                      ) : (
-                        <div className="dash__chart-area">
-                          <Renderer
-                            widget={widget}
-                            /* Summarised or raw, by type — the same rule the
-                               builder follows. A histogram handed summarised
-                               rows draws nothing, which is what this page used
-                               to do to it. */
-                            data={dataFor(widget, held.rows || [])}
-                            rows={held.rows || []}
-                            /* So a dashboard-wide palette reaches a shared
-                               dashboard too, not only the one being edited. */
-                            dashboard={dashboard?.dashboard_json}
-                          />
+                            {presentation.subtitle && (
+                              <div
+                                className="dash__widget-subtitle"
+                                style={{
+                                  marginTop: 4,
+                                  color: "var(--text-muted, #666)",
+                                  ...(subtitleStyle.font_size
+                                    ? { fontSize: `${subtitleStyle.font_size}px` }
+                                    : {}),
+                                  ...(subtitleStyle.bold ? { fontWeight: "bold" } : {}),
+                                  ...(subtitleStyle.italic ? { fontStyle: "italic" } : {}),
+                                }}
+                              >
+                                {presentation.subtitle}
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      )}
-                    </div>
+
+                        {needsChartArea(widget.type) ? (
+                          <div className="dash__chart-area">{drawn}</div>
+                        ) : (
+                          drawn
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}

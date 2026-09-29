@@ -83,3 +83,36 @@ export function formatKpiValue(raw) {
     maximumFractionDigits: 2,
   })
 }
+
+
+/**
+ * The character a title icon is drawn with.
+ *
+ * Moved here from the dashboard page so that a KPI card can be drawn
+ * wherever one is needed — the builder, and a dashboard someone opened from
+ * a public link — rather than only where this map happened to live.
+ *
+ * Every id here must also be an option in the Title Icon picker, or an icon
+ * guessed for a KPI could not be changed by hand.
+ */
+const ICONS = {
+  users: "\u{1F465}",
+  user: "\u{1F464}",
+  students: "\u{1F393}",
+  school: "\u{1F3EB}",
+  chart: "\u{1F4CA}",
+  money: "\u{1F4B0}",
+  location: "\u{1F4CD}",
+  agriculture: "\u{1F33E}",
+  farm: "\u{1F69C}",
+  calendar: "\u{1F4C5}",
+  male: "\u{1F468}",
+  female: "\u{1F469}",
+  land: "\u{1F5FA}\uFE0F",
+  production: "\u{1F4E6}",
+  percent: "\uFF05",
+}
+
+export function iconSymbol(iconId) {
+  return ICONS[iconId] || null
+}

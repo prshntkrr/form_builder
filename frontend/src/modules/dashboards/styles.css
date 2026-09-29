@@ -729,8 +729,59 @@
     display: none !important;
   }
 
-  /* A graph split across two pages is worth neither page. */
-  .dash__widget-card {
+  /* --- the grid, laid out for paper -------------------------------------
+
+     react-grid-layout positions every widget absolutely, with a transform,
+     at a pixel width worked out from this window. Print could do nothing
+     with either of those.
+
+     An absolutely positioned box is not part of the flow a printer breaks
+     into pages, so the rule below had nothing to hold together and a page
+     ended in the middle of a chart. And a pixel width does not shrink to the
+     paper, so a dashboard wider than the printable area simply lost its
+     right-hand edge — the fourth KPI, the end of a pie's labels, the last
+     column of a table.
+
+     For print, and only for print, the same widgets are laid out as a
+     twelve-column grid in normal flow. Each spans the columns it spanned on
+     screen and keeps the height it had, and the columns are fractions of the
+     page rather than pixels, so the whole dashboard fits the width it is
+     given. Nothing here applies on screen: the class is put on the body for
+     the print and taken off again afterwards. */
+  body.dash-printing .dash__grid-wrapper {
+    /* Kept for the drag animation on screen; on paper it would clip. */
+    overflow: visible !important;
+  }
+
+  body.dash-printing .react-grid-layout {
+    position: static !important;
+    /* The grid sets this in pixels, to hold its absolute children. */
+    height: auto !important;
+    display: grid !important;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 8px;
+  }
+
+  body.dash-printing .react-grid-item {
+    position: static !important;
+    transform: none !important;
+    width: auto !important;
+    max-width: none !important;
+    left: auto !important;
+    top: auto !important;
+    margin: 0 !important;
+    transition: none !important;
+
+    /* Set on each widget by the page, from the layout it is drawn with. */
+    grid-column: span var(--print-cols, 12);
+    order: var(--print-order, 0);
+    height: var(--print-height, 300px) !important;
+  }
+
+  /* A graph split across two pages is worth neither page. Now that a widget
+     is a block in the flow rather than an absolute box over it, this is a
+     rule the printer can actually keep. */
+  body.dash-printing .dash__widget-card {
     break-inside: avoid;
     page-break-inside: avoid;
   }
@@ -1399,3 +1450,34 @@
   }
 }
 
+
+/* --- the dashboard, photographed ----------------------------------------
+   Put on the body for the moment an export takes and removed afterwards.
+   What it hides is the editing interface: an exported picture should be the
+   dashboard, not the desk it is being worked on. Nothing here applies at any
+   other time. */
+body.dash-exporting .dash__widget-card .row1,
+body.dash-exporting .dash__kpi-actions,
+body.dash-exporting .dash__fab-wrap,
+body.dash-exporting .dash__menu,
+body.dash-exporting .dash__menu-body,
+body.dash-exporting .dash__version-bar,
+body.dash-exporting .dash__edit-panel,
+body.dash-exporting .react-resizable-handle {
+  display: none !important;
+}
+
+/* The buttons beside the title — Edit Dashboard, Export and share, Version
+   History, Delete — and the one that configures the filters. The title, its
+   badge and the filters themselves stay. */
+body.dash-exporting .dash__dashboard > .row .btn,
+body.dash-exporting .dash__dashboard > .row summary,
+body.dash-exporting .dash__filters .btn {
+  display: none !important;
+}
+
+/* A widget chosen for an AI change is still chosen; it just does not say so
+   in the picture. */
+body.dash-exporting .dash__widget-card--chosen {
+  outline: none !important;
+}
