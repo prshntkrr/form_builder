@@ -20,7 +20,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { CORE_NAV_ITEMS, NAV_GROUPS, moduleNavItems } from './registry.js'
 
 const CAN = {
-  build_any_forms: true, build_forms: true, use_dictionary: true,
+  build_any_forms: true, build_forms: true,
   use_client_catalogs: true, manage_routing: true, use_standards: true,
   view_dashboards: true, import_external_db: true,
   manage_roles: true, manage_users: true,
@@ -46,7 +46,7 @@ describe('what goes in which group', () => {
 
   test('configuration holds the things a form is built from', () => {
     expect(grouped()['Configuration']).toEqual([
-      'New form', 'Standard forms', 'Data dictionary', 'Catalogue', 'Standards',
+      'New form', 'Standard forms', 'CIMMYT standard', 'Catalogue', 'Standards',
     ])
   })
 

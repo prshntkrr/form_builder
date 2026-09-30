@@ -3,7 +3,7 @@ import { Navigate, useParams } from 'react-router-dom'
 import { FormsPanel } from './Nav.jsx'
 import Builder from './pages/Builder.jsx'
 import Catalogues from './pages/Catalogues.jsx'
-import Dictionary from './pages/Dictionary.jsx'
+import CimmytStandard from './pages/CimmytStandard.jsx'
 import Standards from './pages/Standards.jsx'
 import FormFill from './pages/FormFill.jsx'
 import FormRecords from './pages/FormRecords.jsx'
@@ -46,8 +46,11 @@ export default {
       requires: 'build_any_forms' },
     { group: 'configuration', label: 'Standard forms', to: '/library',
       requires: 'build_forms' },
-    { group: 'configuration', label: 'Data dictionary', to: '/dictionary',
-      requires: 'use_dictionary' },
+    /* What replaced the data dictionary: the institution's published
+       vocabulary rather than entries written here by hand, and chosen per
+       question rather than matched on its name. */
+    { group: 'configuration', label: 'CIMMYT standard', to: '/cimmyt',
+      requires: 'use_standards' },
     { group: 'configuration', label: 'Catalogue', to: '/catalogues',
       requires: 'use_client_catalogs' },
     // Three separate vocabularies behind one screen, so one flag cannot gate it.
@@ -72,7 +75,7 @@ export default {
     // The builder.
     { path: '/builder', element: <Builder />, requires: 'build_any_forms' },
     { path: '/library', element: <Library />, requires: 'build_forms' },
-    { path: '/dictionary', element: <Dictionary />, requires: 'use_dictionary' },
+    { path: '/cimmyt', element: <CimmytStandard />, requires: 'use_standards' },
     { path: '/catalogues', element: <Catalogues />, requires: 'use_client_catalogs' },
     { path: '/standards', element: <Standards />, requires: 'use_standards' },
     { path: '/routing', element: <Routing />, requires: 'manage_routing' },

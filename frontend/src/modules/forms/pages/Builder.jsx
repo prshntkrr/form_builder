@@ -188,7 +188,6 @@ export default function Builder() {
   const [trial, setTrial] = useState({})
   const [trialResult, setTrialResult] = useState(null)
   const [picker, setPicker] = useState(null)   // 'start' | 'borrow'
-  const [dict, setDict] = useState(null)      // what the dictionary changed, if anything
   const [contributing, setContributing] = useState(false)
   // The one channel a new form is being built for. Chosen on the draft, once
   // there is something to look at; see ChannelPicker. A saved form's channel
@@ -230,7 +229,6 @@ export default function Builder() {
     setError('')
     setTrial({})
     setDraftTab('questions')
-    setDict(null)
     setRecovered(null)
     setAutoSavedId(null)
     setAutoSaved(null)
@@ -518,7 +516,6 @@ export default function Builder() {
     setError('')
     setSaved(null)
     setCheck(null)
-    setDict(null)
     setTrial({})
     setTrialResult(null)
     setWording(null)
@@ -538,8 +535,6 @@ export default function Builder() {
       const res = await api.generate(prompt)
       clearDraft()
       setForm(prep({ ...res.form_json, channel: newChannel }))
-      // The dictionary still shapes the draft — it just does not announce it.
-      // Nobody asked it to run, so a report here is noise on top of a new form.
     })
 
   /** A form with no questions yet, built by hand — no prompt, no model. */
@@ -715,18 +710,6 @@ export default function Builder() {
       }
       setTrialResult(await api.testSubmission(
         formId, applicable(form, trial), untag(form)))
-    })
-
-  /** Bring what is on screen into line with the dictionary. Nothing is saved. */
-  const conform = () =>
-    run('dict', async () => {
-      const res = await api.applyDictionary(untag(form))
-      const before = new Map((form.fields || []).map((f) => [f.name, f._orig]))
-      setForm(prep({
-        ...res.form_json,
-        fields: res.form_json.fields.map((f) => ({ ...f, _orig: before.get(f.name) })),
-      }))
-      setDict(res.applied)
     })
 
   const inspect = (fix) =>
@@ -1044,26 +1027,6 @@ export default function Builder() {
         </div>
       )}
 
-      {dict?.length > 0 && (
-        <div className="note note--good" style={{ marginBottom: 16 }}>
-          <strong>The data dictionary set {dict.length} field{dict.length === 1 ? '' : 's'}.</strong>
-          {dict.map((d) => (
-            <span key={d.field} className="tiny">
-              <code>{d.field}</code> — {d.changes.join('; ')}
-            </span>
-          ))}
-        </div>
-      )}
-
-      {dict?.length === 0 && (
-        <div className="note" style={{ marginBottom: 16 }}>
-          <strong>Nothing matched the data dictionary.</strong>
-          <span className="tiny">
-            Field names have to match an entry or one of its other names.
-          </span>
-        </div>
-      )}
-
       {check && (
         <div className={`note note--${check.rows_with_issues.length ? 'warn' : 'good'}`} style={{ marginBottom: 16 }}>
           <strong>
@@ -1245,15 +1208,6 @@ export default function Builder() {
                     </button>
                     <button className="btn" onClick={() => setPicker('borrow')} title="Add questions from the standard form library">
                       Library
-                    </button>
-                    <button
-                      className="btn"
-                      onClick={conform}
-                      disabled={busy === 'dict'}
-                      title="Set every known field to the type and limits agreed in the data dictionary"
-                    >
-                      {busy === 'dict' && <span className="spin" />}
-                      Apply dictionary
                     </button>
                   </div>
 

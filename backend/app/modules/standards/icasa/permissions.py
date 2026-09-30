@@ -15,5 +15,9 @@ register(
     permissions=CATALOGUE,
     groups=["Standards"],
     grants={"editor": [STANDARDS_VIEW]},
-    capabilities={"use_standards": STANDARDS_VIEW},
+    # `manage_standards` is what the CIMMYT page asks before showing its import
+    # and its editing. Without it the screens can only be read, which is the
+    # right default for a vocabulary the whole installation maps questions to.
+    capabilities={"use_standards": STANDARDS_VIEW,
+                  "manage_standards": STANDARDS_MANAGE},
 )

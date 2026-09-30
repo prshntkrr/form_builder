@@ -1,5 +1,6 @@
 """Live form rendering + submission endpoints."""
 import logging
+import re
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
@@ -672,33 +673,82 @@ def list_submissions(
     form_id: str,
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
+    since: Optional[str] = Query(None, alias="from", description="Collected on or after, YYYY-MM-DD"),
+    until: Optional[str] = Query(None, alias="to", description="Collected on or before, YYYY-MM-DD"),
     user: Dict[str, Any] = Depends(
         needs_on_form(RESPONSES_VIEW, PROJECT_SUBMISSIONS_VIEW_ALL)),
 ):
     """Every answer to this form, in full.
+
+    `from` / `to` narrow it to when the answers were collected, and the export
+    below takes the same two — so a range chosen on screen and the file that
+    comes out of it are the same set of responses.
 
     Reading other people's answers, so a project's own form asks the project
     permission for exactly that — `project.submissions.view_all`, which a
     manager and a reviewer hold and a surveyor does not. `/records` is the
     narrower cousin: the columns an admin left visible.
     """
+    _dates_look_like_dates(since, until)
     form = _load(form_id, user)
-    return submission_service.list_submissions(form, limit=limit, offset=offset)
+    return submission_service.list_submissions(
+        form, limit=limit, offset=offset, since=since, until=until)
+
+
+def _dates_look_like_dates(*values: Optional[str]) -> None:
+    """Refused here rather than in SQL: `created_on >= 'last tuesday'` is a
+    database error, and a 500 for a typo in a date box is nobody's idea of a
+    message."""
+    for value in values:
+        if value and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+            raise HTTPException(status_code=422, detail="A date must be YYYY-MM-DD")
+
+
+#: What an export can be asked for as, and how it is served.
+EXPORT_FORMATS = {
+    "csv": ("text/csv", "csv"),
+    "xlsx": ("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "xlsx"),
+}
 
 
 @router.get("/{form_id}/submissions/export")
 def export(
     form_id: str,
+    format: str = Query("csv", pattern="^(csv|xlsx)$"),
+    columns: str = Query("", description="Field names to include, comma separated"),
+    since: Optional[str] = Query(None, alias="from", description="Collected on or after, YYYY-MM-DD"),
+    until: Optional[str] = Query(None, alias="to", description="Collected on or before, YYYY-MM-DD"),
     user: Dict[str, Any] = Depends(
         needs_on_form(RESPONSES_EXPORT, PROJECT_SUBMISSIONS_VIEW_ALL)),
 ):
+    """This form's answers, as a file.
+
+    Narrowed the same way the table on screen is narrowed — the same date window
+    read by the same code — so what somebody exports is what they were looking
+    at. Asking for no columns and no dates is the whole form, which is what this
+    endpoint has always returned.
+
+    The filename carries the range, because a folder with three exports of the
+    same form in it is otherwise three files with one name.
+    """
+    _dates_look_like_dates(since, until)
     form = _load(form_id, user)
-    csv_text = submission_service.export_csv(form)
+    chosen = [c.strip() for c in columns.split(",") if c.strip()]
+    media_type, suffix = EXPORT_FORMATS[format]
+
+    if format == "xlsx":
+        body = submission_service.export_xlsx(form, chosen, since, until)
+    else:
+        body = submission_service.export_csv(form, chosen, since, until)
+
     table = (form["form_json"] or {}).get("table_name") or form_id
+    window = "".join(f"_{part}" for part in (since, until) if part)
+
     return Response(
-        content=csv_text,
-        media_type="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="{table}.csv"'},
+        content=body,
+        media_type=media_type,
+        headers={"Content-Disposition":
+                 f'attachment; filename="{table}{window}.{suffix}"'},
     )
 
 

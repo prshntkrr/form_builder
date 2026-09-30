@@ -70,4 +70,41 @@ export async function request(path, options = {}) {
   return body
 }
 
+/**
+ * Save what an endpoint returns as a file.
+ *
+ * A plain `<a href>` to an API path cannot work here: the token is held in
+ * memory and sent as a header, and a link sends no headers — so the download
+ * arrived as a 401 and the browser saved the refusal. This fetches it the same
+ * way every other call goes out, then hands the blob to the browser.
+ *
+ * The server names the file, through Content-Disposition; `fallback` is used
+ * only when it does not.
+ */
+export async function download(path, fallback = 'download') {
+  const headers = authToken ? { Authorization: `Bearer ${authToken}` } : {}
+  const res = await fetch(`${BASE}${path}`, { headers })
+
+  if (!res.ok) {
+    const text = await res.text()
+    let detail = text
+    try { detail = JSON.parse(text)?.detail ?? text } catch { /* not JSON */ }
+    const error = new Error(typeof detail === 'string' ? detail : 'Download failed')
+    error.status = res.status
+    throw error
+  }
+
+  const named = /filename="?([^"]+)"?/.exec(res.headers.get('Content-Disposition') || '')
+  const url = URL.createObjectURL(await res.blob())
+  const link = document.createElement('a')
+  link.href = url
+  link.download = named ? named[1] : fallback
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  // Freed on the next tick: revoking it while the click is still being handled
+  // cancels the download in some browsers.
+  setTimeout(() => URL.revokeObjectURL(url), 0)
+}
+
 export { BASE }
