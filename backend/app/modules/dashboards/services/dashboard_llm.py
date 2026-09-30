@@ -19,6 +19,7 @@ from app.modules.dashboards.schemas import (
 )
 
 from app.modules.dashboards.services.dashboard_validator import (
+    DashboardValidationError,
     validate_dashboard_spec,
 )
 
@@ -57,6 +58,11 @@ class DashboardIntent(BaseModel):
     requested_fields: List[str] = Field(default_factory=list)
     requested_visualizations: List[str] = Field(default_factory=list)
 
+    # False means the user named fields but left the choice of chart types to
+    # us. The generated widget types are then the model's own and cannot be
+    # checked against a request that was never made — see _validate_intent.
+    visualizations_specified: bool = True
+
 
 class DashboardAIResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -87,9 +93,11 @@ IMPORTANT SAFETY RULES:
 7. Use ONLY the data source and fields supplied by the application.
 8. Never invent a field name.
 9. Never invent a data source.
-10. Only use a visualization type when the user explicitly requests
-    that visualization.
-11. Do not add extra visualizations just because they might be useful.
+10. When the user names the visualization types they want, generate
+    exactly those and no others.
+11. When the user names only fields and asks for a dashboard, choose the
+    visualization types yourself from those fields. See CHOOSING
+    VISUALIZATIONS YOURSELF.
 12. The backend will generate the actual SQL.
 13. The backend will retrieve the actual database data.
 14. The backend will validate your response before execution.
@@ -98,6 +106,11 @@ field such as the primary/entity field rather than counting the
 dimension field itself.
 16. Do not use COUNT(dimension_field) when the intent is to count records
 grouped by that dimension, unless no better field is available.
+17. When the user lists the fields they want, that list is a hard limit.
+    Every other column in the table is off limits for that request, even
+    though the application shows you all of them. See STRICT FIELD RULE.
+18. Never compute or derive a field. There is no total, ratio, difference
+    or sum of two columns unless that column exists by itself.
 
 
 SUPPORTED VISUALIZATION TYPES:
@@ -145,7 +158,8 @@ The intent object MUST be:
 
 {
   "requested_fields": [],
-  "requested_visualizations": []
+  "requested_visualizations": [],
+  "visualizations_specified": true
 }
 
 
@@ -158,9 +172,24 @@ requested_fields:
 - Never replace an unavailable requested field with another field.
 
 
+visualizations_specified:
+
+- true  => the user named the chart types they want.
+- false => the user named fields (or nothing) and left the choice of
+           chart types to you.
+
+Decide this from the user's words alone:
+
+- "Create a bar chart and a KPI of gender"        => true
+- "Show me age and district as a pie chart"       => true
+- "Build a dashboard using age, gender, district" => false
+- "Visualize these fields: crop, yield, area"     => false
+- "Make charts from latitude, longitude and crop" => false
+- "Create a dashboard for this data"              => false
+
+
 requested_visualizations:
 
-- List ONLY visualization types explicitly requested by the user.
 - Allowed values:
   - bar
   - line
@@ -169,7 +198,17 @@ requested_visualizations:
   - kpi
   - table
   - map
-- Do not add visualizations that the user did not request.
+  - bubble
+  - histogram
+  - scatter
+
+- When visualizations_specified is true:
+  list ONLY the visualization types the user explicitly requested,
+  and generate exactly those.
+
+- When visualizations_specified is false:
+  leave this list EMPTY. Do not list the types you chose.
+  Your chosen widgets speak for themselves.
 
 ============================================================
 WIDGET TITLE RULE
@@ -797,17 +836,23 @@ The backend creates SQL from the validated dashboard definition.
 VISUALIZATION RULE
 ============================================================
 
-The user must explicitly request every visualization.
+There are two cases. Decide which one the user is in BEFORE you build
+anything.
 
-Example:
+
+------------------------------------------------------------
+CASE 1 — the user named the chart types
+------------------------------------------------------------
+
+Generate exactly those types. Nothing more.
 
 User:
 "Create a bar chart showing students by city."
 
 Correct:
 
-requested_visualizations:
-["bar"]
+"visualizations_specified": true
+"requested_visualizations": ["bar"]
 
 widgets:
 [
@@ -817,27 +862,214 @@ widgets:
   }
 ]
 
-Do NOT add:
+Do NOT also add a KPI, pie, doughnut, line, table or map.
 
-- KPI
-- pie
-- doughnut
-- line
-- table
-- map
-
-
-Example:
 
 User:
 "Create a bar chart and KPI showing students by city."
 
 Correct:
 
-requested_visualizations:
-["bar", "kpi"]
+"visualizations_specified": true
+"requested_visualizations": ["bar", "kpi"]
 
 Generate exactly those requested widget types.
+
+
+------------------------------------------------------------
+CASE 2 — the user named only fields
+------------------------------------------------------------
+
+The user has given you a set of fields and asked for a dashboard,
+without saying which charts to draw. Now you choose.
+
+See CHOOSING VISUALIZATIONS YOURSELF below.
+
+
+============================================================
+CHOOSING VISUALIZATIONS YOURSELF
+============================================================
+
+This section applies ONLY when "visualizations_specified" is false.
+
+Your goal: given the fields the user named, produce EVERY
+visualization those fields can correctly support. Be generous. A
+dashboard built this way should be rich, not minimal.
+
+STRICT FIELD RULE — READ THIS TWICE:
+
+The application shows you EVERY column in the table. That list exists
+so you can match the names the user typed to the real column names.
+
+It is NOT a list of fields you may use.
+
+A table may have 150 columns while the user named 20. You may use
+those 20. The other 130 are invisible to you for this request, no
+matter how useful, related or obvious they seem.
+
+- Use ONLY the fields the user named.
+- Never bring in another column because it looks interesting,
+  relevant, or like it would complete the picture.
+- Never compute, derive, combine or invent a field. If the user did
+  not name it, it does not exist for this dashboard.
+- Before you write each widget, check every field in it against the
+  user's list. If a field is not on that list, the widget is wrong.
+- The ONE exception: a COUNT or COUNT_DISTINCT measure may use a
+  stable identifying field (such as the primary/entity field) to
+  count records, exactly as rule 15 requires.
+- If the user named NO fields at all ("build me a dashboard"), then
+  you may choose the fields too.
+
+A widget that uses a field the user did not name is DISCARDED. You
+lose the chart. Build the chart from their fields instead.
+
+WORKED EXAMPLE OF THE MISTAKE TO AVOID:
+
+available_fields contains 150 columns, among them total_production,
+harvest_date, crop_name, seed_cost, age, district, education.
+
+User:
+"age
+district
+education
+create 10 charts using these fields"
+
+The user named THREE fields: age, district, education.
+
+WRONG — every one of these is discarded:
+
+- line "Total Production Over Time"  (total_production, harvest_date)
+- bar  "Seed Cost by Crop"           (seed_cost, crop_name)
+
+Those columns are real and they are in available_fields. That is
+irrelevant. The user did not name them.
+
+RIGHT — ten charts from three fields:
+
+- kpi       "Total Respondents"        COUNT
+- kpi       "Average Age"              AVG of age
+- bar       "Respondents by District"  COUNT by district
+- pie       "Respondents by Education" COUNT by education
+- bar       "Average Age by District"  AVG age by district
+- bar       "Average Age by Education" AVG age by education
+- bar       "District by Education"    two dimensions, grouped
+- histogram "Age Distribution"         age, NONE, bins 10
+- table     "Respondent Records"       age, district, education
+- doughnut  "Education Split"          COUNT by education
+
+Three fields carry ten charts. You do not need more fields. You need
+more combinations of the fields you were given.
+
+
+HOW TO READ THE FIELDS:
+
+Classify every named field first:
+
+- CATEGORICAL — text, char, string, boolean, or a low-cardinality
+  code. Examples: gender, district, crop, status.
+- NUMERIC — integer, numeric, decimal, float, real, double.
+  Examples: age, yield, area, percentage.
+- TEMPORAL — date, timestamp, datetime.
+  Examples: created_on, sowing_date.
+- COORDINATE — a latitude field and a longitude field.
+
+
+THEN GENERATE, FOR EVERY COMBINATION THAT APPLIES:
+
+1 CATEGORICAL field
+  -> bar   : COUNT of records grouped by it
+  -> pie   : same, when it has few distinct values (a status, a
+             gender, a yes/no). Prefer pie or doughnut for a small
+             set of categories, bar for a larger one.
+  -> table : the category and its count
+
+1 NUMERIC field
+  -> kpi       : SUM or AVG of it, whichever reads more naturally
+                 (AVG for a rate/percentage/age, SUM for a quantity)
+  -> histogram : its distribution, aggregation NONE, bins 10
+
+1 CATEGORICAL + 1 NUMERIC
+  -> bar  : AVG or SUM of the numeric grouped by the categorical
+  -> pie  : SUM of the numeric by the categorical, when the numeric
+            is a quantity that meaningfully adds up
+
+2 CATEGORICAL
+  -> bar with "presentation": {"bar_mode": "grouped"} or "stacked",
+     two dimensions, one COUNT measure
+
+2 NUMERIC
+  -> scatter : both with aggregation NONE, no dimensions
+
+3 NUMERIC
+  -> bubble  : x, y and size
+
+1 CATEGORICAL + 2 NUMERIC
+  -> bubble  : the categorical as the bubble dimension
+
+1 TEMPORAL
+  -> line : COUNT of records over it
+
+1 TEMPORAL + 1 NUMERIC
+  -> line : SUM or AVG of the numeric over the date
+
+1 TEMPORAL + 1 CATEGORICAL
+  -> line : one dimension (the date) and a measure per category, or
+            a grouped bar
+
+LATITUDE + LONGITUDE both named
+  -> map : latitude first in dimensions, longitude second,
+           measures []
+
+ANY set of named fields
+  -> kpi   : a COUNT of total records is almost always worth adding
+  -> table : the named fields listed together with aggregation NONE
+             on each, which shows the underlying records
+
+
+RULES WHILE CHOOSING:
+
+- Never put a text field under SUM, AVG, MIN or MAX. Text supports
+  only COUNT and COUNT_DISTINCT.
+- Never build a histogram or scatter on a text field. They are
+  numeric only.
+- Do not repeat the same chart type on the same fields twice. One
+  bar of gender is enough; a second identical bar is not a second
+  insight.
+- Do not generate a pie or doughnut on a field with many distinct
+  values (a name, an id, a free-text note). It is unreadable.
+- Every widget still needs a meaningful title.
+- Cover the fields. If the user named five fields, a dashboard that
+  uses two of them has not answered the request.
+
+
+EXAMPLE:
+
+available_fields include: gender (text), district (text),
+age (integer), yield (numeric), created_on (date), farmer_id (integer)
+
+User:
+"Create a dashboard using gender, district, age and yield."
+
+"visualizations_specified": false
+"requested_fields": ["gender", "district", "age", "yield"]
+"requested_visualizations": []
+
+Reasonable widgets:
+
+- kpi       "Total Farmers"            COUNT of farmer_id
+- kpi       "Average Age"              AVG of age
+- kpi       "Total Yield"              SUM of yield
+- bar       "Farmers by District"      COUNT by district
+- pie       "Farmers by Gender"        COUNT by gender
+- bar       "Average Yield by District" AVG yield by district
+- bar       "Farmers by District and Gender"
+            two dimensions, grouped bar_mode
+- histogram "Age Distribution"         age, NONE, bins 10
+- scatter   "Age vs Yield"             age and yield, both NONE
+- bubble    "District by Age and Yield"
+- table     "Farmer Records"           the four named fields, NONE
+
+Note that created_on was NOT used: the user did not name it.
 
 
 ============================================================
@@ -853,7 +1085,8 @@ Correct intent:
 
 {
   "requested_fields": ["course"],
-  "requested_visualizations": ["bar"]
+  "requested_visualizations": ["bar"],
+  "visualizations_specified": true
 }
 
 Do NOT silently change course to city.
@@ -912,9 +1145,13 @@ MODE: update
   ("delete this", "remove this graph", "get rid of this"), answer with
   "operation": "delete_widget" and a "dashboard" holding no widgets at all.
 
+"intent.visualizations_specified" MUST be true here, and
 "intent.requested_visualizations" MUST list the type of the one widget you
 return — the existing checks refuse a visualization that was not declared.
-For a deletion it is empty.
+This holds even when the user did not name a chart type and you picked one:
+a single-widget operation always declares what it built. CHOOSING
+VISUALIZATIONS YOURSELF still tells you which type suits the fields, but here
+you pick exactly one and declare it. For a deletion the list is empty.
 
 The "id" and "layout" you give a widget are ignored: which widget this is and
 where it sits on the grid are the dashboard's to decide, not yours.
@@ -957,7 +1194,20 @@ def _build_user_prompt(
     return (
         "Analyze the user's request first.\n\n"
         "Identify every database field explicitly requested by the user.\n"
-        "Identify every visualization explicitly requested by the user.\n\n"
+        "Decide whether the user named the chart types, or named only "
+        "fields and left the chart types to you, and set "
+        "intent.visualizations_specified accordingly.\n\n"
+        "If they named the chart types, generate exactly those.\n"
+        "If they named only fields, follow CHOOSING VISUALIZATIONS "
+        "YOURSELF: build every visualization those fields correctly "
+        "support.\n\n"
+        "available_fields below lists EVERY column in the table. It is "
+        "there so you can match what the user typed to real column "
+        "names. It is NOT permission to use those columns. If the user "
+        "named a set of fields, build the whole dashboard from that set "
+        "and nothing else — combine them in different ways to reach the "
+        "number of charts asked for. A widget using any other column is "
+        "discarded before the user sees it.\n\n"
         "Then generate the dashboard specification.\n\n"
         "IMPORTANT:\n"
         "- Never silently substitute a requested field.\n"
@@ -1422,6 +1672,15 @@ def _repaired_and_validated(
     """
 
     specification = ai_response.dashboard
+
+    # Before the layout is packed, so that a dropped widget leaves no hole.
+    specification = _drop_out_of_scope_widgets(
+        ai_response.intent,
+        specification,
+        fields,
+    )
+
+    specification = _normalize_layout(specification)
     specification = _normalize_table_bindings(specification)
     specification = _normalize_map_bindings(specification, fields)
     specification = _normalize_bubble_bindings(specification)
@@ -1447,10 +1706,115 @@ def _repaired_and_validated(
         fields,
     )
 
-    validate_dashboard_spec(
-        specification,
-        available_sources_for(fields),
+    if ai_response.intent.visualizations_specified:
+        # Strict mode: a bad widget is the model not following the request.
+        validate_dashboard_spec(
+            specification,
+            available_sources_for(fields),
+        )
+
+        return specification
+
+    # Inferred mode: the model chose the charts itself. A widget that the
+    # validator refuses (AVG on a text column, histogram on a string, etc.)
+    # is dropped rather than killing the whole generation — the same logic
+    # as _drop_out_of_scope_widgets, extended to semantic errors.
+    specification = _drop_invalid_widgets(specification, fields)
+
+    return specification
+
+
+def _drop_invalid_widgets(
+    specification: DashboardSpecification,
+    fields: List[Dict[str, Any]],
+) -> DashboardSpecification:
+    """Validate each widget individually and drop any that fail.
+
+    This runs only in inferred mode, where the model chose the chart types
+    itself: a chart it chose wrong (AVG on a text column, histogram on a
+    string) is not worth killing the whole dashboard over, because the user
+    never asked for that specific chart and can't act on the error.
+
+    After dropping, the layout is re-packed so there are no holes.
+    """
+
+    sources = available_sources_for(fields)
+    kept = []
+
+    for widget in specification.widgets:
+        # Build a one-widget specification so the validator checks just this
+        # widget in its normal code path.
+        probe = specification.model_copy(
+            update={"widgets": [widget]}
+        )
+
+        try:
+            validate_dashboard_spec(probe, sources)
+            kept.append(widget)
+
+        except DashboardValidationError as exc:
+            logger.info(
+                "Dropping widget '%s': %s",
+                widget.title,
+                exc,
+            )
+
+    if specification.widgets and not kept:
+        raise LLMError(
+            "Dashboard AI generated charts that are all invalid. "
+            "Try rephrasing your request."
+        )
+
+    specification.widgets = kept
+    specification = _normalize_layout(specification)
+
+    return specification
+
+
+GRID_COLUMNS = 12
+
+
+def _normalize_layout(
+    specification: DashboardSpecification,
+) -> DashboardSpecification:
+    """Reflow the widgets onto the 12-column grid.
+
+    The model places widgets well enough for three or four of them and badly
+    for a dozen, and a single overflowing row is a hard rejection in
+    validate_widget_layout. Repairing the arithmetic here keeps a dashboard
+    the model otherwise got right from being thrown away over its geometry.
+
+    The model's ordering and its sense of how wide a widget wants to be are
+    kept; only the packing is redone.
+    """
+
+    widgets = sorted(
+        specification.widgets,
+        key=lambda widget: (widget.layout.y, widget.layout.x),
     )
+
+    cursor_x = 0
+    cursor_y = 0
+    row_height = 0
+
+    for widget in widgets:
+        width = min(max(widget.layout.w, 1), GRID_COLUMNS)
+        height = max(widget.layout.h, 1)
+
+        if cursor_x + width > GRID_COLUMNS:
+            cursor_x = 0
+            cursor_y += row_height or height
+            row_height = 0
+
+        widget.layout.x = cursor_x
+        widget.layout.y = cursor_y
+        widget.layout.w = width
+        widget.layout.h = height
+
+        cursor_x += width
+        row_height = max(row_height, height)
+
+    specification.widgets = widgets
 
     return specification
 
@@ -1526,6 +1890,12 @@ def _validate_intent(
         for widget in specification.widgets
     }
 
+    if not intent.visualizations_specified:
+        # The user named fields and left the charts to us, so there is no
+        # requested list to check the widgets against. Scope is enforced on
+        # the fields instead, by _drop_out_of_scope_widgets before this runs.
+        return
+
     # Every generated visualization must have been requested.
     for visualization in generated_visualizations:
         if visualization not in intent.requested_visualizations:
@@ -1547,6 +1917,93 @@ def _validate_intent(
             "visualization(s): "
             + ", ".join(missing_visualizations)
         )
+
+
+# An inferred dashboard may count records using a column the user never named,
+# because "how many" needs a stable identifying field rather than the grouping
+# one. Every other reference has to be a field the user actually asked for.
+_COUNTING_AGGREGATIONS = {"COUNT", "COUNT_DISTINCT"}
+
+
+def _drop_out_of_scope_widgets(
+    intent: DashboardIntent,
+    specification: DashboardSpecification,
+    fields: List[Dict[str, Any]],
+) -> DashboardSpecification:
+    """Keep a self-chosen dashboard inside the fields the user named.
+
+    When the model picks the chart types itself, nothing else stops it from
+    wandering into columns the user did not ask about: it is shown every
+    column in the table so that it can recognise the names the user typed,
+    and it reads that list as permission.
+
+    The stray widget is dropped rather than refused. One chart reaching for a
+    column the user did not name is no reason to throw away the nine beside it
+    that got it right, and the user cannot act on the refusal anyway — the
+    field it names is one they deliberately left out.
+    """
+
+    if intent.visualizations_specified:
+        # The user named the chart types, so the visualization checks in
+        # _validate_intent are the guard and the fields follow from them.
+        return specification
+
+    if not intent.requested_fields:
+        # Nothing was named either — "build me a dashboard". The model is free
+        # to choose the fields as well; _validate_fields still holds it to
+        # columns that exist.
+        return specification
+
+    available_fields = {
+        str(field.get("name"))
+        for field in fields
+        if field.get("name")
+    }
+
+    permitted = set(intent.requested_fields) & available_fields
+
+    kept = []
+
+    for widget in specification.widgets:
+        binding = widget.data_binding
+
+        referenced = {
+            dimension.field
+            for dimension in binding.dimensions
+        }
+
+        referenced |= {
+            measure.field
+            for measure in binding.measures
+            if measure.aggregation not in _COUNTING_AGGREGATIONS
+        }
+
+        strayed = sorted(referenced - permitted)
+
+        if strayed:
+            logger.info(
+                "Dropping widget '%s': it uses field(s) outside the "
+                "request: %s",
+                widget.title,
+                ", ".join(strayed),
+            )
+
+            continue
+
+        kept.append(widget)
+
+    if specification.widgets and not kept:
+        # Every widget strayed, so there is no dashboard left to show. This is
+        # worth refusing: silently returning an empty dashboard would look
+        # like the generator had simply done nothing.
+        raise LLMError(
+            "Dashboard AI built every chart from fields the request did not "
+            "ask for. Try naming the fields you want again."
+        )
+
+    specification.widgets = kept
+
+    return specification
 
 
 def _validate_fields(
