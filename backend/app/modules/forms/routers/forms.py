@@ -398,7 +398,12 @@ def translate(req: TranslateRequest, user: Dict[str, Any] = Depends(_could_build
     """
     if not translations.is_supported(req.language):
         raise HTTPException(status_code=400, detail=f"Unsupported language '{req.language}'")
-    if req.language == translations.DEFAULT_LANGUAGE:
+    # The form's own base language, not English. A workbook imported from
+    # Spanish is a Spanish form, and translating it *into* English is the whole
+    # point — comparing against the installation default refused exactly that
+    # and allowed the pointless Spanish-to-Spanish call instead.
+    base = translations.default_language(req.form_json)
+    if req.language == base:
         raise HTTPException(
             status_code=400,
             detail="That is the language the form is already written in.",

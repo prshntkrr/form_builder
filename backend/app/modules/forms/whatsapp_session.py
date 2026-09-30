@@ -1,8 +1,11 @@
 """One WhatsApp conversation in progress, in the database.
 
-    start ─> CONSENT ─yes─> QUESTIONS ─> (REVIEW) ─> COMPLETED
-               │                              submitted
-               └─no─> DECLINED
+    start ─> (LANGUAGE) ─> CONSENT ─yes─> QUESTIONS ─> (REVIEW) ─> COMPLETED
+                              │                              submitted
+                              └─no─> DECLINED
+
+LANGUAGE is asked only by a form that offers more than one; a form with one
+language starts at CONSENT exactly as it always has.
 
 The database is the session. It is not a cache of one held in the process: an
 in-memory dictionary does not survive `--reload`, is not shared between workers,
@@ -39,6 +42,9 @@ from app.core.database import transaction
 logger = logging.getLogger(__name__)
 
 # What the conversation is waiting for.
+#: LANGUAGE comes before CONSENT and only for a form offering more than one
+#: language — a form with one goes straight to the welcome, exactly as before.
+LANGUAGE = "LANGUAGE"
 CONSENT, QUESTIONS, REVIEW = "CONSENT", "QUESTIONS", "REVIEW"
 
 # What became of it.
@@ -136,7 +142,7 @@ def touch(session_id: str, timeout_seconds: int, **changes: Any) -> Dict[str, An
                    "expires_on = CURRENT_TIMESTAMP + make_interval(secs => %s)"]
     values: List[Any] = [int(timeout_seconds)]
 
-    for column in ("state", "consent", "current_field", "survey_id"):
+    for column in ("state", "consent", "current_field", "survey_id", "language"):
         if column in changes:
             assignments.append(f"{column} = %s")
             values.append(changes[column])

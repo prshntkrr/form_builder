@@ -14,28 +14,45 @@
 .trial__ok { margin-top: 14px; }
 .trial__ok .json { margin-top: 10px; }
 
-/* Translating a form: what it says now on the left, the translation on the right. */
-.i18n__pick { gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+/* Translating a form: rows are what the form says, columns are the languages. */
 .i18n__add { padding: 4px 8px; font-size: 13px; }
-
-.i18n__bar { gap: 10px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+.i18n__bar { gap: 10px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
 .grow-end { margin-left: auto; }
 
-.i18n__group {
-  margin: 22px 0 8px; font-size: 12px; font-weight: 600;
-  letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3);
+/* A long form scrolls inside the sheet, with the headings and the element
+   column staying put — otherwise question 40 is a row of unlabelled boxes. */
+.i18n__grid { max-height: min(60vh, 560px); overflow: auto; }
+.i18n__grid thead th {
+  position: sticky; top: 0; z-index: 2;
+  background: var(--surface, #fff);
 }
-.i18n__field { padding-bottom: 8px; }
+.i18n__grid tbody th {
+  position: sticky; left: 0; z-index: 1;
+  background: var(--surface, #fff);
+  text-align: left; font-weight: 500; min-width: 170px; max-width: 240px;
+}
+.i18n__grid td { vertical-align: top; min-width: 210px; }
+.i18n__grid .control { width: 100%; }
 
-.i18n__row {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
-  align-items: center; padding: 6px 0;
-}
-.i18n__from { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.i18n__note { margin-top: 18px; }
+/* Where one kind of thing ends and the next begins — the form, its sections,
+   its questions — without a heading row that would break the column grid. */
+.i18n__first > * { border-top: 2px solid var(--line); padding-top: 12px; }
+
+.i18n__cell { display: flex; flex-direction: column; gap: 2px; }
+.i18n__original { display: block; padding-top: 5px; }
+.i18n__note { margin-top: 14px; }
+
+/* The tab row, and what sits beside it. `.tabs` keeps its own border, so the
+   button is aligned to the tabs' baseline rather than floated over them. */
+.tabbar { display: flex; align-items: flex-end; gap: 12px; }
+.tabbar .tabs { flex: 1 1 auto; }
+.tabs__aside { flex: 0 0 auto; margin-bottom: 8px; }
 
 @media (max-width: 720px) {
-  .i18n__row { grid-template-columns: 1fr; gap: 4px; }
+  /* The grid keeps its columns and scrolls sideways: stacking the languages
+     would lose the one thing the layout is for — seeing them side by side. */
+  .i18n__grid tbody th { min-width: 130px; }
+  .i18n__grid td { min-width: 170px; }
 }
 
 /* The data dictionary list. */

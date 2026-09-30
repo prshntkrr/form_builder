@@ -20,6 +20,7 @@ import WhatsAppBuilder, { ChatPreview } from '../components/WhatsAppBuilder.jsx'
 import FormRenderer from '../components/FormRenderer.jsx'
 import LayoutDesigner from '../components/LayoutDesigner.jsx'
 import ContributeToLibrary from '../components/ContributeToLibrary.jsx'
+import Translations from '../components/Translations.jsx'
 import LibraryPicker from '../components/LibraryPicker.jsx'
 import StandardDrift from '../components/StandardDrift.jsx'
 import VersionDiff from '../components/VersionDiff.jsx'
@@ -165,6 +166,8 @@ export default function Builder() {
   const [ask, setAsk] = useState('')
   // Which language's wording the questions are being edited in.
   const [wording, setWording] = useState(null)
+  // Whether the translations sheet is open over the builder.
+  const [showTranslations, setShowTranslations] = useState(false)
 
   // Which project a new form is being built in. `?project=` when the builder
   // was opened from a project, otherwise whichever project is active. Only
@@ -1131,16 +1134,30 @@ export default function Builder() {
                 being edited, exactly as a new one can. For a saved form the tab
                 is the page's address, so the sidebar and the tab agree. */}
             {(!editing || ['questions', 'design', 'preview', 'json'].includes(section)) && (
-              <div className="tabs">
-                {tabs.map(([id, name]) => (
-                  <button
-                    key={id}
-                    className={pane === id ? 'on' : undefined}
-                    onClick={() => (editing ? navigate(`/forms/${formId}/${id}`) : setDraftTab(id))}
-                  >
-                    {name}
+              <div className="tabbar">
+                <div className="tabs">
+                  {tabs.map(([id, name]) => (
+                    <button
+                      key={id}
+                      className={pane === id ? 'on' : undefined}
+                      onClick={() => (editing ? navigate(`/forms/${formId}/${id}`) : setDraftTab(id))}
+                    >
+                      {name}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Beside the tabs and not one of them: translating is a pass
+                    over the whole form rather than a view of it, and it opens
+                    over whichever tab you were on so you come back to it. */}
+                {form && (
+                  <button className="btn btn--sm btn--quiet tabs__aside"
+                          onClick={() => setShowTranslations(true)}>
+                    Translations
+                    {languageChoices(form).length > 1 &&
+                      ` · ${languageChoices(form).length}`}
                   </button>
-                ))}
+                )}
               </div>
             )}
 
@@ -1509,6 +1526,46 @@ export default function Builder() {
         </aside>
       )}
      </div>
+
+      {/* Every word on the form, one column per language. It edits the same
+          `form` state the rest of the builder edits, so a translation is saved
+          by the ordinary save and versions with the questions it belongs to. */}
+      {showTranslations && form && (
+        <div className="sheet" onMouseDown={() => setShowTranslations(false)}>
+          <div
+            className="sheet__panel sheet__panel--wide"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="i18n-title"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div className="sheet__head">
+              <h2 id="i18n-title">Translations</h2>
+              <p className="muted">
+                The same form in more than one language. Question names, option
+                values and every rule stay exactly as they are — only the words
+                people read change, so answers collected in any language land in
+                the same columns.
+              </p>
+            </div>
+
+            <div className="sheet__body">
+              <Translations form={form} onChange={setForm} />
+            </div>
+
+            <div className="sheet__foot">
+              <span className="tiny muted">
+                Saved with the form — use Save when you are done.
+              </span>
+              <span className="spacer" />
+              <button className="btn btn--primary"
+                      onClick={() => setShowTranslations(false)}>
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   )
 }

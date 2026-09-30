@@ -130,6 +130,17 @@ export function translateForm(formJson, language) {
     return next
   })
 
+  // What a WhatsApp conversation says around the questions. Only the four
+  // messages: the order, the interactions and the review step are how the
+  // conversation behaves, and behaviour does not change with the language.
+  const whatsapp = block.whatsapp
+  if (whatsapp && formJson.channel_config?.whatsapp) {
+    translated.channel_config = {
+      ...formJson.channel_config,
+      whatsapp: { ...formJson.channel_config.whatsapp, ...whatsapp },
+    }
+  }
+
   translated.language = language
   return translated
 }

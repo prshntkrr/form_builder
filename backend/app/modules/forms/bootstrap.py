@@ -545,3 +545,42 @@ def ensure_export_columns() -> List[str]:
 
     logger.info("form_export gained: %s", ", ".join(added))
     return added
+
+
+def ensure_session_language() -> bool:
+    """Give `whatsapp_session` the language the conversation is being held in.
+
+    A conversation on a form offering more than one language starts by asking
+    which one, and every message after that — the consent question, the
+    questions themselves, their choices, a validation error, the thank-you — is
+    said in the answer. The session is where that belongs: it is pinned for the
+    conversation exactly as `form_version` is, so republishing cannot change
+    language halfway through and a second worker reads the same choice.
+
+    Existing rows come out with `''`, which means "the form's own language" —
+    so every conversation configured before this behaves exactly as it did.
+
+    Idempotent, and returns whether it changed anything.
+    """
+    from psycopg2 import sql
+
+    with transaction() as cur:
+        if not table_exists(cur, "whatsapp_session"):
+            return False                      # schema.sql will create it first
+
+        cur.execute(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_schema = %s AND table_name = 'whatsapp_session' "
+            "  AND column_name = 'language'",
+            (settings.db_schema,),
+        )
+        if cur.fetchone() is not None:
+            return False
+
+        cur.execute(sql.SQL(
+            "ALTER TABLE {}.whatsapp_session "
+            "ADD COLUMN language VARCHAR(10) NOT NULL DEFAULT ''"
+        ).format(sql.Identifier(settings.db_schema)))
+
+    logger.info("whatsapp_session gained its language column")
+    return True

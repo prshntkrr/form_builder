@@ -33,5 +33,6 @@ MODULE = Module(
         bootstrap.ensure_routing_permissions,
         bootstrap.ensure_public_share_columns,
         bootstrap.ensure_route_receiver_number,
+        bootstrap.ensure_session_language,
     ],
 )

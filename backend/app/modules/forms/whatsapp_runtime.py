@@ -52,6 +52,7 @@ from app.modules.forms import (
     publishing,
     routing,
     submission_service,
+    translations,
     whatsapp_session as sessions,
 )
 from app.modules.forms.field_types import get_type, resolve_type
@@ -108,16 +109,26 @@ def _definition(session: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     The pinned version out of `form_version`, never `forms.form_json`, which the
     next edit rewrites. A session whose version has somehow gone returns None
     and the conversation is ended rather than continued against something else.
+
+    **Already in the conversation's language**, because this is the one place
+    every message comes from. Translating here means the consent question, each
+    question and its choices, a validation error and the thank-you are all said
+    in the language that was chosen, and no caller has to remember to ask.
     """
     from app.modules.forms import form_service
 
     try:
         form = form_service.get_form(session["form_id"])
-        return publishing.config_of(form, session.get("form_version"))
+        form_json = publishing.config_of(form, session.get("form_version"))
     except Exception:
         logger.exception("Session %s has no definition to run on",
                          session.get("session_id"))
         return None
+
+    language = (session.get("language") or "").strip()
+    if form_json and language:
+        return translations.translate_form(form_json, language)
+    return form_json
 
 
 def _whatsapp_config(form_json: Dict[str, Any]) -> Dict[str, Any]:
@@ -276,7 +287,8 @@ def _how_to_ask(field: Dict[str, Any], config: Dict[str, Any],
 
 
 def render(field: Dict[str, Any], config: Dict[str, Any],
-           answers: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+           answers: Optional[Dict[str, Any]] = None,
+           language: str = "") -> Dict[str, Any]:
     """One question as a WhatsApp message.
 
     The prompt the author wrote, or the question's label. Then, for a question
@@ -309,18 +321,18 @@ def render(field: Dict[str, Any], config: Dict[str, Any],
             # Several answers cannot be tapped: a button or a list row sends one
             # reply and closes. A multi-select is a numbered menu, always.
             interaction = NUMBERED
-            lines.append("_Reply with the numbers, separated by commas — e.g. 1,3_")
+            lines.append(translations.message(language, "reply_numbers"))
         elif interaction in (BUTTONS, LIST):
-            lines.append("_Tap a choice above, or reply with the number._")
+            lines.append(translations.message(language, "tap_choice"))
         else:
-            lines.append("_Reply with the number, or type the option._")
+            lines.append(translations.message(language, "reply_number"))
     else:
         hint = caps.capability("whatsapp", field.get("type") or "text").reason
         if hint:
             lines.append(f"\n_{hint}_")
 
     if not field.get("required"):
-        lines.append("\n_Reply SKIP to leave this blank._")
+        lines.append("\n" + translations.message(language, "reply_skip"))
 
     return say("\n".join(lines), interaction, choices if choices else None,
                title="Select")
@@ -495,6 +507,17 @@ def _begin(identity: str, receiver: str, caller: Dict[str, Any],
         sessions.finish(session["session_id"], sessions.EXPIRED)
         return say(UNAVAILABLE)
 
+    # A form offering more than one language asks which, before it says anything
+    # that would have to be said in one. A form offering one never asks.
+    offered = _offered_languages(form_json)
+    if offered:
+        updated = sessions.touch(
+            session["session_id"], _timeout(resolved.get("project_id")),
+            state=sessions.LANGUAGE)
+        if not updated:
+            return say(UNAVAILABLE)
+        return _ask_language(updated, offered)
+
     return _welcome_and_consent(session, form_json, resolved["form_title"])
 
 
@@ -533,6 +556,79 @@ def _menu(caller: Dict[str, Any], receiver: str) -> Dict[str, Any]:
     "We’ll guide you through the form step by step.")
 
 
+def _offered_languages(form_json: Dict[str, Any]) -> List[Tuple[str, str]]:
+    """The languages this conversation can be held in, as (name, code).
+
+    The form's own first, and only what WhatsApp can actually put on screen —
+    ten is the limit of a list message. A form offering one gets an empty list
+    and is never asked, which is every form built before this.
+    """
+    codes = translations.form_languages(form_json)
+    if len(codes) < 2:
+        return []
+
+    return [(translations.SUPPORTED_LANGUAGES.get(code, code), code)
+            for code in codes[:caps.MAX_LIST_ROWS]]
+
+
+def _ask_language(session: Dict[str, Any],
+                  offered: List[Tuple[str, str]]) -> Dict[str, Any]:
+    """Which language, before anything else is said.
+
+    Asked before the welcome because the welcome is one of the things being
+    translated — asking in a language somebody may not read, and then greeting
+    them in it, would be the wrong way round.
+
+    The question itself cannot be translated: there is no answer yet. So it
+    names each language in that language, which needs no common one.
+    """
+    interaction = BUTTONS if len(offered) <= caps.MAX_BUTTONS else LIST
+    lines = "\n".join(f"{i}. {name}" for i, (name, _) in enumerate(offered, 1))
+
+    return say(f"Please choose a language.\n\n{lines}",
+               interaction, [(name, code) for name, code in offered],
+               title="Language")
+
+
+def _language_reply(session: Dict[str, Any], text: str) -> str:
+    """Their choice, or the question again.
+
+    A tapped button sends the code; a typed reply may be the number in the list,
+    the code, or the language's own name — all three are accepted, because a
+    conversation that only understands what its own buttons send is no use to
+    somebody whose client did not render them.
+    """
+    form_json = _definition(session)
+    if form_json is None:
+        sessions.finish(session["session_id"], sessions.EXPIRED)
+        return say(UNAVAILABLE)
+
+    offered = _offered_languages(form_json)
+    reply = _word(text)
+
+    chosen = ""
+    for i, (name, code) in enumerate(offered, 1):
+        if reply in (str(i), code.lower(), _word(name)):
+            chosen = code
+            break
+
+    if not chosen:
+        return say("Sorry, I did not understand that.\n\n"
+                   + _ask_language(session, offered)["text"],
+                   BUTTONS if len(offered) <= caps.MAX_BUTTONS else LIST,
+                   [(name, code) for name, code in offered], title="Language")
+
+    updated = sessions.touch(
+        session["session_id"], _timeout(session.get("project_id")),
+        state=sessions.CONSENT, language=chosen)
+    if not updated:
+        return say(UNAVAILABLE)
+
+    # Re-read, so the welcome and the consent question are already translated.
+    said = _definition(updated) or form_json
+    return _welcome_and_consent(updated, said, said.get("title") or "")
+
+
 def _welcome_and_consent(session: Dict[str, Any], form_json: Dict[str, Any],
                          title: str) -> Dict[str, Any]:
     """The first message: the welcome prompt with Yes/No consent buttons.
@@ -545,8 +641,10 @@ def _welcome_and_consent(session: Dict[str, Any], form_json: Dict[str, Any],
     consent = _tidy(config.get("consent_message"))
 
     body = f"{welcome}\n\n{consent}" if consent else welcome
-    return say(f"{body}\n\n_Tap a button, or reply YES or NO._",
-               BUTTONS, CONSENT_CHOICES, title="Consent")
+    # In the conversation's own language: a chat held in Hindi should not break
+    # into English to say how to answer.
+    tap = translations.message(session.get("language"), "tap_yes_no")
+    return say(f"{body}\n\n{tap}", BUTTONS, CONSENT_CHOICES, title="Consent")
 
 
 def _start_questions(session: Dict[str, Any], form_json: Dict[str, Any],
@@ -578,7 +676,8 @@ def _start_questions(session: Dict[str, Any], form_json: Dict[str, Any],
     if not updated:
         return say(UNAVAILABLE)
 
-    question = render(field, _whatsapp_config(form_json), answers)
+    question = render(field, _whatsapp_config(form_json), answers,
+                    session.get("language") or "")
     if preamble:
         # One message, not two: two deliveries can arrive in either order, and
         # a question landing before its welcome reads as a non-sequitur.
@@ -589,6 +688,11 @@ def _start_questions(session: Dict[str, Any], form_json: Dict[str, Any],
 def _continue(session: Dict[str, Any], caller: Dict[str, Any], text: str,
               media_url: str = "", media_type: str = "") -> str:
     """The next reply of a conversation already under way."""
+    # Before the definition is read, because until a language is chosen there is
+    # no language to read it in.
+    if session["state"] == sessions.LANGUAGE:
+        return _language_reply(session, text)
+
     form_json = _definition(session)
     if form_json is None:
         sessions.finish(session["session_id"], sessions.EXPIRED)
@@ -609,9 +713,10 @@ def _consent_reply(session: Dict[str, Any], form_json: Dict[str, Any],
         return say(_tidy(config.get("decline_message")) or DEFAULT_DECLINE)
 
     if word not in YES_WORDS:
+        language = session.get("language")
         consent = _tidy(config.get("consent_message")) or DEFAULT_CONSENT
-        return say(f"Sorry, I did not understand that.\n\n{consent}\n\n"
-                   "_Tap a button, or reply YES or NO._",
+        return say(f'{translations.message(language, "not_understood")}\n\n'
+                   f'{consent}\n\n{translations.message(language, "tap_yes_no")}',
                    BUTTONS, CONSENT_CHOICES)
 
     return _start_questions(session, form_json)
@@ -719,6 +824,10 @@ def _answer(session: Dict[str, Any], form_json: Dict[str, Any], text: str,
 
     answers = dict(session.get("answers") or {})
     config = _whatsapp_config(form_json)
+    # The conversation's own language, for this file's own sentences. The
+    # question, its choices and any validation error are already in it —
+    # `_definition` translated the whole form before any of this ran.
+    language = session.get("language") or ""
     ftype = resolve_type(field.get("type") or "text")
     is_media = ftype in ("image", "audio", "file")
     word = _word(text)
@@ -730,12 +839,14 @@ def _answer(session: Dict[str, Any], form_json: Dict[str, Any], text: str,
             if not field.get("required"):
                 answers[name] = None
             else:
-                again = render(field, config, answers)
+                again = render(field, config, answers, language)
                 return {**again, "text": f"⚠️ This question is required and cannot be skipped.\n\n{again['text']}"}
         # 2. Plain text sent when media is expected -> reject text!
         elif not media_url:
-            again = render(field, config, answers)
-            skip_hint = "\n\n_Reply SKIP to leave this blank._" if not field.get("required") else "\n\n_This question is required._"
+            again = render(field, config, answers, language)
+            skip_hint = "\n\n" + translations.message(
+                language,
+                "reply_skip" if not field.get("required") else "required_question")
             if ftype == "image":
                 hint = "⚠️ Please send a photo using your WhatsApp camera or gallery attachment." + skip_hint
             elif ftype == "audio":
@@ -746,22 +857,22 @@ def _answer(session: Dict[str, Any], form_json: Dict[str, Any], text: str,
         # 3. Media attachment received
         else:
             if ftype == "image" and media_type == "audio":
-                again = render(field, config, answers)
+                again = render(field, config, answers, language)
                 return {**again, "text": f"⚠️ A photo is expected for this question, but a voice note was received. Please send a photo.\n\n{again['text']}"}
             if ftype == "audio" and media_type == "image":
-                again = render(field, config, answers)
+                again = render(field, config, answers, language)
                 return {**again, "text": f"⚠️ A voice note is expected for this question, but a photo was received. Please record and send a voice note.\n\n{again['text']}"}
 
             media_id, survey_id, err = _process_media_upload(
                 session, form_json, field, media_url, media_type)
             if err:
-                again = render(field, config, answers)
+                again = render(field, config, answers, language)
                 return {**again, "text": f"⚠️ {err}\n\n{again['text']}"}
             answers[name] = media_id
     else:
         # Field is NOT a media field (e.g. text, select, boolean, number)
         if media_url:
-            again = render(field, config, answers)
+            again = render(field, config, answers, language)
             return {**again, "text": f"⚠️ This question expects a text reply or option choice, not a file/photo.\n\n{again['text']}"}
 
         if word == "skip" and not field.get("required"):
@@ -772,7 +883,7 @@ def _answer(session: Dict[str, Any], form_json: Dict[str, Any], text: str,
                     form_json, name, _one_value(field, _tidy(text), answers), answers)
             except submission_service.ValidationFailed as failed:
                 problem = failed.errors.get(name) or "That answer cannot be used."
-                again = render(field, config, answers)
+                again = render(field, config, answers, language)
                 return {**again, "text": f"⚠️ {problem}\n\n{again['text']}"}
             except KeyError:
                 return _start_questions(session, form_json)
@@ -790,7 +901,7 @@ def _answer(session: Dict[str, Any], form_json: Dict[str, Any], text: str,
     if not updated:
         return say(UNAVAILABLE)
 
-    next_q = render(following, config, answers)
+    next_q = render(following, config, answers, language)
     if is_media and answers.get(name):
         type_label = "Photo" if ftype == "image" else ("Voice note" if ftype == "audio" else "Document")
         next_q = {**next_q, "text": f"✅ {type_label} received!\n\n{next_q['text']}"}

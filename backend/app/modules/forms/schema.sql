@@ -453,8 +453,12 @@ CREATE TABLE IF NOT EXISTS whatsapp_session (
     -- made against this, never against the phone number.
     user_id        VARCHAR(20),
 
-    -- WELCOME -> CONSENT -> QUESTIONS -> (REVIEW) -> done
+    -- (LANGUAGE) -> CONSENT -> QUESTIONS -> (REVIEW) -> done
     state          VARCHAR(20)  NOT NULL DEFAULT 'CONSENT',
+    -- Which language this conversation is being held in. '' is the form's own,
+    -- which is every form offering only one. Pinned like `form_version`, so
+    -- republishing cannot change language halfway through a conversation.
+    language       VARCHAR(10)  NOT NULL DEFAULT '',
     consent        BOOLEAN,
     current_field  VARCHAR(150) NOT NULL DEFAULT '',
     answers        JSONB        NOT NULL DEFAULT '{}'::jsonb,

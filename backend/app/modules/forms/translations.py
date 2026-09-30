@@ -75,6 +75,17 @@ MESSAGES = {
         "not_applicable": "{label} was not asked — the answers given do not call for it",
         "characters": "characters",
         "digits": "digits",
+        # What the WhatsApp conversation says in its own voice, around what the
+        # form says. A conversation held in one language should not break into
+        # another to tell somebody how to answer.
+        "tap_yes_no": "_Tap a button, or reply YES or NO._",
+        "not_understood": "Sorry, I did not understand that.",
+        "choose_language": "Please choose a language.",
+        "reply_numbers": "_Reply with the numbers, separated by commas — e.g. 1,3_",
+        "tap_choice": "_Tap a choice above, or reply with the number._",
+        "reply_number": "_Reply with the number, or type the option._",
+        "reply_skip": "_Reply SKIP to leave this blank._",
+        "required_question": "_This question is required._",
     },
     "hi": {
         "required": "{label} आवश्यक है",
@@ -87,6 +98,14 @@ MESSAGES = {
         "not_applicable": "{label} पूछा नहीं गया — दिए गए उत्तरों के अनुसार यह लागू नहीं है",
         "characters": "अक्षर",
         "digits": "अंक",
+        "tap_yes_no": "_बटन दबाएँ, या YES या NO लिखकर भेजें।_",
+        "not_understood": "क्षमा करें, मैं समझ नहीं पाया।",
+        "choose_language": "कृपया एक भाषा चुनें।",
+        "reply_numbers": "_अंक भेजें, अल्पविराम से अलग करके — जैसे 1,3_",
+        "tap_choice": "_ऊपर से कोई विकल्प चुनें, या उसका अंक भेजें।_",
+        "reply_number": "_अंक भेजें, या विकल्प लिखें।_",
+        "reply_skip": "_खाली छोड़ने के लिए SKIP भेजें।_",
+        "required_question": "_यह प्रश्न आवश्यक है।_",
     },
 }
 
@@ -179,7 +198,33 @@ def _clean_block(block: Dict[str, Any]) -> Dict[str, Any]:
     if fields:
         cleaned["fields"] = fields
 
+    whatsapp = _clean_whatsapp(block.get("whatsapp"))
+    if whatsapp:
+        cleaned["whatsapp"] = whatsapp
+
     return cleaned
+
+
+def _clean_whatsapp(raw: Any) -> Dict[str, str]:
+    """What the conversation says around the questions, in one language.
+
+    Only the four messages. Everything else in `channel_config.whatsapp` —
+    the order, which interaction a question uses, whether there is a review
+    step — is behaviour rather than words, and behaviour does not change with
+    the language it is asked in.
+    """
+    if not isinstance(raw, dict):
+        return {}
+
+    from app.modules.forms.channel_config import MESSAGES
+
+    words = {}
+    for key in MESSAGES:
+        text = _text(raw.get(key))
+        if text:
+            words[key] = text
+
+    return words
 
 
 def _clean_sections(raw: Any) -> Dict[str, Any]:
@@ -277,9 +322,35 @@ def translate_form(form_json: Dict[str, Any], language: Optional[str]) -> Dict[s
     translated["fields"] = _translate_fields(
         form_json.get("fields") or [], block.get("fields") or {}
     )
+
+    channel_config = _translate_whatsapp(
+        form_json.get("channel_config"), block.get("whatsapp") or {})
+    if channel_config is not None:
+        translated["channel_config"] = channel_config
+
     translated["language"] = language
 
     return translated
+
+
+def _translate_whatsapp(channel_config: Any, words: Dict[str, str]):
+    """The conversation's own messages, in this language.
+
+    Only the four messages are swapped. The order, the interactions and the
+    review step are untouched — they are how the conversation behaves, and a
+    conversation does not behave differently for being held in Hindi.
+
+    None when there is nothing to do, so a form with no WhatsApp config does not
+    gain an empty one by being read in another language.
+    """
+    if not words or not isinstance(channel_config, dict):
+        return None
+
+    whatsapp = channel_config.get("whatsapp")
+    if not isinstance(whatsapp, dict):
+        return None
+
+    return {**channel_config, "whatsapp": {**whatsapp, **words}}
 
 
 def _translate_sections(sections: List[Any], block: Dict[str, Any]) -> List[Any]:
