@@ -259,14 +259,6 @@ def _enrich_imported(form_json: Dict[str, Any]) -> Dict[str, Any]:
     attached: list = []
 
     try:
-        from app.modules.forms import dictionary_service
-        applied = dictionary_service.apply_to_form(form_json)
-        form_json = applied["form_json"]
-        attached.extend(applied["applied"])
-    except Exception:
-        logger.exception("Data dictionary enrichment failed on an import")
-
-    try:
         from app.modules.standards.icasa import enrichment
         result = enrichment.enrich_form(form_json, form_json.get("title") or "")
         form_json = result["form_json"]

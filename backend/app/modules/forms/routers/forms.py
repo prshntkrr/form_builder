@@ -21,7 +21,6 @@ from app.modules.forms.permissions import (
 from app.modules.forms.config_validation import ConfigValidationError, validate_config
 from app.modules.forms.form_schema import FormSchemaError, normalize_form
 from app.modules.forms.migration_service import MigrationError
-from app.modules.forms import dictionary_service
 from app.modules.forms import translations
 from app.modules.forms.schemas import (
     CreateFormRequest,
@@ -299,23 +298,22 @@ def generate(req: GenerateRequest, user: Dict[str, Any] = Depends(_could_build_s
     try:
         raw = llm.generate_form(req.prompt, req.language)
 
-        # Two passes over the draft before anyone sees it, in this order because
-        # they answer different questions:
+        # One pass over the draft before anyone sees it: standard enrichment,
+        # which says what each field is and what it is called. Nobody has to ask
+        # for it in the prompt.
         #
-        #   the data dictionary  — how must this field behave?  (type, limits)
-        #   standard enrichment  — what is it, and what is it called?
-        #
-        # Nobody has to ask for either in the prompt.
-        result = dictionary_service.apply_to_form(normalize_form(raw))
+        # The data dictionary used to run here too, deciding each field's type
+        # and limits by matching its *name*. That is now a CIMMYT variable,
+        # chosen per question in the builder — explicit, and stated by the
+        # institution rather than inferred from a name.
         # Crop and feature choices are the application's data, not the model's
         # guess. Done before enrichment so a rewired field is matched in its
         # final shape.
-        dynamic = _dynamic_options(result["form_json"])
+        dynamic = _dynamic_options(normalize_form(raw))
         enriched = _enrich(dynamic["form_json"], req.prompt)
 
         return {
             "form_json": normalize_form(enriched["form_json"]),
-            "dictionary": result["applied"],
             "standards": enriched["attached"],
             # Which crop ontology was used, so the builder can say so rather
             # than leaving the reader to guess why a maize form got maize ids.

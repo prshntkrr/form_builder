@@ -349,11 +349,36 @@ describe('a question\'s Standards tab', () => {
     await user.click(screen.getAllByRole('button', { name: 'Add' })[0])
 
     expect(changes).toHaveLength(1)
-    expect(Object.keys(changes[0])).toEqual(['data_standard'])
     expect(changes[0].data_standard.variable_id).toBe('300')
     expect(changes[0].data_standard.unit).toBe('mm')
-    // Attaching one never removes another.
+
+    /* A variable that states a unit also says so in the hint, which was blank.
+       That is the variable shaping the question — see variableShape.js — and
+       the point of this test is the two lines below: one standard's mapping is
+       never written over another's. */
+    expect(changes[0].help_text).toBe('Measured in mm.')
     expect(changes[0]).not.toHaveProperty('crop_ontology')
+    expect(changes[0]).not.toHaveProperty('semantic_concept')
+  })
+
+  test('a question that already says something is not quietly rewritten', async () => {
+    const user = userEvent.setup()
+    // A hint somebody wrote. The variable has one too, and must not replace it
+    // without being asked — `window.confirm` is not answered here, so it does
+    // not happen.
+    const changes = await drawPicker({ ...FIELD, help_text: 'In whole millimetres' })
+
+    await user.click(screen.getByRole('button', { name: '+ Add standard' }))
+    await screen.findByRole('combobox', { name: 'Standard' })
+    await pick(user, 'Standard', 'icasa:ICASA')
+    await screen.findByRole('combobox', { name: 'Category' })
+    await pick(user, 'Category', 'IRRIGATIONS')
+    await screen.findByText('irrigation_amount')
+
+    await user.click(screen.getAllByRole('button', { name: 'Add' })[0])
+
+    expect(changes[0].data_standard.variable_id).toBe('300')
+    expect(changes[0]).not.toHaveProperty('help_text')
   })
 
   test('a mapping already saved is shown, and can be found in the tree', async () => {

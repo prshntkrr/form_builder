@@ -99,6 +99,17 @@ def _safely(work, fallback=None):
         return fallback
 
 
+#: What a standard is *called*, where that differs from what it is *named*.
+#: `data_standard.name` is the key — it is what a saved form stores, what the
+#: importer keys on, and what `?p=icasa:…` addresses — so it cannot be prettied
+#: up. This is the label beside it, and nothing reads it back.
+DISPLAY_NAMES = {"CIMMYT_CV": "CIMMYT standard"}
+
+
+def _display(standard: str) -> str:
+    return DISPLAY_NAMES.get(standard, standard)
+
+
 def _roots(user) -> List[Dict[str, Any]]:
     options = []
 
@@ -106,7 +117,7 @@ def _roots(user) -> List[Dict[str, Any]]:
         from app.modules.standards.icasa import icasa_importer
         for standard in _safely(icasa_importer.loaded, []) or []:
             options.append(_option(
-                f"{ICASA}:{standard['name']}", standard["name"],
+                f"{ICASA}:{standard['name']}", _display(standard["name"]),
                 f"{standard.get('variables', 0)} variables", True))
 
     if _seont(user) is not None:
@@ -171,7 +182,7 @@ def _walk_icasa(user, standard: str, path: List[str]):
     # string. Split it and the two levels are already there.
     split = [(c["category"].split(NESTED), c["variables"]) for c in known]
 
-    crumbs = [{"value": path[0], "label": standard}]
+    crumbs = [{"value": path[0], "label": _display(standard)}]
 
     if not chosen:
         heads = {}

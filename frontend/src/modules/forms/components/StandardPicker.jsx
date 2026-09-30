@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { api } from '../api.js'
+import { describe, planFor } from '../variableShape.js'
 import StandardHierarchy, { StandardContent } from './StandardHierarchy.jsx'
 
 /**
@@ -121,6 +122,13 @@ const SLOTS = {
 
 const ORDER = ['seont', 'icasa', 'crop_ontology']
 
+// What a standard is called, where that differs from what it is named. The
+// field stores the name — `CIMMYT_CV` is the key the vocabulary is keyed on and
+// what a saved form carries — so it is relabelled here and never rewritten.
+// Mirrors `DISPLAY_NAMES` in the browse router, which labels the same standards
+// in the tree.
+const DISPLAY_NAMES = { CIMMYT_CV: 'CIMMYT standard' }
+
 // Which slot a row from the standards browser belongs in. The browser says
 // which vocabulary a row came from; this says where that vocabulary is written
 // on the field.
@@ -155,10 +163,39 @@ export default function StandardPicker({ field, canLoadOptions, onChange }) {
   const add = (row) => {
     const standard = FROM_BROWSER[node?.items?.kind]
     if (!standard) return
+
     // Only this standard's own key is written. Whatever else the field carries
     // stays exactly as it was: attaching ICASA never removes Crop Ontology.
-    onChange(SLOTS[standard].attach(row))
-    setNote(`${SLOTS[standard].label} attached.`)
+    const mapping = SLOTS[standard].attach(row)
+
+    /* A variable that says what it is also shapes the question — the type, the
+       values it permits, the unit it is measured in. This is the half the data
+       dictionary used to do, moved to where the decision is made deliberately
+       rather than matched on a field's name.
+
+       Blanks are filled without asking. Anything that would overwrite a
+       decision somebody already made is named and offered, because a question
+       set to text with a length limit, mapped to a variable that says decimal,
+       is a disagreement worth showing. */
+    const { fill, conflicts } = standard === 'icasa'
+      ? planFor(field, row)
+      : { fill: {}, conflicts: [] }
+
+    const agreed = conflicts.length && window.confirm(
+      [`${row.name} is defined as:`, '',
+       ...conflicts.map((c) => `  ${describe(c)}`), '',
+       'Change this question to match it?'].join(String.fromCharCode(10)))
+
+    const shaped = agreed
+      ? Object.fromEntries(conflicts.map((c) => [c.key, c.to]))
+      : {}
+
+    onChange({ ...mapping, ...fill, ...shaped })
+
+    const changed = Object.keys({ ...fill, ...shaped }).length
+    setNote(changed
+      ? `${row.name} attached, and the question set to match it.`
+      : `${SLOTS[standard].label} attached.`)
   }
 
   const alreadyPicked = () => {
@@ -178,8 +215,9 @@ export default function StandardPicker({ field, canLoadOptions, onChange }) {
 
       {attached.length === 0 && !browsing && (
         <p className="tiny muted">
-          None attached. A standard describes the question; it never changes its
-          wording or how it behaves.
+          None attached. A standard says what a question means and is called.
+          One that also defines a type, a unit or a list of values will fill
+          those in — and ask first where they would replace something you set.
         </p>
       )}
 
@@ -300,7 +338,9 @@ function Attached({ slot, value, field, canLoadOptions, onChange, onNote, onErro
   return (
     <div className="row std__chosen">
       <span className="grow">
-        <span className="std__badge">{value.standard || slot.label}</span>
+        <span className="std__badge">
+          {DISPLAY_NAMES[value.standard] || value.standard || slot.label}
+        </span>
         <strong> {shown.name}</strong>
         {shown.detail && <span className="tiny muted"> {shown.detail}</span>}
       </span>

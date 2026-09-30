@@ -746,9 +746,30 @@ def _write(cur, form, form_json, table_name, clean, version, created_by,
 # --------------------------------------------------------------------------- #
 # reads
 # --------------------------------------------------------------------------- #
+def _collected_between(since: Optional[str], until: Optional[str]):
+    """The `created_on` window, as SQL and its values.
+
+    Dates, not timestamps, because that is what somebody asking for "March"
+    means. `until` covers its whole day — a response recorded at 16:40 on the
+    last day of the range is inside the range, and comparing against the bare
+    date would silently drop every answer after midnight.
+    """
+    clause, values = sql.SQL(""), []
+
+    if since:
+        clause += sql.SQL(" AND created_on >= %s")
+        values.append(since)
+    if until:
+        clause += sql.SQL(" AND created_on < (%s::date + INTERVAL '1 day')")
+        values.append(until)
+
+    return clause, values
+
+
 def list_submissions(
     form: Dict[str, Any], limit: int = 50, offset: int = 0,
     only_by: Optional[str] = None,
+    since: Optional[str] = None, until: Optional[str] = None,
 ) -> Dict[str, Any]:
     """The stored responses to one form, a page at a time.
 
@@ -756,6 +777,11 @@ def list_submissions(
     fill a form in but was never given "see every submission in the project".
     They used to see everybody's, which on a shared form is other people's
     fieldwork.
+
+    `since` / `until` narrow to when they were collected. They are here rather
+    than in the export because the table and the export must mean the same thing
+    by a date range; two implementations would eventually disagree, and the one
+    somebody hands to a donor would be the wrong one.
 
     Narrowed in SQL, not after: the count has to mean the same thing as the
     rows, or a pager offers pages that are not there.
@@ -791,11 +817,13 @@ def list_submissions(
             sql.Identifier(settings.db_schema), sql.Identifier(table_name)
         )
         mine = sql.SQL(" AND created_by = %s") if only_by else sql.SQL("")
-        scope = [form["form_id"]] + ([only_by] if only_by else [])
+        window, dates = _collected_between(since, until)
+        narrow = mine + window
+        scope = [form["form_id"]] + ([only_by] if only_by else []) + dates
 
         cur.execute(
             sql.SQL("SELECT COUNT(*) AS n FROM {} WHERE form_id = %s{}").format(
-                qualified, mine),
+                qualified, narrow),
             tuple(scope),
         )
         total = int(cur.fetchone()["n"])
@@ -808,7 +836,7 @@ def list_submissions(
                 ORDER BY created_on DESC, survey_id DESC
                 LIMIT %s OFFSET %s
                 """
-            ).format(_parent_select(cur, table_name), qualified, mine),
+            ).format(_parent_select(cur, table_name), qualified, narrow),
             tuple(scope + [limit, offset]),
         )
         rows = [dict(r) for r in cur.fetchall()]
@@ -948,24 +976,90 @@ def _cell(value: Any) -> str:
     return str(value)
 
 
-def export_csv(form: Dict[str, Any]) -> str:
-    data = list_submissions(form, limit=100000, offset=0)
+#: The envelope every export carries, whatever was asked for. Which response
+#: this is, when, by whom, and against which version of the questions — without
+#: the last of those a spreadsheet of answers cannot be read back with certainty.
+ENVELOPE = ["survey_id", "created_on", "created_by", "form_version"]
+
+#: One export, capped. Not a paging limit — the answer is the whole range — but
+#: a file nobody's spreadsheet can open is not a delivery, and a runaway query
+#: on a shared database is everybody's problem.
+EXPORT_LIMIT = 100000
+
+
+def export_rows(
+    form: Dict[str, Any],
+    columns: Optional[list] = None,
+    since: Optional[str] = None,
+    until: Optional[str] = None,
+) -> Tuple[list, list, bool]:
+    """What an export contains: its headings, its rows, and whether it was cut.
+
+    `columns` are field *names*, and anything not a question of this form is
+    dropped rather than refused — a stale column list left in a browser tab must
+    not fail somebody's download. Asking for none means every question, which is
+    what the export has always done.
+
+    One reader for both formats, so a CSV and an XLSX of the same range can
+    never disagree about what is in it.
+    """
+    data = list_submissions(form, limit=EXPORT_LIMIT, offset=0, since=since, until=until)
+
+    wanted = [c for c in data["columns"] if c["name"] in set(columns)] if columns else None
+    shown = wanted if wanted else data["columns"]
+
+    headers = ENVELOPE + [c["label"] for c in shown]
+    rows = [
+        [row.get(key) for key in ENVELOPE]
+        + [_cell((row.get("form_data") or {}).get(c["name"])) for c in shown]
+        for row in data["rows"]
+    ]
+
+    # `total` is the count for the same window, so this is "there is more than
+    # came out", not a guess. The caller says so rather than handing over a
+    # truncated file that looks complete.
+    return headers, rows, data["total"] > len(rows)
+
+
+def export_csv(form: Dict[str, Any], columns: Optional[list] = None,
+               since: Optional[str] = None, until: Optional[str] = None) -> str:
+    headers, rows, _ = export_rows(form, columns, since, until)
+
     buffer = io.StringIO()
     writer = csv.writer(buffer)
-
-    headers = ["survey_id", "created_on", "created_by", "form_version"]
-    headers += [c["label"] for c in data["columns"]]
     writer.writerow(headers)
-
-    for row in data["rows"]:
-        form_data = row.get("form_data") or {}
-        line = [
-            row.get("survey_id"),
-            row.get("created_on"),
-            row.get("created_by"),
-            row.get("form_version"),
-        ]
-        line += [_cell(form_data.get(c["name"])) for c in data["columns"]]
-        writer.writerow(line)
-
+    writer.writerows(rows)
     return buffer.getvalue()
+
+
+def export_xlsx(form: Dict[str, Any], columns: Optional[list] = None,
+                since: Optional[str] = None, until: Optional[str] = None) -> bytes:
+    """The same rows as a workbook.
+
+    Excel is what these are opened in, and a CSV of them is not: an id like
+    `0031` loses its zeros, a long number becomes scientific notation, and a
+    comma inside an answer starts an argument about quoting. Written with
+    openpyxl, which is already here for the CIMMYT workbook.
+    """
+    import openpyxl
+
+    headers, rows, _ = export_rows(form, columns, since, until)
+
+    book = openpyxl.Workbook()
+    sheet = book.active
+    # A sheet name is capped at 31 characters and cannot hold []:*?/\ — and a
+    # form's title is somebody's free text, so it is never used raw.
+    sheet.title = "Responses"
+
+    sheet.append(headers)
+    for row in rows:
+        # Everything but the envelope is already a string; a timestamp is not,
+        # and openpyxl refuses what it cannot type.
+        sheet.append([v if isinstance(v, (str, int, float, type(None))) else str(v)
+                      for v in row])
+
+    sheet.freeze_panes = "A2"
+
+    out = io.BytesIO()
+    book.save(out)
+    return out.getvalue()
