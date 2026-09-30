@@ -117,6 +117,45 @@ def _choices(field: Optional[Dict[str, Any]], resolved: Dict[str, Dict[str, Any]
             for o in field.get("options") or []]
 
 
+def options_for(field: Dict[str, Any], language: Optional[str] = None,
+                parent_value: Any = None) -> List[Dict[str, Any]]:
+    """Every choice one question offers right now, as `[{value, label}, …]`.
+
+    The single-question twin of the package's option sets, for a channel that
+    asks one question at a time and has to write the choices out as it goes —
+    a WhatsApp conversation, an IVR menu. It resolves through `_option_set`,
+    which is the same dispatch the package uses, so a catalogue read one way is
+    the catalogue read the other.
+
+    `parent_value` narrows a dependent list to the answer already given for the
+    question it depends on — the same narrowing the mobile app does locally and
+    the submission service repeats on arrival. A dependent question asked before
+    its parent offers nothing, because nothing has been offered yet.
+
+    Empty when the source is unreachable or has nothing: the caller shows a
+    question with no choices rather than a wrong list, and the submission
+    service still judges whatever comes back.
+    """
+    source = field.get("options_from") or {}
+    if not source:
+        return [o if isinstance(o, dict) else {"value": o, "label": o}
+                for o in field.get("options") or []]
+
+    found = _option_set(field, {}, {}, language or "") or {}
+
+    if "by_parent" in found:
+        return list(found["by_parent"].get(str(parent_value), [])) \
+            if parent_value not in (None, "", [], {}) else []
+
+    options = list(found.get("options") or [])
+    if source.get("depends_on"):
+        if parent_value in (None, "", [], {}):
+            return []
+        options = [o for o in options
+                   if str(o.get("parent_code") or "") == str(parent_value)]
+    return options
+
+
 def package_hash(package: Dict[str, Any]) -> str:
     """SHA-256 of everything a renderer reads — and nothing that moves on its own.
 

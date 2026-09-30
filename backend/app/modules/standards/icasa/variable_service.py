@@ -74,6 +74,30 @@ def search(
         return [dict(row) for row in cur.fetchall()]
 
 
+def all_of(standard: str, limit: int = 500) -> List[Dict[str, Any]]:
+    """Every variable one standard published, in its own order.
+
+    For a vocabulary small enough to read: CIMMYT's institutional core set is
+    tens of variables, and showing them all is more use than a search box that
+    has to be guessed at first. ICASA's 1,384 are what `search` is for.
+    """
+    with transaction() as cur:
+        cur.execute(
+            """
+            SELECT v.variable_id, v.external_id, v.code, v.name, v.label,
+                   v.definition, v.data_type, v.unit, v.category, v.metadata,
+                   s.name AS standard, s.version AS standard_version
+            FROM   standard_variable v
+            JOIN   data_standard s ON s.standard_id = v.standard_id
+            WHERE  s.name = %s
+            ORDER  BY v.external_id
+            LIMIT  %s
+            """,
+            (standard, limit),
+        )
+        return [dict(row) for row in cur.fetchall()]
+
+
 def get(variable_id: int) -> Dict[str, Any]:
     with transaction() as cur:
         cur.execute(

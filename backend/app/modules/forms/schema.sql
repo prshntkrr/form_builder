@@ -329,6 +329,13 @@ CREATE TABLE IF NOT EXISTS channel_form_route (
     -- NULL is a route that is not a project's — the system forms.
     project_id     VARCHAR(20),
 
+    -- The WhatsApp number the keyword has to arrive on, or '' for any number.
+    -- A column rather than a corner of `metadata` because resolution matches on
+    -- it and the routing screen shows it: it is part of what a route *is*, not
+    -- a provider's spare baggage. Empty for IVR, which is reached by calling the
+    -- number rather than by the number identifying the form.
+    receiver_number VARCHAR(32) NOT NULL DEFAULT '',
+
     enabled        BOOLEAN      NOT NULL DEFAULT TRUE,
     metadata       JSONB        NOT NULL DEFAULT '{}'::jsonb,
     created_by     VARCHAR(50)  NOT NULL DEFAULT '',
@@ -336,15 +343,21 @@ CREATE TABLE IF NOT EXISTS channel_form_route (
     updated_on     TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
 );
 
--- One live meaning per keyword per scope. Enforced here rather than only in
--- Python, because two routes for one keyword is not a thing to resolve at the
--- moment a caller is waiting. Disabled routes are exempt: retiring a keyword
--- and giving it to another form is the ordinary way these change hands.
-CREATE UNIQUE INDEX IF NOT EXISTS uq_route_project
-    ON channel_form_route (channel, route_key_norm, project_id) WHERE enabled;
-CREATE UNIQUE INDEX IF NOT EXISTS uq_route_global
-    ON channel_form_route (channel, route_key_norm)
-    WHERE enabled AND project_id IS NULL;
+-- One live meaning per keyword per scope *per number*. Enforced in the database
+-- rather than only in Python, because two routes for one keyword is not a thing
+-- to resolve at the moment a caller is waiting. The number is part of the key:
+-- the same keyword reaching two forms on two different WhatsApp numbers is one
+-- meaning each, not a clash. Disabled routes are exempt — retiring a keyword and
+-- giving it to another form is the ordinary way these change hands.
+--
+-- The two indexes are created by `bootstrap.ensure_route_receiver_number`, not
+-- here, and deliberately. This file re-runs whole whenever *any* of the module's
+-- tables is missing, and on a database that already has `channel_form_route`
+-- the CREATE TABLE above is a no-op — so an index naming `receiver_number`
+-- would fail on the column not existing yet and roll back this entire file,
+-- taking every other table in it down. That is not hypothetical; it is how this
+-- comment came to be written. An index on a column a migration adds belongs in
+-- that migration.
 
 
 -- Which application account a phone number or channel id belongs to.
@@ -361,3 +374,103 @@ CREATE TABLE IF NOT EXISTS channel_identity (
     created_on TIMESTAMP   DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (channel, identity)
 );
+
+
+-- How a channel is operated, per project. Not what a form asks — that is the
+-- form definition — but how the conversation is run: how long a silence ends
+-- it, and the credential the gateway is reached with.
+--
+-- Deliberately *not* in `form_json`: a definition is published, exported and
+-- handed to phones, and a provider token has no business travelling with it. A
+-- timeout is not versioned either — shortening it applies to the sessions
+-- running now, not to the next version of a form.
+--
+-- NULL project_id is the system scope, matching `channel_form_route`. A
+-- project with no row takes the defaults in `channel_settings.py`.
+--
+-- `api_token` holds a sealed blob from `app/core/secrets.py`, never a token.
+-- `token_hint` is the last four characters, which is what the screen shows.
+CREATE TABLE IF NOT EXISTS channel_settings (
+    settings_id     SERIAL       PRIMARY KEY,
+    channel         VARCHAR(20)  NOT NULL CHECK (channel IN ('whatsapp', 'ivr')),
+    project_id      VARCHAR(20),
+
+    session_timeout_seconds INTEGER NOT NULL DEFAULT 600,
+
+    api_token       TEXT         NOT NULL DEFAULT '',
+    token_hint      VARCHAR(8)   NOT NULL DEFAULT '',
+    token_set_on    TIMESTAMP,
+    token_set_by    VARCHAR(50)  NOT NULL DEFAULT '',
+
+    updated_by      VARCHAR(50)  NOT NULL DEFAULT '',
+    created_on      TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+    updated_on      TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
+);
+
+-- One row per channel per scope. Two indexes for the same reason the routes
+-- have two: NULL is not DISTINCT from NULL to a unique index.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_channel_settings_project
+    ON channel_settings (channel, project_id) WHERE project_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_channel_settings_global
+    ON channel_settings (channel) WHERE project_id IS NULL;
+
+
+-- One WhatsApp conversation in progress.
+--
+-- The database is the session, not a cache of it. An in-process dictionary does
+-- not survive a restart and is not shared between workers, so two replies to
+-- the same question could land on two different workers and disagree about
+-- which question was asked.
+--
+-- `form_version` is pinned when the session starts: the answers are being
+-- collected against the definition the first question came from, and
+-- republishing the form must not reinterpret a half-finished conversation.
+--
+-- `answers` holds what has been validated so far — the values as `form_data`
+-- would store them, not the raw replies, because each reply is validated as it
+-- arrives (`submission_service.validate_field`).
+--
+--     status   ACTIVE     talking now
+--              COMPLETED  submitted; kept briefly so a duplicate webhook is
+--                         answered rather than starting a new survey
+--              EXPIRED    silent past its timeout; a partial may have been kept
+--              DECLINED   consent refused
+CREATE TABLE IF NOT EXISTS whatsapp_session (
+    session_id     VARCHAR(40)  PRIMARY KEY,
+    channel        VARCHAR(20)  NOT NULL DEFAULT 'whatsapp',
+
+    -- Who is talking, and which of our numbers they reached.
+    identity       VARCHAR(120) NOT NULL,
+    receiver_number VARCHAR(32) NOT NULL DEFAULT '',
+
+    -- What they were routed to. The route is kept for tracing; the form and the
+    -- version are what the conversation actually runs on.
+    route_id       INTEGER,
+    form_id        VARCHAR(20)  REFERENCES forms (form_id) ON DELETE CASCADE,
+    form_version   INTEGER,
+    project_id     VARCHAR(20),
+    -- The account the identity resolved to. Every authorisation decision was
+    -- made against this, never against the phone number.
+    user_id        VARCHAR(20),
+
+    -- WELCOME -> CONSENT -> QUESTIONS -> (REVIEW) -> done
+    state          VARCHAR(20)  NOT NULL DEFAULT 'CONSENT',
+    consent        BOOLEAN,
+    current_field  VARCHAR(150) NOT NULL DEFAULT '',
+    answers        JSONB        NOT NULL DEFAULT '{}'::jsonb,
+
+    status         VARCHAR(12)  NOT NULL DEFAULT 'ACTIVE',
+    survey_id      VARCHAR(50),
+
+    created_on     TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+    last_activity_on TIMESTAMP  DEFAULT CURRENT_TIMESTAMP,
+    expires_on     TIMESTAMP    NOT NULL,
+    completed_on   TIMESTAMP
+);
+
+-- One live conversation per number. A second one would mean two questions
+-- outstanding with no way for the person to say which they are answering.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_whatsapp_session_live
+    ON whatsapp_session (channel, identity) WHERE status = 'ACTIVE';
+CREATE INDEX IF NOT EXISTS ix_whatsapp_session_sweep
+    ON whatsapp_session (expires_on) WHERE status = 'ACTIVE';

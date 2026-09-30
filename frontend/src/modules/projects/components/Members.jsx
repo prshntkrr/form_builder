@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react'
 
 import { api } from '../api.js'
+import { useAuth } from '../../../core/auth.jsx'
+import { projectsChanged } from '../active.js'
 
 const MANAGE = 'project.members.manage'
 
@@ -14,6 +16,8 @@ const MANAGE = 'project.members.manage'
  */
 export default function Members({ projectId, can }) {
   const mayManage = can(MANAGE)
+  // Whose row is whose: nobody may suspend or remove their own membership.
+  const { user } = useAuth()
 
   const [members, setMembers] = useState(null)
   const [roles, setRoles] = useState([])
@@ -41,11 +45,29 @@ export default function Members({ projectId, can }) {
     try {
       await api.updateMember(projectId, member.member_id, changes)
       load()
+      // The member count lives on the project, which other screens are showing.
+      projectsChanged()
     } catch (e) {
       setError(e.message)
     } finally {
       setBusy('')
     }
+  }
+
+  /* Why this row cannot be suspended or removed, or '' if it can.
+     A role that manages members is what makes somebody the manager here — the
+     permission, never the role's name, which an installation invents for
+     itself. */
+  const managing = (m) =>
+    (roles.find((r) => r.role_id === m.role_id)?.permissions || []).includes(MANAGE)
+  const managers = members?.filter((m) => m.status === 'Active' && managing(m)) || []
+
+  const locked = (m) => {
+    if (m.user_id === user?.user_id) return 'Your own membership'
+    if (managing(m) && m.status === 'Active' && managers.length === 1) {
+      return 'Only manager'
+    }
+    return ''
   }
 
   const remove = async (member) => {
@@ -54,6 +76,7 @@ export default function Members({ projectId, can }) {
     try {
       await api.removeMember(projectId, member.member_id)
       load()
+      projectsChanged()
     } catch (e) {
       setError(e.message)
     } finally {
@@ -126,20 +149,30 @@ export default function Members({ projectId, can }) {
                   </td>
                   {mayManage && (
                     <td className="cat__actions">
-                      <button
-                        className="btn btn--quiet btn--sm"
-                        disabled={busy === m.member_id}
-                        onClick={() => change(m, {
-                          status: m.status === 'Active' ? 'Suspended' : 'Active',
-                        })}
-                      >
-                        {m.status === 'Active' ? 'Suspend' : 'Reinstate'}
-                      </button>
-                      <button className="btn btn--quiet btn--sm"
-                              disabled={busy === m.member_id}
-                              onClick={() => remove(m)}>
-                        Remove
-                      </button>
+                      {/* Not on your own row, and not on the last person who can
+                          run this project. Both are refused by the backend too;
+                          hiding them here is so nobody is offered a button that
+                          only ever answers with an error. */}
+                      {locked(m) ? (
+                        <span className="tiny muted" title={locked(m)}>{locked(m)}</span>
+                      ) : (
+                        <>
+                          <button
+                            className="btn btn--quiet btn--sm"
+                            disabled={busy === m.member_id}
+                            onClick={() => change(m, {
+                              status: m.status === 'Active' ? 'Suspended' : 'Active',
+                            })}
+                          >
+                            {m.status === 'Active' ? 'Suspend' : 'Reinstate'}
+                          </button>
+                          <button className="btn btn--quiet btn--sm"
+                                  disabled={busy === m.member_id}
+                                  onClick={() => remove(m)}>
+                            Remove
+                          </button>
+                        </>
+                      )}
                     </td>
                   )}
                 </tr>
@@ -172,7 +205,10 @@ export default function Members({ projectId, can }) {
 function AddMember({ projectId, roles, onClose, onAdded }) {
   const [search, setSearch] = useState('')
   const [found, setFound] = useState(null)
-  const [userId, setUserId] = useState('')
+  // Who is picked, kept whole rather than by id: once the list below closes,
+  // the input shows their name and there is nothing else to read it from.
+  const [picked, setPicked] = useState(null)
+  const [listOpen, setListOpen] = useState(false)
   const [roleId, setRoleId] = useState(roles[0]?.role_id || '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -189,8 +225,9 @@ function AddMember({ projectId, roles, onClose, onAdded }) {
     setBusy(true)
     setError('')
     try {
-      await api.addMember(projectId, { user_id: userId, role_id: roleId })
+      await api.addMember(projectId, { user_id: picked.user_id, role_id: roleId })
       onAdded()
+      projectsChanged()
     } catch (e) {
       setError(e.message)
       setBusy(false)
@@ -211,29 +248,64 @@ function AddMember({ projectId, roles, onClose, onAdded }) {
         <div className="sheet__body">
           {error && <div className="note note--bad">{error}</div>}
 
-          <label className="cat__field">
-            <span className="minilabel">Find somebody</span>
-            <input className="control" value={search} placeholder="Name or email"
-                   onChange={(e) => setSearch(e.target.value)} />
-          </label>
+          {/* One field, not two. Typing a name and then picking the same
+              person again from a second dropdown was asking twice for one
+              answer. Matches appear under the input as it is typed. */}
+          <div className="cat__field find">
+            <span className="minilabel" id="find-somebody">Find somebody</span>
+            <input
+              className="control"
+              value={search}
+              placeholder="Name or email"
+              aria-labelledby="find-somebody"
+              role="combobox"
+              aria-expanded={listOpen && (found?.length ?? 0) > 0}
+              aria-controls="find-results"
+              aria-autocomplete="list"
+              onFocus={() => setListOpen(true)}
+              onChange={(e) => {
+                setSearch(e.target.value)
+                setPicked(null)     // typing again means they are choosing again
+                setListOpen(true)
+              }}
+              onKeyDown={(e) => { if (e.key === 'Escape') setListOpen(false) }}
+            />
 
-          <label className="cat__field">
-            <span className="minilabel">Account</span>
-            <select className="control" value={userId}
-                    onChange={(e) => setUserId(e.target.value)}>
-              <option value="">Choose an account…</option>
-              {(found || []).map((c) => (
-                <option key={c.user_id} value={c.user_id}>
-                  {c.full_name || c.email} — {c.email}
-                </option>
-              ))}
-            </select>
+            {listOpen && found?.length > 0 && !picked && (
+              <ul className="find__list" id="find-results" role="listbox">
+                {found.slice(0, 20).map((c) => (
+                  <li key={c.user_id}>
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={picked?.user_id === c.user_id}
+                      className="find__hit"
+                      onClick={() => {
+                        setPicked(c)
+                        setSearch(c.full_name || c.email)
+                        setListOpen(false)
+                      }}
+                    >
+                      <span className="strong ellipsis">{c.full_name || c.email}</span>
+                      <span className="tiny muted ellipsis">{c.email}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {picked && (
+              <span className="tiny muted">
+                Adding <b>{picked.full_name || picked.email}</b> ({picked.email})
+              </span>
+            )}
+
             {found?.length === 0 && (
               <span className="tiny muted">
                 Nobody left to add{search ? ' matching that' : ''}.
               </span>
             )}
-          </label>
+          </div>
 
           <label className="cat__field">
             <span className="minilabel">Role in this project</span>
@@ -252,7 +324,7 @@ function AddMember({ projectId, roles, onClose, onAdded }) {
         <div className="sheet__foot">
           <button className="btn btn--quiet" onClick={onClose}>Cancel</button>
           <button className="btn btn--primary" onClick={save}
-                  disabled={busy || !userId || !roleId}>
+                  disabled={busy || !picked || !roleId}>
             {busy && <span className="spin" />}
             Add to project
           </button>

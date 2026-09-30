@@ -8,8 +8,8 @@
  * from the backend already narrowed.
  */
 import React from 'react'
-import { render, screen, waitFor, within } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 
 import { formTree, hasHierarchy } from '../forms/formTree.js'
@@ -171,5 +171,145 @@ describe('the project forms screen', () => {
     draw()
     await waitFor(() =>
       expect(document.querySelectorAll('tbody tr')).toHaveLength(3))
+  })
+})
+
+
+// --------------------------------------------------------------------------- //
+/**
+ * Switching project takes every screen with it.
+ *
+ * Forms and Review are keyed on the active project and always did. Project
+ * settings reads its id out of the URL, so changing the selector used to leave
+ * the sidebar saying one project while another's settings were on screen —
+ * which is the one thing this module sets out never to do.
+ */
+describe('changing the project you are working in', () => {
+  const PRJ1 = { project_id: 'PRJ1', name: 'BOOST - Test', status: 'Active',
+                 your_permissions: ['project.members.manage'] }
+  const PRJ2 = { project_id: 'PRJ2', name: 'Nepal', status: 'Active',
+                 your_permissions: ['project.members.manage'] }
+
+  let ProjectSettings
+  let setActiveProjectId
+
+  beforeEach(async () => {
+    for (const key of Object.keys(responses)) delete responses[key]
+    responses['/projects'] = { projects: [PRJ1, PRJ2] }
+    responses['/projects/PRJ1'] = PRJ1
+    responses['/projects/PRJ2'] = PRJ2
+    responses['/projects/PRJ1/forms'] = { forms: [], everything: true }
+    responses['/projects/PRJ2/forms'] = { forms: [], everything: true }
+
+    const active = await import('./active.js')
+    setActiveProjectId = active.setActiveProjectId
+    setActiveProjectId('PRJ1')
+    ProjectSettings = (await import('./pages/ProjectSettings.jsx')).default
+  })
+
+  const draw = () => {
+    const seen = []
+    render(
+      <MemoryRouter initialEntries={['/projects/PRJ1']}>
+        <Routes>
+          <Route path="/projects/:projectId" element={<ProjectSettings />} />
+          <Route path="/forms" element={<Landed on="/forms" seen={seen} />} />
+          <Route path="/projects/PRJ2" element={<Landed on="/projects/PRJ2" seen={seen} />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+    return seen
+  }
+
+  test('settings follows the selector to the new project', async () => {
+    const seen = draw()
+    await screen.findByText(/BOOST - Test/)
+
+    await act(async () => { setActiveProjectId('PRJ2') })
+
+    await waitFor(() => expect(seen).toContain('/projects/PRJ2'))
+  })
+
+  test('leaving for the system context goes somewhere that exists', async () => {
+    // There is no settings page outside a project, and the sidebar does not
+    // offer one — so staying put would be a page nobody can navigate away from.
+    const seen = draw()
+    await screen.findByText(/BOOST - Test/)
+
+    await act(async () => { setActiveProjectId('system') })
+
+    await waitFor(() => expect(seen).toContain('/forms'))
+  })
+
+  test('opening a project that is not the active one stays put', async () => {
+    // The projects list offers "Open" beside "Switch to" precisely so somebody
+    // can look at one without changing context. Nothing changed, so nothing moves.
+    const seen = draw()
+    await screen.findByText(/BOOST - Test/)
+
+    await new Promise((r) => setTimeout(r, 50))
+    expect(seen).toEqual([])
+  })
+})
+
+function Landed({ on, seen }) {
+  seen.push(on)
+  return <div>landed {on}</div>
+}
+
+
+// --------------------------------------------------------------------------- //
+/**
+ * Counts that live on the project, changed from somewhere else.
+ *
+ * The member count is on the project; adding a member happens on the Members
+ * tab; the number is read on Overview. Three screens, one fact — so the fact
+ * has to be announced rather than each screen reloading when it feels like it.
+ *
+ * Reported: a member was added and the Overview kept the number it loaded with.
+ * The list hook had been wired to the event and the single-project hook had not.
+ */
+describe('a project whose numbers changed', () => {
+  let active
+
+  beforeEach(async () => {
+    for (const key of Object.keys(responses)) delete responses[key]
+    vi.resetModules()
+    active = await import('./active.js')
+  })
+
+  test('both hooks follow the event, not just the list', async () => {
+    // Read from the source: what broke was one hook listening and one not, and
+    // a rendered assertion would pass with either one wired.
+    const source = require('node:fs')
+      .readFileSync('src/modules/projects/active.js', 'utf8')
+
+    // Once in each hook: the list, and the single project.
+    const listens = source.split('addEventListener(event, load)').length - 1
+    expect(listens).toBe(2)
+
+    // Both hooks are there to be wired.
+    expect(source).toContain('export function useProjects')
+    expect(source).toContain('export function useProject(')
+  })
+
+  test('announcing a change is a plain event anyone can listen for', async () => {
+    const heard = vi.fn()
+    window.addEventListener('ea_projects_changed', heard)
+
+    active.projectsChanged()
+
+    expect(heard).toHaveBeenCalledTimes(1)
+    window.removeEventListener('ea_projects_changed', heard)
+  })
+
+  test('a form created in the builder counts too', () => {
+    // `form_count` is on the project and forms are created elsewhere, so the
+    // hooks follow the builder's own announcement as well.
+    const source = require('node:fs')
+      .readFileSync('src/modules/projects/active.js', 'utf8')
+
+    expect(source).toContain("const FORMS_CHANGED = 'ea_forms_changed'")
+    expect(source.split('FORMS_CHANGED]').length - 1).toBeGreaterThanOrEqual(4)
   })
 })

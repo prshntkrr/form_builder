@@ -1,5 +1,9 @@
 // The forms module's calls. Adding one never touches a shared file.
-import { BASE, request } from '../../core/http.js'
+import { BASE, download, request } from '../../core/http.js'
+
+/** `{from, to}` as query string. An absent side is absent, not an empty value. */
+const _window = ({ from, to } = {}) =>
+  (from ? `&from=${from}` : '') + (to ? `&to=${to}` : '')
 
 export const api = {
   // --- forms a field officer may fill ---
@@ -159,73 +163,26 @@ export const api = {
   // The standard identifiers behind a form's columns, for a downstream job.
   standardMapping: (formId) => request(`/standards/mapping/${formId}`),
 
-  // --- data dictionary ---
-  dictionary: (search) =>
-    request(`/dictionary${search ? `?search=${encodeURIComponent(search)}` : ''}`),
+  // --- CIMMYT controlled vocabulary ---
+  // What replaced the data dictionary. Two ways in and one vocabulary: the
+  // workbook CIMMYT publishes, and the variable this installation needs that
+  // the workbook does not carry yet. Both write the same row.
+  cimmytVariables: (search) =>
+    request(`/standards/cimmyt/variables${search ? `?q=${encodeURIComponent(search)}` : ''}`),
 
-  addDictionaryEntry: (body) =>
-    request('/dictionary', { method: 'POST', body: JSON.stringify(body) }),
+  saveCimmytVariable: (variable) =>
+    request('/standards/cimmyt/variables', { method: 'POST', body: JSON.stringify(variable) }),
 
-  updateDictionaryEntry: (entryId, changes) =>
-    request(`/dictionary/${entryId}`, { method: 'PATCH', body: JSON.stringify(changes) }),
+  // Only a variable added here. One from the workbook is refused, because the
+  // next import would bring it back.
+  deleteCimmytVariable: (externalId) =>
+    request(`/standards/cimmyt/variables/${encodeURIComponent(externalId)}`, { method: 'DELETE' }),
 
-  deleteDictionaryEntry: (entryId) =>
-    request(`/dictionary/${entryId}`, { method: 'DELETE' }),
-
-  // Bring a draft into line with the dictionary. Nothing is saved.
-  applyDictionary: (formJson) =>
-    request('/dictionary/apply', {
-      method: 'POST',
-      body: JSON.stringify({ form_json: formJson }),
-    }),
-
-  // The languages a form can be offered in.
-  languages: () => request('/forms/languages'),
-
-  // Ask the model for one language's wording. Returns only the translations.
-  translateForm: (formJson, language) =>
-    request('/forms/translate', {
-      method: 'POST',
-      body: JSON.stringify({ form_json: formJson, language }),
-    }),
-
-  // A dry run: same validation and coercion as a real submission, nothing
-  // written. `formJson` tests what is on screen rather than what is saved.
-  testSubmission: (formId, data, formJson) =>
-    request(`/forms/${formId}/test-submission`, {
-      method: 'POST',
-      body: JSON.stringify({ data, form_json: formJson }),
-    }),
-
-  // `status` is 'Draft' to build without publishing, 'Active' to go live.
-  // `projectId` puts the form inside a project. Optional: without one the form
-  // belongs to no project and follows the account-wide form permissions, which
-  // is what every form did before projects existed. The backend checks that
-  // this account may build in that project, so sending somebody else's id
-  // fails there rather than succeeding here.
-  createForm: (formJson, createdBy, status, projectId) =>
-    request('/forms', {
-      method: 'POST',
-      body: JSON.stringify({
-        form_json: formJson,
-        created_by: createdBy,
-        form_status: status,
-        ...(projectId ? { project_id: projectId } : {}),
-      }),
-    }),
-
-  updateForm: (formId, formJson, updatedBy, renames) =>
-    request(`/forms/${formId}`, {
-      method: 'PUT',
-      body: JSON.stringify({ form_json: formJson, updated_by: updatedBy, renames }),
-    }),
-
-  // Check stored responses against the current definition; fix re-coerces what it can.
-  revalidate: (formId, fix = false) =>
-    request(`/forms/${formId}/revalidate`, { method: 'POST', body: JSON.stringify({ fix }) }),
-
-  // Repopulate the flat <form>_tabular mirror from the JSONB table.
-  rebuildTabular: (formId) => request(`/forms/${formId}/rebuild-tabular`, { method: 'POST' }),
+  importCimmyt: (file) => {
+    const body = new FormData()
+    body.append('file', file)
+    return request('/standards/cimmyt/import', { method: 'POST', body })
+  },
 
   // --- standard form library ---
   listStandards: (params = {}) => {
@@ -391,6 +348,25 @@ export const api = {
 
   deleteRoute: (routeId) => request(`/mcdc/routes/${routeId}`, { method: 'DELETE' }),
 
+  // The same `channel_form_route` row, addressed by the form instead of by a
+  // route id — which is what the Form Builder knows. Not a second store: a
+  // route saved here is the one the routing screen lists and can change.
+  whatsappRoute: (formId) => request(`/mcdc/forms/${formId}/whatsapp-route`),
+
+  saveWhatsappRoute: (formId, route) =>
+    request(`/mcdc/forms/${formId}/whatsapp-route`,
+            { method: 'PUT', body: JSON.stringify(route) }),
+
+  // How the channel is operated here: the timeout, and whether a token is set.
+  // The token itself is never returned — only `token_set` and its last four
+  // characters, which is all the screen shows.
+  whatsappSettings: (project) =>
+    request(`/mcdc/whatsapp/settings${project ? `?project=${project}` : ''}`),
+
+  saveWhatsappSettings: (project, settings) =>
+    request(`/mcdc/whatsapp/settings${project ? `?project=${project}` : ''}`,
+            { method: 'PUT', body: JSON.stringify(settings) }),
+
   // --- one form's submissions hanging off another's ---
   // What this form is attached to, and what is attached to it.
   formRelationship: (formId) => request(`/forms/${formId}/relationship`),
@@ -423,8 +399,20 @@ export const api = {
   mediaUrl: (formId, surveyId, mediaId) =>
     request(`/forms/${formId}/submissions/${encodeURIComponent(surveyId)}/media/${mediaId}/url`),
 
-  listSubmissions: (formId, limit = 50, offset = 0) =>
-    request(`/forms/${formId}/submissions?limit=${limit}&offset=${offset}`),
+  // `range` is `{ from, to }` as YYYY-MM-DD, either side optional. The export
+  // below takes the same one, so what is on screen and what comes out of the
+  // download are the same responses.
+  listSubmissions: (formId, limit = 50, offset = 0, range = {}) =>
+    request(`/forms/${formId}/submissions?limit=${limit}&offset=${offset}`
+            + _window(range)),
 
-  exportUrl: (formId) => `${BASE}/forms/${formId}/submissions/export`,
+  // Saved through `download`, not linked to: the token is a header, and a plain
+  // link sends none — which is why the old Export CSV link handed back a 401.
+  exportSubmissions: (formId, { format = 'csv', columns = [], from, to } = {}) =>
+    download(
+      `/forms/${formId}/submissions/export?format=${format}`
+      + (columns.length ? `&columns=${encodeURIComponent(columns.join(','))}` : '')
+      + _window({ from, to }),
+      `${formId}.${format}`,
+    ),
 }

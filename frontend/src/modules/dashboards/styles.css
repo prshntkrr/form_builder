@@ -120,6 +120,17 @@
   border-bottom: none;
 }
 
+/* --- KPI card ------------------------------------------------------------
+   An icon on the left, the title and the number on the right. Compact on
+   purpose: a KPI is one fact, and four of them belong across a row.
+
+   The negative margin is the one piece worth explaining. A widget sits inside
+   `.dash__widget-card`, which supplies the padding every other widget type
+   wants; pulling back by exactly that much lets the KPI's tint reach the card
+   edges instead of floating as a panel inside a white frame. The card clips
+   it, so the rounded corners still come from `.card`. The two paddings are
+   therefore a pair — change one and change the other, here and in the phone
+   breakpoint at the end of this file. */
 .dash__kpi {
   width: 100%;
   height: 100%;
@@ -128,14 +139,109 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
+
+  position: relative;
+  margin: -10px -12px;
+  padding: 10px 12px;
+  box-sizing: content-box;
+  overflow: hidden;
+
+  /* Built from the theme's own green so a dashboard still looks like the rest
+     of the application. Quiet enough to read a number off. */
+  background-image: linear-gradient(
+    135deg,
+    var(--accent-wash) 0%,
+    rgba(255, 255, 255, 0) 65%
+  );
+}
+
+.dash__kpi-body {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.dash__kpi-icon {
+  flex: 0 0 auto;
+  /* 46px inside a 64px row: the icon is the first thing read on the card, and
+     at 38 it was a detail rather than a marker. 46 + the 8px padding either
+     side is 62 of the 64 the row gives. */
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 40px;
+  line-height: 1;
+
+  /* Solid against the card's tint, which is at its strongest in this corner. */
+  background: var(--card);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-sm);
+}
+
+.dash__kpi-text {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.dash__kpi-title {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.25;
+  color: var(--ink-2);
+  /* Secondary to the number. The card is a fixed band now, so a long title is
+     held to two lines and ellipsised rather than pushing the number out of
+     sight — the full text is still in the DOM and in the tooltip. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.dash__kpi-subtitle {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--ink-3);
+  overflow-wrap: anywhere;
+}
+
+/* Edit and Remove, over the card rather than in it.
+
+   The card is now its own contents and no taller, so there is no corner
+   left for these to sit in: at 90px they would cover the end of the title.
+   Shown on hover, and on focus so they can still be tabbed to — the same
+   way the resize handle above and the row actions in core behave. */
+.dash__kpi-actions {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  z-index: 1;
+  opacity: 0;
+  transition: opacity .12s;
+}
+
+.dash__kpi:hover .dash__kpi-actions,
+.dash__kpi-actions:focus-within {
+  opacity: 1;
+}
+
+/* A subtitle and a two-line title together are taller than the card. The
+   title is the one with a tooltip holding the rest of it, so it gives way
+   first — rather than the number, which is what the card is for. */
+.dash__kpi-text:has(.dash__kpi-subtitle) .dash__kpi-title {
+  -webkit-line-clamp: 1;
 }
 
 .dash__kpi-value {
-  margin-top: 8px;
-  font-size: 36px;
-  line-height: 1;
+  margin-top: 1px;
+  font-size: 24px;
+  line-height: 1.15;
   font-weight: 700;
-  color: var(--accent-deep);
+  color: var(--ink);
   min-width: 0;
   max-width: 100%;
   overflow: hidden;
@@ -184,7 +290,7 @@
 }
 
 .modal input {
-  width: 100%;
+  
   box-sizing: border-box;
 
   margin-top: 16px;
@@ -293,6 +399,20 @@
   min-height: 0;
 }
 
+/* The same size, from here rather than from a `style` attribute.
+
+   Highcharts refuses to measure a container whose *inline* height is 100%
+   when its parent has no inline height — it draws 400px tall instead, and
+   goes on doing so through every reflow. See `useChartFit.js`. Sizing the
+   container from the stylesheet is what makes a Highcharts widget the
+   height of the widget. Nothing else about it changes. */
+.dash__chart-fill {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
 /* Highcharts container must also fill its parent. */
 .dash__chart-area .highcharts-container {
   width: 100% !important;
@@ -305,6 +425,16 @@
   max-width: 100%;
   min-width: 0;
   box-sizing: border-box;
+}
+
+/* `.card--pad` is 26px, which is right for a page card and is a band of
+   nothing around a grid that already spaces its own widgets. Two classes
+   rather than one: core's stylesheet is injected after this module's, so an
+   override of equal specificity would lose. Paired with the grid's
+   `containerPadding`, which is now zero — between them the widgets were
+   inset from the panel edge three times over. */
+.dash__dashboard.card--pad {
+  padding: 16px 18px;
 }
 
 .dash__grid-wrapper {
@@ -324,21 +454,51 @@
   box-sizing: border-box;
 }
 
-.main--dashboard {
+/* A dashboard is a grid of widgets, so it wants the whole content area rather
+   than core's 1000px reading column.
+
+   Both class names on purpose: `.main--dashboard` alone has the same
+   specificity as `.main`, and core's stylesheet is injected *after* this one
+   (main.jsx imports App.jsx, and so the module registry, before
+   core/styles.css), which made core's max-width win and left this rule dead.
+   Matching both classes settles it by specificity instead of by import order.
+
+   The horizontal padding is core's own — inherited from `.main`, including the
+   narrower padding it switches to on small screens — so the page keeps its
+   margin from the viewport edge and reflows exactly as every other page does. */
+.main.main--dashboard {
   width: 100%;
   max-width: none;
   min-width: 0;
   box-sizing: border-box;
+
+  /* Tighter than core's 34px/30px/80px. A dashboard is read as a whole, so
+     the page's own margin is whitespace around something that is already
+     mostly whitespace; every pixel taken off the sides is a pixel of chart. */
+  padding: 20px 20px 40px;
+}
+
+/* Below 860px core's `.main` clears the fixed menu button with 60px of top
+   padding. This rule is more specific, so it has to say so too, or the
+   button sits over the heading. */
+@media (max-width: 860px) {
+  .main.main--dashboard {
+    padding: 60px 14px 40px;
+  }
 }
 
 .dash__filters {
-  margin-top: 20px;
-  padding-top: 20px;
+  margin-top: 14px;
+  padding-top: 14px;
   border-top: 1px solid var(--border);
 }
 
+.dash__filters h3 + .muted {
+  margin: 2px 0 0;
+}
+
 .dash__filter-list {
-  margin-top: 16px;
+  margin-top: 12px;
 }
 
 .dash__filter-row {
@@ -569,8 +729,59 @@
     display: none !important;
   }
 
-  /* A graph split across two pages is worth neither page. */
-  .dash__widget-card {
+  /* --- the grid, laid out for paper -------------------------------------
+
+     react-grid-layout positions every widget absolutely, with a transform,
+     at a pixel width worked out from this window. Print could do nothing
+     with either of those.
+
+     An absolutely positioned box is not part of the flow a printer breaks
+     into pages, so the rule below had nothing to hold together and a page
+     ended in the middle of a chart. And a pixel width does not shrink to the
+     paper, so a dashboard wider than the printable area simply lost its
+     right-hand edge — the fourth KPI, the end of a pie's labels, the last
+     column of a table.
+
+     For print, and only for print, the same widgets are laid out as a
+     twelve-column grid in normal flow. Each spans the columns it spanned on
+     screen and keeps the height it had, and the columns are fractions of the
+     page rather than pixels, so the whole dashboard fits the width it is
+     given. Nothing here applies on screen: the class is put on the body for
+     the print and taken off again afterwards. */
+  body.dash-printing .dash__grid-wrapper {
+    /* Kept for the drag animation on screen; on paper it would clip. */
+    overflow: visible !important;
+  }
+
+  body.dash-printing .react-grid-layout {
+    position: static !important;
+    /* The grid sets this in pixels, to hold its absolute children. */
+    height: auto !important;
+    display: grid !important;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 8px;
+  }
+
+  body.dash-printing .react-grid-item {
+    position: static !important;
+    transform: none !important;
+    width: auto !important;
+    max-width: none !important;
+    left: auto !important;
+    top: auto !important;
+    margin: 0 !important;
+    transition: none !important;
+
+    /* Set on each widget by the page, from the layout it is drawn with. */
+    grid-column: span var(--print-cols, 12);
+    order: var(--print-order, 0);
+    height: var(--print-height, 300px) !important;
+  }
+
+  /* A graph split across two pages is worth neither page. Now that a widget
+     is a block in the flow rather than an absolute box over it, this is a
+     rule the printer can actually keep. */
+  body.dash-printing .dash__widget-card {
     break-inside: avoid;
     page-break-inside: avoid;
   }
@@ -643,34 +854,29 @@
   cursor: pointer;
 }
 
-/* A coloured map pin is an SVG in a divIcon, which Leaflet would otherwise
-   give a white box and a border. */
-.dash__map-pin {
-  background: none;
-  border: 0;
-}
-
 /* --- density -------------------------------------------------------------
    `.card--pad` is 26px everywhere in the application, which is right for a
    page card and far too much for a widget that is mostly chart. Overridden
    here rather than in core, so only dashboards get tighter. */
 .dash__widget-card.card--pad {
-  padding: 12px 14px;
+  padding: 10px 12px;
 }
 
 .dash__widget h3 {
-  margin: 0 0 6px;
+  margin: 0 0 4px;
   font-size: 14px;
+  line-height: 1.3;
 }
 
 .dash__widget-header {
   gap: 8px;
 }
 
-/* A KPI is one number. It does not need the room a chart needs. */
+/* A KPI is one number. It does not need the room a chart needs, and it has to
+   stay inside a card a quarter of a row wide. */
 .dash__kpi-value {
-  margin-top: 2px;
-  font-size: clamp(22px, 2.2vw, 30px);
+  margin-top: 1px;
+  font-size: clamp(19px, 1.6vw, 24px);
 }
 
 .dash__table th,
@@ -682,7 +888,19 @@
   /* One thing at a time on a phone, with the padding back to something a
      thumb can work with. */
   .dash__widget-card.card--pad {
-    padding: 14px 16px;
+    padding: 12px 14px;
+  }
+
+  /* Paired with the padding above — see the note on `.dash__kpi`. */
+  .dash__kpi {
+    margin: -12px -14px;
+    padding: 12px 14px;
+  }
+
+  .dash__kpi-icon {
+    width: 42px;
+    height: 42px;
+    font-size: 22px;
   }
 }
 
@@ -715,3 +933,550 @@
 .dash__field .control {
   width: 100%;
 }
+
+/* --- a table's pager -----------------------------------------------------
+   Under the rows, not over them: a table is read first and navigated second. */
+.dash__pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.dash__pager-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.dash__pager-size {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+.dash__pager-size .control {
+  width: auto;
+  padding: 2px 6px;
+  font-size: 12px;
+}
+
+.dash__pager-pages {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.dash__pager-gap {
+  padding: 0 2px;
+  color: var(--ink-3);
+}
+
+/* Small enough that a row of page numbers does not become the widget. */
+.btn--tiny {
+  padding: 3px 8px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+/* --- a table's columns, in the editor ------------------------------------ */
+.dash__column-card {
+  border: 1px solid var(--line);
+  border-radius: var(--r, 8px);
+  padding: 10px 12px;
+  margin-top: 8px;
+  background: var(--card);
+}
+
+.dash__column-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dash__column-head .control {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* The drag handle. `draggable` is on the card, so this is the affordance
+   rather than the mechanism. */
+.dash__column-grip {
+  cursor: grab;
+  color: var(--ink-3);
+  user-select: none;
+  letter-spacing: -2px;
+}
+
+.dash__column-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.dash__column-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+@media (max-width: 767px) {
+  .dash__column-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* --- the floating "+" that adds a widget ---------------------------------
+   It stands where "+ Add Graph" stood, at the foot of the grid on the right,
+   and opens the same kind of menu "Export and share" does. The menu opens
+   upward over the grid by default so it is never pushed past the bottom of
+   the page; the page turns it downward when there is no room above. */
+.dash__fab-wrap {
+  position: relative;
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.dash__fab {
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  transition: background .12s, transform .06s;
+}
+.dash__fab:hover { background: var(--accent-deep); border-color: var(--accent-deep); }
+.dash__fab:active { transform: translateY(.5px); }
+.dash__fab:focus-visible { outline: 2px solid var(--accent-deep); outline-offset: 2px; }
+
+/* The "+" turns into a "×" by turning: one glyph, no swap. */
+.dash__fab-glyph {
+  font-size: 28px;
+  font-weight: 400;
+  line-height: 1;
+  transition: transform .15s;
+}
+.dash__fab[aria-expanded="true"] .dash__fab-glyph { transform: rotate(45deg); }
+
+.dash__fab-menu {
+  min-width: 160px;
+  margin-top: 10px;
+  top: 100%;
+}
+.dash__fab-menu--up {
+  top: auto;
+  bottom: 100%;
+  margin-top: 0;
+  margin-bottom: 10px;
+}
+
+@media (max-width: 767px) {
+  .dash__fab { width: 44px; height: 44px; }
+}
+
+@media print {
+  body.dash-printing .dash__fab-wrap { display: none !important; }
+}
+
+/* --- the graph builder ---------------------------------------------------
+   The editor with its preview beside it. Two panels on a desktop, one above
+   the other when there is not the width for two, and each scrolling on its
+   own so a long configuration never pushes the buttons off the screen. */
+.modal--builder {
+  width: min(1120px, calc(100vw - 32px));
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.dash__builder {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+  gap: 20px;
+  align-items: start;
+
+  /* The panels scroll, the modal does not. */
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-top: 4px;
+}
+
+.dash__builder-config {
+  min-width: 0;
+  max-height: 62vh;
+  overflow-y: auto;
+  /* Room for the scrollbar, so a select is not under it. */
+  padding-right: 10px;
+}
+
+.dash__builder-preview {
+  min-width: 0;
+  position: sticky;
+  top: 0;
+}
+
+.dash__preview-heading {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+
+/* A definite height, because a chart drawn at 100% of nothing is nothing. */
+.dash__preview-stage {
+  height: 340px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--paper);
+}
+
+/* The widget inside the stage is the height it will be on the grid, which
+   the panel sets; the stage only centres it. */
+.dash__preview-stage > .dash__widget-card {
+  flex: 0 0 auto;
+  min-height: 0;
+  width: 100%;
+}
+
+.dash__preview-note {
+  margin: 0;
+  text-align: center;
+}
+
+.dash__preview-skeleton {
+  flex: 1 1 auto;
+  min-height: 0;
+  border-radius: var(--r-sm);
+}
+
+@media (max-width: 900px) {
+  .dash__builder {
+    grid-template-columns: 1fr;
+  }
+
+  .dash__builder-config {
+    max-height: none;
+    overflow-y: visible;
+    padding-right: 0;
+  }
+
+  .dash__builder-preview {
+    position: static;
+  }
+
+  /* One column now, so the modal is what scrolls. */
+  .modal--builder {
+    overflow-y: auto;
+  }
+
+  .dash__preview-stage {
+    height: 280px;
+  }
+}
+
+/* --- a line chart's series ----------------------------------------------
+   The same card the table's columns use, with a number instead of a drag
+   handle: lines are drawn in the order they are listed, and reordering them
+   changes nothing anybody can see. */
+.dash__series-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.dash__series-number {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+/* --- the dashboard's filters --------------------------------------------
+   One control per configured filter, wrapping onto as many rows as the
+   width allows, with Search and Reset at the end of them. Nothing is
+   queried until Search: a control only changes what is picked. */
+.dash__filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.dash__filter-control {
+  position: relative;
+  min-width: 0;
+  flex: 0 1 220px;
+}
+
+.dash__filter-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.dash__filter-name {
+  flex: 0 0 auto;
+  font-weight: 550;
+}
+
+/* The part that changes, and is quiet until it does. */
+.dash__filter-summary {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+.dash__filter-summary--set {
+  color: var(--accent);
+}
+
+.dash__filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 5px;
+}
+
+.dash__filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--accent-wash);
+  font-size: 12px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.dash__filter-chip button {
+  border: 0;
+  background: none;
+  padding: 0 4px;
+  font: inherit;
+  line-height: 1;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.dash__filter-chip button:hover { color: var(--rose); }
+
+/* The values, over the dashboard rather than pushing it down. */
+.dash__filter-pop {
+  position: absolute;
+  z-index: 50;
+  top: calc(100% + 6px);
+  left: 0;
+  width: max(100%, 240px);
+  max-width: 90vw;
+  padding: 8px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  box-shadow: var(--shadow);
+}
+
+.dash__filter-options {
+  max-height: 220px;
+  overflow-y: auto;
+  margin-top: 8px;
+}
+
+.dash__filter-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  border-radius: var(--r-sm);
+  font-size: 13px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.dash__filter-option:hover { background: var(--accent-wash); }
+.dash__filter-option input { accent-color: var(--accent); flex: none; }
+
+.dash__filter-error { color: var(--rose); margin: 0; }
+
+.dash__filter-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-left: auto;
+}
+
+/* --- configuring which filters there are -------------------------------- */
+.modal--filters {
+  width: min(640px, calc(100vw - 32px));
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.dash__filter-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.dash__filter-field-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.dash__filter-field-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+@media (max-width: 767px) {
+  .dash__filter-field-row {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .dash__filter-control {
+    flex: 1 1 100%;
+  }
+
+  .dash__filter-actions {
+    margin-left: 0;
+    width: 100%;
+  }
+}
+
+/* --- the AI assistant ----------------------------------------------------
+   Two modes, the widget being worked on, and what the AI proposed before
+   anybody has agreed to it. */
+.dash__ai-modes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 6px 0 2px;
+}
+
+.dash__ai-selected {
+  margin: 6px 0 8px;
+}
+
+.dash__candidate {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--paper);
+}
+
+/* Side by side where there is room for two, stacked where there is not. */
+.dash__candidate-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+
+.dash__candidate-stage {
+  height: 240px;
+  background: var(--card);
+}
+
+.dash__candidate-card {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  width: 100%;
+}
+
+/* The widget an AI change is aimed at. A ring, not a redesign. */
+.dash__widget-card--chosen {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.btn1--on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+@media (max-width: 767px) {
+  .dash__candidate-pair {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+/* --- the dashboard, photographed ----------------------------------------
+   Put on the body for the moment an export takes and removed afterwards.
+   What it hides is the editing interface: an exported picture should be the
+   dashboard, not the desk it is being worked on. Nothing here applies at any
+   other time. */
+body.dash-exporting .dash__widget-card .row1,
+body.dash-exporting .dash__kpi-actions,
+body.dash-exporting .dash__fab-wrap,
+body.dash-exporting .dash__menu,
+body.dash-exporting .dash__menu-body,
+body.dash-exporting .dash__version-bar,
+body.dash-exporting .dash__edit-panel,
+body.dash-exporting .react-resizable-handle {
+  display: none !important;
+}
+
+/* The buttons beside the title — Edit Dashboard, Export and share, Version
+   History, Delete — and the one that configures the filters. The title, its
+   badge and the filters themselves stay. */
+body.dash-exporting .dash__dashboard > .row .btn,
+body.dash-exporting .dash__dashboard > .row summary,
+body.dash-exporting .dash__filters .btn {
+  display: none !important;
+}
+
+/* A widget chosen for an AI change is still chosen; it just does not say so
+   in the picture. */
+body.dash-exporting .dash__widget-card--chosen {
+  outline: none !important;
+}
+
+/* --- the map's popup fields, in the graph editor -------------------------
+   The rows lay themselves out inline, in the editor's own idiom: they sit
+   inside the modal, where a borrowed class failed to reach them once
+   already. Only the hover is here, which costs nothing if it goes missing. */
+.dash__map-field:hover { background: var(--accent-wash); }

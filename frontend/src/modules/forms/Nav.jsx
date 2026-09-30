@@ -2,6 +2,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { NavLink, useMatch, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../core/auth.jsx'
+import { formTree } from './formTree.js'
 import { useFormsRevision } from '../../core/events.js'
 import { api } from './api.js'
 import { api as projectApi } from '../projects/api.js'
@@ -15,54 +16,6 @@ export const SECTIONS = [
   ['history', 'History'],
   ['responses', 'View'],
 ]
-
-/** The forms module's fixed links, at the top of the sidebar. */
-export default function FormsNav({ onNavigate }) {
-  const navigate = useNavigate()
-  const { can } = useAuth()
-  if (!can.build_forms) return null
-
-  const go = (to) => { navigate(to); onNavigate?.() }
-
-  return (
-    <>
-      <button className="btn btn--primary side__new" onClick={() => go('/builder')}>
-        New form
-      </button>
-
-      <nav className="side__links">
-        <NavLink to="/library" className={({ isActive }) => `side__form${isActive ? ' on' : ''}`}
-                 onClick={onNavigate}>
-          <span className="grow">Standard forms</span>
-        </NavLink>
-        {can.use_dictionary && (
-          <NavLink to="/dictionary" className={({ isActive }) => `side__form${isActive ? ' on' : ''}`}
-                   onClick={onNavigate}>
-            <span className="grow">Data dictionary</span>
-          </NavLink>
-        )}
-        {can.use_client_catalogs && (
-          <NavLink to="/catalogues" className={({ isActive }) => `side__form${isActive ? ' on' : ''}`}
-                   onClick={onNavigate}>
-            <span className="grow">Catalogue</span>
-          </NavLink>
-        )}
-        {can.manage_routing && (
-          <NavLink to="/routing" className={({ isActive }) => `side__form${isActive ? ' on' : ''}`}
-                   onClick={onNavigate}>
-            <span className="grow">Channel routing</span>
-          </NavLink>
-        )}
-        {(can.use_standards || can.use_ontology || can.use_crop_ontology) && (
-          <NavLink to="/standards" className={({ isActive }) => `side__form${isActive ? ' on' : ''}`}
-                   onClick={onNavigate}>
-            <span className="grow">Standards</span>
-          </NavLink>
-        )}
-      </nav>
-    </>
-  )
-}
 
 /**
  * The forms module's scrolling panel.
@@ -111,6 +64,10 @@ export function FormsPanel({ onNavigate }) {
   // window, which is what `place` then keeps it inside.
   const [menu, setMenu] = useState(null)
   const card = useRef(null)
+
+  // Narrowing the list, and which parents are folded shut.
+  const [search, setSearch] = useState('')
+  const [shut, setShut] = useState({})
 
   // Where the list has got to, so the open row can be kept in view.
   const activeRow = useRef(null)
@@ -214,19 +171,100 @@ export function FormsPanel({ onNavigate }) {
           : api.listForms({ project: 'none', limit: 200 }))
       : api.liveForms(projectId || (system ? 'none' : undefined))
 
-    load.then((found) => { if (!cancelled) setForms(found) })
+    /* One shape, whichever endpoint answered.
+       `projectForms` and `live/list` both carry `parent_form_id`; the system
+       list is the builder's own `GET /api/forms`, which carries the whole
+       definition instead — so the relationship is read from where it is
+       declared rather than asking that endpoint to change. */
+    const withParents = (found) => (found || []).map((f) => ({
+      ...f,
+      parent_form_id: f.parent_form_id
+        ?? (f.form_json?.relationship?.type === 'child'
+              ? f.form_json.relationship.parent_form_id || null
+              : null),
+    }))
+
+    load.then((found) => { if (!cancelled) setForms(withParents(found)) })
         .catch(() => { if (!cancelled) setForms([]) })
     return () => { cancelled = true }
   }, [revision, builder, projectId, system])
 
+  /* The list, arranged by which form hangs off which.
+   *
+   * `formTree` is the same helper the project's forms table uses — one
+   * arrangement, so the sidebar and the page cannot disagree about what is a
+   * child of what. It returns a flat list of `{form, depth}`, which is what a
+   * list of rows wants.
+   *
+   * Searching flattens it on purpose: a match three levels down should be
+   * findable without knowing which parent to open first, and a tree filtered to
+   * matches only is a tree with holes in it. */
+  const wanted = search.trim().toLowerCase()
+
+  const rows = React.useMemo(() => {
+    if (!forms) return null
+    if (wanted) {
+      return forms
+        .filter((f) => (f.form_title || '').toLowerCase().includes(wanted))
+        .map((form) => ({ form, depth: 0 }))
+    }
+    return formTree(forms)
+  }, [forms, wanted])
+
+  // Which forms have children, so only those get a chevron.
+  const parents = React.useMemo(() => {
+    const held = new Set()
+    for (const f of forms || []) if (f.parent_form_id) held.add(f.parent_form_id)
+    return held
+  }, [forms])
+
+  const folded = (id) => Boolean(shut[id])
+
+  const fold = (id) => setShut((current) => ({ ...current, [id]: !current[id] }))
+
+  /* A row is drawn unless one of the forms above it is folded. Checked against
+     every ancestor, not just the parent, so folding a grandparent takes the
+     whole branch with it. */
+  const hidden = (form) => {
+    const byId = new Map((forms || []).map((f) => [f.form_id, f]))
+    let at = byId.get(form.parent_form_id)
+    const seen = new Set()
+    while (at && !seen.has(at.form_id)) {
+      if (folded(at.form_id)) return true
+      seen.add(at.form_id)
+      at = byId.get(at.parent_form_id)
+    }
+    return false
+  }
+
+  const visible = (rows || []).filter(({ form }) => !hidden(form))
+
   return (
     <>
-      <div className="side__label">
+      <div className="side__label side__label--rule">
         {builder ? (system ? 'System forms' : active?.name || 'Forms') : 'Forms to fill in'}
         <NavLink to={builder ? '/forms' : '/fill'} className="side__all" onClick={onNavigate}>
           All
         </NavLink>
       </div>
+
+      {/* Only worth the row it costs once there is a list to narrow. */}
+      {forms && forms.length > 6 && (
+        <div className="side__search">
+          <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true">
+            <circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" strokeWidth="2" />
+            <path d="M16.5 16.5L21 21" stroke="currentColor" strokeWidth="2"
+                  strokeLinecap="round" />
+          </svg>
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search forms…"
+            aria-label="Search forms"
+          />
+        </div>
+      )}
 
       <nav className="side__forms">
         {forms === null && [0, 1, 2].map((i) => (
@@ -243,8 +281,16 @@ export function FormsPanel({ onNavigate }) {
           </p>
         )}
 
-        {forms?.map((f) => {
+        {forms?.length > 0 && wanted && visible.length === 0 && (
+          <p className="side__empty">Nothing matches “{search.trim()}”.</p>
+        )}
+
+        {visible.map(({ form: f, depth }) => {
           const open = f.form_id === activeId
+          const parent = parents.has(f.form_id)
+          // The rail and the indent together; one variable so the row, its
+          // chevron and its label cannot drift apart.
+          const inset = { '--depth': depth }
 
           // A field officer goes straight to the form; there is nothing to edit.
           if (!builder) {
@@ -253,6 +299,7 @@ export function FormsPanel({ onNavigate }) {
                 key={f.form_id}
                 to={`/f/${f.form_id}`}
                 className={`side__form${open ? ' on' : ''}`}
+                style={inset}
                 onClick={onNavigate}
                 title={f.form_description || f.form_title}
               >
@@ -262,7 +309,27 @@ export function FormsPanel({ onNavigate }) {
           }
 
           return (
-            <div className="side__row" key={f.form_id} ref={open ? activeRow : null}>
+            <div className="side__row" key={f.form_id} ref={open ? activeRow : null}
+                 style={inset}>
+              {/* Only a form something hangs off gets a control. Everything
+                  else gets the same width of nothing, so the titles line up. */}
+              {parent ? (
+                <button
+                  type="button"
+                  className={`side__fold${folded(f.form_id) ? '' : ' on'}`}
+                  aria-expanded={!folded(f.form_id)}
+                  aria-label={`${folded(f.form_id) ? 'Show' : 'Hide'} the forms under ${f.form_title}`}
+                  onClick={() => fold(f.form_id)}
+                >
+                  <svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true">
+                    <path d="M9 6l6 6-6 6" fill="none" stroke="currentColor"
+                          strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+              ) : (
+                <span className="side__fold side__fold--none" aria-hidden="true" />
+              )}
+
               <NavLink
                 to={`/forms/${f.form_id}/questions`}
                 className={`side__form grow${open ? ' on' : ''}`}

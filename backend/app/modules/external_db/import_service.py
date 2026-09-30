@@ -87,6 +87,11 @@ class ImportRefused(ExternalDbError):
     code = "IMPORT_FAILED"
 
 
+#: What every reporting table in this application is called. A dashboard data
+#: source is any `%_tabular` table; see dashboards/data_source_service.py.
+TABULAR_SUFFIX = "_tabular"
+
+
 def check_destination(name: str) -> str:
     """The local table name, or a refusal.
 
@@ -99,6 +104,15 @@ def check_destination(name: str) -> str:
         raise ImportRefused(
             f"'{text}' is not a usable table name. Use letters, digits and "
             "underscores, starting with a letter.", "VALIDATION_ERROR")
+
+    # Every reporting source in this application is a `_tabular` table — that
+    # suffix is what `list_tabular_tables` looks for, so an imported table
+    # without it could be loaded and then never appear in a dashboard. Added
+    # here rather than asked of the person: it is a rule of the system, not a
+    # decision of theirs.
+    if not text.lower().endswith(TABULAR_SUFFIX):
+        text = f"{text}{TABULAR_SUFFIX}"
+
     if text.lower() in RESERVED_DESTINATIONS:
         raise ImportRefused(
             f"'{text}' is one of this application's own tables. Choose another name.",

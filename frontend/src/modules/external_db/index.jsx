@@ -1,5 +1,4 @@
 import React from 'react'
-import ExternalDbNav from './Nav.jsx'
 import ExternalImport from './pages/ExternalImport.jsx'
 import './styles.css'
 
@@ -14,7 +13,10 @@ export default {
   name: 'external_db',
   label: 'External data',
   order: 30,
-  Nav: ExternalDbNav,
+  navItems: [
+    { group: 'data', label: 'External database import', to: '/external-import',
+      requires: 'import_external_db' },
+  ],
   home: () => null,
   routes: [
     { path: '/external-import', element: <ExternalImport />, requires: 'import_external_db' },

@@ -1,6 +1,6 @@
 from typing import List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 # ---------------------------------------------------------------------------
@@ -103,6 +103,11 @@ class DashboardDataRequest(BaseModel):
     table_name: str
     binding: DashboardDataBinding
 
+    # A table asks for one page; every other widget asks for its whole (small,
+    # aggregated) result and leaves these unset, which reads exactly as before.
+    page: Optional[int] = Field(default=None, ge=1)
+    page_size: Optional[int] = Field(default=None, ge=1, le=200)
+
 
 # ---------------------------------------------------------------------------
 # Widget layout
@@ -139,6 +144,21 @@ class AxisPresentation(BaseModel):
     italic: Optional[bool] = None
 
 
+class TableColumnPresentation(BaseModel):
+    """One column of a table: where its values come from, and its heading.
+
+    `field` and `aggregation` together name an entry of the binding —
+    aggregation "NONE" is a raw column, anything else an aggregate — so a
+    column can be reordered or renamed without touching what is queried.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    field: str = Field(min_length=1)
+    aggregation: AggregationType = "NONE"
+    label: Optional[str] = None
+
+
 class WidgetPresentation(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -151,6 +171,22 @@ class WidgetPresentation(BaseModel):
 
     x_axis: Optional[AxisPresentation] = None
     y_axis: Optional[AxisPresentation] = None
+
+    # How a bar chart that binds two dimensions is arranged: one bar per
+    # compared value side by side, or stacked into one. Presentation and not
+    # binding, because both draw the very same query — absent means the single
+    # bar chart every dashboard saved before this one.
+    bar_mode: Optional[Literal["single", "grouped", "stacked"]] = None
+
+    # A table's columns as the editor arranged them: which binding entry each
+    # one shows, in what order, under what heading. The binding is still what
+    # is queried — this only says how the result is presented, which is why a
+    # table saved before this (and one the AI writes) renders unchanged from
+    # the binding alone when the key is absent.
+    table_columns: Optional[List["TableColumnPresentation"]] = None
+
+    # How many rows a page of this table holds. Absent means the default.
+    table_page_size: Optional[int] = Field(default=None, ge=1, le=200)
 
     # Colour. Every one of these is optional, and absent means "as it was" —
     # a widget nobody has styled carries none of them and renders exactly as
@@ -265,6 +301,24 @@ class DashboardInfo(BaseModel):
 # Complete dashboard specification
 # ---------------------------------------------------------------------------
 
+class FilterFieldConfig(BaseModel):
+    """A column the dashboard offers as a filter, and what it is called.
+
+    Configuration, not a selection: this says *which* filters a reader is
+    given, and persists with the dashboard. What they then pick is sent with
+    each data request as an ordinary `IN` filter and is never stored here.
+
+    `label` is the owner's own wording. The field is what is queried, and it
+    is the only part the database ever sees.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    field: str = Field(min_length=1)
+
+    label: Optional[str] = None
+
+
 class DashboardSpecification(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -284,10 +338,60 @@ class DashboardSpecification(BaseModel):
         default_factory=DashboardLayout
     )
 
+    # Absent in every dashboard saved before filters could be configured,
+    # which is why it defaults to none rather than being required.
+    filter_fields: List[FilterFieldConfig] = Field(
+        default_factory=list
+    )
+
+    @field_validator("filter_fields")
+    @classmethod
+    def _no_repeated_field(cls, value):
+        """One filter per column.
+
+        Two filters on the same column would be ANDed together, so the
+        second could only ever narrow the first — and the reader would be
+        given the same list twice with no way to tell them apart.
+        """
+        seen = set()
+
+        for entry in value:
+            if entry.field in seen:
+                raise ValueError(
+                    f"'{entry.field}' is already a filter field."
+                )
+
+            seen.add(entry.field)
+
+        return value
+
 
 class DashboardGenerateRequest(BaseModel):
     table_name: str
     prompt: str
+
+
+class WidgetOperationRequest(BaseModel):
+    """One AI operation on one widget of a dashboard that already exists.
+
+    The dashboard is sent whole so the server can check that the selected
+    widget is really on it, apply the operation itself, and validate the
+    result — rather than trusting the browser to do any of that.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    table_name: str
+
+    prompt: str
+
+    mode: Literal["add", "update"]
+
+    # Which widget the person selected. Required in "update" mode; the
+    # generated widget's own id is never used.
+    widget_id: Optional[str] = None
+
+    dashboard: DashboardSpecification
 
 
 class SharedDataRequest(BaseModel):

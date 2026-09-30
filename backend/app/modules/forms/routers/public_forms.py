@@ -102,6 +102,19 @@ def public_form(token: str, language: Optional[str] = Query(None)):
     form = _resolved(token)
 
     form_json = form.get("form_json") or {}
+
+    # A form cannot be shared while it asks for a photo or a file — see
+    # `public_share.share`. It can, though, be shared first and asked to collect
+    # one afterwards, and then the link kept working with a control nobody could
+    # use: a required question with no way to answer it. Said plainly instead.
+    asks_for_files = public_share.media_fields(form_json)
+    if asks_for_files:
+        raise HTTPException(status_code=409, detail=(
+            "This form now asks for a file or a photo, which cannot be uploaded "
+            "without an account. Ask whoever shared it to remove that question "
+            "or to collect these answers another way."))
+
+
     languages = translations.form_languages(form_json)
     chosen = (
         language if language in languages

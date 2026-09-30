@@ -32,7 +32,7 @@ class ChannelError(ValueError):
 
 
 def _options_of(field: Dict[str, Any]) -> List[Any]:
-    """The choices a field offers, as the definition holds them.
+    """The values a field offers, as the definition holds them.
 
     A catalogue-backed field carries a reference rather than a copy, so its list
     here may be empty. That is not this module's problem to solve: the raw reply
@@ -44,13 +44,41 @@ def _options_of(field: Dict[str, Any]) -> List[Any]:
     return [o.get("value") if isinstance(o, dict) else o for o in options]
 
 
+def _labelled(field: Dict[str, Any]) -> List[tuple]:
+    """The choices as `(label, value)`, for reading a reply that names one.
+
+    The label is what the person was *shown* — on a button, in a list row, or
+    beside a number — so it is what they send back when they do not send a
+    number. The value is what is stored.
+    """
+    pairs = []
+    for option in field.get("options") or []:
+        if isinstance(option, dict):
+            value = option.get("value")
+            pairs.append((str(option.get("label") or value or ""), value))
+        else:
+            pairs.append((str(option), option))
+    return pairs
+
+
 def _one_answer(field: Dict[str, Any], raw: Any) -> Any:
     """One reply, as the answer to one question.
 
-    A keypad and a chat reply both say "2" when they mean the second choice, so
-    a number against a field that offers choices is read as a choice. Anything
-    else is passed through untouched — including a value that happens to be
-    numeric on a numeric question, which has no options to index into.
+    Three ways a channel says the same choice, and all three become the value:
+
+        "2"       a keypad, or a numbered menu — the second choice
+        "Maize"   the label, which is what a tapped button or list row sends
+                  back, and what somebody types when they read it off the screen
+        "MAIZE"   the value itself
+
+    The label matters because a label and a value are often not the same string:
+    a question offering "Maize" storing `MZ` used to accept the number and
+    refuse the word, which is the one thing a person is most likely to send.
+
+    Anything else is passed through untouched — including a value that happens
+    to be numeric on a numeric question, which has no options to index into. The
+    submission service decides whether what comes out is a valid choice; this
+    only reads what was meant.
     """
     options = _options_of(field)
     if not options:
@@ -62,8 +90,13 @@ def _one_answer(field: Dict[str, Any], raw: Any) -> Any:
         if 1 <= index <= len(options):
             return options[index - 1]
 
-    # Said in full, or said in a way this cannot read — either way the
-    # submission service decides whether it is a valid choice.
+    # Matched with case and surrounding space forgiven, and nothing fuzzier: a
+    # near miss would store the wrong answer and nobody downstream could tell.
+    folded = text.casefold()
+    for label, value in _labelled(field):
+        if folded in (label.strip().casefold(), str(value).strip().casefold()):
+            return value
+
     return raw
 
 

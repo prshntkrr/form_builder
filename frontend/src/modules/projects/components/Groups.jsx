@@ -143,12 +143,18 @@ function NewGroup({ projectId, onClose, onMade }) {
           <label className="cat__field">
             <span className="minilabel">Description</span>
             <input className="control" value={description}
+                   placeholder="Who is in it, and what they collect"
                    onChange={(e) => setDescription(e.target.value)} />
+            <span className="tiny muted">
+              Required. A list of group names with nothing under them does not
+              say who is supposed to be in which.
+            </span>
           </label>
         </div>
         <div className="sheet__foot">
           <button className="btn btn--quiet" onClick={onClose}>Cancel</button>
-          <button className="btn btn--primary" onClick={save} disabled={busy || !name.trim()}>
+          <button className="btn btn--primary" onClick={save}
+                  disabled={busy || !name.trim() || !description.trim()}>
             {busy && <span className="spin" />}
             Create group
           </button>

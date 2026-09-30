@@ -76,6 +76,14 @@ ROUTES: Tuple[Tuple[str, str], ...] = (
     ("PUT", rf"/api/mcdc/routes/\d+"),
     ("DELETE", rf"/api/mcdc/routes/\d+"),
     ("POST", r"/api/mcdc/identities"),
+    # The same routing table addressed by form instead of by route id, which is
+    # how the Form Builder's WhatsApp section reads and writes it.
+    ("GET", rf"/api/mcdc/forms/{FORM_ID}/whatsapp-route"),
+    ("PUT", rf"/api/mcdc/forms/{FORM_ID}/whatsapp-route"),
+    # How the channel is operated: the session timeout and the sealed token.
+    # Administration too, and behind `mcdc.manage` like the rest of it.
+    ("GET", r"/api/mcdc/whatsapp/settings"),
+    ("PUT", r"/api/mcdc/whatsapp/settings"),
 
     # Collecting: the published configuration, then the submission.
     ("GET", r"/api/forms/live/list"),

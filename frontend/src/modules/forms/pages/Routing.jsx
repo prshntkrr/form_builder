@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 import { api } from '../api.js'
 import { useProjects } from '../../projects/active.js'
@@ -17,15 +18,29 @@ import { useProjects } from '../../projects/active.js'
  * The routes belong to the context being worked in, like everything else: a
  * project's routes are its own, and the system context has its own.
  */
-const CHANNELS = [['whatsapp', 'WhatsApp', 'Keyword'], ['ivr', 'IVR', 'Option']]
+/* `page` is where Open goes for a channel that has a screen of its own.
+   WhatsApp does: its routes are configured in each form's builder, so the
+   channel needs an operational list rather than an editor here. IVR has no
+   builder yet, so its routes are still made and kept on this page — the only
+   place they can be. */
+const CHANNELS = [
+  ['whatsapp', 'WhatsApp', 'Keyword', '/routing/whatsapp'],
+  ['ivr', 'IVR', 'Option', null],
+]
+
+const BLANK = { route_key: '', form_id: '' }
 
 export default function Routing() {
   const { projectId } = useProjects()
+  const navigate = useNavigate()
   const [state, setState] = useState(null)
   const [forms, setForms] = useState([])
   const [error, setError] = useState('')
+  // Which channels are expanded. Independently, not as an accordion: opening
+  // IVR is no reason to put WhatsApp away.
+  const [open, setOpen] = useState({})
   const [adding, setAdding] = useState(null)      // which channel
-  const [draft, setDraft] = useState({ route_key: '', form_id: '' })
+  const [draft, setDraft] = useState(BLANK)
   const [busy, setBusy] = useState(false)
 
   const load = useCallback(() => {
@@ -43,8 +58,8 @@ export default function Routing() {
 
   useEffect(load, [load])
 
-  const titleOf = (formId) =>
-    forms.find((f) => f.form_id === formId)?.form_title || formId
+  const formOf = (formId) => forms.find((f) => f.form_id === formId)
+  const titleOf = (formId) => formOf(formId)?.form_title || formId
 
   const add = async (channel) => {
     setBusy(true); setError('')
@@ -56,7 +71,7 @@ export default function Routing() {
         project_id: projectId || null,
       })
       setAdding(null)
-      setDraft({ route_key: '', form_id: '' })
+      setDraft(BLANK)
       load()
     } catch (e) {
       setError(e.message)
@@ -102,40 +117,86 @@ export default function Routing() {
 
       {error && <div className="note note--bad" style={{ marginBottom: 16 }}>{error}</div>}
 
-      {CHANNELS.map(([channel, label, keyLabel]) => {
+      {CHANNELS.map(([channel, label, keyLabel, page]) => {
         const rows = (state.routes || []).filter((r) => r.channel === channel)
+        // A channel with a page of its own is never expanded here; Open goes
+        // there instead, and everything about it lives on that screen.
+        const isOpen = !page && Boolean(open[channel])
         return (
           <div className="card card--pad" key={channel} style={{ marginBottom: 18 }}>
+            {/* Closed, a channel is one line: its name and how much is on it,
+                so the page answers "is anything set up?" without opening
+                anything. */}
             <div className="row">
               <strong className="grow">{label}</strong>
-              <button className="btn btn--sm"
-                      onClick={() => { setAdding(adding === channel ? null : channel)
-                                       setDraft({ route_key: '', form_id: '' }) }}>
-                {adding === channel ? 'Cancel' : 'Add route'}
+
+              {!isOpen && (
+                <span className="tiny muted">
+                  {rows.length === 0 ? 'Nothing routed yet'
+                    : `${rows.length} route${rows.length === 1 ? '' : 's'}`}
+                </span>
+              )}
+
+              {/* Only a channel whose routes are made here offers to make one.
+                  A WhatsApp route is configured in its form's builder, with the
+                  messages it belongs with, so offering it here as well would be
+                  two ways to write one row. */}
+              {isOpen && (
+                <button className="btn btn--sm"
+                        onClick={() => { setAdding(adding === channel ? null : channel)
+                                         setDraft(BLANK) }}>
+                  {adding === channel ? 'Cancel' : 'Add route'}
+                </button>
+              )}
+
+              <button
+                className={isOpen ? 'btn btn--quiet btn--sm' : 'btn btn--sm'}
+                aria-expanded={page ? undefined : isOpen}
+                onClick={() => {
+                  if (page) { navigate(page); return }
+                  setOpen({ ...open, [channel]: !isOpen })
+                  if (isOpen) {
+                    // Closing puts away what belonged to it, so reopening is
+                    // not half-way through something somebody forgot about.
+                    setAdding(null)
+                    setDraft(BLANK)
+                  }
+                }}
+              >
+                {isOpen ? 'Close' : 'Open'}
               </button>
             </div>
 
-            {rows.length === 0 && (
+            {isOpen && rows.length === 0 && (
               <p className="tiny muted">
                 Nothing reaches a form on {label} yet.
               </p>
             )}
 
-            {rows.length > 0 && (
+            {isOpen && rows.length > 0 && (
               <table className="data">
                 <thead>
                   <tr>
-                    <th>{keyLabel}</th><th>Form</th><th /><th />
+                    <th>Form</th>
+                    <th>{keyLabel}</th><th>Status</th><th />
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map((route) => (
                     <tr key={route.route_id}>
-                      <td><code>{route.route_key}</code></td>
                       <td>{titleOf(route.form_id)}</td>
+                      <td><code>{route.route_key}</code></td>
                       <td>
+                        {/* Two facts, not one. A route can be on while its form
+                            is not published, in which case the keyword reaches
+                            nothing — saying only "On" would hide that. */}
                         <span className={`tag ${route.enabled ? 'tag--add' : ''}`}>
                           {route.enabled ? 'On' : 'Off'}
+                        </span>
+                        {' '}
+                        <span className="tiny muted">
+                          {formOf(route.form_id)?.form_status === 'Active'
+                            ? 'Published' : 'Not published'}
                         </span>
                       </td>
                       <td className="cat__actions">
@@ -154,12 +215,12 @@ export default function Routing() {
               </table>
             )}
 
-            {adding === channel && (
+            {isOpen && adding === channel && (
               <div className="row" style={{ marginTop: 10 }}>
                 <input
                   className="control"
                   aria-label={`${keyLabel} for ${label}`}
-                  placeholder={channel === 'ivr' ? '1' : 'REGISTER FARMER'}
+                  placeholder="1"
                   value={draft.route_key}
                   onChange={(e) => setDraft({ ...draft, route_key: e.target.value })}
                 />
@@ -191,7 +252,8 @@ export default function Routing() {
       <p className="tiny muted">
         A keyword is matched with its case and surrounding spaces forgiven, and
         nothing fuzzier — a keyword that nearly matches would start the wrong
-        form. One live route per keyword; disable a route to free its keyword.
+        form. One live route per keyword per number; disable a route to free its
+        keyword.
       </p>
     </main>
   )

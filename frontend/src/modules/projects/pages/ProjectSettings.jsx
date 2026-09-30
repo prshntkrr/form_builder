@@ -1,11 +1,11 @@
-import React, { useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import React, { useEffect, useRef, useState } from 'react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import Groups from '../components/Groups.jsx'
 import Members from '../components/Members.jsx'
 import ProjectForms from '../components/ProjectForms.jsx'
 import { api } from '../api.js'
-import { useProject } from '../active.js'
+import { isSystem, useProject, useProjects } from '../active.js'
 
 const TABS = [
   ['overview', 'Overview'],
@@ -26,6 +26,32 @@ export default function ProjectSettings() {
   const { projectId } = useParams()
   const { project, state, error, can, reload } = useProject(projectId)
   const [tab, setTab] = useState('overview')
+
+  /* Switching project in the selector brings this page with it.
+   *
+   * Every other screen is keyed on the active project, but this one reads its
+   * id out of the URL — so changing the selector left the sidebar saying one
+   * project while the settings of another were on screen, which is exactly what
+   * the module sets out never to do.
+   *
+   * On a *change*, not on a disagreement: the projects list offers "Open" for a
+   * project that is not the active one, and that is a deliberate act this must
+   * not undo. Leaving project context altogether has no settings page to go to,
+   * so it goes to the forms. */
+  const { activeId } = useProjects()
+  const navigate = useNavigate()
+  const was = useRef(activeId)
+
+  useEffect(() => {
+    if (was.current === activeId) return
+    was.current = activeId
+
+    if (!activeId || isSystem(activeId)) {
+      navigate('/forms', { replace: true })
+    } else if (activeId !== projectId) {
+      navigate(`/projects/${activeId}`, { replace: true })
+    }
+  }, [activeId, projectId, navigate])
 
   if (state === 'loading') {
     return (

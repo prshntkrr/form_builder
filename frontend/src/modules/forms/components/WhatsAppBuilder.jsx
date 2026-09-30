@@ -17,7 +17,9 @@ import {
  * question can actually be asked on WhatsApp are offered; the server refuses any
  * other.
  */
-export default function WhatsAppBuilder({ form, chosen, onSelect, onChange, onAdd }) {
+export default function WhatsAppBuilder({
+  form, chosen, onSelect, onChange, onAdd, route, onRoute,
+}) {
   const config = configOf(form)
   const byName = Object.fromEntries((form.fields || []).map((f) => [f.name, f]))
   const order = conversationOrder(form).map((name) => byName[name]).filter(Boolean)
@@ -27,6 +29,8 @@ export default function WhatsAppBuilder({ form, chosen, onSelect, onChange, onAd
     <div className="wa">
       <div className="wa__build">
         <h2 className="wa__title">WhatsApp conversation</h2>
+
+        {route && <RouteFields route={route} onRoute={onRoute} />}
 
         <label className="wa__message">
           <span className="minilabel">1. Welcome</span>
@@ -40,7 +44,37 @@ export default function WhatsAppBuilder({ form, chosen, onSelect, onChange, onAd
           />
         </label>
 
-        <ol className="wa__steps" start={2}>
+        <label className="wa__message">
+          <span className="minilabel">2. Consent</span>
+          <textarea
+            className="control"
+            rows={2}
+            maxLength={1024}
+            placeholder="Would you like to continue with the registration?"
+            value={config.consent_message || ''}
+            onChange={(e) => onChange(setMessage(form, 'consent_message', e.target.value))}
+          />
+          <span className="tiny muted">
+            Asked before the first question and answered YES or NO. Leave it
+            empty to go straight from the welcome to the questions.
+          </span>
+        </label>
+
+        {config.consent_message && (
+          <label className="wa__message">
+            <span className="minilabel">If they say no</span>
+            <textarea
+              className="control"
+              rows={2}
+              maxLength={1024}
+              placeholder="No problem. Nothing has been recorded."
+              value={config.decline_message || ''}
+              onChange={(e) => onChange(setMessage(form, 'decline_message', e.target.value))}
+            />
+          </label>
+        )}
+
+        <ol className="wa__steps" start={3}>
           {order.map((field, i) => (
             <Step
               key={field.name}
@@ -86,6 +120,56 @@ export default function WhatsAppBuilder({ form, chosen, onSelect, onChange, onAd
 
       <ChatPreview form={form} order={order} config={config} />
     </div>
+  )
+}
+
+/**
+ * How somebody reaches this form: the number, and the word they send to it.
+ *
+ * These two are the route (`channel_form_route`) — the same row the project's
+ * Channel routing screen lists — so they are saved with the form but they are
+ * not *in* it. The messages above are: they refer to the questions, so they are
+ * versioned and rolled back with them.
+ *
+ * The route is stored switched off until the form is published, and comes on
+ * with it. Nothing is lost by configuring it while still drafting.
+ */
+function RouteFields({ route, onRoute }) {
+  return (
+    <section className="wa__route" aria-label="WhatsApp configuration">
+      <span className="minilabel">WhatsApp configuration</span>
+
+      <label className="wa__routefield">
+        <span className="tiny">WhatsApp number</span>
+        <input
+          className="control control--sm"
+          inputMode="tel"
+          maxLength={32}
+          placeholder="+91XXXXXXXXXX"
+          value={route.receiver_number || ''}
+          onChange={(e) => onRoute({ receiver_number: e.target.value })}
+        />
+        <span className="tiny muted">
+          The number people message. Leave it empty to answer on any number this
+          installation receives on.
+        </span>
+      </label>
+
+      <label className="wa__routefield">
+        <span className="tiny">Keyword</span>
+        <input
+          className="control control--sm"
+          maxLength={120}
+          placeholder="FARMER"
+          value={route.keyword || ''}
+          onChange={(e) => onRoute({ keyword: e.target.value })}
+        />
+        <span className="tiny muted">
+          What they send to start this form. Case and spaces are forgiven;
+          one live keyword per number.
+        </span>
+      </label>
+    </section>
   )
 }
 
@@ -187,6 +271,16 @@ export function ChatPreview({ form, order, config }) {
       <div className="wa__phonehead">WhatsApp · preview</div>
       <div className="wa__chat">
         {config.welcome_message && <div className="wa__bubble">{config.welcome_message}</div>}
+
+        {config.consent_message && (
+          <div className="wa__bubble" data-step="consent">
+            <div>{config.consent_message}</div>
+            <div className="wa__buttons">
+              <span className="wa__button">Yes</span>
+              <span className="wa__button">No</span>
+            </div>
+          </div>
+        )}
 
         {asked.map((field) => {
           const way = config.fields?.[field.name]?.interaction || defaultWhatsappInteraction(field)

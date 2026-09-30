@@ -278,16 +278,43 @@ def applies(form_json: Dict[str, Any], answers: Dict[str, Any], name: str) -> bo
 # --------------------------------------------------------------------------- #
 # cleaning what arrives
 # --------------------------------------------------------------------------- #
-def normalize_rules(raw: Any) -> List[Dict[str, Any]]:
+def _names(items: Any, key: str) -> Any:
+    """The set of names in a field or section list, or None for "do not check".
+
+    None and a list are different answers: no list given means the caller is not
+    checking references, while an empty list means a form with no questions, and
+    every reference in it dangles.
+    """
+    if items is None:
+        return None
+    return {_text(item.get(key) or item.get("name"))
+            for item in items if isinstance(item, dict)} - {""}
+
+
+def normalize_rules(raw: Any, fields: Any = None,
+                    sections: Any = None) -> List[Dict[str, Any]]:
     """Keep only rules this engine can actually evaluate.
 
     Called from `normalize_form`, so a hand-edited definition cannot store a
     shape the renderer would choke on. Anything unrecognised is dropped rather
     than rejected: a bad rule must never stop a form being saved, and a dropped
     rule leaves its target visible, which is the safe direction to fail.
+
+    `fields` and `sections` make that true of **references** as well as shape.
+    `problems()` below refuses a rule that names a question or a section the
+    form does not have, so without this the documented invariant —
+    `validate_config(normalize_form(anything))` never raises — did not hold: a
+    question deleted in the builder left its rules behind, and from then on the
+    whole form was unsaveable, naming a question nobody could see to fix.
+
+    Passing neither checks shape alone, which is what every caller outside
+    `normalize_form` wants — a rule being edited names questions that exist.
     """
     if not isinstance(raw, list):
         return []
+
+    known_fields = _names(fields, "name")
+    known_sections = _names(sections, "key")
 
     cleaned: List[Dict[str, Any]] = []
 
@@ -302,6 +329,11 @@ def normalize_rules(raw: Any) -> List[Dict[str, Any]]:
             field = _text(condition.get("field"))
             operator = _text(condition.get("operator"))
             if not field or operator not in OPERATORS:
+                continue
+            # A question this form no longer has. Dropping the condition leaves
+            # the rest of the rule working; a rule left with none is dropped
+            # below, which leaves its target visible.
+            if known_fields is not None and field not in known_fields:
                 continue
 
             kept = {"field": field, "operator": operator}
@@ -328,10 +360,15 @@ def normalize_rules(raw: Any) -> List[Dict[str, Any]]:
             name = _text(target.get("name"))
             if not name:
                 continue
+            # Nothing left to show or hide, so the rule goes with it.
+            if known_fields is not None and name not in known_fields:
+                continue
             cleaned_target["name"] = name
         elif kind == "section":
             key = _text(target.get("key") or target.get("name"))
             if not key:
+                continue
+            if known_sections is not None and key not in known_sections:
                 continue
             cleaned_target["key"] = key
 

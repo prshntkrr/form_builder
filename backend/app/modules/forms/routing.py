@@ -23,6 +23,20 @@ it.
 The route names the *form*, never a version. Which version is live is the
 published-form service's business, so republishing does not mean editing every
 keyword that points at the form.
+
+A WhatsApp route also names the **number** the keyword has to arrive on. A route
+with none answers wherever it arrives, which is every route configured before
+numbers existed and is why nothing had to be migrated. A route with one answers
+only there, so two projects can use "START" on their own lines without either
+reaching the other's form. The number is part of the uniqueness key for exactly
+that reason, and part of resolution — never of authorization.
+
+Two screens edit these rows and there is no second store behind either: the
+project's Channel routing page, by route id, and the Form Builder's WhatsApp
+section, by form (`route_for_form`). What the *conversation says* — the welcome,
+the consent question — is not here at all: it refers to the questions, so it
+lives in `form_json.channel_config.whatsapp` and is versioned and rolled back
+with them.
 """
 import logging
 import re
@@ -123,6 +137,37 @@ def _usable_form(form_id: str, project_id: Optional[str]) -> Dict[str, Any]:
 # --------------------------------------------------------------------------- #
 # the rows
 # --------------------------------------------------------------------------- #
+def normalize_number(raw: Any) -> str:
+    """A phone number as it is compared.
+
+    Digits and a leading +, because the same number is written `+91 98765
+    43210`, `+919876543210` and `919876543210` depending on who is typing or
+    which provider is sending. Nothing is inferred: a number with no country
+    code is not given one, because guessing the country of a number is how a
+    keyword ends up matching a route on somebody else's line.
+    """
+    text = re.sub(r"[^\d+]", "", str(raw or ""))
+    return ("+" + text.lstrip("+").replace("+", "")) if text.startswith("+") \
+        else text.replace("+", "")
+
+
+def same_number(a: Any, b: Any) -> bool:
+    """Whether two numbers are the same line.
+
+    Compared on their digits from the right, so a route stored as
+    `+919876543210` still matches a provider that sends `9876543210`. Ten
+    digits is the shortest national number this has to deal with; comparing
+    fewer would start matching numbers that only share a suffix.
+    """
+    left, right = re.sub(r"\D", "", str(a or "")), re.sub(r"\D", "", str(b or ""))
+    if not left or not right:
+        return False
+    if left == right:
+        return True
+    keep = min(len(left), len(right), 10)
+    return keep >= 10 and left[-keep:] == right[-keep:]
+
+
 def _shown(row: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "route_id": row["route_id"],
@@ -130,6 +175,7 @@ def _shown(row: Dict[str, Any]) -> Dict[str, Any]:
         "route_key": row["route_key"],
         "form_id": row["form_id"],
         "project_id": row["project_id"],
+        "receiver_number": row.get("receiver_number") or "",
         "enabled": row["enabled"],
         "metadata": row["metadata"] or {},
         "created_by": row["created_by"],
@@ -168,40 +214,134 @@ def get_route(route_id: int) -> Optional[Dict[str, Any]]:
     return _shown(dict(row)) if row else None
 
 
-def _clashes(channel: str, key_norm: str, project_id: Optional[str],
-             enabled: bool, ignoring: Optional[int] = None) -> bool:
-    """Whether an enabled route already answers to this, in this scope.
+def _clashes_on(cur, channel: str, key_norm: str, project_id: Optional[str],
+                enabled: bool, receiver_number: str = "",
+                ignoring: Optional[int] = None) -> bool:
+    """Whether an enabled route already answers to this, on this cursor.
 
     Only enabled routes clash: a keyword can be retired and the same keyword
     given to another form, which is the ordinary way these change hands.
+
+    The number is part of the question. The same keyword on two different
+    WhatsApp numbers is two meanings and no clash; a route that answers on any
+    number ('') does clash with one on a specific number, because a message
+    arriving there would match both and there would be nothing to choose
+    between them.
     """
     if not enabled:
         return False
 
+    cur.execute(
+        """
+        SELECT receiver_number FROM channel_form_route
+        WHERE channel = %s AND route_key_norm = %s AND enabled
+          AND project_id IS NOT DISTINCT FROM %s
+          AND (%s::int IS NULL OR route_id <> %s)
+        """,
+        (channel, key_norm, project_id, ignoring, ignoring),
+    )
+    others = [r["receiver_number"] or "" for r in cur.fetchall()]
+
+    wanted = normalize_number(receiver_number)
+    return any(not other or not wanted or same_number(other, wanted)
+               for other in others)
+
+
+def _clashes(channel: str, key_norm: str, project_id: Optional[str],
+             enabled: bool, receiver_number: str = "",
+             ignoring: Optional[int] = None) -> bool:
+    """`_clashes_on` in a transaction of its own, for the standalone callers."""
     with transaction() as cur:
+        return _clashes_on(cur, channel, key_norm, project_id, enabled,
+                           receiver_number, ignoring)
+
+
+def upsert_form_route(cur, *, channel: str, form_id: str,
+                      project_id: Optional[str], route_key: str,
+                      receiver_number: str = "", enabled: bool = True,
+                      created_by: str = "") -> Dict[str, Any]:
+    """The one route a form is reached by, written on the caller's cursor.
+
+    For saving a form and its keyword **in one transaction**: either the form,
+    its version, its tables and its route are all stored, or none of them are.
+    Two requests — create the form, then give it a keyword — is how a form came
+    to exist with no way to reach it, twice, because the second could fail on
+    its own and the first had already committed.
+
+    Deliberately does **not** check that the form is published, unlike
+    `create_route`. It is called from inside the transaction that is creating or
+    updating that very form, so nothing outside can see the row yet and asking
+    would get the wrong answer. The caller knows the status it is writing and
+    passes `enabled` accordingly.
+
+    Everything else is the same rule as the standalone path: the same key
+    normalisation, the same clash check, the same columns.
+    """
+    key = check_key(channel, route_key)
+    key_norm = normalize_key(channel, key)
+    number = normalize_number(receiver_number)
+
+    cur.execute(
+        "SELECT route_id FROM channel_form_route "
+        "WHERE form_id = %s AND channel = %s ORDER BY enabled DESC, route_id LIMIT 1",
+        (form_id, channel),
+    )
+    found = cur.fetchone()
+    route_id = found["route_id"] if found else None
+
+    if _clashes_on(cur, channel, key_norm, project_id, enabled, number,
+                   ignoring=route_id):
+        raise RoutingError(
+            f"'{key}' already reaches another form on {channel} here. Give this "
+            "one a different keyword, or disable the other route first.")
+
+    if route_id is None:
         cur.execute(
             """
-            SELECT route_id FROM channel_form_route
-            WHERE channel = %s AND route_key_norm = %s AND enabled
-              AND project_id IS NOT DISTINCT FROM %s
-              AND (%s::int IS NULL OR route_id <> %s)
+            INSERT INTO channel_form_route
+                (channel, route_key, route_key_norm, form_id, project_id,
+                 enabled, receiver_number, created_by)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING *
             """,
-            (channel, key_norm, project_id, ignoring, ignoring),
+            (channel, key, key_norm, form_id, project_id, enabled, number,
+             created_by),
         )
-        return cur.fetchone() is not None
+    else:
+        cur.execute(
+            """
+            UPDATE channel_form_route
+               SET route_key = %s, route_key_norm = %s, project_id = %s,
+                   enabled = %s, receiver_number = %s,
+                   updated_on = CURRENT_TIMESTAMP
+             WHERE route_id = %s
+             RETURNING *
+            """,
+            (key, key_norm, project_id, enabled, number, route_id),
+        )
+
+    return _shown(dict(cur.fetchone()))
 
 
 def create_route(channel: str, route_key: str, form_id: str,
                  project_id: Optional[str] = None, enabled: bool = True,
                  metadata: Optional[Dict[str, Any]] = None,
+                 receiver_number: str = "",
                  created_by: str = "") -> Dict[str, Any]:
     channel = (channel or "").strip().lower()
     key = check_key(channel, route_key)
     key_norm = normalize_key(channel, key)
+    number = normalize_number(receiver_number)
 
-    _usable_form(form_id, project_id)
+    # Only an enabled route has to point at something usable, the same rule
+    # `update_route` has always applied. A route configured alongside a form
+    # that is still a draft is stored switched off and comes on when the form is
+    # published — which is how the builder can configure routing before there is
+    # anything to route to.
+    if enabled:
+        _usable_form(form_id, project_id)
 
-    if _clashes(channel, key_norm, project_id, enabled):
+    if _clashes(channel, key_norm, project_id, enabled, number):
         raise RoutingError(
             f"'{key}' already points somewhere on {channel} here. Change that "
             "route, or disable it first — two live routes for one keyword is "
@@ -212,12 +352,12 @@ def create_route(channel: str, route_key: str, form_id: str,
             """
             INSERT INTO channel_form_route
                 (channel, route_key, route_key_norm, form_id, project_id,
-                 enabled, metadata, created_by)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                 enabled, metadata, receiver_number, created_by)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING *
             """,
             (channel, key, key_norm, form_id, project_id, enabled,
-             Json(metadata or {}), created_by),
+             Json(metadata or {}), number, created_by),
         )
         row = dict(cur.fetchone())
 
@@ -236,6 +376,9 @@ def update_route(route_id: int, **changes: Any) -> Dict[str, Any]:
     project_id = changes["project_id"] if "project_id" in changes else was["project_id"]
     enabled = was["enabled"] if changes.get("enabled") is None else bool(changes["enabled"])
     metadata = changes.get("metadata")
+    number = normalize_number(changes["receiver_number"]
+                              if "receiver_number" in changes
+                              else was.get("receiver_number"))
 
     key = check_key(channel, route_key)
     key_norm = normalize_key(channel, key)
@@ -245,7 +388,7 @@ def update_route(route_id: int, **changes: Any) -> Dict[str, Any]:
     if enabled:
         _usable_form(form_id, project_id)
 
-    if _clashes(channel, key_norm, project_id, enabled, ignoring=route_id):
+    if _clashes(channel, key_norm, project_id, enabled, number, ignoring=route_id):
         raise RoutingError(
             f"'{key}' already points somewhere on {channel} here.")
 
@@ -255,12 +398,13 @@ def update_route(route_id: int, **changes: Any) -> Dict[str, Any]:
             UPDATE channel_form_route
                SET channel = %s, route_key = %s, route_key_norm = %s,
                    form_id = %s, project_id = %s, enabled = %s,
+                   receiver_number = %s,
                    metadata = COALESCE(%s, metadata),
                    updated_on = CURRENT_TIMESTAMP
              WHERE route_id = %s
              RETURNING *
             """,
-            (channel, key, key_norm, form_id, project_id, enabled,
+            (channel, key, key_norm, form_id, project_id, enabled, number,
              Json(metadata) if metadata is not None else None, route_id),
         )
         row = dict(cur.fetchone())
@@ -303,15 +447,43 @@ def link_identity(channel: str, identity: str, user_id: str,
 
 
 def user_for_identity(channel: str, identity: str) -> Optional[Dict[str, Any]]:
-    """The account behind a channel identity, with its permissions loaded."""
+    """The account behind a channel identity, with its permissions loaded.
+
+    Matched exactly first, then as a phone number. The two are not the same
+    string: a number is written `+919876543210` when somebody types it into
+    this application and `919876543210` when a provider sends it, and an exact
+    comparison reads the second as a number nobody has linked — which is
+    answered identically to an unknown keyword, so the symptom is a survey that
+    politely refuses to start and gives no reason at all.
+
+    The phone comparison is `same_number`, the same rule routing already uses
+    for the number a keyword arrived on, so linking is forgiving in exactly the
+    way the rest of the channel is and no more.
+    """
     from app.core import auth_service
+
+    channel = (channel or "").strip().lower()
+    wanted = str(identity or "").strip()
+    if not wanted:
+        return None
 
     with transaction() as cur:
         cur.execute(
             "SELECT user_id FROM channel_identity WHERE channel = %s AND identity = %s",
-            ((channel or "").strip().lower(), str(identity or "").strip()),
+            (channel, wanted),
         )
         row = cur.fetchone()
+
+        if row is None:
+            # Read as a phone number instead. The table holds one row per
+            # person per channel, so this is a short list to walk rather than
+            # something to index.
+            cur.execute(
+                "SELECT identity, user_id FROM channel_identity WHERE channel = %s",
+                (channel,),
+            )
+            row = next((r for r in cur.fetchall()
+                        if same_number(r["identity"], wanted)), None)
 
     if row is None:
         return None
@@ -321,6 +493,25 @@ def user_for_identity(channel: str, identity: str) -> Optional[Dict[str, Any]]:
 # --------------------------------------------------------------------------- #
 # resolution
 # --------------------------------------------------------------------------- #
+def _on_this_number(routes: List[Dict[str, Any]],
+                    receiver: Optional[str]) -> List[Dict[str, Any]]:
+    """The routes a message arriving on this number could have meant.
+
+    A route with no number answers wherever it arrives, which is every route
+    configured before numbers existed. A route with one answers only there —
+    two projects can use the same keyword on their own lines without either
+    reaching the other's form.
+
+    Resolution, not authorization: which form the keyword *means*. Whether the
+    person may fill it in is still `may_fill_form`, afterwards and separately.
+    """
+    if not receiver:
+        return routes
+    return [r for r in routes
+            if not (r.get("receiver_number") or "")
+            or same_number(r["receiver_number"], receiver)]
+
+
 def _matching(channel: str, key_norm: str,
               projects: List[str]) -> List[Dict[str, Any]]:
     with transaction() as cur:
@@ -335,7 +526,8 @@ def _matching(channel: str, key_norm: str,
         return [dict(r) for r in cur.fetchall()]
 
 
-def resolve(channel: str, route_key: str, user: Dict[str, Any]) -> Dict[str, Any]:
+def resolve(channel: str, route_key: str, user: Dict[str, Any],
+            receiver: Optional[str] = None) -> Dict[str, Any]:
     """Which form this keyword or menu option means, for this identity.
 
     Two steps, in this order and never merged:
@@ -365,9 +557,16 @@ def resolve(channel: str, route_key: str, user: Dict[str, Any]) -> Dict[str, Any
     else:
         projects = access.projects_for(user)
 
-    found = _matching(channel, normalize_key(channel, route_key), projects)
+    found = _on_this_number(
+        _matching(channel, normalize_key(channel, route_key), projects), receiver)
     if not found:
         return {"matched": False}
+
+    # A route configured for this exact number beats one that answers anywhere:
+    # somebody who has said what a keyword means on their line has said it.
+    if receiver:
+        exact = [r for r in found if r.get("receiver_number")]
+        found = exact or found
 
     scoped = [r for r in found if r["project_id"]]
     if len({r["project_id"] for r in scoped}) > 1:
@@ -422,5 +621,154 @@ def authorized(route: Dict[str, Any], user: Dict[str, Any]) -> Dict[str, Any]:
         "version": config["version"],
         "status": config["status"],
         "project_id": route["project_id"],
+        "receiver_number": route.get("receiver_number") or "",
         "metadata": route.get("metadata") or {},
     }
+
+
+def offered(channel: str, user: Dict[str, Any],
+            receiver: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Every route this identity could actually use, on this number.
+
+    What a menu is built from. The same two steps as `resolve` and in the same
+    order — a route in a scope this identity can be in, then `may_fill_form` —
+    so a list can never offer something a keyword would refuse, and somebody
+    whose number is linked to an account with nothing assigned to it sees an
+    empty list rather than a catalogue of what the installation collects.
+
+    Sorted by keyword so the numbers beside a menu do not move between
+    messages: somebody replying "2" to a menu they were sent a minute ago must
+    get what was second then.
+    """
+    channel = (channel or "").strip().lower()
+    if channel not in CHANNELS:
+        raise RoutingError(
+            f"There is no '{channel}' channel to route. Known: {', '.join(CHANNELS)}.")
+
+    try:
+        from app.modules.projects import access
+    except Exception:
+        projects: List[str] = []
+    else:
+        projects = access.projects_for(user)
+
+    with transaction() as cur:
+        cur.execute(
+            """
+            SELECT * FROM channel_form_route
+            WHERE channel = %s AND enabled
+              AND (project_id IS NULL OR project_id = ANY(%s))
+            ORDER BY route_key
+            """,
+            (channel, list(projects) or [""]),
+        )
+        rows = [dict(r) for r in cur.fetchall()]
+
+    offers = []
+    for route in _on_this_number(rows, receiver):
+        resolved = authorized(route, user)
+        if resolved.get("matched"):
+            offers.append(resolved)
+    return offers
+
+
+def project_for_receiver(receiver: str,
+                         channel: str = "whatsapp") -> Optional[str]:
+    """Whose account answers a message that arrived on this number.
+
+    The project that routes a form on it. A number belongs to whoever set it up
+    against their forms, so a message arriving there is answered on their
+    provider account and with their credential — not on the installation's.
+
+    This is asked **before** there is a conversation, which is why it reads the
+    number rather than a session: the welcome, the consent question and the
+    "nothing to fill in here" reply all go out before any session exists, and
+    answering those on the system account meant an installation whose tokens are
+    all per-project could not send at all.
+
+    None when no route claims the number, which is the system scope — a route
+    with no number of its own is deliberately not matched here, because it
+    answers anywhere and says nothing about whose line this is.
+    """
+    if not receiver:
+        return None
+
+    with transaction() as cur:
+        cur.execute(
+            "SELECT project_id, receiver_number FROM channel_form_route "
+            "WHERE channel = %s AND enabled AND receiver_number <> ''",
+            (channel,),
+        )
+        rows = [dict(r) for r in cur.fetchall()]
+
+    for row in rows:
+        if same_number(row["receiver_number"], receiver):
+            return row["project_id"]
+    return None
+
+
+def route_for_form(form_id: str, channel: str = "whatsapp") -> Optional[Dict[str, Any]]:
+    """The route a form is reached by on one channel, or None.
+
+    The Form Builder's WhatsApp section reads and writes this. There is at most
+    one per form per channel by convention rather than by constraint — a form
+    given a second keyword by hand from the routing screen keeps it, and the
+    builder shows the first. Enforcing one in the database would take that away
+    for no gain.
+    """
+    with transaction() as cur:
+        cur.execute(
+            "SELECT * FROM channel_form_route WHERE form_id = %s AND channel = %s "
+            "ORDER BY enabled DESC, route_id LIMIT 1",
+            (form_id, channel),
+        )
+        row = cur.fetchone()
+    return _shown(dict(row)) if row else None
+
+
+def set_enabled_for_form(form_id: str, enabled: bool,
+                         channel: str = "whatsapp") -> int:
+    """Switch a form's routes on or off without touching their configuration.
+
+    What publishing and unpublishing a form do. The keyword, the number and the
+    scope are kept: unpublishing takes a form off the air, it does not throw
+    away how somebody reached it, and republishing brings the same route back
+    rather than asking for it to be typed again.
+
+    Unpublishing is unconditional. Publishing only re-enables a route that
+    would not clash with one somebody has set up in the meantime.
+    """
+    with transaction() as cur:
+        if not enabled:
+            cur.execute(
+                "UPDATE channel_form_route SET enabled = FALSE, "
+                "updated_on = CURRENT_TIMESTAMP "
+                "WHERE form_id = %s AND channel = %s AND enabled",
+                (form_id, channel),
+            )
+            return cur.rowcount
+
+        cur.execute(
+            "SELECT * FROM channel_form_route "
+            "WHERE form_id = %s AND channel = %s AND NOT enabled",
+            (form_id, channel),
+        )
+        sleeping = [dict(r) for r in cur.fetchall()]
+
+    woken = 0
+    for route in sleeping:
+        if _clashes(route["channel"], route["route_key_norm"], route["project_id"],
+                    True, route.get("receiver_number") or "",
+                    ignoring=route["route_id"]):
+            logger.warning(
+                "Route %s for %s stayed off: '%s' is taken on %s now",
+                route["route_id"], form_id, route["route_key"], route["channel"])
+            continue
+        with transaction() as cur:
+            cur.execute(
+                "UPDATE channel_form_route SET enabled = TRUE, "
+                "updated_on = CURRENT_TIMESTAMP WHERE route_id = %s",
+                (route["route_id"],),
+            )
+        woken += 1
+    return woken

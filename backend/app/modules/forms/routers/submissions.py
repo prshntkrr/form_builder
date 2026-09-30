@@ -1,5 +1,6 @@
 """Live form rendering + submission endpoints."""
 import logging
+import re
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
@@ -8,6 +9,7 @@ from pydantic import BaseModel
 
 from app.core import auth_service
 from app.modules.forms import form_service
+from app.modules.forms.form_schema import parent_form_id
 from app.modules.forms import submission_service
 from app.modules.forms import translations
 from app.modules.forms import view_service
@@ -28,6 +30,7 @@ from app.modules.forms.permissions import (
 # projects module switched off.
 PROJECT_FORMS_MANAGE = "project.forms.manage"
 PROJECT_SUBMISSIONS_VIEW_ALL = "project.submissions.view_all"
+PROJECT_SUBMISSIONS_REVIEW = "project.submissions.review"
 from app.core.database import transaction
 from app.modules.forms.schemas import (
     IngestRequest, SubmitRequest, TestSubmissionRequest, ViewConfigRequest,
@@ -216,6 +219,12 @@ def fillable_forms(project: Optional[str], user: Dict[str, Any],
             "default_language": translations.default_language(f["form_json"] or {}),
             "languages": translations.form_languages(f["form_json"] or {}),
             "updated_on": f["updated_on"],
+            # Which form's submissions this one's hang off, or null. Read from
+            # the definition where the relationship is declared — this invents
+            # nothing and changes no behaviour. Additive: a client that does not
+            # know the key is unaffected, and one that does can show the list as
+            # the tree it already is.
+            "parent_form_id": parent_form_id(f["form_json"] or {}),
             # Where the complete, renderable definition is.
             "package_url": f"/api/forms/{f['form_id']}/package",
             "project_id": where.get(f["form_id"]),
@@ -518,6 +527,57 @@ def test_submission(
     return {**result, "form_id": form_id, "form_status": form["form_status"]}
 
 
+def _may_fill(form_id: str, user: Dict[str, Any]) -> bool:
+    """Whether this account may answer this form. The submit route's own check."""
+    try:
+        from app.modules.projects import access
+    except ImportError:
+        return True                      # no projects module, no project rule
+    try:
+        return bool(access.may_fill_form(user, form_id))
+    except Exception:
+        logger.exception("Could not work out whether %s may be filled in", form_id)
+        return True                      # the endpoint decides; this only hides a button
+
+
+def _only_their_own(form_id: str, user: Dict[str, Any]) -> Optional[str]:
+    """The name to narrow a record list to, or None for "everything".
+
+    A surveyor may fill a form in; that is not the same as being allowed to read
+    what everybody else collected on it, which on a shared form is other
+    people's fieldwork. Three ways to be allowed the whole list:
+
+      an account permission   `responses.view` — the builder's own view
+      a project permission    `project.submissions.view_all`
+      reviewing               `project.submissions.review`, since a reviewer
+                              cannot review what they cannot see
+
+    Anything else gets their own. Narrowed by `created_by`, which is what a
+    submission stores — `auth_service.display_name`.
+    """
+    if auth_service.may(user, RESPONSES_VIEW):
+        return None
+
+    try:
+        from app.modules.projects import access, project_service
+    except ImportError:
+        # The projects module is switched off; the account permission stands.
+        return None
+
+    project_id = None
+    try:
+        project_id = project_service.project_of_form(form_id)
+    except Exception:
+        project_id = None
+
+    if project_id:
+        held = access.permissions_in(user, project_id)
+        if PROJECT_SUBMISSIONS_VIEW_ALL in held or PROJECT_SUBMISSIONS_REVIEW in held:
+            return None
+
+    return auth_service.display_name(user)
+
+
 @router.get("/{form_id}/records")
 def records(
     form_id: str,
@@ -532,7 +592,8 @@ def records(
     """
     form = _load(form_id, user)
     form_json = form["form_json"] or {}
-    data = submission_service.list_submissions(form, limit=limit, offset=offset)
+    data = submission_service.list_submissions(
+        form, limit=limit, offset=offset, only_by=_only_their_own(form_id, user))
 
     if auth_service.may(user, RESPONSES_VIEW):
         allowed = [c["name"] for c in data["columns"]]
@@ -554,6 +615,10 @@ def records(
         "form_id": form_id,
         "form_title": form["form_title"],
         "form_status": form["form_status"],
+        # Whether this account may add to this form — the same answer
+        # `POST /submissions` gives, so the button and the endpoint cannot
+        # disagree. A reviewer reads a project's work without collecting it.
+        "may_fill": _may_fill(form_id, user),
         "total": data["total"],
         "limit": data["limit"],
         "offset": data["offset"],
@@ -610,33 +675,82 @@ def list_submissions(
     form_id: str,
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
+    since: Optional[str] = Query(None, alias="from", description="Collected on or after, YYYY-MM-DD"),
+    until: Optional[str] = Query(None, alias="to", description="Collected on or before, YYYY-MM-DD"),
     user: Dict[str, Any] = Depends(
         needs_on_form(RESPONSES_VIEW, PROJECT_SUBMISSIONS_VIEW_ALL)),
 ):
     """Every answer to this form, in full.
+
+    `from` / `to` narrow it to when the answers were collected, and the export
+    below takes the same two — so a range chosen on screen and the file that
+    comes out of it are the same set of responses.
 
     Reading other people's answers, so a project's own form asks the project
     permission for exactly that — `project.submissions.view_all`, which a
     manager and a reviewer hold and a surveyor does not. `/records` is the
     narrower cousin: the columns an admin left visible.
     """
+    _dates_look_like_dates(since, until)
     form = _load(form_id, user)
-    return submission_service.list_submissions(form, limit=limit, offset=offset)
+    return submission_service.list_submissions(
+        form, limit=limit, offset=offset, since=since, until=until)
+
+
+def _dates_look_like_dates(*values: Optional[str]) -> None:
+    """Refused here rather than in SQL: `created_on >= 'last tuesday'` is a
+    database error, and a 500 for a typo in a date box is nobody's idea of a
+    message."""
+    for value in values:
+        if value and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+            raise HTTPException(status_code=422, detail="A date must be YYYY-MM-DD")
+
+
+#: What an export can be asked for as, and how it is served.
+EXPORT_FORMATS = {
+    "csv": ("text/csv", "csv"),
+    "xlsx": ("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "xlsx"),
+}
 
 
 @router.get("/{form_id}/submissions/export")
 def export(
     form_id: str,
+    format: str = Query("csv", pattern="^(csv|xlsx)$"),
+    columns: str = Query("", description="Field names to include, comma separated"),
+    since: Optional[str] = Query(None, alias="from", description="Collected on or after, YYYY-MM-DD"),
+    until: Optional[str] = Query(None, alias="to", description="Collected on or before, YYYY-MM-DD"),
     user: Dict[str, Any] = Depends(
         needs_on_form(RESPONSES_EXPORT, PROJECT_SUBMISSIONS_VIEW_ALL)),
 ):
+    """This form's answers, as a file.
+
+    Narrowed the same way the table on screen is narrowed — the same date window
+    read by the same code — so what somebody exports is what they were looking
+    at. Asking for no columns and no dates is the whole form, which is what this
+    endpoint has always returned.
+
+    The filename carries the range, because a folder with three exports of the
+    same form in it is otherwise three files with one name.
+    """
+    _dates_look_like_dates(since, until)
     form = _load(form_id, user)
-    csv_text = submission_service.export_csv(form)
+    chosen = [c.strip() for c in columns.split(",") if c.strip()]
+    media_type, suffix = EXPORT_FORMATS[format]
+
+    if format == "xlsx":
+        body = submission_service.export_xlsx(form, chosen, since, until)
+    else:
+        body = submission_service.export_csv(form, chosen, since, until)
+
     table = (form["form_json"] or {}).get("table_name") or form_id
+    window = "".join(f"_{part}" for part in (since, until) if part)
+
     return Response(
-        content=csv_text,
-        media_type="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="{table}.csv"'},
+        content=body,
+        media_type=media_type,
+        headers={"Content-Disposition":
+                 f'attachment; filename="{table}{window}.{suffix}"'},
     )
 
 

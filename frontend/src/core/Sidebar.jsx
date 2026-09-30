@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react'
-import { NavLink, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { api } from './api.js'
 import { initials, useAuth } from './auth.jsx'
 import { moduleLists, moduleNavs } from './registry.js'
+import SystemNav from './SystemNav.jsx'
 
 /** Who you are, and the way out. Both always visible — no menu to discover. */
 function Account() {
@@ -51,29 +52,6 @@ function Trouble() {
   )
 }
 
-/** Administration, which core owns. Modules add their own sections above this. */
-function Admin({ onNavigate }) {
-  const { can } = useAuth()
-  if (!can.manage_roles && !can.manage_users) return null
-
-  return (
-    <nav className="side__links">
-      {can.manage_roles && (
-        <NavLink to="/roles" className={({ isActive }) => `side__form${isActive ? ' on' : ''}`}
-                 onClick={onNavigate}>
-          <span className="grow">Roles</span>
-        </NavLink>
-      )}
-      {can.manage_users && (
-        <NavLink to="/users" className={({ isActive }) => `side__form${isActive ? ' on' : ''}`}
-                 onClick={onNavigate}>
-          <span className="grow">Users</span>
-        </NavLink>
-      )}
-    </nav>
-  )
-}
-
 /**
  * The shell's navigation.
  *
@@ -84,6 +62,14 @@ function Admin({ onNavigate }) {
  * Order matters: every fixed link — modules' and core's alike — sits above the
  * scrolling panels, because a panel is `flex: 1` and would otherwise push what
  * follows it to the foot of the sidebar.
+ *
+ * Four bands, and only the third of them scrolls:
+ *
+ *   brand + project      fixed, always visible
+ *   system groups        fixed, but collapsible — this is the height the forms
+ *                        list was losing, a dozen rows of it
+ *   forms panel          `flex: 1; min-height: 0; overflow-y: auto`
+ *   account              fixed at the foot
  */
 export default function Sidebar({ onNavigate }) {
   const { modules } = useAuth()
@@ -97,9 +83,12 @@ export default function Sidebar({ onNavigate }) {
         </span>
       </div>
 
+      {/* The project selector and this project's own screens. Primary
+          navigation: never folded away, never inside a group. */}
       {moduleNavs(modules).map(({ name, Nav }) => <Nav key={name} onNavigate={onNavigate} />)}
 
-      <Admin onNavigate={onNavigate} />
+      {/* Everything else, in groups somebody can collapse. */}
+      <SystemNav onNavigate={onNavigate} />
 
       {moduleLists(modules).map(({ name, List }) => <List key={name} onNavigate={onNavigate} />)}
 

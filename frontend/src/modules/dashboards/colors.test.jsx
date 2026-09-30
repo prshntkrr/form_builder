@@ -32,7 +32,9 @@ describe('a widget nobody has styled', () => {
     expect(paletteFor(3, null)).toEqual([
       defaultSliceColor(0), defaultSliceColor(1), defaultSliceColor(2),
     ])
-    expect(defaultSliceColor(0)).toBe('hsl(0, 55%, 45%)')
+    // Hex, not hsl(): the same colour, in the one notation both chart
+    // libraries accept. am5.color() refuses hsl() and throws.
+    expect(defaultSliceColor(0)).toBe('#b23434')
   })
 })
 

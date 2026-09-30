@@ -2,13 +2,13 @@
  * The polygon field, on the screens.
  *
  * Longitude first, everywhere: the backend stores `[lng, lat]`, the geofence
- * rings already use that order, and Leaflet uses the opposite one. So the
+ * rings already use that order, and Google uses the opposite one. So the
  * thing worth pinning down is that the order never flips — what the map hands
  * back, what the list shows, and what reaches the field definition all agree.
  *
- * The map itself is Leaflet's business and is stubbed here; what belongs to
- * this application is which points exist, who may change them, and in what
- * order they are written down.
+ * The map itself is Google's business and is faked here; what belongs to this
+ * application is which points exist, who may change them, and in what order
+ * they are written down.
  */
 import React from 'react'
 import { act, render, screen, within } from '@testing-library/react'
@@ -18,36 +18,88 @@ import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { STORAGE, TYPES, typeName } from './fieldTypes.js'
 import { readFileSync } from 'node:fs'
 
-/* react-leaflet draws to a real canvas and measures a real container, neither
-   of which exists here. The parts that matter — the click that adds a point,
-   the drag that moves one — are exercised through the props instead. */
+/* Google Maps draws to a real canvas and measures a real container, neither of
+   which exists here. This fake has the shape of the real API — you construct a
+   Map, then construct overlays onto it — and leaves the same DOM breadcrumbs
+   the assertions below read. The parts that matter, the click that adds a point
+   and the drag that moves one, are driven through the listeners it records.
+
+   `mapEvents.click` is undefined on a read-only map, exactly as before: the
+   component attaches nothing when it cannot be drawn on. */
 const mapEvents = {}
+const dragged = []
 
-vi.mock('react-leaflet', () => ({
-  MapContainer: ({ children }) => <div data-testid="map">{children}</div>,
-  TileLayer: () => null,
-  Polygon: ({ positions }) => (
-    <div data-testid="polygon" data-points={positions.length} />
-  ),
-  Polyline: ({ positions }) => (
-    <div data-testid="polyline" data-points={positions.length} />
-  ),
-  Marker: ({ position, draggable }) => (
-    <div
-      data-testid="marker"
-      data-draggable={String(Boolean(draggable))}
-      data-lat={position[0]}
-      data-lng={position[1]}
-    />
-  ),
-  useMapEvents: (handlers) => {
-    Object.assign(mapEvents, handlers)
-    return null
+const point = (lat, lng) => ({ lat: () => lat, lng: () => lng })
+
+function fakeMaps() {
+  let container = null
+
+  const mark = (testid, props) => {
+    const node = document.createElement('div')
+    node.setAttribute('data-testid', testid)
+    for (const [key, value] of Object.entries(props)) {
+      node.setAttribute(`data-${key}`, String(value))
+    }
+    container?.appendChild(node)
+    return node
+  }
+
+  class Map {
+    constructor(el, options) {
+      container = el
+      el.setAttribute('data-testid', 'map')
+      this.options = options
+    }
+    addListener(event, handler) {
+      if (event === 'click') mapEvents.click = handler
+      // The real API hands back a handle; the component removes it on cleanup.
+      return { remove: () => { if (event === 'click') delete mapEvents.click } }
+    }
+    setCenter() {}
+  }
+
+  class Overlay {
+    constructor(testid, count, options) {
+      this.node = mark(testid, { points: count })
+      this.options = options
+    }
+    setMap(map) { if (!map) this.node.remove() }
+    addListener() {}
+  }
+
+  class Polygon extends Overlay {
+    constructor(o) { super('polygon', (o.paths || []).length, o) }
+  }
+
+  class Polyline extends Overlay {
+    constructor(o) { super('polyline', (o.path || []).length, o) }
+  }
+
+  class Marker {
+    constructor(o) {
+      this.options = o
+      this.node = mark('marker', {
+        draggable: Boolean(o.draggable),
+        lat: o.position.lat,
+        lng: o.position.lng,
+      })
+    }
+    setMap(map) { if (!map) this.node.remove() }
+    addListener(event, handler) {
+      if (event === 'dragend') dragged.push(handler)
+    }
+  }
+
+  return { Map, Marker, Polygon, Polyline, SymbolPath: { CIRCLE: 0 } }
+}
+
+vi.mock('../../core/googleMaps.js', () => ({
+  MAPS_KEY: 'test-key',
+  mapsConfigured: () => true,
+  loadGoogleMaps: async () => {
+    window.google = { maps: fakeMaps() }
+    return window.google.maps
   },
-}))
-
-vi.mock('leaflet', () => ({
-  default: { icon: () => ({}) },
 }))
 
 vi.mock('./api.js', () => ({
@@ -60,6 +112,11 @@ vi.mock('./api.js', () => ({
 /* Matches FieldEditor.test.jsx: something in the inspector's subtree asks. */
 vi.mock('../../core/auth.jsx', () => ({ useAuth: () => ({ can: {} }) }))
 
+/* The map loads asynchronously, as the real API does. Nothing it draws exists
+   until that promise has settled, so a test that looks at the overlays waits
+   for one turn first. */
+const mapDrawn = () => act(async () => {})
+
 const RING = [
   [77.3300, 28.5350],
   [77.4000, 28.5350],
@@ -70,6 +127,8 @@ const RING = [
 beforeEach(() => {
   vi.clearAllMocks()
   for (const key of Object.keys(mapEvents)) delete mapEvents[key]
+  dragged.length = 0
+  delete window.google
   Object.defineProperty(window.navigator, 'geolocation', {
     value: { getCurrentPosition: vi.fn() }, configurable: true, writable: true,
   })
@@ -103,6 +162,8 @@ describe('drawing a boundary', () => {
         {...props}
       />,
     )
+    await mapDrawn()
+
 
     return changes
   }
@@ -120,7 +181,7 @@ describe('drawing a boundary', () => {
     const changes = await draw({ value: [] })
 
     // What Leaflet hands a click handler is {lat, lng} — the other way round.
-    mapEvents.click({ latlng: { lat: 28.5350, lng: 77.3300 } })
+    mapEvents.click({ latLng: point(28.5350, 77.3300) })
 
     expect(changes[0]).toEqual([[77.33, 28.535]])
   })
@@ -133,6 +194,7 @@ describe('drawing a boundary', () => {
 
     const { default: PolygonMap } = await import('./components/PolygonMap.jsx')
     render(<PolygonMap value={RING.slice(0, 2)} onChange={() => {}} />)
+    await mapDrawn()
 
     expect(screen.getByTestId('polyline')).toBeTruthy()
   })
@@ -176,6 +238,7 @@ describe('a boundary nobody may redraw', () => {
   const drawReadOnly = async () => {
     const { default: PolygonMap } = await import('./components/PolygonMap.jsx')
     render(<PolygonMap value={RING} editable={false} onChange={() => {}} />)
+    await mapDrawn()
   }
 
   test('is still shown', async () => {
@@ -258,9 +321,9 @@ describe('answering a polygon question', () => {
     const answers = await fill({ coordinates: [], editable: true }, undefined)
 
     await openMap(user)
-    act(() => mapEvents.click({ latlng: { lat: 28.5350, lng: 77.3300 } }))
-    act(() => mapEvents.click({ latlng: { lat: 28.5350, lng: 77.4000 } }))
-    act(() => mapEvents.click({ latlng: { lat: 28.6200, lng: 77.4000 } }))
+    act(() => mapEvents.click({ latLng: point(28.5350, 77.3300) }))
+    act(() => mapEvents.click({ latLng: point(28.5350, 77.4000) }))
+    act(() => mapEvents.click({ latLng: point(28.6200, 77.4000) }))
     await user.click(screen.getByRole('button', { name: 'Save Area' }))
 
     expect(answers[0]).toEqual(['farm_boundary', [
@@ -290,6 +353,7 @@ describe('previewing a boundary, and drawing it full-screen', () => {
     render(
       <PolygonPicker value={value} onChange={(ring) => saved.push(ring)} />,
     )
+    await mapDrawn()
 
     return saved
   }
@@ -333,7 +397,7 @@ describe('previewing a boundary, and drawing it full-screen', () => {
     const saved = await pick(RING)
 
     await openEditor(user)
-    mapEvents.click({ latlng: { lat: 29.0, lng: 78.0 } })
+    mapEvents.click({ latLng: point(29.0, 78.0) })
     await user.click(screen.getByRole('button', { name: 'Cancel' }))
 
     expect(saved).toEqual([])
@@ -347,7 +411,7 @@ describe('previewing a boundary, and drawing it full-screen', () => {
     await openEditor(user)
     expect(screen.getByRole('button', { name: 'Save Area' }).disabled).toBe(true)
 
-    const click = (lat, lng) => act(() => mapEvents.click({ latlng: { lat, lng } }))
+    const click = (lat, lng) => act(() => mapEvents.click({ latLng: point(lat, lng) }))
 
     click(28.5350, 77.3300)
     click(28.5350, 77.4000)
@@ -365,9 +429,9 @@ describe('previewing a boundary, and drawing it full-screen', () => {
     const saved = await pick([])
 
     await openEditor(user)
-    mapEvents.click({ latlng: { lat: 28.5350, lng: 77.3300 } })
-    mapEvents.click({ latlng: { lat: 28.5350, lng: 77.4000 } })
-    mapEvents.click({ latlng: { lat: 28.6200, lng: 77.4000 } })
+    mapEvents.click({ latLng: point(28.5350, 77.3300) })
+    mapEvents.click({ latLng: point(28.5350, 77.4000) })
+    mapEvents.click({ latLng: point(28.6200, 77.4000) })
     await user.click(screen.getByRole('button', { name: 'Save Area' }))
 
     expect(saved[0]).toEqual([
@@ -409,6 +473,7 @@ describe('what the builder inspector renders for a polygon field', () => {
         onRemove={() => {}}
       />,
     )
+    await mapDrawn()
   }
 
   test('the inspector offers Select Map Area', async () => {
@@ -512,6 +577,7 @@ describe('a polygon question has to be answerable', () => {
     }
 
     render(<Holder />)
+    await mapDrawn()
     return answers
   }
 
@@ -577,13 +643,13 @@ describe('a polygon question has to be answerable', () => {
     await openMap(user)
     expect(heading().textContent).toMatch(/0 points/)
 
-    act(() => mapEvents.click({ latlng: { lat: 28.5350, lng: 77.3300 } }))
+    act(() => mapEvents.click({ latLng: point(28.5350, 77.3300) }))
     expect(heading().textContent).toMatch(/1 point$/)
 
-    act(() => mapEvents.click({ latlng: { lat: 28.5350, lng: 77.4000 } }))
+    act(() => mapEvents.click({ latLng: point(28.5350, 77.4000) }))
     expect(heading().textContent).toMatch(/2 points/)
 
-    act(() => mapEvents.click({ latlng: { lat: 28.6200, lng: 77.4000 } }))
+    act(() => mapEvents.click({ latLng: point(28.6200, 77.4000) }))
     await user.click(screen.getByRole('button', { name: 'Save Area' }))
 
     expect(answers[0][1]).toHaveLength(4)
@@ -611,6 +677,7 @@ describe('Open Map, on the form itself', () => {
     }
 
     render(<Holder />)
+    await mapDrawn()
     return answers
   }
 
@@ -641,9 +708,9 @@ describe('Open Map, on the form itself', () => {
     const answers = await fill()
 
     await openMap(user)
-    act(() => mapEvents.click({ latlng: { lat: 28.5350, lng: 77.3300 } }))
-    act(() => mapEvents.click({ latlng: { lat: 28.5350, lng: 77.4000 } }))
-    act(() => mapEvents.click({ latlng: { lat: 28.6200, lng: 77.4000 } }))
+    act(() => mapEvents.click({ latLng: point(28.5350, 77.3300) }))
+    act(() => mapEvents.click({ latLng: point(28.5350, 77.4000) }))
+    act(() => mapEvents.click({ latLng: point(28.6200, 77.4000) }))
     await user.click(within(sheet()).getByRole('button', { name: 'Save Area' }))
 
     expect(answers[0]).toEqual(['farm_boundary', [
@@ -657,7 +724,7 @@ describe('Open Map, on the form itself', () => {
     const answers = await fill({ coordinates: RING, editable: true })
 
     await openMap(user)
-    act(() => mapEvents.click({ latlng: { lat: 29.0, lng: 78.0 } }))
+    act(() => mapEvents.click({ latLng: point(29.0, 78.0) }))
     await user.click(within(sheet()).getByRole('button', { name: 'Cancel' }))
 
     expect(answers).toEqual([])
@@ -685,7 +752,7 @@ describe('Open Map, on the form itself', () => {
     const answers = await fill({ coordinates: RING, editable: true })
 
     await openMap(user)
-    act(() => mapEvents.click({ latlng: { lat: 29.0, lng: 78.0 } }))
+    act(() => mapEvents.click({ latLng: point(29.0, 78.0) }))
     await user.keyboard('{Escape}')
 
     expect(screen.queryByRole('dialog')).toBeNull()
@@ -713,5 +780,71 @@ describe('the map sheet sits above Leaflet', () => {
 
     expect(classes).toBeGreaterThan(1)
     expect(Number(rule[2].match(/z-index:\s*(\d+)/)[1])).toBeGreaterThan(800)
+  })
+})
+
+
+// --------------------------------------------------------------------------- //
+/**
+ * The map is built on the element, not on whatever a ref points at later.
+ *
+ * Reported from the browser:
+ *
+ *   TypeError: Failed to execute 'observe' on 'IntersectionObserver':
+ *              parameter 1 is not of type 'Element'
+ *
+ * The effect read `box.current` after awaiting the API and found null, because
+ * React had swapped the node underneath it. The element is state now, so the
+ * map is built when there is genuinely something to build it on.
+ */
+describe('building the map on a real element', () => {
+  const draw = async (props = {}) => {
+    const { default: PolygonMap } = await import('./components/PolygonMap.jsx')
+    render(<PolygonMap value={RING} onChange={() => {}} {...props} />)
+    await mapDrawn()
+  }
+
+  test('nothing is constructed before there is an element to construct it on', async () => {
+    await draw()
+
+    // The fake tags the element it was handed; if it had been given null or
+    // undefined there would be no tagged node at all.
+    const el = screen.getByTestId('map')
+    expect(el).toBeTruthy()
+    expect(el.nodeType).toBe(1)          // an Element, which is the whole point
+  })
+
+  test('one map per element, however many times the effect runs', async () => {
+    await draw()
+    // React runs effects twice in StrictMode; a second map on the same node
+    // would replace the first and orphan every overlay already on it.
+    expect(screen.getAllByTestId('map')).toHaveLength(1)
+  })
+
+  test('the overlays reach the map rather than being drawn into nothing', async () => {
+    await draw()
+
+    // Four points: a polygon and four markers, all on the one map.
+    expect(screen.getByTestId('polygon').dataset.points).toBe('4')
+    expect(screen.getAllByTestId('marker')).toHaveLength(4)
+    expect(screen.getByTestId('map').contains(screen.getByTestId('polygon'))).toBe(true)
+  })
+
+  test('a map that cannot be loaded says so, and keeps the point list', async () => {
+    vi.resetModules()
+    vi.doMock('../../core/googleMaps.js', () => ({
+      MAPS_KEY: '',
+      mapsConfigured: () => false,
+      loadGoogleMaps: async () => { throw new Error('no key') },
+    }))
+
+    const { default: PolygonMap } = await import('./components/PolygonMap.jsx')
+    render(<PolygonMap value={RING} onChange={() => {}} />)
+    await mapDrawn()
+
+    expect(screen.getByText(/cannot be shown/i)).toBeTruthy()
+    // The boundary is unaffected — it is data, not a map.
+    expect(screen.getByText('77.33, 28.535')).toBeTruthy()
+    vi.doUnmock('../../core/googleMaps.js')
   })
 })

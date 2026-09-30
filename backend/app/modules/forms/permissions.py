@@ -40,9 +40,6 @@ RECORDS_CREATE = "records.create"
 LIBRARY_VIEW = "library.view"
 LIBRARY_MANAGE = "library.manage"
 
-# --- data dictionary --------------------------------------------------------
-DICTIONARY_VIEW = "dictionary.view"
-DICTIONARY_MANAGE = "dictionary.manage"
 
 CATALOGUE = [
     Permission(RECORDS_VIEW, "See records",
@@ -84,17 +81,12 @@ CATALOGUE = [
     Permission(LIBRARY_MANAGE, "Manage standard forms",
                "Offer a form as a standard, or withdraw one", "Standard forms"),
 
-    Permission(DICTIONARY_VIEW, "See the data dictionary",
-               "Read the agreed type and limits for each known field", "Data dictionary"),
-    Permission(DICTIONARY_MANAGE, "Manage the data dictionary",
-               "Add, change and remove entries everyone's forms are built from",
-               "Data dictionary"),
 ]
 
 register(
     permissions=CATALOGUE,
     # Most-used first; core appends Administration after every module's groups.
-    groups=["Records", "Forms", "Responses", "Standard forms", "Data dictionary"],
+    groups=["Records", "Forms", "Responses", "Standard forms"],
     # What the built-in roles get when an installation is first seeded. Narrowing
     # a role afterwards sticks — roles are seeded once, never re-seeded.
     grants={
@@ -105,7 +97,6 @@ register(
             MCDC_MANAGE,
             RESPONSES_VIEW, RESPONSES_EXPORT,
             LIBRARY_VIEW, LIBRARY_MANAGE,
-            DICTIONARY_VIEW, DICTIONARY_MANAGE,
         ],
         "standard": [RECORDS_VIEW, RECORDS_CREATE],
     },
@@ -116,8 +107,6 @@ register(
         # Whether the System context is offered at all. Held on the account, so
         # belonging to a project can never turn it on.
         "use_system_forms": FORMS_SYSTEM_VIEW,
-        "use_dictionary": DICTIONARY_VIEW,
-        "manage_dictionary": DICTIONARY_MANAGE,
         "use_library": LIBRARY_VIEW,
         "see_responses": RESPONSES_VIEW,
         "export_forms": FORMS_EXPORT,

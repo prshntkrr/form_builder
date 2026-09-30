@@ -308,10 +308,16 @@ def _normalize_field(raw: Any, index: int, taken: set) -> Optional[Dict[str, Any
     ftype = normalize_type(raw.get("type") or raw.get("field_type") or raw.get("input_type"))
     spec = get_type(ftype)
     name = safe_field_name(str(name_source), taken, fallback=f"field_{index + 1}")
+    # What the incoming definition called this question, when that is not what
+    # it ends up called. Everything else that refers to a question by name —
+    # the translations, above all — has to be able to follow it.
+    was = str(name_source).strip()
     label = label or name.replace("_", " ").title()
 
     options = _normalize_options(raw.get("options") or raw.get("choices") or raw.get("values"))
     options_from = _normalize_options_from(raw.get("options_from"))
+
+    renamed_here = was if was and was != name else None
 
     if spec.has_options and not options and not options_from:
         # A dropdown with no choices is unusable — degrade to free text rather
@@ -331,6 +337,7 @@ def _normalize_field(raw: Any, index: int, taken: set) -> Optional[Dict[str, Any
             default = None
 
     field: Dict[str, Any] = {
+        "_was": renamed_here,
         "name": name,
         "label": _cut(label, MAX_LABEL),
         "type": ftype,
@@ -662,6 +669,45 @@ def _normalize_data_standard(raw: Any) -> Optional[Dict[str, str]]:
     }
 
 
+def _translations_following_renames(raw: Any,
+                                    fields: List[Dict[str, Any]]) -> Any:
+    """The translation block, keyed by what each question is *now* called.
+
+    A question does not always keep the key it arrived with: a reserved one is
+    moved aside (`created_by` is an envelope column, so it becomes
+    `created_by_value`), a duplicate gets `_2`, and anything SQL-hostile is
+    slugified. The translations are keyed by name, so without this they went on
+    pointing at the old key and simply stopped being found — an imported form
+    showed "Creado por" in English however carefully the workbook translated it.
+
+    Nothing is invented and nothing is dropped: an entry whose question kept its
+    name is untouched, and one naming a question this form does not have is left
+    where it is for `normalize_translations` to judge.
+    """
+    if not isinstance(raw, dict):
+        return raw
+
+    # Only where nothing is still using the old key. Two questions both asking
+    # to be called `nombre` leave the first one holding it and the second as
+    # `nombre_2`; following that rename would take the first one's words away
+    # and give them to a question that was never translated.
+    kept = {f["name"] for f in fields}
+    moved = {f["_was"]: f["name"]
+             for f in fields if f.get("_was") and f["_was"] not in kept}
+    if not moved:
+        return raw
+
+    following = {}
+    for language, block in raw.items():
+        if not isinstance(block, dict) or not isinstance(block.get("fields"), dict):
+            following[language] = block
+            continue
+        words = {moved.get(name, name): value for name, value in block["fields"].items()}
+        following[language] = {**block, "fields": words}
+
+    return following
+
+
 def _normalize_sections(raw: Any, fields: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     sections: List[Dict[str, Any]] = []
     seen = set()
@@ -724,7 +770,10 @@ def normalize_form(raw: Any, fallback_title: str = "Untitled Form") -> Dict[str,
     # definition can never carry a rule the renderer would choke on; a form with
     # none — every form built before this existed — is unaffected.
     from app.modules.forms import conditions
-    rules = conditions.normalize_rules(raw.get("rules"))
+    # The fields and sections as this form actually has them, so a rule about a
+    # question that has been deleted is dropped rather than carried to
+    # `config_validation`, which refuses it — and refuses the whole form with it.
+    rules = conditions.normalize_rules(raw.get("rules"), fields, sections)
 
     # The words this form can be shown in. The field names never change with the
     # language, so a translated form still writes to the same columns.
@@ -733,7 +782,13 @@ def normalize_form(raw: Any, fallback_title: str = "Untitled Form") -> Dict[str,
     declared = str(raw.get("default_language") or "").strip().lower()
     default_language = declared if declared in SUPPORTED_LANGUAGES else DEFAULT_LANGUAGE
 
-    translated_words = normalize_translations(raw.get("translations"), default_language)
+    translated_words = normalize_translations(
+        _translations_following_renames(raw.get("translations"), fields),
+        default_language,
+    )
+    # A working note for the remap above, never part of the definition.
+    for one in fields:
+        one.pop("_was", None)
     languages = _normalize_languages(
         raw.get("languages"), translated_words, default_language
     )
