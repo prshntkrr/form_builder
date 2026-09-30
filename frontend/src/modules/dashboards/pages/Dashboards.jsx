@@ -86,6 +86,14 @@ const WIDGET_NOUNS = { table: "Table", kpi: "Card" };
 
 /* The editor's preview borrows an id no real widget has, so that nothing
    keyed by widget id can confuse the two. */
+/**
+ * How many fields beyond the coordinates a map's popup may be given.
+ *
+ * Not a technical limit — an info window is a small box beside a pin, and a
+ * dozen rows in it covers the map it is meant to annotate.
+ */
+const MAX_MAP_DETAIL_FIELDS = 6;
+
 const PREVIEW_WIDGET_ID = "__preview__";
 
 /* Long enough that running down a dropdown with the arrow keys asks once,
@@ -327,6 +335,7 @@ export default function Dashboards() {
     bubbleYAggregation: "SUM",
     bubbleSize: "",
     bubbleSizeAggregation: "SUM",
+    mapDetailFields: [],
     histogramField: "",
     histogramBins: 10,
     scatterX: "",
@@ -2431,7 +2440,8 @@ export default function Dashboards() {
       bubbleY: firstNumericField,
       bubbleYAggregation: "SUM",
       bubbleSize: firstNumericField,
-      bubbleSizeAggregation: "SUM"
+      bubbleSizeAggregation: "SUM",
+      mapDetailFields: []
     };
   };
 
@@ -2535,6 +2545,14 @@ export default function Dashboards() {
       bubbleYAggregation: bubbleYAgg,
       bubbleSize: bubbleSizeField,
       bubbleSizeAggregation: bubbleSizeAgg,
+      /* A map's popup fields are the dimensions past the two coordinates, so
+         a map saved with some opens with them still ticked. */
+      mapDetailFields: widget.type === "map"
+        ? (widget.data_binding?.dimensions || [])
+            .slice(2)
+            .map((d) => d?.field)
+            .filter(Boolean)
+        : [],
       histogramField: widget.histogram?.field || "",
       histogramBins: widget.histogram?.bins || 10,
       scatterX: widget.scatter?.x || "",
@@ -3473,8 +3491,16 @@ export default function Dashboards() {
         id: PREVIEW_WIDGET_ID,
         sourceId: dashboard?.data_sources?.[0]?.id,
         fields,
+        /* The filters of the widget being edited. Without them the preview
+           answers a different question from the widget on the grid — a map
+           of one state previewed as the whole country. A new widget has
+           none, so adding is unaffected. */
+        filters: editingWidgetId
+          ? dashboard?.widgets?.find((w) => w.id === editingWidgetId)
+              ?.data_binding?.filters || []
+          : [],
       }),
-    [widgetForm, dashboard, fields],
+    [widgetForm, dashboard, fields, editingWidgetId],
   );
 
   /* A preview does not need a title to be worth drawing — it is usually the
@@ -5179,6 +5205,7 @@ export default function Dashboards() {
               <>
                 <label
                   className="dash__edit-label"
+                  htmlFor="widget-map-lat"
                   style={{
                     marginTop: 16,
                   }}
@@ -5187,6 +5214,7 @@ export default function Dashboards() {
                 </label>
 
                 <select
+                  id="widget-map-lat"
                   className="control"
                   value={widgetForm.dimension}
                   onChange={(e) =>
@@ -5207,6 +5235,7 @@ export default function Dashboards() {
 
                 <label
                   className="dash__edit-label"
+                  htmlFor="widget-map-lng"
                   style={{
                     marginTop: 16,
                   }}
@@ -5215,6 +5244,7 @@ export default function Dashboards() {
                 </label>
 
                 <select
+                  id="widget-map-lng"
                   className="control"
                   value={widgetForm.measure}
                   onChange={(e) => {
@@ -5241,6 +5271,131 @@ export default function Dashboards() {
                     </option>
                   ))}
                 </select>
+
+                <label
+                  className="dash__edit-label"
+                  style={{
+                    marginTop: 16,
+                  }}
+                >
+                  Show these fields when a marker is clicked
+                </label>
+
+                <p className="tiny muted" style={{ marginBottom: 8 }}>
+                  Coordinates are always shown. Choose up to{" "}
+                  {MAX_MAP_DETAIL_FIELDS} more, such as the farmer's name.
+                </p>
+
+                <div
+                  className="dash__map-fields"
+                  style={{
+                    maxHeight: 200,
+                    overflowY: "auto",
+                    border: "1px solid var(--line, #e3e6e3)",
+                    borderRadius: 10,
+                    padding: 4,
+                  }}
+                >
+                  {fields
+                    ?.filter(
+                      (field) =>
+                        field.name !== widgetForm.dimension &&
+                        field.name !== widgetForm.measure,
+                    )
+                    .map((field) => {
+                      const chosen = (
+                        widgetForm.mapDetailFields || []
+                      ).includes(field.name);
+
+                      const full =
+                        (widgetForm.mapDetailFields || []).length >=
+                        MAX_MAP_DETAIL_FIELDS;
+
+                      const label = fieldLabel(field);
+
+                      /* Laid out inline rather than by class. A row is a
+                         checkbox beside two lines of text, and that is the
+                         whole of it — but it sits inside the modal, where a
+                         borrowed class already failed to reach it once. The
+                         rest of this editor styles itself the same way. */
+                      return (
+                        <label
+                          key={field.name}
+                          className="dash__map-field"
+                          title={label}
+                          style={{
+                            display: "flex",
+                            alignItems: "flex-start",
+                            gap: 10,
+                            padding: "7px 8px",
+                            borderRadius: 7,
+                            cursor: "pointer",
+                            textAlign: "left",
+                            color: "var(--ink, #1a1c1a)",
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={chosen}
+                            disabled={!chosen && full}
+                            style={{ flex: "none", margin: "3px 0 0" }}
+                            onChange={() =>
+                              setWidgetForm((current) => {
+                                const held = current.mapDetailFields || [];
+
+                                return {
+                                  ...current,
+                                  mapDetailFields: held.includes(field.name)
+                                    ? held.filter((f) => f !== field.name)
+                                    : [...held, field.name],
+                                };
+                              })
+                            }
+                          />
+
+                          {/* A form's field is labelled with its question,
+                              which is a whole sentence. It is clamped, and
+                              the column name goes under it, so every row
+                              carries something short enough to read. */}
+                          <span
+                            style={{
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: 1,
+                              minWidth: 0,
+                            }}
+                          >
+                            <span
+                              style={{
+                                fontSize: 13,
+                                lineHeight: 1.35,
+                                display: "-webkit-box",
+                                WebkitLineClamp: 2,
+                                WebkitBoxOrient: "vertical",
+                                overflow: "hidden",
+                                overflowWrap: "anywhere",
+                              }}
+                            >
+                              {label}
+                            </span>
+
+                            {label === field.name ? null : (
+                              <span
+                                style={{
+                                  fontSize: 11,
+                                  lineHeight: 1.3,
+                                  color: "var(--ink-2, #5f655f)",
+                                  overflowWrap: "anywhere",
+                                }}
+                              >
+                                {field.name}
+                              </span>
+                            )}
+                          </span>
+                        </label>
+                      );
+                    })}
+                </div>
               </>
             ) : (
               widgetForm.type === "table" ? (

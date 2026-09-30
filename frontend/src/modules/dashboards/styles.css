@@ -290,7 +290,7 @@
 }
 
 .modal input {
-  width: 100%;
+  
   box-sizing: border-box;
 
   margin-top: 16px;
@@ -852,13 +852,6 @@
   width: 60px;
   padding: 2px 4px;
   cursor: pointer;
-}
-
-/* A coloured map pin is an SVG in a divIcon, which Leaflet would otherwise
-   give a white box and a border. */
-.dash__map-pin {
-  background: none;
-  border: 0;
 }
 
 /* --- density -------------------------------------------------------------
@@ -1481,3 +1474,9 @@ body.dash-exporting .dash__filters .btn {
 body.dash-exporting .dash__widget-card--chosen {
   outline: none !important;
 }
+
+/* --- the map's popup fields, in the graph editor -------------------------
+   The rows lay themselves out inline, in the editor's own idiom: they sit
+   inside the modal, where a borrowed class failed to reach them once
+   already. Only the hover is here, which costs nothing if it goes missing. */
+.dash__map-field:hover { background: var(--accent-wash); }
