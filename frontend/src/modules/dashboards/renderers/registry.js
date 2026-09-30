@@ -17,7 +17,7 @@ import HighchartDoughnutRenderer from "./HighchartDoughnutRenderer.jsx";
 import FallbackRenderer from "./FallbackRenderer.jsx";
 import KpiRenderer from "./KpiRenderer.jsx";
 import TableRenderer from "./TableRenderer.jsx";
-import LeafletMapRenderer from "./LeafletMapRenderer";
+import GoogleMapRenderer from "./GoogleMapRenderer.jsx";
 import HighchartBubbleRenderer from "./HighchartBubbleRenderer.jsx";
 import HighchartHistogramRenderer from "./HighchartHistogramRenderer.jsx";
 import HighchartScatterRenderer from "./HighchartScatterRenderer.jsx";
@@ -35,7 +35,7 @@ const RENDERERS = {
   line: AmChartLineRenderer,
   pie: HighchartPieRenderer,
   doughnut: HighchartDoughnutRenderer,
-  map: LeafletMapRenderer,
+  map: GoogleMapRenderer,
   bubble: HighchartBubbleRenderer,
   histogram: HighchartHistogramRenderer,
   scatter: HighchartScatterRenderer,

@@ -236,3 +236,133 @@ describe('editing one', () => {
     expect(updatedWidget(existing, form(), { fields: FIELDS }).created_by_ai).toBe(true)
   })
 })
+
+describe('a map, and what its popup shows', () => {
+  /* The two coordinates come first by this widget's long-standing
+     convention, and the popup's fields ride after them — as dimensions,
+     because that is how a column is asked for without aggregating it, and
+     because a field the server does not select cannot be shown. */
+
+  const mapForm = (over = {}) => form({
+    type: 'map',
+    dimension: 'latitude',
+    measure: 'longitude',
+    ...over,
+  })
+
+  test('with none chosen, the binding is the two coordinates it always was', () => {
+    expect(bindingFor(mapForm(), FIELDS).dimensions)
+      .toEqual([{ field: 'latitude' }, { field: 'longitude' }])
+  })
+
+  test('a chosen field is asked for, after the coordinates', () => {
+    const binding = bindingFor(
+      mapForm({ mapDetailFields: ['farmer_name'] }), FIELDS,
+    )
+
+    expect(binding.dimensions).toEqual([
+      { field: 'latitude' },
+      { field: 'longitude' },
+      { field: 'farmer_name' },
+    ])
+  })
+
+  test('several, in the order they were chosen', () => {
+    const binding = bindingFor(
+      mapForm({ mapDetailFields: ['village', 'farmer_name'] }), FIELDS,
+    )
+
+    expect(binding.dimensions.slice(2))
+      .toEqual([{ field: 'village' }, { field: 'farmer_name' }])
+  })
+
+  test('a coordinate is not asked for twice', () => {
+    // The popup names them itself, and a repeat would show them as a field.
+    const binding = bindingFor(
+      mapForm({ mapDetailFields: ['latitude', 'longitude', 'village'] }),
+      FIELDS,
+    )
+
+    expect(binding.dimensions)
+      .toEqual([
+        { field: 'latitude' },
+        { field: 'longitude' },
+        { field: 'village' },
+      ])
+  })
+
+  test('and a map still asks for no measures', () => {
+    const binding = bindingFor(
+      mapForm({ mapDetailFields: ['farmer_name'] }), FIELDS,
+    )
+
+    expect(binding.measures).toEqual([])
+  })
+
+  test('the widget a map draft becomes carries them', () => {
+    const widget = draftWidget(
+      mapForm({ mapDetailFields: ['farmer_name'] }),
+      { id: 'w1', sourceId: 's1', fields: FIELDS },
+    )
+
+    expect(widget.data_binding.dimensions.map((d) => d.field))
+      .toEqual(['latitude', 'longitude', 'farmer_name'])
+  })
+})
+
+describe('the filters a widget already had', () => {
+  /* The editor has no filter UI: filters come from the AI that drafted the
+     widget. So the form cannot describe them, and rebuilding a widget from
+     the form used to return an empty list and drop them — a map titled
+     "Plot Locations in Morelos" quietly became a map of the whole country
+     the moment anybody opened it and pressed Apply. */
+
+  const FILTER = [{ field: 'farmer_state', operator: 'EQUALS', value: 'MORELOS' }]
+
+  test('a map keeps them', () => {
+    expect(bindingFor(form({ type: 'map', dimension: 'lat', measure: 'lng' }),
+      FIELDS, FILTER).filters).toEqual(FILTER)
+  })
+
+  test('and so does every other kind', () => {
+    for (const type of ['bar', 'line', 'pie', 'kpi', 'bubble', 'histogram', 'scatter']) {
+      expect(bindingFor(form({ type }), FIELDS, FILTER).filters).toEqual(FILTER)
+    }
+  })
+
+  test('a table keeps them too', () => {
+    const binding = bindingFor(
+      form({ type: 'table', tableColumns: [{ field: 'district', aggregation: 'NONE' }] }),
+      FIELDS,
+      FILTER,
+    )
+
+    expect(binding.filters).toEqual(FILTER)
+  })
+
+  test('with none given, the binding still says so', () => {
+    expect(bindingFor(form(), FIELDS).filters).toEqual([])
+  })
+
+  test('editing a widget carries its own filters over', () => {
+    const existing = {
+      id: 'w1',
+      type: 'map',
+      title: 'Plot Locations in Morelos',
+      data_source_id: 's1',
+      data_binding: {
+        dimensions: [{ field: 'latitude' }, { field: 'longitude' }],
+        measures: [],
+        filters: FILTER,
+      },
+    }
+
+    const after = updatedWidget(
+      existing,
+      form({ type: 'map', dimension: 'latitude', measure: 'longitude' }),
+      { fields: FIELDS },
+    )
+
+    expect(after.data_binding.filters).toEqual(FILTER)
+  })
+})

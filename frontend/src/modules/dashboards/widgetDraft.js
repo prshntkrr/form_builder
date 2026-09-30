@@ -42,7 +42,16 @@ export const MANAGED_KEYS = [
 
 /* ── what the widget asks the server for ──────────────────────────────── */
 
-export function bindingFor(form, fields = []) {
+/**
+ * What the widget asks the server for.
+ *
+ * `filters` is what the widget already had. The editor has no filter UI —
+ * they are set by the AI that drafted the widget — so the form cannot
+ * describe them, and every branch below used to return an empty list.
+ * Editing anything then dropped them: a map of one state previewed as the
+ * whole country, and Apply Changes saved it that way.
+ */
+export function bindingFor(form, fields = [], filters = []) {
   if (form.type === "map") {
     const dimensions = [];
 
@@ -54,7 +63,21 @@ export function bindingFor(form, fields = []) {
       dimensions.push({ field: form.measure });
     }
 
-    return { dimensions, measures: [], filters: [] };
+    /* Whatever the popup was told to show, after the two coordinates. They
+       are dimensions because that is how a column is asked for without
+       aggregating it, and because the renderer reads them back by position:
+       0 is latitude, 1 is longitude, the rest are the popup's. A coordinate
+       is not repeated — it is already in the popup by name.
+
+       Grouping by them is harmless: a latitude and longitude together are
+       near enough unique per response that the row count does not change. */
+    for (const field of form.mapDetailFields || []) {
+      if (field && field !== form.dimension && field !== form.measure) {
+        dimensions.push({ field });
+      }
+    }
+
+    return { dimensions, measures: [], filters };
   }
 
   if (form.type === "bubble") {
@@ -80,7 +103,7 @@ export function bindingFor(form, fields = []) {
       });
     }
 
-    return { dimensions, measures, filters: [] };
+    return { dimensions, measures, filters };
   }
 
   if (form.type === "histogram") {
@@ -89,7 +112,7 @@ export function bindingFor(form, fields = []) {
       measures: form.histogramField
         ? [{ field: form.histogramField, aggregation: "NONE" }]
         : [],
-      filters: [],
+      filters,
     };
   }
 
@@ -104,14 +127,14 @@ export function bindingFor(form, fields = []) {
       measures.push({ field: form.scatterY, aggregation: "NONE" });
     }
 
-    return { dimensions: [], measures, filters: [] };
+    return { dimensions: [], measures, filters };
   }
 
   /* A table is a list of columns, and the binding follows from it. Every
      other type still builds its binding from one dimension and one
      measure, exactly as before. */
   if (form.type === "table" && (form.tableColumns || []).length) {
-    return bindingForColumns(form.tableColumns, []);
+    return bindingForColumns(form.tableColumns, filters);
   }
 
   /* A line chart is one group and any number of lines. One line is the
@@ -121,7 +144,7 @@ export function bindingFor(form, fields = []) {
     return {
       dimensions: form.dimension ? [{ field: form.dimension }] : [],
       measures: measuresFor(seriesFromForm(form), fields),
-      filters: [],
+      filters,
     };
   }
 
@@ -153,7 +176,7 @@ export function bindingFor(form, fields = []) {
       ]
     : [];
 
-  return { dimensions, measures, filters: [] };
+  return { dimensions, measures, filters };
 }
 
 /* ── how it should look ───────────────────────────────────────────────── */
@@ -313,13 +336,16 @@ export function widgetProblem(form) {
  * form: adding gives it a new id and a place at the bottom, editing keeps
  * the ones the widget already had, and a preview borrows a reserved id.
  */
-export function draftWidget(form, { id, sourceId, layout, fields = [] } = {}) {
+export function draftWidget(
+  form,
+  { id, sourceId, layout, fields = [], filters = [] } = {},
+) {
   const widget = {
     id,
     type: form.type,
     title: form.title.trim(),
     data_source_id: sourceId,
-    data_binding: bindingFor(form, fields),
+    data_binding: bindingFor(form, fields, filters),
   };
 
   if (layout) {
@@ -380,6 +406,8 @@ export function updatedWidget(widget, form, { fields = [] } = {}) {
     sourceId: widget.data_source_id,
     layout: widget.layout,
     fields,
+    // Its own filters, which the form never knew about and must not lose.
+    filters: widget.data_binding?.filters || [],
   });
 
   const merged = { ...widget, ...draft };
