@@ -42,14 +42,15 @@ class StorageUnavailable(RuntimeError):
 # each. Deliberately a short list: an installation that needs another type adds
 # it here, and anything not named is refused.
 ALLOWED_TYPES: Dict[str, List[str]] = {
-    "image": ["image/jpeg", "image/png", "image/webp", "image/heic"],
-    "audio": ["audio/mpeg", "audio/wav", "audio/ogg", "audio/webm", "audio/mp4"],
+    "image": ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/heic"],
+    "audio": ["audio/mpeg", "audio/wav", "audio/ogg", "audio/webm", "audio/mp4",
+              "audio/aac", "audio/amr", "audio/m4a", "audio/x-m4a", "audio/opus", "audio/3gpp"],
     "file": ["application/pdf",
              "application/msword",
              "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
              "application/vnd.ms-excel",
              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-             "text/csv", "text/plain"],
+             "text/csv", "text/plain", "application/octet-stream", "application/zip"],
 }
 
 MEDIA_TYPES = tuple(ALLOWED_TYPES)
@@ -303,3 +304,41 @@ def for_submission(form_id: str, survey_id: str) -> List[Dict[str, Any]]:
             (form_id, survey_id),
         )
         return [dict(row) for row in cur.fetchall()]
+
+
+def store_media_bytes(
+    project_id: Optional[str],
+    form_id: str,
+    survey_id: str,
+    field_name: str,
+    media_type: str,
+    filename: str,
+    content_type: str,
+    data: bytes,
+    created_by: str = "",
+) -> Dict[str, Any]:
+    """Upload media bytes directly to S3 and record in form_media.
+
+    For channels like WhatsApp where the backend receives the media URL or stream
+    rather than a browser uploading via presigned URL. Returns the saved form_media
+    row dict (including media_id).
+    """
+    row_info = start_upload(
+        project_id=project_id,
+        form_id=form_id,
+        survey_id=survey_id,
+        field_name=field_name,
+        media_type=media_type,
+        filename=filename,
+        content_type=content_type,
+        created_by=created_by,
+    )
+    s3 = _client()
+    s3.put_object(
+        Bucket=settings.aws_s3_bucket,
+        Key=row_info["s3_key"],
+        Body=data,
+        ContentType=content_type or "application/octet-stream",
+    )
+    return finish_upload(row_info["media_id"], file_size=len(data))
+

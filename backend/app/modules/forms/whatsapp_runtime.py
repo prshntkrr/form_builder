@@ -32,7 +32,12 @@ and the final submission read the definition the conversation began with
 never reinterprets a conversation halfway through.
 """
 import logging
+import os
+import urllib.parse
+import uuid
 from typing import Any, Dict, List, Optional, Tuple
+
+import httpx
 
 from app.modules.forms.channel_capabilities import (
     BUTTONS, LIST, NUMBERED, TEXT_REPLY,
@@ -189,8 +194,13 @@ def _choices(field: Dict[str, Any],
     bare prompt and every reply was refused as "not an available option" — the
     choices existed, and the conversation had simply never asked for them.
     """
-    if resolve_type(field.get("type") or "text") == "boolean":
+    ftype = resolve_type(field.get("type") or "text")
+    if ftype == "boolean":
         return [("Yes", "yes"), ("No", "no")]
+
+    # Only choice-based fields offer selectable choices
+    if ftype not in ("select", "radio", "multiselect"):
+        return []
 
     source = field.get("options_from") or {}
     if source:
@@ -313,7 +323,7 @@ def render(field: Dict[str, Any], config: Dict[str, Any],
         lines.append("\n_Reply SKIP to leave this blank._")
 
     return say("\n".join(lines), interaction, choices if choices else None,
-               title=field.get("label") or name)
+               title="Select")
 
 
 # --------------------------------------------------------------------------- #
@@ -383,7 +393,8 @@ def _timeout(project_id: Optional[str]) -> int:
 # --------------------------------------------------------------------------- #
 # the conversation
 # --------------------------------------------------------------------------- #
-def reply(identity: str, receiver: str, text: str) -> Optional[str]:
+def reply(identity: str, receiver: str, text: str,
+          media_url: str = "", media_type: str = "") -> Optional[str]:
     """What to send back, or None to say nothing.
 
     The one entry point. Everything above is called from here and nothing else
@@ -413,7 +424,7 @@ def reply(identity: str, receiver: str, text: str) -> Optional[str]:
         return say(UNAVAILABLE)
 
     if session:
-        return _continue(session, caller, text)
+        return _continue(session, caller, text, media_url=media_url, media_type=media_type)
 
     # A reply that arrives just after the last one completed a survey: a
     # provider retrying the delivery it never heard back from, not a new answer.
@@ -460,7 +471,7 @@ def _begin(identity: str, receiver: str, caller: Dict[str, Any],
     return _welcome_and_consent(session, form_json, resolved["form_title"])
 
 
-def _menu(caller: Dict[str, Any], receiver: str) -> str:
+def _menu(caller: Dict[str, Any], receiver: str) -> Dict[str, Any]:
     """What this account can start, when the keyword meant nothing.
 
     Built from `routing.offered`, which runs the same resolution and the same
@@ -476,36 +487,39 @@ def _menu(caller: Dict[str, Any], receiver: str) -> str:
     if not offers:
         return say(UNAVAILABLE)
 
-    lines = ["*Available surveys*", ""]
-    lines += [f"{i}. {o['form_title']} — send *{o['route_key']}*"
-              for i, o in enumerate(offers, 1)]
-    lines += ["", "_Send the keyword for the one you want._"]
-    return say("\n".join(lines))
+    # lines = ["*Available surveys*", ""]
+    # lines += [f"{i}. {o['form_title']} — send *{o['route_key']}*"
+    #           for i, o in enumerate(offers, 1)]
+    # lines += ["", "_Tap an option below or send the keyword._"]
+
+    # if len(offers) <= caps.MAX_BUTTONS:
+    #     choices = [(str(o["form_title"])[:20], o["route_key"]) for o in offers]
+    #     return say("\n".join(lines), interaction=caps.BUTTONS, choices=choices, title="Available surveys")
+    # elif len(offers) <= caps.MAX_LIST_ROWS:
+    #     choices = [(str(o["form_title"])[:24], o["route_key"]) for o in offers]
+    #     return say("\n".join(lines), interaction=caps.LIST, choices=choices, title="Available surveys")
+
+    # return say("\n".join(lines))
+    return say(
+    "*Welcome to E-Agrology!*\n\n"
+    "To get started, simply type the *keyword* of the form you want to fill out.\n\n"
+    "We’ll guide you through the form step by step.")
 
 
 def _welcome_and_consent(session: Dict[str, Any], form_json: Dict[str, Any],
-                         title: str) -> str:
-    """The first message: the welcome, then the consent question.
+                         title: str) -> Dict[str, Any]:
+    """The first message: the welcome prompt with Yes/No consent buttons.
 
-    Sent together as one message rather than two, because two messages is two
-    deliveries and the second can arrive first. The keyword never goes straight
-    to a question — that is the point of the consent step.
-
-    A form that configures no consent question is not asking for consent: the
-    welcome is sent and the first question comes with it.
+    Matches the Form Builder preview which presents the welcome prompt followed by
+    native Yes / No buttons. When the user taps Yes, the survey advances to Question 1.
     """
     config = _whatsapp_config(form_json)
     welcome = _tidy(config.get("welcome_message")) or DEFAULT_WELCOME.format(title=title)
     consent = _tidy(config.get("consent_message"))
 
-    if not consent:
-        return _start_questions(session, form_json, preamble=welcome)
-
-    # Two buttons, for the same reason a two-choice question gets them: tapping
-    # Yes is one action, and typing it is three. The text still says what to
-    # reply, so the message works if the buttons do not arrive.
-    return say(f"{welcome}\n\n{consent}\n\n_Tap a button, or reply YES or NO._",
-               BUTTONS, CONSENT_CHOICES)
+    body = f"{welcome}\n\n{consent}" if consent else welcome
+    return say(f"{body}\n\n_Tap a button, or reply YES or NO._",
+               BUTTONS, CONSENT_CHOICES, title="Consent")
 
 
 def _start_questions(session: Dict[str, Any], form_json: Dict[str, Any],
@@ -519,9 +533,21 @@ def _start_questions(session: Dict[str, Any], form_json: Dict[str, Any],
         # required is unaskable, so this is an empty or wholly optional form.
         return _submit(session, form_json)
 
+    # Ensure survey_id is allocated for media tracking
+    survey_id = session.get("survey_id")
+    if not survey_id:
+        from app.modules.forms import form_service
+        try:
+            form = form_service.get_form(session["form_id"])
+            survey_id = submission_service.start(
+                form, created_by=f"whatsapp:{session['identity']}")
+        except Exception as exc:
+            logger.warning("Could not pre-allocate survey_id: %s", exc)
+
     updated = sessions.touch(
         session["session_id"], _timeout(session.get("project_id")),
-        state=sessions.QUESTIONS, consent=True, current_field=field_name(field))
+        state=sessions.QUESTIONS, consent=True, current_field=field_name(field),
+        survey_id=survey_id)
     if not updated:
         return say(UNAVAILABLE)
 
@@ -533,7 +559,8 @@ def _start_questions(session: Dict[str, Any], form_json: Dict[str, Any],
     return question
 
 
-def _continue(session: Dict[str, Any], caller: Dict[str, Any], text: str) -> str:
+def _continue(session: Dict[str, Any], caller: Dict[str, Any], text: str,
+              media_url: str = "", media_type: str = "") -> str:
     """The next reply of a conversation already under way."""
     form_json = _definition(session)
     if form_json is None:
@@ -542,7 +569,7 @@ def _continue(session: Dict[str, Any], caller: Dict[str, Any], text: str) -> str
 
     if session["state"] == sessions.CONSENT:
         return _consent_reply(session, form_json, text)
-    return _answer(session, form_json, text)
+    return _answer(session, form_json, text, media_url=media_url, media_type=media_type)
 
 
 def _consent_reply(session: Dict[str, Any], form_json: Dict[str, Any],
@@ -563,7 +590,91 @@ def _consent_reply(session: Dict[str, Any], form_json: Dict[str, Any],
     return _start_questions(session, form_json)
 
 
-def _answer(session: Dict[str, Any], form_json: Dict[str, Any], text: str) -> str:
+def _process_media_upload(session: Dict[str, Any], form_json: Dict[str, Any],
+                          field: Dict[str, Any], media_url: str,
+                          media_type: str) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+    """Download media from Picky Assist URL and upload to S3 via media_service.
+
+    Returns (media_id, survey_id, error_message).
+    """
+    from app.modules.forms import form_service, media_service
+
+    survey_id = session.get("survey_id")
+    if not survey_id:
+        try:
+            form = form_service.get_form(session["form_id"])
+            survey_id = submission_service.start(
+                form, created_by=f"whatsapp:{session['identity']}")
+        except Exception as exc:
+            logger.exception("Failed to allocate survey_id for WhatsApp media: %s", exc)
+            return None, None, "Could not initialize storage for upload."
+
+    # Download from Picky Assist
+    try:
+        with httpx.Client(timeout=30) as client:
+            resp = client.get(media_url)
+            resp.raise_for_status()
+            data = resp.content
+            raw_content_type = resp.headers.get("content-type") or ""
+    except Exception as exc:
+        logger.exception("Failed to download WhatsApp media from %s: %s", media_url, exc)
+        return None, survey_id, "We could not download the file you sent. Please try sending it again."
+
+    content_type = raw_content_type.split(";")[0].strip().lower()
+    ftype = resolve_type(field.get("type") or "text")
+
+    # Guess extension and default content_type if missing or generic
+    parsed = urllib.parse.urlparse(media_url)
+    base_name = os.path.basename(parsed.path)
+    ext = os.path.splitext(base_name)[1].lower()
+    if not ext or len(ext) > 5:
+        if ftype == "image":
+            ext = ".jpg"
+        elif ftype == "audio":
+            ext = ".ogg"
+        else:
+            ext = ".pdf"
+
+    if not content_type or content_type == "application/octet-stream":
+        if ext in (".jpg", ".jpeg"):
+            content_type = "image/jpeg"
+        elif ext == ".png":
+            content_type = "image/png"
+        elif ext == ".ogg":
+            content_type = "audio/ogg"
+        elif ext == ".mp3":
+            content_type = "audio/mpeg"
+        elif ext == ".pdf":
+            content_type = "application/pdf"
+        elif ftype == "image":
+            content_type = "image/jpeg"
+        elif ftype == "audio":
+            content_type = "audio/ogg"
+        elif ftype == "file":
+            content_type = "application/pdf"
+
+    filename = f"{field_name(field)}_{uuid.uuid4().hex[:8]}{ext}"
+
+    try:
+        media_row = media_service.store_media_bytes(
+            project_id=session.get("project_id"),
+            form_id=session["form_id"],
+            survey_id=survey_id,
+            field_name=field_name(field),
+            media_type=ftype,
+            filename=filename,
+            content_type=content_type,
+            data=data,
+            created_by=f"whatsapp:{session['identity']}"
+        )
+        return media_row["media_id"], survey_id, None
+    except Exception as exc:
+        logger.exception("Failed to store WhatsApp media in S3: %s", exc)
+        return None, survey_id, "Failed to save the file. Please try sending it again."
+
+
+def _answer(session: Dict[str, Any], form_json: Dict[str, Any], text: str,
+            media_url: str = "", media_type: str = "") -> str:
     """One answer to the outstanding question.
 
     Validated by `submission_service.validate_field` — the same per-question
@@ -581,36 +692,82 @@ def _answer(session: Dict[str, Any], form_json: Dict[str, Any], text: str) -> st
 
     answers = dict(session.get("answers") or {})
     config = _whatsapp_config(form_json)
+    ftype = resolve_type(field.get("type") or "text")
+    is_media = ftype in ("image", "audio", "file")
+    word = _word(text)
+    survey_id = session.get("survey_id")
 
-    if _word(text) == "skip" and not field.get("required"):
-        answers[name] = None
-    else:
-        try:
-            value = submission_service.validate_field(
-                form_json, name, _one_value(field, _tidy(text), answers), answers)
-        except submission_service.ValidationFailed as failed:
-            problem = failed.errors.get(name) or "That answer cannot be used."
-            # Asked again exactly as it was asked the first time, buttons and
-            # all: a correction should not be harder to answer than the
-            # question was.
+    if is_media:
+        # 1. Check for skip
+        if word == "skip":
+            if not field.get("required"):
+                answers[name] = None
+            else:
+                again = render(field, config, answers)
+                return {**again, "text": f"⚠️ This question is required and cannot be skipped.\n\n{again['text']}"}
+        # 2. Plain text sent when media is expected -> reject text!
+        elif not media_url:
             again = render(field, config, answers)
-            return {**again, "text": f"⚠️ {problem}\n\n{again['text']}"}
-        except KeyError:
-            return _start_questions(session, form_json)
-        answers[name] = value
+            skip_hint = "\n\n_Reply SKIP to leave this blank._" if not field.get("required") else "\n\n_This question is required._"
+            if ftype == "image":
+                hint = "⚠️ Please send a photo using your WhatsApp camera or gallery attachment." + skip_hint
+            elif ftype == "audio":
+                hint = "⚠️ Please record and send a voice note using the microphone button." + skip_hint
+            else:
+                hint = "⚠️ Please attach a document or file using the attachment button." + skip_hint
+            return {**again, "text": f"{hint}\n\n{again['text']}"}
+        # 3. Media attachment received
+        else:
+            if ftype == "image" and media_type == "audio":
+                again = render(field, config, answers)
+                return {**again, "text": f"⚠️ A photo is expected for this question, but a voice note was received. Please send a photo.\n\n{again['text']}"}
+            if ftype == "audio" and media_type == "image":
+                again = render(field, config, answers)
+                return {**again, "text": f"⚠️ A voice note is expected for this question, but a photo was received. Please record and send a voice note.\n\n{again['text']}"}
+
+            media_id, survey_id, err = _process_media_upload(
+                session, form_json, field, media_url, media_type)
+            if err:
+                again = render(field, config, answers)
+                return {**again, "text": f"⚠️ {err}\n\n{again['text']}"}
+            answers[name] = media_id
+    else:
+        # Field is NOT a media field (e.g. text, select, boolean, number)
+        if media_url:
+            again = render(field, config, answers)
+            return {**again, "text": f"⚠️ This question expects a text reply or option choice, not a file/photo.\n\n{again['text']}"}
+
+        if word == "skip" and not field.get("required"):
+            answers[name] = None
+        else:
+            try:
+                value = submission_service.validate_field(
+                    form_json, name, _one_value(field, _tidy(text), answers), answers)
+            except submission_service.ValidationFailed as failed:
+                problem = failed.errors.get(name) or "That answer cannot be used."
+                again = render(field, config, answers)
+                return {**again, "text": f"⚠️ {problem}\n\n{again['text']}"}
+            except KeyError:
+                return _start_questions(session, form_json)
+            answers[name] = value
 
     following = _next_question(form_json, answers)
     if following is None:
-        session = {**session, "answers": answers}
+        session = {**session, "answers": answers, "survey_id": survey_id}
         return _submit(session, form_json)
 
     updated = sessions.touch(
         session["session_id"], _timeout(session.get("project_id")),
-        answers=answers, current_field=field_name(following))
+        answers=answers, current_field=field_name(following),
+        survey_id=survey_id)
     if not updated:
         return say(UNAVAILABLE)
 
-    return render(following, config, answers)
+    next_q = render(following, config, answers)
+    if is_media and answers.get(name):
+        type_label = "Photo" if ftype == "image" else ("Voice note" if ftype == "audio" else "Document")
+        next_q = {**next_q, "text": f"✅ {type_label} received!\n\n{next_q['text']}"}
+    return next_q
 
 
 def _submit(session: Dict[str, Any], form_json: Dict[str, Any]) -> str:
@@ -634,6 +791,7 @@ def _submit(session: Dict[str, Any], form_json: Dict[str, Any]) -> str:
             channel="whatsapp",
             client_submission_id=session["session_id"],
             source_ref=f"whatsapp {session['receiver_number']}",
+            survey_id=session.get("survey_id"),
         )
     except submission_service.ValidationFailed as failed:
         # Every answer passed on its way in, so this is the whole-form pass

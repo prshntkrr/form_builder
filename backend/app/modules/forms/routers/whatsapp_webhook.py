@@ -69,7 +69,7 @@ _sweeper: Optional[asyncio.Task] = None
 # these keys sends a question that can still be answered by replying with a
 # number. That is exactly the behaviour this replaced, so the worst case is no
 # worse than before.
-PICKY_INTERACTIVE = {"buttons": "button", "list": "list"}
+PICKY_INTERACTIVE = {"buttons": 2, "list": 1}
 #: WhatsApp's own limits on what it will render. Beyond them it refuses the
 #: message outright, so the numbered text is sent on its own instead.
 MAX_BUTTON_TITLE = 20
@@ -77,30 +77,54 @@ MAX_ROW_TITLE = 24
 
 
 def _interactive(message: Dict[str, Any]) -> Dict[str, Any]:
-    """The provider-specific half of one outgoing message, or nothing.
+    """The provider-specific interactive configuration according to Picky Assist Push API.
 
-    Nothing for a plain message, and nothing when a title is too long for
-    WhatsApp to render — a refused interactive message would lose the question
-    altogether, and the numbered text says the same thing.
+    Returns a dict with 'interactive_type' and 'interactive' object, or empty dict for plain text.
     """
     kind = PICKY_INTERACTIVE.get(message.get("interaction") or "")
     choices = message.get("choices") or []
     if not kind or not choices:
         return {}
 
-    limit = MAX_BUTTON_TITLE if kind == "button" else MAX_ROW_TITLE
+    limit = MAX_BUTTON_TITLE if kind == 2 else MAX_ROW_TITLE
     if any(len(str(label)) > limit for label, _ in choices):
-        logger.info("Choices too long for a %s; sending the numbered text", kind)
+        logger.info("Choices too long for interactive type %s; sending the numbered text", kind)
         return {}
 
-    return {
-        "type": kind,
-        # The id is the option's own value, so a tapped choice comes back as
-        # the thing that gets stored rather than as something to map again.
-        "options": [{"id": str(value), "title": str(label)}
-                    for label, value in choices],
-        "header": message.get("title") or "",
-    }
+    title = str(message.get("title") or "")
+
+    if kind == 2:  # Buttons
+        btn_options = [
+            {"title": str(label)[:MAX_BUTTON_TITLE], "button_id": str(value)}
+            for label, value in choices[:3]
+        ]
+        return {
+            "interactive_type": 2,
+            "interactive": {
+                "buttons": btn_options,
+            },
+        }
+
+    if kind == 1:  # List
+        list_title = str(title or "Select Option")[:MAX_BUTTON_TITLE]
+        choice_options = [
+            {"title": str(label)[:MAX_ROW_TITLE], "choice_id": str(value), "description": ""}
+            for label, value in choices[:10]
+        ]
+        return {
+            "interactive_type": 1,
+            "interactive": {
+                "list_title": list_title,
+                "sections": [
+                    {
+                        "title": str(title or "Options")[:MAX_BUTTON_TITLE],
+                        "choices": choice_options,
+                    }
+                ],
+            },
+        }
+
+    return {}
 
 
 async def send(number: str, message: Any, application: Any,
@@ -131,14 +155,18 @@ async def send(number: str, message: Any, application: Any,
                           "message arrived on)")
         return
 
-    one = {"number": number, "message": text}
-    one.update(_interactive(message))
+    one: Dict[str, Any] = {"number": number, "message": text}
+    inter_data = _interactive(message)
 
-    payload = {
+    payload: Dict[str, Any] = {
         "token": token,
         "application": application,
         "data": [one],
     }
+
+    if inter_data:
+        payload["interactive_type"] = inter_data["interactive_type"]
+        one["interactive"] = inter_data["interactive"]
 
     try:
         async with httpx.AsyncClient(timeout=PUSH_TIMEOUT_SECONDS) as client:
@@ -217,7 +245,15 @@ RECEIVER_KEYS = ("receiver", "to", "receiver_number", "business_number",
 
 SENDER_KEYS = ("number", "sender", "from", "mobile", "msisdn", "contact_number")
 
-MESSAGE_KEYS = ("message-in", "text", "message", "body", "message_in")
+MESSAGE_KEYS = (
+    "message-in", "text", "message", "body", "message_in",
+    "id", "button_id", "selected_id", "title"
+)
+
+MEDIA_KEYS = (
+    "media-url", "media_url", "media", "attachment", "file_url", "file",
+    "url", "document_url", "audio_url", "voice_url", "image_url"
+)
 
 
 def _first(body: Dict[str, Any], keys) -> str:
@@ -228,25 +264,63 @@ def _first(body: Dict[str, Any], keys) -> str:
     return ""
 
 
-def _read(body: Dict[str, Any]) -> Dict[str, str]:
-    """A Picky Assist delivery, in the three things the runtime needs.
+def _read(body: Dict[str, Any]) -> Dict[str, Any]:
+    """A Picky Assist delivery, in the things the runtime needs.
 
     Several spellings because the provider's payload differs between its
-    versions and its test console. Unknown keys are ignored rather than
-    rejected: a webhook that 400s makes a provider retry forever.
+    versions and its test console. Captures text messages, quick reply button taps,
+    list menu selections, and media attachments (photos, voice notes, documents).
     """
     sender = _first(body, SENDER_KEYS)
     receiver = _first(body, RECEIVER_KEYS)
     raw = _first(body, MESSAGE_KEYS)
 
+    # Check for interactive replies (button click / list menu selection)
+    if not raw and isinstance(body.get("interactive"), dict):
+        inter = body["interactive"]
+        raw = str(
+            inter.get("button_reply", {}).get("id") or
+            inter.get("button_reply", {}).get("title") or
+            inter.get("list_reply", {}).get("id") or
+            inter.get("list_reply", {}).get("title") or ""
+        )
+
+    if not raw and isinstance(body.get("data"), list) and body["data"]:
+        first_data = body["data"][0] if isinstance(body["data"][0], dict) else {}
+        raw = str(first_data.get("id") or first_data.get("message") or "")
+
+    # Check for media attachments
+    media_url = _first(body, MEDIA_KEYS)
+    if not media_url and isinstance(body.get("data"), list) and body["data"]:
+        first_data = body["data"][0] if isinstance(body["data"][0], dict) else {}
+        media_url = _first(first_data, MEDIA_KEYS)
+
+    # If raw message itself is a media URL (Picky Assist sometimes passes media URL in message-in)
+    if not media_url and raw and (raw.startswith("http://") or raw.startswith("https://")):
+        media_url = raw
+
+    raw_type = str(body.get("type") or body.get("media_type") or "").strip().lower()
+    if not raw_type and isinstance(body.get("data"), list) and body["data"]:
+        first_data = body["data"][0] if isinstance(body["data"][0], dict) else {}
+        raw_type = str(first_data.get("type") or first_data.get("media_type") or "").strip().lower()
+
+    media_type = ""
+    if raw_type in ("2", "image", "photo"):
+        media_type = "image"
+    elif raw_type in ("4", "audio", "voice", "ptt"):
+        media_type = "audio"
+    elif raw_type in ("6", "document", "file", "3", "video"):
+        media_type = "file"
+    elif media_url:
+        lowered = media_url.lower().split("?")[0]
+        if any(lowered.endswith(ext) for ext in (".jpg", ".jpeg", ".png", ".webp", ".heic")):
+            media_type = "image"
+        elif any(lowered.endswith(ext) for ext in (".ogg", ".mp3", ".wav", ".m4a", ".aac", ".amr", ".opus")):
+            media_type = "audio"
+        else:
+            media_type = "file"
+
     if not receiver:
-        # Which number this arrived on decides whose provider account answers
-        # it (`_scope_of`), so not finding it is worth saying out loud. The
-        # keys are logged, never the values: the values are phone numbers and
-        # whatever somebody typed.
-        # Expected with Picky Assist, which identifies the account by
-        # `application` rather than by a number. Debug, not a warning: it is
-        # normal, and at warning level it buried the lines that matter.
         logger.debug(
             "No receiver number in the inbound payload; its keys were: %s",
             ", ".join(sorted(str(k) for k in body)) or "(none)")
@@ -255,7 +329,9 @@ def _read(body: Dict[str, Any]) -> Dict[str, str]:
         "identity": sender,
         "receiver": receiver,
         # Picky Assist form-encodes the body, so "+" arrives for a space.
-        "text": urllib.parse.unquote_plus(raw),
+        "text": urllib.parse.unquote_plus(raw) if raw else "",
+        "media_url": media_url,
+        "media_type": media_type,
         "application": body.get("application") or 121,
     }
 
@@ -278,17 +354,19 @@ async def webhook(request: Request, background: BackgroundTasks):
         body = {}
 
     message = _read(body)
-    if not message["identity"] or not message["text"]:
+    if not message["identity"] or (not message["text"] and not message["media_url"]):
         return {"status": "ok"}
 
-    logger.info("WhatsApp in from %s on %s (app %s, %d chars)",
+    logger.info("WhatsApp in from %s on %s (app %s, %d chars, media: %s)",
                 _masked(message["identity"]), _masked(message["receiver"]),
-                message["application"], len(message["text"]))
+                message["application"], len(message["text"]),
+                message["media_type"] if message["media_url"] else "none")
 
     try:
         answer = await asyncio.to_thread(
             whatsapp_runtime.reply,
-            message["identity"], message["receiver"], message["text"])
+            message["identity"], message["receiver"], message["text"],
+            media_url=message["media_url"], media_type=message["media_type"])
     except Exception:
         logger.exception("The WhatsApp conversation failed for %s",
                          _masked(message["identity"]))
@@ -296,8 +374,8 @@ async def webhook(request: Request, background: BackgroundTasks):
 
     if answer:
         background.add_task(send, message["identity"], answer,
-                            message["application"],
-                            _scope_of(message["identity"], message["receiver"]))
+                             message["application"],
+                             _scope_of(message["identity"], message["receiver"]))
 
     return {"status": "ok"}
 
