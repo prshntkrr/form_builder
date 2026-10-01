@@ -3767,13 +3767,15 @@ export default function Dashboards() {
               onChange={(e) => setListSearch(e.target.value)}
             />
 
-            <button
-              className="btn btn--primary"
-              type="button"
-              onClick={startNewDashboard}
-            >
-              Create dashboard
-            </button>
+            {can.build_dashboards && (
+              <button
+                className="btn btn--primary"
+                type="button"
+                onClick={startNewDashboard}
+              >
+                Create dashboard
+              </button>
+            )}
           </div>
 
           {listError && <div className="alert alert--bad">{listError}</div>}
@@ -4180,7 +4182,7 @@ export default function Dashboards() {
                   <div className="dash__version-bar">
                     {/* Option B: if a latest draft exists, show Continue Editing.
                         Otherwise show Edit Dashboard. */}
-                    {hasLatestDraft ? (
+                    {can.edit_dashboards && (hasLatestDraft ? (
                       <button
                         className="btn"
                         type="button"
@@ -4209,7 +4211,7 @@ export default function Dashboards() {
                       >
                         Edit Dashboard
                       </button>
-                    )}
+                    ))}
 
                     {currentVersionNo != null && !isCurrentVersionPublished && (
                       <button
