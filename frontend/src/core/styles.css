@@ -375,8 +375,8 @@ a:hover { text-decoration: underline; }
  *
  * `--narrow` is the other half of the decision and is unchanged: a form being
  * filled in, a wizard, a page of prose keeps a reading measure. */
-.main { width: 100%; max-width: 1440px; margin: 0 auto; padding: 34px 30px 80px; }
-.main--narrow { max-width: 720px; }
+.main { width: 100%; padding: 34px 30px 80px; }
+.main--narrow { max-width: 720px; margin: 0 auto; }
 
 /* ══ surfaces ═════════════════════════════════════════════════════════════ */
 .card {
