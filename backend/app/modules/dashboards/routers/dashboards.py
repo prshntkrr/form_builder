@@ -16,6 +16,7 @@ from app.core.config import settings
 
 from app.core.deps import needs
 from app.modules.dashboards.permissions import (
+    DASHBOARDS_CREATE,
     DASHBOARDS_IMPORT,
     DASHBOARDS_VIEW,
     DASHBOARDS_EDIT,
@@ -92,7 +93,7 @@ def list_dashboards_route(
 @router.post("")
 def save_dashboard(
     payload: Dict[str, Any],
-    user: Dict[str, Any] = Depends(needs(DASHBOARDS_VIEW)),
+    user: Dict[str, Any] = Depends(needs(DASHBOARDS_CREATE)),
 ):
     """Persist a generated dashboard specification."""
 
@@ -247,7 +248,7 @@ def get_dashboard_route(
 def update_dashboard_route(
     dashboard_id: str,
     payload: Dict[str, Any],
-    user: Dict[str, Any] = Depends(needs(DASHBOARDS_VIEW)),
+    user: Dict[str, Any] = Depends(needs(DASHBOARDS_EDIT)),
 ):
     """Update a saved dashboard."""
 
@@ -369,7 +370,7 @@ def restore_version_route(
 @router.post("/generate")
 def generate_dashboard_route(
     req: DashboardGenerateRequest,
-    user: Dict[str, Any] = Depends(needs(DASHBOARDS_VIEW)),
+    user: Dict[str, Any] = Depends(needs(DASHBOARDS_CREATE)),
 ):
     """
     Generate a validated dashboard specification from a user prompt.
@@ -442,7 +443,7 @@ def generate_dashboard_route(
 @router.post("/widget-operation")
 def widget_operation_route(
     req: WidgetOperationRequest,
-    user: Dict[str, Any] = Depends(needs(DASHBOARDS_VIEW)),
+    user: Dict[str, Any] = Depends(needs(DASHBOARDS_EDIT)),
 ):
     """Add one widget, or change the one that is selected.
 

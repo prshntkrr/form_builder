@@ -44,6 +44,7 @@ register(
     capabilities={
         "view_dashboards": DASHBOARDS_VIEW,
         "build_dashboards": DASHBOARDS_CREATE,
+        "edit_dashboards": DASHBOARDS_EDIT,
         "share_dashboards": DASHBOARDS_SHARE,
         "import_dashboard_source": DASHBOARDS_IMPORT,
     },
