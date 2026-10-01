@@ -20,14 +20,15 @@ which is the one copy.
 import logging
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from app.core import auth_service
 from app.core.deps import current_user, needs
-from app.modules.forms import channel_settings, routing
+from app.modules.forms import channel_settings, routing, webhook_service
 from app.modules.forms.permissions import MCDC_INTEGRATE, MCDC_MANAGE, RECORDS_VIEW
 from app.modules.forms.schemas import (
-    IdentityRequest, RouteRequest, WhatsAppRouteRequest, WhatsAppSettingsRequest,
+    IdentityRequest, RouteRequest, WebhookRequest,
+    WhatsAppRouteRequest, WhatsAppSettingsRequest,
 )
 
 logger = logging.getLogger(__name__)
@@ -351,6 +352,124 @@ def save_whatsapp_settings(req: WhatsAppSettingsRequest,
             updated_by=auth_service.display_name(user))
     except channel_settings.SettingsError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+
+# --------------------------------------------------------------------------- #
+# IVR settings
+# --------------------------------------------------------------------------- #
+@router.get("/ivr/settings")
+def ivr_settings(project: Optional[str] = Query(None),
+                 user: Dict[str, Any] = Depends(needs(MCDC_MANAGE))):
+    project_id = None if project in (None, "", "none") else project
+    _project_reachable(user, project_id)
+    return channel_settings.shown("ivr", project_id)
+
+
+@router.put("/ivr/settings")
+def save_ivr_settings(req: WhatsAppSettingsRequest,
+                      project: Optional[str] = Query(None),
+                      user: Dict[str, Any] = Depends(needs(MCDC_MANAGE))):
+    project_id = None if project in (None, "", "none") else project
+    _project_reachable(user, project_id)
+    try:
+        return channel_settings.save(
+            "ivr", project_id,
+            session_timeout_seconds=req.session_timeout_seconds,
+            api_token=req.api_token,
+            updated_by=auth_service.display_name(user))
+    except channel_settings.SettingsError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+# --------------------------------------------------------------------------- #
+# Sarvam AI settings (speech-to-text key, stored as a pseudo-channel)
+# --------------------------------------------------------------------------- #
+@router.get("/sarvam/settings")
+def sarvam_settings(project: Optional[str] = Query(None),
+                    user: Dict[str, Any] = Depends(needs(MCDC_MANAGE))):
+    project_id = None if project in (None, "", "none") else project
+    _project_reachable(user, project_id)
+    return channel_settings.shown("sarvam", project_id)
+
+
+@router.put("/sarvam/settings")
+def save_sarvam_settings(req: WhatsAppSettingsRequest,
+                         project: Optional[str] = Query(None),
+                         user: Dict[str, Any] = Depends(needs(MCDC_MANAGE))):
+    project_id = None if project in (None, "", "none") else project
+    _project_reachable(user, project_id)
+    try:
+        return channel_settings.save(
+            "sarvam", project_id,
+            session_timeout_seconds=req.session_timeout_seconds,
+            api_token=req.api_token,
+            updated_by=auth_service.display_name(user))
+    except channel_settings.SettingsError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+# --------------------------------------------------------------------------- #
+# webhook management
+# --------------------------------------------------------------------------- #
+def _base_url(request) -> str:
+    return str(request.base_url).rstrip("/")
+
+
+@router.get("/whatsapp/webhooks")
+def list_webhooks(
+    request: Request,
+    project: Optional[str] = Query(None),
+    user: Dict[str, Any] = Depends(needs(MCDC_MANAGE)),
+):
+    project_id = None if project in (None, "", "none") else project
+    return {"webhooks": webhook_service.list_webhooks(project_id, _base_url(request))}
+
+
+@router.post("/whatsapp/webhooks", status_code=201)
+def create_webhook(
+    req: WebhookRequest,
+    request: Request,
+    user: Dict[str, Any] = Depends(needs(MCDC_MANAGE)),
+):
+    project_id = None if req.project_id in (None, "", "none") else req.project_id
+    _project_reachable(user, project_id)
+    try:
+        return webhook_service.create_webhook(
+            label=req.label, channel="whatsapp",
+            project_id=project_id,
+            api_token=req.api_token or "",
+            created_by=auth_service.display_name(user),
+            base_url=_base_url(request))
+    except webhook_service.WebhookError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.put("/whatsapp/webhooks/{webhook_id}")
+def update_webhook(
+    webhook_id: str,
+    req: WebhookRequest,
+    request: Request,
+    user: Dict[str, Any] = Depends(needs(MCDC_MANAGE)),
+):
+    try:
+        return webhook_service.update_webhook(
+            webhook_id,
+            label=req.label,
+            enabled=req.enabled,
+            api_token=req.api_token,
+            base_url=_base_url(request))
+    except webhook_service.WebhookError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.delete("/whatsapp/webhooks/{webhook_id}")
+def delete_webhook(
+    webhook_id: str,
+    user: Dict[str, Any] = Depends(needs(MCDC_MANAGE)),
+):
+    if not webhook_service.delete_webhook(webhook_id):
+        raise HTTPException(status_code=404, detail="That webhook does not exist.")
+    return {"webhook_id": webhook_id, "deleted": True}
 
 
 @router.post("/identities", status_code=201)

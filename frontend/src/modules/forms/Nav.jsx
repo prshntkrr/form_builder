@@ -27,6 +27,14 @@ export const SECTIONS = [
 export function FormsPanel({ onNavigate }) {
   const { can } = useAuth()
   const revision = useFormsRevision()
+  const [sectionOpen, setSectionOpen] = useState(() => {
+    try { return localStorage.getItem('ea_forms_open') !== '0' } catch { return true }
+  })
+  const toggleSection = () => {
+    const next = !sectionOpen
+    setSectionOpen(next)
+    try { localStorage.setItem('ea_forms_open', next ? '1' : '0') } catch {}
+  }
 
   // Anyone who may build a form somewhere — on the account, or through a role
   // in some project. A Project Manager holds no account form permission at all.
@@ -241,15 +249,17 @@ export function FormsPanel({ onNavigate }) {
 
   return (
     <>
-      <div className="side__label side__label--rule">
+      <div className="side__label side__label--rule" style={{ cursor: 'pointer' }} onClick={toggleSection}>
+        <svg className={`nav__chev${sectionOpen ? ' on' : ''}`} viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">
+          <path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
         {builder ? (system ? 'System forms' : active?.name || 'Forms') : 'Forms to fill in'}
-        <NavLink to={builder ? '/forms' : '/fill'} className="side__all" onClick={onNavigate}>
+        <NavLink to={builder ? '/forms' : '/fill'} className="side__all" onClick={(e) => { e.stopPropagation(); onNavigate?.() }}>
           All
         </NavLink>
       </div>
 
-      {/* Only worth the row it costs once there is a list to narrow. */}
-      {forms && forms.length > 6 && (
+      {sectionOpen && forms && forms.length > 6 && (
         <div className="side__search">
           <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true">
             <circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" strokeWidth="2" />
@@ -266,7 +276,7 @@ export function FormsPanel({ onNavigate }) {
         </div>
       )}
 
-      <nav className="side__forms">
+      <nav className="side__forms" hidden={!sectionOpen}>
         {forms === null && [0, 1, 2].map((i) => (
           <div key={i} className="skeleton" style={{ height: 28, margin: '3px 12px' }} />
         ))}

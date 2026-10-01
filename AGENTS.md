@@ -66,6 +66,15 @@ any time.
 holding every answer collected while it was asked. This was a deliberate change
 — do not "tidy it up".
 
+**A question's key is not always its column.** A key may be 150 characters
+(`MAX_FIELD_NAME`) because it is a JSON key — in `form_data`, in a rule, in the
+layout, in the mobile package. A Postgres identifier is cut at 63 bytes,
+silently, so `tabular_service.column_for()` maps a key over 55 characters to a
+shortened one carrying eight characters of its digest. A key of 55 or fewer
+*is* its column, unchanged, which is every mirror built so far. Anything that
+turns a question into SQL goes through `column_for`; anything that treats it as
+a key uses the key itself.
+
 ### 3. `normalize_form` repairs, `config_validation` rejects
 
 `form_schema.normalize_form()` is deliberately lenient: an LLM emits duplicate
@@ -130,11 +139,25 @@ builder exists. Rules:
   migrated. Do not add `channel` to a legacy form: `channel_is_fixed` refuses it.
 - **A saved form's channel never changes** (`channel_is_fixed`). Taking a form
   to another channel is a copy ("Copy as a … form" in the builder).
-- **`channel_config.whatsapp`** — welcome/completion messages, `review`,
-  `order`, and per-question `{prompt, interaction}` keyed by field name. It
-  references questions, never copies them; unknown names and interactions a
-  question cannot use are refused (`channel_config.whatsapp_problems`). Nothing
-  else may be stored there — credentials belong to the future gateway.
+- **`channel_config.whatsapp`** — welcome/consent/decline/completion messages,
+  `review`, `order`, and per-question `{prompt, interaction}` keyed by field
+  name. It references questions, never copies them; unknown names and
+  interactions a question cannot use are refused
+  (`channel_config.whatsapp_problems`). Nothing else may be stored there — no
+  number, no keyword, no credentials.
+
+  **The split, which is the thing to get right.** Three homes, and each one is
+  the only home for what it holds:
+
+  | | where | why |
+  |---|---|---|
+  | keyword, number, enabled | `channel_form_route` | operational; moving a form to a new number is not a new version of the questions |
+  | welcome, consent, decline, completion, prompts, order | `form_json.channel_config.whatsapp` | refers to the questions, so it versions, publishes and rolls back with them — a session pinned to v3 keeps asking v3's consent question |
+  | session timeout, Picky Assist token | `channel_settings` | per project, sealed with `core/secrets.py`; a definition that is published and handed to phones must never carry a credential |
+
+  The Form Builder's WhatsApp section and Project → Channel routing edit the
+  **same** `channel_form_route` row — by form (`routing.route_for_form`) and by
+  route id respectively. Do not add a second store for either.
 - **How WhatsApp may ask a question** is `channel_capabilities.whatsapp_interactions`
   (mirrored in `channelCapabilities.js`, compared by a test). Buttons ≤ 3
   choices, list ≤ 10, catalogue questions numbered only.
@@ -145,6 +168,48 @@ builder exists. Rules:
 - Renaming or deleting a question in the builder moves or drops its WhatsApp
   settings in the same update (`whatsappConfig.renameInWhatsApp` /
   `removeFromWhatsApp`), exactly as layout references are handled.
+- **Publishing follows onto the routes.** `set_status` enables a form's WhatsApp
+  routes when it goes Active and disables them otherwise
+  (`routing.set_enabled_for_form`). Nothing is deleted, so republishing brings
+  the same keyword back. A route may therefore be created against a draft — it
+  is stored switched off — which is the one place `create_route` differs from
+  how it used to behave.
+
+### The WhatsApp conversation
+
+`routers/whatsapp_webhook.py` is **transport only**: a Picky Assist payload in,
+a line of text out, the push API, and the credential fetched at the moment of
+the call. Everything else is `whatsapp_runtime.py`, and it decides nothing it
+could ask something else:
+
+```
+keyword ─> routing.resolve ─> welcome+consent ─> Q1 … Qn ─> submission_service
+           (scope, precedence,  channel_config    render +    (whole-form
+            enabled, published,                   validate_   validation,
+            may_fill_form)                        field)      one transaction)
+```
+
+- **A phone number is not an account.** `channel_identity` maps it to one, and
+  every authorisation is decided against the account. An unlinked number and an
+  unknown keyword get the *same* sentence (`whatsapp_runtime.UNAVAILABLE`) —
+  telling them apart turns the keyword space into a directory of what is
+  collected. The menu is built from `routing.offered`, which runs the same two
+  steps, so it can never list what a keyword would refuse.
+- **One validation implementation, still.** Replies go through
+  `ingestion.normalize` (numbered choice → the option's value) and then
+  `submission_service.validate_field`. The runtime's own code is presentation:
+  which question is next, how it is written out, and Yes/No for a boolean —
+  which is not in the definition because `true`/`false` is storage, not a
+  question.
+- **The session is the database** (`whatsapp_session`), never a process
+  dictionary: `--reload` and a second worker both break that. It pins
+  `form_version` at the first question, so republishing cannot reinterpret a
+  conversation halfway through.
+- **A partial is not a submission.** An expired session stores what it had
+  through `submission_service._write`, deliberately skipping the whole-form
+  pass — every value already went through `validate_field` on the way in; what
+  it is not is complete. `whatsapp_session._keep_partial` says so at length.
+  The session row stays EXPIRED, never COMPLETED.
 
 One canonical form, answered on several channels. Read before touching any of it:
 
@@ -158,6 +223,14 @@ One canonical form, answered on several channels. Read before touching any of it
   The app owns rendering, storage and offline; MCDC owns the definition and
   validates every answer.
 
+- **A new endpoint under `/api/mcdc/` must be added to `core/gateway.py`.**
+  `GUARDED_PREFIXES` guards that whole namespace, so a path not listed in
+  `ROUTES` is refused with `ROUTE_NOT_ALLOWED` — a **404**, before it reaches
+  the router, however correctly the route is declared. It appears in
+  `/openapi.json` and still 404s, which is what makes it confusing: the symptom
+  looks like a missing route, and the cause is an allow-list two modules away.
+  This cost an evening; the WhatsApp settings and the builder's route endpoint
+  both landed this way.
 - **The list lives in `forms/channels.py`** (`CHANNELS`, `ROUTED_CHANNELS`,
   `DEFAULTS`). `ingestion` and `routing` import it. `core/gateway.py` keeps a
   literal copy because core must load with forms switched off;

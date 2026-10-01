@@ -415,6 +415,29 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_channel_settings_global
     ON channel_settings (channel) WHERE project_id IS NULL;
 
 
+-- A webhook endpoint that a provider (Picky Assist, WhatsApp Cloud API) posts
+-- to. Each row is its own URL: `/api/integrations/whatsapp/webhook/<webhook_id>`.
+--
+-- Multiple webhooks let one installation receive messages from several WhatsApp
+-- numbers or Picky Assist accounts, each routed to the right project. The token
+-- is sealed the same way `channel_settings.api_token` is.
+CREATE TABLE IF NOT EXISTS webhook_config (
+    webhook_id   VARCHAR(32)  PRIMARY KEY,
+    label        VARCHAR(100) NOT NULL DEFAULT '',
+    channel      VARCHAR(20)  NOT NULL DEFAULT 'whatsapp'
+                              CHECK (channel IN ('whatsapp', 'ivr')),
+    project_id   VARCHAR(20),
+    enabled      BOOLEAN      NOT NULL DEFAULT TRUE,
+
+    api_token    TEXT         NOT NULL DEFAULT '',
+    token_hint   VARCHAR(8)  NOT NULL DEFAULT '',
+
+    created_by   VARCHAR(50) NOT NULL DEFAULT '',
+    created_on   TIMESTAMP   DEFAULT CURRENT_TIMESTAMP,
+    updated_on   TIMESTAMP   DEFAULT CURRENT_TIMESTAMP
+);
+
+
 -- One WhatsApp conversation in progress.
 --
 -- The database is the session, not a cache of it. An in-process dictionary does

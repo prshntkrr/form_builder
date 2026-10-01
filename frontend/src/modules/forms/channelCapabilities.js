@@ -89,8 +89,7 @@ export const FORM_CHANNELS = ['web_mobile', 'whatsapp', 'ivr']
 
 export const FORM_CHANNEL_NAMES = { web_mobile: 'Web / Mobile', whatsapp: 'WhatsApp', ivr: 'IVR' }
 
-/** Channels a form may be published on today. IVR has no builder yet. */
-export const PUBLISHABLE = ['web_mobile', 'whatsapp']
+export const PUBLISHABLE = ['web_mobile', 'whatsapp', 'ivr']
 
 export function formChannel(formJson) {
   if (FORM_CHANNELS.includes(formJson?.channel)) return formJson.channel
@@ -160,3 +159,49 @@ export function whatsappInteractions(field) {
 }
 
 export const defaultWhatsappInteraction = (field) => whatsappInteractions(field)[0] || null
+
+// ── how IVR asks each kind of question ──────────────────────────────────────
+// Mirrors `channel_capabilities.ivr_interactions`.
+
+export const IVR_INTERACTION_NAMES = {
+  dtmf: 'Keypad input',
+  menu: 'Numbered menu',
+  voice: 'Voice recording',
+  ivr_boolean: 'Yes / No (1 / 2)',
+}
+
+export const MAX_IVR_MENU = 9
+
+export const IVR_BY_TYPE = {
+  text: [],
+  textarea: [],
+  email: [],
+  phone: ['dtmf'],
+  url: [],
+  date: ['dtmf'],
+  datetime: ['dtmf'],
+  time: ['dtmf'],
+  number: ['dtmf'],
+  decimal: ['dtmf'],
+  rating: ['dtmf'],
+  boolean: ['ivr_boolean'],
+  select: ['menu'],
+  radio: ['menu'],
+  multiselect: [],
+  file: [],
+  image: [],
+  audio: ['voice'],
+  signature: [],
+  location: [],
+  polygon: [],
+}
+
+export function ivrInteractions(field) {
+  const count = choiceCount(field)
+  return (IVR_BY_TYPE[field?.type || 'text'] || []).filter((way) => {
+    if (way === 'menu') return count !== null && count <= MAX_IVR_MENU
+    return true
+  })
+}
+
+export const defaultIvrInteraction = (field) => ivrInteractions(field)[0] || null

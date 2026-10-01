@@ -339,3 +339,46 @@ def whatsapp_interactions(field: Dict[str, Any]) -> List[str]:
 def default_whatsapp_interaction(field: Dict[str, Any]) -> Optional[str]:
     allowed = whatsapp_interactions(field)
     return allowed[0] if allowed else None
+
+
+# --------------------------------------------------------------------------- #
+# how IVR asks each kind of question
+# --------------------------------------------------------------------------- #
+# IVR is keypad + voice. Questions are spoken (TTS), answers are DTMF digits
+# or voice recordings. Choices are read aloud as a numbered menu ("Press 1
+# for …, Press 2 for …").
+#
+#     dtmf      keyed in as digits (phone, number, date as DDMMYYYY)
+#     menu      numbered menu spoken aloud, answer by pressing 1-9
+#     voice     spoken answer recorded during the call
+#     boolean   "Press 1 for Yes, Press 2 for No"
+DTMF, MENU, VOICE, IVR_BOOLEAN = "dtmf", "menu", "voice", "ivr_boolean"
+IVR_INTERACTIONS = (DTMF, MENU, VOICE, IVR_BOOLEAN)
+MAX_IVR_MENU = 9
+
+_IVR_BY_TYPE: Dict[str, tuple] = {
+    "text": (), "textarea": (), "email": (), "url": (),
+    "phone": (DTMF,), "number": (DTMF,), "decimal": (DTMF,),
+    "rating": (DTMF,),
+    "date": (DTMF,), "datetime": (DTMF,), "time": (DTMF,),
+    "boolean": (IVR_BOOLEAN,),
+    "select": (MENU,), "radio": (MENU,),
+    "multiselect": (), "file": (), "image": (),
+    "audio": (VOICE,),
+    "signature": (), "location": (), "polygon": (),
+}
+
+
+def ivr_interactions(field: Dict[str, Any]) -> List[str]:
+    """The ways IVR can ask this question. Empty: it cannot."""
+    name = resolve_type(field.get("type") or "text")
+    allowed = list(_IVR_BY_TYPE.get(name or "", ()))
+    count = _choice_count(field)
+    if MENU in allowed and (count is None or count > MAX_IVR_MENU):
+        allowed.remove(MENU)
+    return allowed
+
+
+def default_ivr_interaction(field: Dict[str, Any]) -> Optional[str]:
+    allowed = ivr_interactions(field)
+    return allowed[0] if allowed else None

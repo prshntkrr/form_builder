@@ -77,9 +77,8 @@ FORM_CHANNELS = (WEB_MOBILE, WHATSAPP, IVR)
 FORM_CHANNEL_NAMES: Dict[str, str] = {
     WEB_MOBILE: "Web / Mobile", WHATSAPP: "WhatsApp", IVR: "IVR"}
 
-#: Channels a form may be published on today. IVR has no builder yet, so an IVR
-#: form can be drafted and kept, but not put live.
-PUBLISHABLE = (WEB_MOBILE, WHATSAPP)
+#: Channels a form may be published on today.
+PUBLISHABLE = (WEB_MOBILE, WHATSAPP, IVR)
 
 _PROFILES: Dict[str, Dict[str, bool]] = {
     WEB_MOBILE: {WEB: True, MOBILE: True, WHATSAPP: False, IVR: False},

@@ -10,13 +10,15 @@ import { generateLayout, layoutIsStale, removeFromLayout, withFieldReplaced } fr
 import * as recovery from '../draftRecovery.js'
 import { FORM_CHANNEL_NAMES, PUBLISHABLE, formChannel } from '../channelCapabilities.js'
 import { conversationOrder, configOf, removeFromWhatsApp, renameInWhatsApp } from '../whatsappConfig.js'
+import { removeFromIvr, renameInIvr, conversationOrder as ivrConversationOrder } from '../ivrConfig.js'
 import { activeProjectId } from '../../projects/active.js'
 import ConditionEditor from '../components/ConditionEditor.jsx'
 import ExportPanel from '../components/ExportPanel.jsx'
 import FormRelationship from '../components/FormRelationship.jsx'
 import LocationSettings from '../components/LocationSettings.jsx'
-import ChannelPicker, { IvrPlaceholder } from '../components/ChannelPicker.jsx'
+import ChannelPicker from '../components/ChannelPicker.jsx'
 import WhatsAppBuilder, { ChatPreview } from '../components/WhatsAppBuilder.jsx'
+import IVRBuilder, { CallPreview } from '../components/IVRBuilder.jsx'
 import FormRenderer from '../components/FormRenderer.jsx'
 import LayoutDesigner from '../components/LayoutDesigner.jsx'
 import ContributeToLibrary from '../components/ContributeToLibrary.jsx'
@@ -480,13 +482,6 @@ export default function Builder() {
   /** The channel picked for the new form, while it is still a draft. */
   const pickChannel = (channel) => {
     if (form && !editing && channel !== form.channel) {
-      if (channel === 'ivr') {
-        // There is no IVR builder, so an IVR draft could only ever be saved as a
-        // form nobody can build or publish. The draft stays what it is.
-        setError('IVR forms are not supported yet. This draft stays '
-          + `${FORM_CHANNEL_NAMES[form.channel] || 'as it is'}.`)
-        return
-      }
       if (form.channel && form.fields?.length && !window.confirm(
         `Switch this unsaved draft to ${FORM_CHANNEL_NAMES[channel]}? Its questions are kept, `
         + `and it will open in the ${FORM_CHANNEL_NAMES[channel]} builder.`)) return
@@ -758,7 +753,9 @@ export default function Builder() {
     // reason follows the rename in the same update.
     const rules = next.name ? renameFieldInRules(replaced.rules, from, next.name) : replaced.rules
     const withRules = rules === replaced.rules ? replaced : { ...replaced, rules }
-    setForm(next.name ? renameInWhatsApp(withRules, from, next.name) : withRules)
+    let renamed = next.name ? renameInWhatsApp(withRules, from, next.name) : withRules
+    renamed = next.name ? renameInIvr(renamed, from, next.name) : renamed
+    setForm(renamed)
   }
   const knownAs = useRef({})
 
@@ -822,7 +819,7 @@ export default function Builder() {
     const rules = removeFieldFromRules(form.rules, form.fields[i]?.name)
     if (rules !== form.rules) kept.rules = rules
     // …nor in the WhatsApp conversation.
-    setForm(removeFromWhatsApp(kept, form.fields[i]?.name))
+    setForm(removeFromIvr(removeFromWhatsApp(kept, form.fields[i]?.name), form.fields[i]?.name))
   }
 
   const add = () => {
@@ -916,10 +913,10 @@ export default function Builder() {
   const tabs = channel === 'whatsapp'
     ? [['questions', 'WhatsApp'], ['preview', 'Chat preview'], ['json', 'JSON']]
     : channel === 'ivr'
-      ? [['questions', 'IVR'], ['json', 'JSON']]
+      ? [['questions', 'IVR'], ['preview', 'Call preview'], ['json', 'JSON']]
       : [['questions', 'Questions'], ['design', 'Design'], ['preview', 'Preview'], ['json', 'JSON']]
 
-  const workspace = Boolean(form) && channel !== 'ivr' && (pane === 'questions' || pane === 'design')
+  const workspace = Boolean(form) && (pane === 'questions' || pane === 'design')
   const chosenIndex = form ? form.fields.findIndex((f) => f.name === chosen) : -1
   const chosenField = chosenIndex < 0 ? null : form.fields[chosenIndex]
 
@@ -1174,13 +1171,29 @@ export default function Builder() {
                 />
               )}
 
-              {channel === 'ivr' && pane !== 'json' && <IvrPlaceholder />}
+              {pane === 'questions' && channel === 'ivr' && (
+                <IVRBuilder
+                  form={form}
+                  chosen={chosen}
+                  onSelect={setChosen}
+                  onChange={setForm}
+                  onAdd={() => addField()}
+                />
+              )}
 
               {pane === 'preview' && channel === 'whatsapp' && (
                 <ChatPreview
                   form={form}
                   order={conversationOrder(form).map((n) => form.fields.find((f) => f.name === n)).filter(Boolean)}
                   config={configOf(form)}
+                />
+              )}
+
+              {pane === 'preview' && channel === 'ivr' && (
+                <CallPreview
+                  form={form}
+                  order={ivrConversationOrder(form).map((n) => form.fields.find((f) => f.name === n)).filter(Boolean)}
+                  config={form?.channel_config?.ivr || {}}
                 />
               )}
 

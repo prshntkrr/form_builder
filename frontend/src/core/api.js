@@ -4,6 +4,7 @@ import { BASE, request } from './http.js'
 
 export const api = {
   health: () => request('/health'),
+  stats: (loadRange) => request(`/stats${loadRange ? `?load_range=${loadRange}` : ''}`),
 
   // --- session ---
   login: (email, password) =>

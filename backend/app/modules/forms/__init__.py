@@ -9,19 +9,20 @@ from pathlib import Path
 from app.core.registry import Module
 
 from . import bootstrap, permissions  # noqa: F401  (importing registers the permissions)
-from .routers import (forms, mcdc, public_forms, standard_forms,
+from .routers import (forms, ivr_webhook, mcdc, public_forms, standard_forms,
                       submissions, whatsapp_webhook)
 
 MODULE = Module(
     name="forms",
     label="Forms",
     routers=[forms.router, standard_forms.router, submissions.router,
-             mcdc.router, public_forms.router, whatsapp_webhook.router],
+             mcdc.router, public_forms.router, whatsapp_webhook.router,
+             ivr_webhook.router],
     tables=["forms", "form_version", "standard_form_library", "form_view",
             "data_dictionary", "form_media", "form_survey_progress",
             "form_export", "submission_channel", "submission_receipt",
             "channel_form_route", "channel_identity", "channel_settings",
-            "whatsapp_session"],
+            "webhook_config", "whatsapp_session"],
     schema_file=Path(__file__).resolve().parent / "schema.sql",
     migrations=[
         bootstrap.ensure_status_values,
@@ -34,5 +35,6 @@ MODULE = Module(
         bootstrap.ensure_public_share_columns,
         bootstrap.ensure_route_receiver_number,
         bootstrap.ensure_session_language,
+        bootstrap.ensure_webhook_config,
     ],
 )

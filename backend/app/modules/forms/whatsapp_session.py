@@ -58,7 +58,8 @@ def _shown(row: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def start(identity: str, receiver_number: str, route: Dict[str, Any],
-          user_id: str, timeout_seconds: int) -> Dict[str, Any]:
+          user_id: str, timeout_seconds: int,
+          channel: str = "whatsapp") -> Dict[str, Any]:
     """Begin a conversation, replacing whatever this number was in the middle of.
 
     Sending a keyword while already answering something is a person starting
@@ -72,9 +73,9 @@ def start(identity: str, receiver_number: str, route: Dict[str, Any],
     with transaction() as cur:
         cur.execute(
             "UPDATE whatsapp_session SET status = %s, completed_on = CURRENT_TIMESTAMP "
-            "WHERE channel = 'whatsapp' AND identity = %s AND status = %s "
+            "WHERE channel = %s AND identity = %s AND status = %s "
             "RETURNING session_id, form_id, form_version, answers, project_id",
-            (EXPIRED, identity, ACTIVE),
+            (EXPIRED, channel, identity, ACTIVE),
         )
         replaced = [dict(r) for r in cur.fetchall()]
 
@@ -83,14 +84,14 @@ def start(identity: str, receiver_number: str, route: Dict[str, Any],
             INSERT INTO whatsapp_session
                 (session_id, identity, receiver_number, route_id, form_id,
                  form_version, project_id, user_id, state, answers, status,
-                 expires_on)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                 channel, expires_on)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                     CURRENT_TIMESTAMP + make_interval(secs => %s))
             RETURNING *
             """,
             (session_id, identity, receiver_number or "", route.get("route_id"),
              route["form_id"], route["version"], route.get("project_id"),
-             user_id, CONSENT, Json({}), ACTIVE, int(timeout_seconds)),
+             user_id, CONSENT, Json({}), ACTIVE, channel, int(timeout_seconds)),
         )
         session = _shown(dict(cur.fetchone()))
 
@@ -100,7 +101,7 @@ def start(identity: str, receiver_number: str, route: Dict[str, Any],
     return session
 
 
-def live(identity: str) -> Optional[Dict[str, Any]]:
+def live(identity: str, channel: str = "whatsapp") -> Optional[Dict[str, Any]]:
     """The conversation this number is in, or None.
 
     Expiry is decided here, on the way in, because a webhook is the only clock
@@ -116,8 +117,8 @@ def live(identity: str) -> Optional[Dict[str, Any]]:
         cur.execute(
             "SELECT *, (expires_on <= CURRENT_TIMESTAMP) AS due "
             "FROM whatsapp_session "
-            "WHERE channel = 'whatsapp' AND identity = %s AND status = %s",
-            (identity, ACTIVE),
+            "WHERE channel = %s AND identity = %s AND status = %s",
+            (channel, identity, ACTIVE),
         )
         row = cur.fetchone()
 

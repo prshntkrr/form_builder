@@ -431,6 +431,35 @@ export const api = {
     request(`/mcdc/whatsapp/settings${project ? `?project=${project}` : ''}`,
             { method: 'PUT', body: JSON.stringify(settings) }),
 
+  ivrSettings: (project) =>
+    request(`/mcdc/ivr/settings${project ? `?project=${project}` : ''}`),
+
+  saveIvrSettings: (project, settings) =>
+    request(`/mcdc/ivr/settings${project ? `?project=${project}` : ''}`,
+            { method: 'PUT', body: JSON.stringify(settings) }),
+
+  sarvamSettings: (project) =>
+    request(`/mcdc/sarvam/settings${project ? `?project=${project}` : ''}`),
+
+  saveSarvamSettings: (project, settings) =>
+    request(`/mcdc/sarvam/settings${project ? `?project=${project}` : ''}`,
+            { method: 'PUT', body: JSON.stringify(settings) }),
+
+  webhooks: (project) =>
+    request(`/mcdc/whatsapp/webhooks${project ? `?project=${project}` : ''}`)
+      .then((r) => r.webhooks || []),
+
+  createWebhook: (data) =>
+    request('/mcdc/whatsapp/webhooks',
+            { method: 'POST', body: JSON.stringify(data) }),
+
+  updateWebhook: (id, data) =>
+    request(`/mcdc/whatsapp/webhooks/${id}`,
+            { method: 'PUT', body: JSON.stringify(data) }),
+
+  deleteWebhook: (id) =>
+    request(`/mcdc/whatsapp/webhooks/${id}`, { method: 'DELETE' }),
+
   // --- one form's submissions hanging off another's ---
   // What this form is attached to, and what is attached to it.
   formRelationship: (formId) => request(`/forms/${formId}/relationship`),

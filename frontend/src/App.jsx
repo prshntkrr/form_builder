@@ -1,10 +1,11 @@
-import React, { useState } from 'react'
-import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom'
+import React, { useRef, useState } from 'react'
+import { Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import Sidebar from './core/Sidebar.jsx'
-import { useAuth } from './core/auth.jsx'
+import { initials, useAuth } from './core/auth.jsx'
 import ForgotPassword from './core/pages/ForgotPassword.jsx'
 import Login from './core/pages/Login.jsx'
 import ResetPassword from './core/pages/ResetPassword.jsx'
+import Dashboard from './core/pages/Dashboard.jsx'
 import Roles from './core/pages/Roles.jsx'
 import Users from './core/pages/Users.jsx'
 import { homeFor, moduleRoutes, publicModuleRoutes } from './core/registry.js'
@@ -69,18 +70,95 @@ function NotFound() {
   )
 }
 
-/** The shell: navigation plus whatever is being worked on. */
-function Shell() {
+function ThemeButton() {
+  const [theme, setTheme] = useState(() => {
+    try { return localStorage.getItem('theme') || 'system' } catch { return 'system' }
+  })
+  const next = () => {
+    const order = ['light', 'system', 'dark']
+    const n = order[(order.indexOf(theme) + 1) % order.length]
+    setTheme(n)
+    const root = document.documentElement
+    if (n === 'system') root.removeAttribute('data-theme')
+    else root.setAttribute('data-theme', n)
+    try { localStorage.setItem('theme', n) } catch {}
+  }
+  const icon = theme === 'dark' ? '🌙' : theme === 'light' ? '☀️' : '💻'
+  const label = theme === 'dark' ? 'Dark' : theme === 'light' ? 'Light' : 'Auto'
+  return (
+    <button className="topbar__btn" onClick={next} title={`Theme: ${label}`}>
+      {icon}
+    </button>
+  )
+}
+
+function TopbarAccount() {
+  const { user, signOut } = useAuth()
+  const navigate = useNavigate()
   const [open, setOpen] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const ref = useRef(null)
+
+  const leave = async () => {
+    setBusy(true)
+    await signOut()
+    navigate('/login', { replace: true, state: { signedOut: true } })
+  }
 
   return (
-    <div className={`app${open ? ' app--menu' : ''}`}>
-      <button className="menu-toggle" onClick={() => setOpen(!open)} aria-label="Menu">
-        {open ? '✕' : '☰'}
+    <div className="topbar__account" ref={ref}>
+      <button className="topbar__user" onClick={() => setOpen(!open)}>
+        <span className="topbar__avatar">{initials(user)}</span>
+        <span className="topbar__name">{user?.full_name || user?.email}</span>
+        <span className="topbar__role">{user?.role_label || user?.role}</span>
+        <span style={{ fontSize: 10, color: 'var(--ink-3)' }}>▾</span>
+      </button>
+      {open && (
+        <div className="topbar__dropdown">
+          <button className="topbar__dropdown-item" onClick={leave} disabled={busy}>
+            {busy ? <span className="spin" /> : 'Sign out'}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** The shell: navigation plus whatever is being worked on. */
+function Shell() {
+  const [mobileMenu, setMobileMenu] = useState(false)
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return localStorage.getItem('sidebar_collapsed') === '1' } catch { return false }
+  })
+
+  const toggleCollapse = () => {
+    const next = !collapsed
+    setCollapsed(next)
+    try { localStorage.setItem('sidebar_collapsed', next ? '1' : '0') } catch {}
+  }
+
+  return (
+    <div className={`app${mobileMenu ? ' app--menu' : ''}${collapsed ? ' app--collapsed' : ''}`}>
+      <button className="menu-toggle" onClick={() => setMobileMenu(!mobileMenu)} aria-label="Menu">
+        {mobileMenu ? '✕' : '☰'}
       </button>
 
-      <Sidebar onNavigate={() => setOpen(false)} />
-      <div className="body" onClick={() => open && setOpen(false)}>
+      <Sidebar onNavigate={() => setMobileMenu(false)} collapsed={collapsed} onToggleCollapse={toggleCollapse} />
+      <div className="body" onClick={() => mobileMenu && setMobileMenu(false)}>
+        <div className="topbar">
+          {collapsed && (
+            <button className="topbar__btn topbar__collapse" onClick={toggleCollapse} title="Expand sidebar">
+              ☰
+            </button>
+          )}
+          <Link to="/dashboard" className="topbar__brand">
+            <span className="brand__mark">e</span>
+            e-Agrology
+          </Link>
+          <span className="grow" />
+          <ThemeButton />
+          <TopbarAccount />
+        </div>
         <Outlet />
       </div>
     </div>
@@ -124,8 +202,9 @@ export default function App() {
 
       {/* Signed in, any role. */}
       <Route element={<Require />}>
-        <Route path="/" element={<Home />} />
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route element={<Shell />}>
+          <Route path="/dashboard" element={<Dashboard />} />
           {(byCapability[''] || []).map((r) => (
             <Route key={r.path} path={r.path} element={r.element} />
           ))}

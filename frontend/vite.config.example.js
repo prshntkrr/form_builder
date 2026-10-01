@@ -14,6 +14,11 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     include: ['src/**/*.test.jsx'],
+    /* The builder tests render a 4,700-line component and drive it through
+       userEvent; several take 3-5s on their own, and under the parallel run
+       they crossed the 5s default and failed as timeouts rather than as
+       anything real. */
+    testTimeout: 20000,
   },
   server: {
     port: 5173,

@@ -547,6 +547,36 @@ def ensure_export_columns() -> List[str]:
     return added
 
 
+def ensure_webhook_config() -> bool:
+    """Create the webhook_config table on databases that predate it.
+
+    Fresh databases get it from schema.sql; this handles the rest.
+    Idempotent: returns False if the table already exists.
+    """
+    with transaction() as cur:
+        if table_exists(cur, "webhook_config"):
+            return False
+
+        cur.execute("""
+            CREATE TABLE webhook_config (
+                webhook_id   VARCHAR(32)  PRIMARY KEY,
+                label        VARCHAR(100) NOT NULL DEFAULT '',
+                channel      VARCHAR(20)  NOT NULL DEFAULT 'whatsapp'
+                                          CHECK (channel IN ('whatsapp', 'ivr')),
+                project_id   VARCHAR(20),
+                enabled      BOOLEAN      NOT NULL DEFAULT TRUE,
+                api_token    TEXT         NOT NULL DEFAULT '',
+                token_hint   VARCHAR(8)  NOT NULL DEFAULT '',
+                created_by   VARCHAR(50) NOT NULL DEFAULT '',
+                created_on   TIMESTAMP   DEFAULT CURRENT_TIMESTAMP,
+                updated_on   TIMESTAMP   DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+    logger.info("Created webhook_config table")
+    return True
+
+
 def ensure_session_language() -> bool:
     """Give `whatsapp_session` the language the conversation is being held in.
 

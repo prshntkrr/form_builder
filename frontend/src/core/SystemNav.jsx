@@ -55,6 +55,15 @@ export default function SystemNav({ onNavigate }) {
   // Core's own screens are declared the same way and join the same groups.
   const groups = moduleNavItems(modules, can, CORE_NAV_ITEMS)
 
+  const [sectionOpen, setSectionOpen] = useState(() => {
+    try { return localStorage.getItem('ea_system_open') !== '0' } catch { return true }
+  })
+  const toggleSection = () => {
+    const next = !sectionOpen
+    setSectionOpen(next)
+    try { localStorage.setItem('ea_system_open', next ? '1' : '0') } catch {}
+  }
+
   /* Open on first use, so nothing is hidden from somebody who has never
      collapsed anything. After that, what they chose. */
   const [open, setOpen] = useState(() => remembered() || {})
@@ -83,11 +92,12 @@ export default function SystemNav({ onNavigate }) {
 
   return (
     <>
-      {/* Outside the scroller below: a heading that scrolls away from the thing
-          it names is a heading doing nothing. */}
-      <div className="side__label">System</div>
+      <div className="side__label" style={{ cursor: 'pointer' }} onClick={toggleSection}>
+        <Chevron open={sectionOpen} />
+        System
+      </div>
 
-      <div className="nav">
+      <div className="nav" hidden={!sectionOpen}>
         {groups.map((group) => {
         const shown = isOpen(group) || holdsCurrent(group)
 
