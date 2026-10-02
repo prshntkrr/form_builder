@@ -179,9 +179,14 @@ def export_form(form_json: Dict[str, Any]) -> bytes:
         father = ""
         options_from = field.get("options_from", {})
         if options_from:
-            if options_from.get("source") == "client_catalog":
+            src_type = options_from.get("source", "")
+            if src_type == "client_catalog":
                 catalog = options_from.get("catalog", "")
-                father = options_from.get("depends_on", "")
+            elif src_type == "crop_ontology":
+                catalog = options_from.get("kind", "")
+            elif src_type == "data_standard":
+                catalog = options_from.get("standard", "")
+            father = options_from.get("depends_on", "")
 
         if not catalog and source.get("catalog_id"):
             catalog = source["catalog_id"]
