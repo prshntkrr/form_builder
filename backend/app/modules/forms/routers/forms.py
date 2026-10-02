@@ -532,6 +532,34 @@ def detail(form_id: str, user: Dict[str, Any] = Depends(current_user)):
         raise HTTPException(status_code=404, detail=str(exc))
 
 
+@router.get("/{form_id}/export-excel")
+def export_excel(form_id: str, user: Dict[str, Any] = Depends(current_user)):
+    """Download the form definition as an Edit View Excel workbook."""
+    from fastapi.responses import Response
+    from app.modules.forms.excel_export import export_form
+
+    _may_read(form_id, user)
+    try:
+        form = form_service.get_form(form_id)
+    except form_service.FormNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+    form_json = form.get("form_json", {})
+    xlsx_bytes = export_form(form_json)
+
+    title = (form_json.get("title") or "form").strip()
+    safe_title = "".join(c if c.isalnum() or c in " _-" else "_" for c in title)
+    safe_title = safe_title.replace(" ", "_")
+    version = form_json.get("version", "")
+    filename = f"{safe_title}_v{version}.xlsx" if version else f"{safe_title}.xlsx"
+
+    return Response(
+        content=xlsx_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @router.put("/{form_id}")
 def update(form_id: str, req: UpdateFormRequest,
            user: Dict[str, Any] = Depends(needs_on_form(FORMS_EDIT, "project.forms.manage"))):

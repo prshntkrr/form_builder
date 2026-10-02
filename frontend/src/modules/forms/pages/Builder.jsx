@@ -1427,6 +1427,15 @@ export default function Builder() {
                   Publish
                 </button>
               )}
+              {editing && (
+                <button
+                  className="btn btn--quiet btn--sm"
+                  onClick={() => api.exportExcel(formId)}
+                  title="Download the form definition as an Excel workbook"
+                >
+                  Export Excel
+                </button>
+              )}
               {editing && status === 'Active' && (
                 <button
                   className="btn btn--quiet btn--sm"

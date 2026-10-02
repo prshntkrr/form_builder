@@ -501,6 +501,9 @@ export const api = {
 
   // Saved through `download`, not linked to: the token is a header, and a plain
   // link sends none — which is why the old Export CSV link handed back a 401.
+  exportExcel: (formId) =>
+    download(`/forms/${formId}/export-excel`, `form_${formId}.xlsx`),
+
   exportSubmissions: (formId, { format = 'csv', columns = [], from, to } = {}) =>
     download(
       `/forms/${formId}/submissions/export?format=${format}`
