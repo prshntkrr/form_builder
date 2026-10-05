@@ -4,9 +4,9 @@ Every route declares the permission it needs. Never test a role name — roles a
 the installation's to define, permissions are the application's.
 """
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 
 from app.modules.forms.llm import LLMError
 from app.modules.dashboards.services.dashboard_validator import (
@@ -14,7 +14,8 @@ from app.modules.dashboards.services.dashboard_validator import (
 )
 from app.core.config import settings
 
-from app.core.deps import needs
+from app.core.deps import current_user
+from app.modules.dashboards import dash_access
 from app.modules.dashboards.permissions import (
     DASHBOARDS_CREATE,
     DASHBOARDS_IMPORT,
@@ -61,6 +62,7 @@ from app.modules.dashboards.services.data_source_service import (
     list_tabular_tables,
     list_table_columns,
 )
+from app.modules.dashboards.services import data_source_registry
 
 from app.modules.dashboards.services.dashboard_llm import (
     available_sources_for,
@@ -83,53 +85,77 @@ router = APIRouter(prefix="/api/dashboards", tags=["dashboards"])
 
 @router.get("")
 def list_dashboards_route(
-    user: Dict[str, Any] = Depends(needs(DASHBOARDS_VIEW)),
+    project_id: Optional[str] = Query(None),
+    user: Dict[str, Any] = Depends(dash_access.needs_in_query(DASHBOARDS_VIEW)),
 ):
-    """Return all active dashboards."""
+    """Return the active dashboards in one project.
 
-    return list_dashboards()
+    A dashboard is only ever reachable from inside its own project, so the
+    project is required to see any. Without it the list is empty rather than
+    global — there is no cross-project dashboard view.
+    """
+
+    return list_dashboards(project_id=project_id)
 
 
 @router.post("")
 def save_dashboard(
     payload: Dict[str, Any],
-    user: Dict[str, Any] = Depends(needs(DASHBOARDS_CREATE)),
+    user: Dict[str, Any] = Depends(current_user),
 ):
-    """Persist a generated dashboard specification."""
+    """Persist a generated dashboard specification into its project."""
 
     dashboard = payload.get("dashboard") or {}
 
     title = dashboard.get("name") or "Untitled Dashboard"
 
+    project_id = payload.get("project_id")
+    if not project_id:
+        raise HTTPException(
+            status_code=400,
+            detail="A dashboard must be created inside a project.",
+        )
+
+    # Hybrid: the account role may create dashboards, or the role held in this
+    # project may.
+    dash_access.require(user, DASHBOARDS_CREATE, project_id)
+
     saved = create_dashboard(
         title=title,
         dashboard_json=payload,
         created_by=user.get("username"),
+        project_id=project_id,
     )
 
     return saved
 
 @router.get("/data-sources")
 def list_data_sources(
-    user: Dict[str, Any] = Depends(needs(DASHBOARDS_VIEW)),
+    project_id: Optional[str] = Query(None),
+    user: Dict[str, Any] = Depends(dash_access.needs_in_query(DASHBOARDS_VIEW)),
 ):
-    """Return PostgreSQL _tabular tables available to dashboards."""
+    """Return the _tabular tables one project's dashboards may draw on."""
     return {
-        "data_sources": list_tabular_tables(),
+        "data_sources": list_tabular_tables(project_id=project_id),
     }
 
 @router.post("/data-sources/excel")
 async def import_excel_data_source(
     file: UploadFile = File(...),
     table_name: str = Form(...),
-    user: Dict[str, Any] = Depends(needs(DASHBOARDS_IMPORT)),
+    project_id: str = Form(...),
+    user: Dict[str, Any] = Depends(current_user),
 ):
-    """Create a data source from a spreadsheet.
+    """Create a data source from a spreadsheet, inside one project.
 
     The table is named `<table_name>_tabular`, which is how `list_data_sources`
     finds it — the import is only useful if the result appears in the picker.
+    It is registered to `project_id` so only that project's dashboards see it.
     Nothing is overwritten: a name already in use is refused.
     """
+    # Hybrid: account role may import, or the role held in this project may.
+    dash_access.require(user, DASHBOARDS_IMPORT, project_id)
+
     from app.modules.dashboards.services.excel_source_service import (
         ExcelSourceError,
         MAX_WORKBOOK_BYTES,
@@ -156,7 +182,7 @@ async def import_excel_data_source(
         )
 
     try:
-        return import_workbook(
+        result = import_workbook(
             data,
             table_name,
             imported_by=user.get("username", ""),
@@ -166,11 +192,23 @@ async def import_excel_data_source(
         # none of them is the server failing.
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    # The table exists now; tie it to the project so its dashboards can see it
+    # and no other project's can. Registered after the load, so a failed import
+    # leaves nothing behind in the registry either.
+    data_source_registry.register(
+        table_name=result["table_name"],
+        project_id=project_id,
+        source_type="excel",
+        created_by=user.get("username"),
+    )
+
+    return result
+
 
 @router.get("/data-sources/{table_name}")
 def get_data_source(
     table_name: str,
-    user: Dict[str, Any] = Depends(needs(DASHBOARDS_VIEW)),
+    user: Dict[str, Any] = Depends(dash_access.needs_for_table(DASHBOARDS_VIEW)),
 ):
     """Return active field metadata for a selected _tabular table."""
     try:
@@ -186,7 +224,7 @@ def get_data_source(
 def get_filter_options(
     table_name: str,
     field: str,
-    user: Dict[str, Any] = Depends(needs(DASHBOARDS_VIEW)),
+    user: Dict[str, Any] = Depends(dash_access.needs_for_table(DASHBOARDS_VIEW)),
 ):
     """The values a dashboard filter on this column can be set to.
 
@@ -230,7 +268,7 @@ def get_filter_options(
 @router.get("/{dashboard_id}")
 def get_dashboard_route(
     dashboard_id: str,
-    user: Dict[str, Any] = Depends(needs(DASHBOARDS_VIEW)),
+    user: Dict[str, Any] = Depends(dash_access.needs_for_dashboard(DASHBOARDS_VIEW)),
 ):
     """Return a saved dashboard by ID."""
 
@@ -248,7 +286,7 @@ def get_dashboard_route(
 def update_dashboard_route(
     dashboard_id: str,
     payload: Dict[str, Any],
-    user: Dict[str, Any] = Depends(needs(DASHBOARDS_EDIT)),
+    user: Dict[str, Any] = Depends(dash_access.needs_for_dashboard(DASHBOARDS_EDIT)),
 ):
     """Update a saved dashboard."""
 
@@ -274,7 +312,7 @@ def update_dashboard_route(
 @router.delete("/{dashboard_id}")
 def delete_dashboard_route(
     dashboard_id: str,
-    user: Dict[str, Any] = Depends(needs(DASHBOARDS_DELETE)),
+    user: Dict[str, Any] = Depends(dash_access.needs_for_dashboard(DASHBOARDS_DELETE)),
 ):
     """Soft-delete a saved dashboard."""
 
@@ -299,7 +337,7 @@ def delete_dashboard_route(
 @router.get("/{dashboard_id}/versions")
 def list_versions_route(
     dashboard_id: str,
-    user: Dict[str, Any] = Depends(needs(DASHBOARDS_VIEW)),
+    user: Dict[str, Any] = Depends(dash_access.needs_for_dashboard(DASHBOARDS_VIEW)),
 ):
     """Return all versions for a saved dashboard."""
 
@@ -310,7 +348,7 @@ def list_versions_route(
 def get_version_route(
     dashboard_id: str,
     version_no: int,
-    user: Dict[str, Any] = Depends(needs(DASHBOARDS_VIEW)),
+    user: Dict[str, Any] = Depends(dash_access.needs_for_dashboard(DASHBOARDS_VIEW)),
 ):
     """Return a specific version with full configuration."""
 
@@ -329,7 +367,7 @@ def get_version_route(
 def publish_version_route(
     dashboard_id: str,
     version_no: int,
-    user: Dict[str, Any] = Depends(needs(DASHBOARDS_EDIT)),
+    user: Dict[str, Any] = Depends(dash_access.needs_for_dashboard(DASHBOARDS_EDIT)),
 ):
     """Publish a version."""
 
@@ -348,7 +386,7 @@ def publish_version_route(
 def restore_version_route(
     dashboard_id: str,
     version_no: int,
-    user: Dict[str, Any] = Depends(needs(DASHBOARDS_EDIT)),
+    user: Dict[str, Any] = Depends(dash_access.needs_for_dashboard(DASHBOARDS_EDIT)),
 ):
     """Create a new draft version from an existing version."""
 
@@ -370,7 +408,7 @@ def restore_version_route(
 @router.post("/generate")
 def generate_dashboard_route(
     req: DashboardGenerateRequest,
-    user: Dict[str, Any] = Depends(needs(DASHBOARDS_CREATE)),
+    user: Dict[str, Any] = Depends(current_user),
 ):
     """
     Generate a validated dashboard specification from a user prompt.
@@ -398,6 +436,12 @@ def generate_dashboard_route(
             status_code=422,
             detail="A dashboard prompt is required.",
         )
+
+    # Hybrid: account role may create dashboards, or the role held in the
+    # project this data source belongs to may.
+    dash_access.require(
+        user, DASHBOARDS_CREATE, dash_access.project_of_table(table_name)
+    )
 
     # ---------------------------------------------------------
     # Resolve the real database schema
@@ -443,7 +487,7 @@ def generate_dashboard_route(
 @router.post("/widget-operation")
 def widget_operation_route(
     req: WidgetOperationRequest,
-    user: Dict[str, Any] = Depends(needs(DASHBOARDS_EDIT)),
+    user: Dict[str, Any] = Depends(current_user),
 ):
     """Add one widget, or change the one that is selected.
 
@@ -484,6 +528,12 @@ def widget_operation_route(
                 status_code=404,
                 detail=f"Widget '{req.widget_id}' is not on this dashboard.",
             )
+
+    # Hybrid: account role may edit dashboards, or the role held in the project
+    # this data source belongs to may.
+    dash_access.require(
+        user, DASHBOARDS_EDIT, dash_access.project_of_table(table_name)
+    )
 
     fields = list_table_columns(
         table_name=table_name,
@@ -541,7 +591,7 @@ def widget_operation_route(
 @router.post("/data")
 def get_dashboard_data(
     req: DashboardDataRequest,
-    user: Dict[str, Any] = Depends(needs(DASHBOARDS_VIEW)),
+    user: Dict[str, Any] = Depends(current_user),
 ):
     """
     Execute a validated dashboard data binding.
@@ -563,6 +613,12 @@ def get_dashboard_data(
             status_code=400,
             detail="Only tabular dashboard data sources are supported.",
         )
+
+    # Hybrid: account role may view dashboards, or the role held in the project
+    # this data source belongs to may.
+    dash_access.require(
+        user, DASHBOARDS_VIEW, dash_access.project_of_table(table_name)
+    )
 
     fields = list_table_columns(
         table_name=table_name,
@@ -655,7 +711,7 @@ def get_dashboard_data(
 @router.post("/{dashboard_id}/share")
 def share_dashboard_route(
     dashboard_id: str,
-    user: Dict[str, Any] = Depends(needs(DASHBOARDS_SHARE)),
+    user: Dict[str, Any] = Depends(dash_access.needs_for_dashboard(DASHBOARDS_SHARE)),
 ):
     """Issue a public link for a published dashboard.
 
@@ -680,7 +736,7 @@ def share_dashboard_route(
 @router.delete("/{dashboard_id}/share", status_code=204)
 def unshare_dashboard_route(
     dashboard_id: str,
-    user: Dict[str, Any] = Depends(needs(DASHBOARDS_SHARE)),
+    user: Dict[str, Any] = Depends(dash_access.needs_for_dashboard(DASHBOARDS_SHARE)),
 ):
     """Withdraw the public link, breaking every copy of it."""
 

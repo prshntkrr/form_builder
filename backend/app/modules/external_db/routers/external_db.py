@@ -198,9 +198,27 @@ def load(req: LoadRequest, user: Dict[str, Any] = Depends(needs(EXTERNAL_DB_IMPO
     transaction, so a failure leaves the database exactly as it was.
     """
     try:
-        return import_service.load(
+        result = import_service.load(
             as_spec(req.connection, user), req.source_schema, req.source_table,
             req.destination_table, loaded_by=auth_service.display_name(user),
             connection_id=req.connection.connection_id)
     except ExternalDbError as exc:
         raise _refuse(exc)
+
+    # Tie the loaded table to its project so only that project's dashboards see
+    # it. The dashboards module owns the registry; if it is switched off there
+    # is nothing to register into, and the import still stands on its own.
+    try:
+        from app.modules.dashboards.services import data_source_registry
+
+        data_source_registry.register(
+            table_name=result["destination"]["table"],
+            project_id=req.project_id,
+            source_type="import",
+            source_id=str(result.get("import_id") or ""),
+            created_by=user.get("username"),
+        )
+    except ImportError:
+        pass
+
+    return result
