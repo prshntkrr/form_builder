@@ -556,7 +556,7 @@ Rules decide which questions and groups apply, given the answers so far.
 
 ### 5.6 Location and area settings
 
-- `config.location` — `{"enabled": true, "required": false}` when the form records
+- `config.location` — `{"enabled": true, "required": fal se}` when the form records
   where it was filled in. Absent when it does not. Capture the device position
   and send it with the submission (6.7).
 - `config.geofence` — `{"enabled": true, "polygon": [[longitude, latitude], …]}`
