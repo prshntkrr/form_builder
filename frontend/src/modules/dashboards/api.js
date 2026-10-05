@@ -5,8 +5,10 @@ export const api = {
   // Dashboard persistence
   // -----------------------------
 
-  listDashboards: () =>
-    request('/dashboards'),
+  // A dashboard is only reachable from inside its own project, so the project
+  // is always passed. Without it the list comes back empty rather than global.
+  listDashboards: (projectId) =>
+    request(`/dashboards?project_id=${encodeURIComponent(projectId || '')}`),
 
   getDashboard: (dashboardId) =>
     request(`/dashboards/${encodeURIComponent(dashboardId)}`),
@@ -77,8 +79,12 @@ export const api = {
   // Data sources
   // -----------------------------
 
-  listDataSources: () =>
-    request('/dashboards/data-sources'),
+  // Scoped to one project: the form tables of forms in it, plus the Excel and
+  // external-database imports registered to it. Empty without a project.
+  listDataSources: (projectId) =>
+    request(
+      `/dashboards/data-sources?project_id=${encodeURIComponent(projectId || '')}`
+    ),
 
   getDataSource: (tableName) =>
     request(
@@ -88,10 +94,11 @@ export const api = {
   // Creates the table and fills it in one call. The name comes back with the
   // _tabular suffix the picker discovers sources by, which is not always what
   // was typed — the caller shows what was actually created.
-  importExcelSource: (file, tableName) => {
+  importExcelSource: (file, tableName, projectId) => {
     const body = new FormData()
     body.append('file', file)
     body.append('table_name', tableName)
+    body.append('project_id', projectId || '')
     return request('/dashboards/data-sources/excel', { method: 'POST', body })
   },
 

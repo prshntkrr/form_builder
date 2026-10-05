@@ -37,6 +37,14 @@ class Permission:
     label: str
     detail: str
     group: str
+    # A permission usable *inside a project* even though it is not one of the
+    # projects module's own permissions. It may be held by a project role
+    # (so it does not knock the role off the project side — see
+    # projects.is_project_role) and, in the hybrid model, it may be granted
+    # either on an account role or on a project role. Dashboards are the first:
+    # a dashboard belongs to a project, so a project role can carry the right
+    # to build or read one. Left False means an ordinary account permission.
+    shared: bool = False
 
 
 CORE_CATALOGUE: List[Permission] = [
@@ -195,7 +203,7 @@ def __getattr__(name: str):
     register its permissions until it has been imported, and importing every
     module from here would be a cycle.
     """
-    if name in ("ALL", "CATALOGUE", "BY_KEY", "GROUPS", "BUILT_IN"):
+    if name in ("ALL", "CATALOGUE", "BY_KEY", "GROUPS", "BUILT_IN", "SHARED"):
         _ensure()
         if name == "CATALOGUE":
             return _catalogue()
@@ -205,6 +213,10 @@ def __getattr__(name: str):
             return {p.key: p for p in _catalogue()}
         if name == "GROUPS":
             return _group_order()
+        if name == "SHARED":
+            # Permissions usable inside a project but owned by another module —
+            # dashboards today. See Permission.shared.
+            return {p.key for p in _catalogue() if p.shared}
         return _built_in()
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 

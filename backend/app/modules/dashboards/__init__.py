@@ -18,11 +18,16 @@ MODULE = Module(
     routers=[dashboards.router],
     # Add table names here as schema.sql grows. Listing one makes the schema file
     # run on a fresh database and reports it in /api/health when it is absent.
-    tables=["dashboard", "dashboard_version"],
+    tables=["dashboard", "dashboard_version", "dashboard_data_source"],
     schema_file=Path(__file__).resolve().parent / "schema.sql",
     migrations=[
         bootstrap.ensure_version_columns,
         bootstrap.ensure_dashboard_version_table,
         bootstrap.ensure_share_columns,
+        bootstrap.ensure_dashboard_project,
+        bootstrap.ensure_dashboard_project_key,
+        bootstrap.ensure_data_source_table,
+        bootstrap.ensure_data_source_project_key,
+        bootstrap.ensure_data_source_backfill,
     ],
 )

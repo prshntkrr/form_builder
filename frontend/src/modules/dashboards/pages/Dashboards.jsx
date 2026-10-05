@@ -47,6 +47,7 @@ import {
   settleAggregation,
 } from "../chartConfig.js";
 import { useCapabilities } from "../../../core/auth.jsx";
+import { useProjects, useProject } from "../../projects/active.js";
 import {
   CHIP_LIMIT,
   bindingFilters,
@@ -118,6 +119,21 @@ const ADD_MENU_HEIGHT = 170;
 
 export default function Dashboards() {
   const can = useCapabilities();
+
+  /* Dashboards and their data sources are scoped to one project. `projectId` is
+     null in the system context (no project chosen), where there is nothing to
+     show or build — a dashboard is only ever reachable from inside a project. */
+  const { projectId } = useProjects();
+
+  /* Inside a project the project role is the sole authority for dashboard
+     permissions — the account role is irrelevant. The server enforces the same
+     rule, so a button only shows where the project role allows it. */
+  const { can: projectCan } = useProject(projectId);
+  const mayBuild = projectId ? projectCan("dashboards.create") : can.build_dashboards;
+  const mayEdit = projectId ? projectCan("dashboards.edit") : can.edit_dashboards;
+  const mayImport = projectId
+    ? projectCan("dashboards.import_source")
+    : can.import_dashboard_source;
 
   const [dataSources, setDataSources] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -509,10 +525,15 @@ export default function Dashboards() {
      ========================================================= */
 
   const loadSavedDashboards = async () => {
+    if (!projectId) {
+      setSavedDashboards([]);
+      return;
+    }
+
     setLoadingSavedDashboards(true);
 
     try {
-      const result = await api.listDashboards();
+      const result = await api.listDashboards(projectId);
 
       setSavedDashboards(Array.isArray(result) ? result : []);
     } catch (e) {
@@ -525,6 +546,12 @@ export default function Dashboards() {
   /* Read once on arrival, and again after an import adds one. Returns the
      list so the caller can act on what is now there. */
   const loadDataSources = async ({ showLoading = true } = {}) => {
+    if (!projectId) {
+      setDataSources([]);
+      if (showLoading) setLoading(false);
+      return [];
+    }
+
     if (showLoading) {
       setLoading(true);
     }
@@ -532,7 +559,7 @@ export default function Dashboards() {
     setError("");
 
     try {
-      const result = await api.listDataSources();
+      const result = await api.listDataSources(projectId);
       const sources = result.data_sources || [];
 
       setDataSources(sources);
@@ -549,10 +576,13 @@ export default function Dashboards() {
     }
   };
 
+  /* Reloads whenever the active project changes, so switching project swaps
+     both lists rather than leaving the previous project's showing. */
   useEffect(() => {
     loadDataSources();
     loadSavedDashboards();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]);
 
   /* =========================================================
      IMPORT A SPREADSHEET AS A DATA SOURCE
@@ -580,7 +610,11 @@ export default function Dashboards() {
     setImportError("");
 
     try {
-      const result = await api.importExcelSource(importFile, importName.trim());
+      const result = await api.importExcelSource(
+        importFile,
+        importName.trim(),
+        projectId,
+      );
 
       // The picker finds sources by their _tabular suffix, so the table that
       // was created is rarely named exactly what was typed. Select by what
@@ -1031,6 +1065,11 @@ export default function Dashboards() {
       return;
     }
 
+    if (!projectId) {
+      setSaveError("Choose a project before saving a dashboard.");
+      return;
+    }
+
     setSaving(true);
     setSaveError("");
 
@@ -1043,6 +1082,10 @@ export default function Dashboards() {
 
       const dashboardToSave = {
         ...dashboardWithLayout,
+
+        // The project the dashboard is created in; the server stores it and
+        // every later view of this project reads it back.
+        project_id: projectId,
 
         dashboard: {
           ...(dashboardWithLayout.dashboard || {}),
@@ -3707,11 +3750,23 @@ export default function Dashboards() {
         </div>
       )}
 
+      {/* No project chosen. Dashboards live inside a project — there is nothing
+          to list or build in the system context. */}
+      {!projectId && (
+        <div className="blank">
+          <h2>Choose a project</h2>
+          <p>
+            Dashboards belong to a project. Pick one from “Working in” above to
+            see its dashboards and build new ones.
+          </p>
+        </div>
+      )}
+
       {/* API error */}
-      {error && <div className="alert alert--bad">{error}</div>}
+      {projectId && error && <div className="alert alert--bad">{error}</div>}
 
       {/* Loading */}
-      {loading && (
+      {projectId && loading && (
         <div className="stack-list">
           <div
             className="skeleton"
@@ -3730,18 +3785,23 @@ export default function Dashboards() {
       )}
 
       {/* No data sources */}
-      {view === "builder" && !loading && !error && dataSources.length === 0 && (
-        <div className="blank">
-          <h2>No data sources yet</h2>
+      {projectId &&
+        view === "builder" &&
+        !loading &&
+        !error &&
+        dataSources.length === 0 && (
+          <div className="blank">
+            <h2>No data sources yet</h2>
 
-          <p>
-            Create a form and submit some data to create a tabular data source.
-          </p>
-        </div>
-      )}
+            <p>
+              Add a form to this project and submit some data, or import a
+              spreadsheet or external table, to create a data source.
+            </p>
+          </div>
+        )}
 
       {/* Saved dashboards — where this page opens */}
-      {view === "list" && !loading && !error && (
+      {projectId && view === "list" && !loading && !error && (
         <section
           className="card card--pad"
           style={{
@@ -3767,7 +3827,7 @@ export default function Dashboards() {
               onChange={(e) => setListSearch(e.target.value)}
             />
 
-            {can.build_dashboards && (
+            {mayBuild && (
               <button
                 className="btn btn--primary"
                 type="button"
@@ -3873,14 +3933,14 @@ export default function Dashboards() {
       {/* Data source selector. It used to stay on screen above an opened
           dashboard, which is what made opening one look like nothing had
           happened. */}
-      {view === "builder" && !dashboard && !loading && !error && (
+      {projectId && view === "builder" && !dashboard && !loading && !error && (
         <section className="card card--pad">
           {/* The heading carries the import action, so bringing data in and
               choosing data are the same decision in the same place. */}
           <div className="dash__source-head">
             <h2>Select Data Source</h2>
 
-            {can.import_dashboard_source && (
+            {mayImport && (
               <button
                 className="btn"
                 type="button"
@@ -3912,9 +3972,7 @@ export default function Dashboards() {
           {dataSources.length === 0 && (
             <div className="tiny muted" style={{ marginBottom: 8 }}>
               No data sources yet.
-              {can.import_dashboard_source
-                ? " Import a spreadsheet to create one."
-                : ""}
+              {mayImport ? " Import a spreadsheet to create one." : ""}
             </div>
           )}
 
@@ -4182,7 +4240,7 @@ export default function Dashboards() {
                   <div className="dash__version-bar">
                     {/* Option B: if a latest draft exists, show Continue Editing.
                         Otherwise show Edit Dashboard. */}
-                    {can.edit_dashboards && (hasLatestDraft ? (
+                    {mayEdit && (hasLatestDraft ? (
                       <button
                         className="btn"
                         type="button"
