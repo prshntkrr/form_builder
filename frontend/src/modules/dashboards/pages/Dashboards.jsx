@@ -2384,16 +2384,22 @@ export default function Dashboards() {
 
     const widgetStyle = presentation.background_color ? { backgroundColor: presentation.background_color } : {};
 
+    const widgetFontFamily = presentation.font_family || null;
+
     const headerTitleStyle = {
       ...(titleStyle.font_size ? { fontSize: `${titleStyle.font_size}px` } : {}),
       ...(titleStyle.bold ? { fontWeight: "bold" } : {}),
-      ...(titleStyle.italic ? { fontStyle: "italic" } : {})
+      ...(titleStyle.italic ? { fontStyle: "italic" } : {}),
+      ...(titleStyle.color ? { color: titleStyle.color } : {}),
+      ...(widgetFontFamily ? { fontFamily: widgetFontFamily } : {})
     };
 
     const headerSubtitleStyle = {
       ...(subtitleStyle.font_size ? { fontSize: `${subtitleStyle.font_size}px` } : {}),
       ...(subtitleStyle.bold ? { fontWeight: "bold" } : {}),
-      ...(subtitleStyle.italic ? { fontStyle: "italic" } : {})
+      ...(subtitleStyle.italic ? { fontStyle: "italic" } : {}),
+      ...(subtitleStyle.color ? { color: subtitleStyle.color } : {}),
+      ...(widgetFontFamily ? { fontFamily: widgetFontFamily } : {})
     };
 
     const renderHeader = () => (
@@ -2404,7 +2410,7 @@ export default function Dashboards() {
             {iconSymbol && <span style={{ marginLeft: "8px" }}>{iconSymbol}</span>}
           </h3>
           {presentation.subtitle && (
-            <div className="dash__widget-subtitle" style={{...headerSubtitleStyle, marginTop: "4px", color: "var(--text-muted, #666)"}}>
+            <div className="dash__widget-subtitle" style={{...headerSubtitleStyle, marginTop: "4px", ...(!subtitleStyle.color ? { color: "var(--text-muted, #666)" } : {})}}>
               {presentation.subtitle}
             </div>
           )}
@@ -2533,8 +2539,10 @@ export default function Dashboards() {
         subtitle: "",
         title_icon: "",
         background_color: "",
-        title_style: { font_size: "", bold: false, italic: false },
-        subtitle_style: { font_size: "", bold: false, italic: false },
+        font_family: "",
+        series_colors: [],
+        title_style: { font_size: "", bold: false, italic: false, color: "" },
+        subtitle_style: { font_size: "", bold: false, italic: false, color: "" },
         x_axis: { title: "", font_size: "", bold: false, italic: false },
         y_axis: { title: "", font_size: "", bold: false, italic: false }
       },
@@ -2663,15 +2671,19 @@ export default function Dashboards() {
         subtitle: p.subtitle || "",
         title_icon: p.title_icon || "",
         background_color: p.background_color || "",
+        font_family: p.font_family || "",
+        series_colors: Array.isArray(p.series_colors) ? [...p.series_colors] : [],
         title_style: {
           font_size: p.title_style?.font_size || "",
           bold: p.title_style?.bold || false,
-          italic: p.title_style?.italic || false
+          italic: p.title_style?.italic || false,
+          color: p.title_style?.color || ""
         },
         subtitle_style: {
           font_size: p.subtitle_style?.font_size || "",
           bold: p.subtitle_style?.bold || false,
-          italic: p.subtitle_style?.italic || false
+          italic: p.subtitle_style?.italic || false,
+          color: p.subtitle_style?.color || ""
         },
         x_axis: {
           title: p.x_axis?.title || "",
@@ -5911,12 +5923,97 @@ export default function Dashboards() {
 
             <h3 style={{ marginBottom: 16 }}>Appearance</h3>
 
-            {/* Colour, per kind of graph. Each control writes one key, and an
-                unset key means the graph keeps the colour it always had —
-                which is why every one of these has a Clear beside it. */}
-            {["bar", "line", "histogram", "bubble", "scatter"].includes(
+            <label className="dash__edit-label">Font Family</label>
+            <select
+              className="control"
+              value={widgetForm.presentation?.font_family || ""}
+              onChange={(e) =>
+                setWidgetForm((curr) => ({
+                  ...curr,
+                  presentation: { ...curr.presentation, font_family: e.target.value }
+                }))
+              }
+              style={{ marginBottom: 16 }}
+            >
+              <option value="">Default</option>
+              <option value="Arial">Arial</option>
+              <option value="Helvetica">Helvetica</option>
+              <option value="Georgia">Georgia</option>
+              <option value="Times New Roman">Times New Roman</option>
+              <option value="Courier New">Courier New</option>
+              <option value="Monaco">Monaco</option>
+            </select>
+
+            {/* Series colours: a list of colours applied cyclically to
+                categories (single series) or one-per-series (multi-series).
+                Chart types that have their own colour model are excluded. */}
+            {["bar", "line", "pie", "doughnut", "histogram", "bubble", "scatter"].includes(
               widgetForm.type,
             ) && (
+              <>
+                <label className="dash__edit-label">Series Colors</label>
+
+                {(widgetForm.presentation?.series_colors || []).map((color, index) => (
+                  <div className="dash__color-row" key={index} style={{ marginBottom: 6 }}>
+                    <span style={{ fontSize: 13, color: "var(--text-muted, #888)", minWidth: 20 }}>{index + 1}</span>
+                    <input
+                      className="control"
+                      type="color"
+                      aria-label={`Series color ${index + 1}`}
+                      value={color}
+                      onChange={(e) =>
+                        setWidgetForm((curr) => {
+                          const next = [...(curr.presentation?.series_colors || [])];
+                          next[index] = e.target.value;
+                          return { ...curr, presentation: { ...curr.presentation, series_colors: next } };
+                        })
+                      }
+                    />
+                    <span style={{ fontSize: 12, color: "var(--text-muted, #888)" }}>{color}</span>
+                    <button
+                      type="button"
+                      className="btn1"
+                      onClick={() =>
+                        setWidgetForm((curr) => {
+                          const next = [...(curr.presentation?.series_colors || [])];
+                          next.splice(index, 1);
+                          return { ...curr, presentation: { ...curr.presentation, series_colors: next } };
+                        })
+                      }
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+
+                {(widgetForm.presentation?.series_colors || []).length < 12 && (
+                  <button
+                    type="button"
+                    className="btn1"
+                    style={{ marginBottom: 16 }}
+                    onClick={() =>
+                      setWidgetForm((curr) => {
+                        const next = [...(curr.presentation?.series_colors || [])];
+                        next.push("#1a5f3f");
+                        return { ...curr, presentation: { ...curr.presentation, series_colors: next } };
+                      })
+                    }
+                  >
+                    + Add Color
+                  </button>
+                )}
+
+                {(widgetForm.presentation?.series_colors || []).length === 0 && (
+                  <p className="muted" style={{ fontSize: 12, marginBottom: 16 }}>No custom colors — using defaults.</p>
+                )}
+              </>
+            )}
+
+            {/* Legacy single-color and palette controls for types that still
+                use them as a fallback when no series_colors are set. */}
+            {["bar", "line", "histogram", "bubble", "scatter"].includes(
+              widgetForm.type,
+            ) && (widgetForm.presentation?.series_colors || []).length === 0 && (
               <>
                 <label className="dash__edit-label">
                   {widgetForm.type === "line" ? "Line Color" : "Bar / Point Color"}
@@ -5955,7 +6052,7 @@ export default function Dashboards() {
               </>
             )}
 
-            {["pie", "doughnut"].includes(widgetForm.type) && (
+            {["pie", "doughnut"].includes(widgetForm.type) && (widgetForm.presentation?.series_colors || []).length === 0 && (
               <>
                 <label className="dash__edit-label">Slice Colours</label>
 
@@ -6210,6 +6307,43 @@ export default function Dashboards() {
               </label>
             </div>
 
+            <label className="dash__edit-label">Title Color</label>
+            <div className="dash__color-row">
+              <input
+                className="control"
+                type="color"
+                aria-label="Title colour"
+                value={widgetForm.presentation?.title_style?.color || "#222222"}
+                onChange={(e) =>
+                  setWidgetForm((curr) => ({
+                    ...curr,
+                    presentation: {
+                      ...curr.presentation,
+                      title_style: { ...(curr.presentation?.title_style || {}), color: e.target.value }
+                    }
+                  }))
+                }
+              />
+              <span style={{ fontSize: 12, color: "var(--text-muted, #888)" }}>
+                {widgetForm.presentation?.title_style?.color || "default"}
+              </span>
+              <button
+                type="button"
+                className="btn1"
+                onClick={() =>
+                  setWidgetForm((curr) => ({
+                    ...curr,
+                    presentation: {
+                      ...curr.presentation,
+                      title_style: { ...(curr.presentation?.title_style || {}), color: "" }
+                    }
+                  }))
+                }
+              >
+                Clear
+              </button>
+            </div>
+
             <h3 style={{ marginBottom: 16, marginTop: 24 }}>Subtitle</h3>
             <label className="dash__edit-label">Subtitle Text</label>
             <input
@@ -6270,6 +6404,43 @@ export default function Dashboards() {
                 />{" "}
                 Italic
               </label>
+            </div>
+
+            <label className="dash__edit-label">Subtitle Color</label>
+            <div className="dash__color-row">
+              <input
+                className="control"
+                type="color"
+                aria-label="Subtitle colour"
+                value={widgetForm.presentation?.subtitle_style?.color || "#666666"}
+                onChange={(e) =>
+                  setWidgetForm((curr) => ({
+                    ...curr,
+                    presentation: {
+                      ...curr.presentation,
+                      subtitle_style: { ...(curr.presentation?.subtitle_style || {}), color: e.target.value }
+                    }
+                  }))
+                }
+              />
+              <span style={{ fontSize: 12, color: "var(--text-muted, #888)" }}>
+                {widgetForm.presentation?.subtitle_style?.color || "default"}
+              </span>
+              <button
+                type="button"
+                className="btn1"
+                onClick={() =>
+                  setWidgetForm((curr) => ({
+                    ...curr,
+                    presentation: {
+                      ...curr.presentation,
+                      subtitle_style: { ...(curr.presentation?.subtitle_style || {}), color: "" }
+                    }
+                  }))
+                }
+              >
+                Clear
+              </button>
             </div>
 
             {(widgetForm.type === "bar" || widgetForm.type === "line") && (

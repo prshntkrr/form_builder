@@ -116,12 +116,57 @@ describe('a palette shorter than the data', () => {
   })
 })
 
+describe('series colours (the per-widget palette)', () => {
+  test('are returned when set', () => {
+    const colors = widgetColors(widget({ series_colors: ['#ff0000', '#00ff00'] }))
+    expect(colors.seriesColors).toEqual(['#ff0000', '#00ff00'])
+  })
+
+  test('an empty list counts as no list', () => {
+    expect(widgetColors(widget({ series_colors: [] })).seriesColors).toBeNull()
+  })
+
+  test('are null when absent', () => {
+    expect(widgetColors(widget(undefined)).seriesColors).toBeNull()
+  })
+})
+
+describe('title and subtitle colours', () => {
+  test('title colour lives in title_style', () => {
+    expect(widgetColors(widget({ title_style: { color: '#cc0000' } })).titleColor)
+      .toBe('#cc0000')
+  })
+
+  test('subtitle colour lives in subtitle_style', () => {
+    expect(widgetColors(widget({ subtitle_style: { color: '#0000cc' } })).subtitleColor)
+      .toBe('#0000cc')
+  })
+
+  test('are null when not set', () => {
+    const colors = widgetColors(widget(undefined))
+    expect(colors.titleColor).toBeNull()
+    expect(colors.subtitleColor).toBeNull()
+  })
+})
+
+describe('font family', () => {
+  test('is returned when set', () => {
+    expect(widgetColors(widget({ font_family: 'Georgia' })).fontFamily)
+      .toBe('Georgia')
+  })
+
+  test('is null when absent', () => {
+    expect(widgetColors(widget(undefined)).fontFamily).toBeNull()
+  })
+})
+
 describe('what gets saved', () => {
   test('every colour the resolver reads is a key the saver keeps', () => {
     // If these drift apart, colours are chosen on screen and silently lost on
     // save — which is the quietest way this feature could fail.
     expect(COLOR_KEYS).toEqual([
       'series_color',
+      'series_colors',
       'palette',
       'value_color',
       'marker_color',

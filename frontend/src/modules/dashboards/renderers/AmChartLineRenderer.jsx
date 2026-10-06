@@ -44,6 +44,8 @@ export default function AmChartLineRenderer({ widget, data, rows, dashboard }) {
 
     root.setThemes([am5themes_Animated.new(root)]);
 
+    const fontFamily = widget.presentation?.font_family || undefined;
+
     /* Every number this chart draws — axis ticks and tooltips alike — reads
        the way it does on a stat tile: grouped, and no more decimals than it
        deserves. An average arrives as 420.0111111111111. */
@@ -83,6 +85,7 @@ export default function AmChartLineRenderer({ widget, data, rows, dashboard }) {
       paddingRight: 5,
       oversizedBehavior: "truncate",
       maxWidth: 120,
+      fontFamily,
     });
 
     const { rows: categories, series: lines } = lineSeriesData(
@@ -101,7 +104,8 @@ export default function AmChartLineRenderer({ widget, data, rows, dashboard }) {
         centerX: am5.p50,
         fontWeight: widget.presentation.x_axis.bold ? "bold" : "normal",
         fontStyle: widget.presentation.x_axis.italic ? "italic" : "normal",
-        fontSize: widget.presentation.x_axis.font_size || undefined
+        fontSize: widget.presentation.x_axis.font_size || undefined,
+        fontFamily,
       }));
     }
 
@@ -115,6 +119,7 @@ export default function AmChartLineRenderer({ widget, data, rows, dashboard }) {
 
     yAxis.get("renderer").labels.template.setAll({
       fontSize: 12,
+      fontFamily,
     });
 
     if (widget.presentation?.y_axis?.title) {
@@ -126,14 +131,17 @@ export default function AmChartLineRenderer({ widget, data, rows, dashboard }) {
         rotation: -90,
         fontWeight: widget.presentation.y_axis.bold ? "bold" : "normal",
         fontStyle: widget.presentation.y_axis.italic ? "italic" : "normal",
-        fontSize: widget.presentation.y_axis.font_size || undefined
+        fontSize: widget.presentation.y_axis.font_size || undefined,
+        fontFamily,
       }));
     }
 
     // ── Series ─────────────────────────────────────────────────
 
+    const colors = widgetColors(widget, dashboard);
+
     /* The colour this widget was given, or the app's accent as before. */
-    const chosen = widgetColors(widget, dashboard).series;
+    const chosen = colors.series;
 
     const accent =
       chosen
@@ -143,11 +151,13 @@ export default function AmChartLineRenderer({ widget, data, rows, dashboard }) {
 
     /* One line keeps the colour it always had. Several take the widget's
        palette, so each is told apart from the others without anybody
-       choosing six colours by hand. */
+       choosing six colours by hand. series_colors overrides both. */
     const shades =
-      lines.length > 1
-        ? paletteFor(lines.length, widgetColors(widget, dashboard).palette)
-        : [accent];
+      colors.seriesColors
+        ? paletteFor(lines.length, colors.seriesColors)
+        : lines.length > 1
+          ? paletteFor(lines.length, colors.palette)
+          : [accent];
 
     lines.forEach((line, index) => {
       const shade = shades[index] || accent;

@@ -110,6 +110,7 @@ export default function HighchartBubbleRenderer({ widget, data, dashboard }) {
         type: "bubble",
         backgroundColor: "transparent",
         animation: false,
+        style: { fontFamily: p.font_family || "inherit" },
         // Highcharts keeps 10px around the plot and 15 under it, which is
         // a second margin inside a widget that already has one.
         spacing: [4, 4, 4, 4],
