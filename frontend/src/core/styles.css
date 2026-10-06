@@ -779,7 +779,6 @@ table.data td { max-width: 240px; overflow: hidden; text-overflow: ellipsis; whi
 .gate__sub { margin-bottom: 8px; text-align: center; font-size: 14px; }
 .gate__card .note { margin-top: 12px; }
 
-<<<<<<< Updated upstream
 .gate__remember {
   display: flex; align-items: center; gap: 8px; margin-top: 14px;
   font-size: 13.5px; color: var(--ink-2); cursor: pointer; user-select: none;
@@ -802,12 +801,9 @@ table.data td { max-width: 240px; overflow: hidden; text-overflow: ellipsis; whi
   .gate__art { display: none; }
 }
 
-.account { display: flex; align-items: center; gap: 9px; padding: 4px 2px; }
-=======
 .account-wrap { position: relative; padding: 0 8px 8px; }
 .account { display: flex; align-items: center; gap: 9px; padding: 6px 8px; border-radius: var(--r-sm); }
 .account:hover { background: var(--accent-wash); }
->>>>>>> Stashed changes
 .account__id {
   display: flex; flex-direction: column; min-width: 0; flex: 1; line-height: 1.25;
 }

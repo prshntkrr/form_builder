@@ -4,6 +4,7 @@ import HighchartsReact from "highcharts-react-official";
 
 import { widgetColors } from "./colors.js";
 import { useChartFit } from "./useChartFit.js";
+import { scatterPoints } from "./prepareChartData.js";
 
 export default function HighchartScatterRenderer({ widget, data, dashboard }) {
   // Sized and resized by its container, not by a 400px default.
@@ -16,26 +17,9 @@ export default function HighchartScatterRenderer({ widget, data, dashboard }) {
     const xField = scatterConfig.x;
     const yField = scatterConfig.y;
 
-    const xAlias = `${xField}_none`;
-    const yAlias = `${yField}_none`;
-
-    const seriesData = [];
-
-    if (data && data.length > 0) {
-      for (const row of data) {
-        const xVal = row[xAlias];
-        const yVal = row[yAlias];
-
-        if (xVal !== null && xVal !== undefined && yVal !== null && yVal !== undefined) {
-          const numX = Number(xVal);
-          const numY = Number(yVal);
-          
-          if (!isNaN(numX) && isFinite(numX) && !isNaN(numY) && isFinite(numY)) {
-            seriesData.push([numX, numY]);
-          }
-        }
-      }
-    }
+    // Built in prepareChartData, so an exported point list is the points that
+    // were drawn — including which rows were dropped for not being numbers.
+    const seriesData = scatterPoints(widget, data);
 
     return {
       chart: {

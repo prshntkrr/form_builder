@@ -48,6 +48,13 @@ import {
 } from "../chartConfig.js";
 import { useCapabilities } from "../../../core/auth.jsx";
 import { useProjects, useProject } from "../../projects/active.js";
+import WidgetContextMenu from "../components/WidgetContextMenu.jsx";
+import WidgetFullscreen from "../components/WidgetFullscreen.jsx";
+import {
+  downloadWidgetData,
+  downloadWidgetImage,
+  printWidget,
+} from "../widgetExport.js";
 import {
   CHIP_LIMIT,
   bindingFilters,
@@ -321,6 +328,11 @@ export default function Dashboards() {
   /* Which page of each table is on screen. Keyed by widget, because two
      tables on one dashboard page independently. */
   const [tablePages, setTablePages] = useState({});
+
+  /* Which widget is filling the screen, by id rather than by value: holding
+     the widget itself would make a second copy that stops matching the one on
+     the dashboard the moment anything edits it. Null is the ordinary grid. */
+  const [fullscreenWidgetId, setFullscreenWidgetId] = useState(null);
 
   /* What the editor's preview is showing: the rows it drew, or why it has
      nothing to draw. Never mixed into `widgetData`, which belongs to the
@@ -2278,6 +2290,21 @@ export default function Dashboards() {
      the dashboard's own, and `options.readOnly` leaves off the Edit and
      Remove buttons. Both are for the editor's preview, which is this same
      function so that a preview cannot drift from the widget it previews. */
+  /* Run one widget export and say so if it fails.
+
+     Nothing here touches the dashboard: no state the grid reads is set on the
+     way in, so asking for a picture does not redraw the other widgets, and a
+     failure leaves the dashboard exactly as it was. */
+  const runExport = async (work) => {
+    setExportError("");
+
+    try {
+      await work();
+    } catch (err) {
+      setExportError(err?.message || "That export did not work.");
+    }
+  };
+
   const renderWidget = (widget, options = {}) => {
     const {
       rows = NO_ROWS,
@@ -2323,6 +2350,30 @@ export default function Dashboards() {
       </div>
     );
 
+    /* The ⋮ and what it opens. Not in edit mode, where the card already
+       carries Select / Edit / Remove and is being dragged about, and not on a
+       widget drawn read-only inside a preview or the fullscreen view — the
+       menu belongs to the tile on the dashboard. */
+    const contextMenu = !isEditMode && !options.readOnly && (
+      <WidgetContextMenu
+        widget={widget}
+        onFullscreen={() => setFullscreenWidgetId(widget.id)}
+        onImage={(format, card) =>
+          runExport(() => downloadWidgetImage(widget, card, format))
+        }
+        onData={(format) =>
+          runExport(() =>
+            downloadWidgetData(
+              widget,
+              { rows, numRows, data: preparedData.get(widget.id), fields },
+              format,
+            ),
+          )
+        }
+        onPrint={(card) => runExport(() => printWidget(widget, card))}
+      />
+    );
+
     const presentation = widget.presentation || {};
     /* Whatever this widget should be coloured, decided once for every branch
        below rather than in each of them. */
@@ -2359,6 +2410,7 @@ export default function Dashboards() {
           )}
         </div>
         {editButton}
+        {contextMenu}
       </div>
     );
 
@@ -2400,7 +2452,14 @@ export default function Dashboards() {
           rows={rows}
           numRows={numRows}
           dashboard={dashboard}
-          actions={editButton}
+          /* A KPI draws its own header, so its ⋮ travels with the edit
+             controls rather than through `renderHeader`. */
+          actions={
+            <>
+              {editButton}
+              {contextMenu}
+            </>
+          }
         />
       );
     }
@@ -3314,6 +3373,18 @@ export default function Dashboards() {
 
     return prepared;
   }, [dashboard, widgetData]);
+
+  /* The widget filling the screen, looked up from the dashboard rather than
+     copied when it was opened — so it is the same object the grid is drawing
+     and cannot describe an older version of itself. Null closes the view,
+     which is also what happens if the widget is removed while it is open. */
+  const fullscreenWidget = useMemo(
+    () =>
+      (dashboard?.widgets || []).find(
+        (item) => item.id === fullscreenWidgetId,
+      ) || null,
+    [dashboard, fullscreenWidgetId],
+  );
 
   /* What each widget is worth on a printed page.
 
@@ -4785,6 +4856,21 @@ export default function Dashboards() {
                       )}
                     </div>
                   </div>
+
+                  {/* One widget filling the screen. Drawn from the dashboard's
+                      own widget list by id, through the same `renderWidget`,
+                      so it is the same specification with the same data and
+                      the same colours — a second instance of it, which leaves
+                      the tile in the grid (and a map's Google instance)
+                      exactly where it was. */}
+                  {fullscreenWidget && (
+                    <WidgetFullscreen
+                      widget={fullscreenWidget}
+                      onClose={() => setFullscreenWidgetId(null)}
+                    >
+                      {renderWidget(fullscreenWidget, { readOnly: true })}
+                    </WidgetFullscreen>
+                  )}
 
                   {/* Add a widget: a floating "+" where "+ Add Graph" stood,
                       opening to the three things a dashboard is made of. */}
