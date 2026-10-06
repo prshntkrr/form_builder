@@ -1,6 +1,6 @@
 import React from "react";
 
-import { formatKpiValue, iconSymbol, kpiIconId } from "../kpi.js";
+import { iconSymbol, kpiDisplayValue, kpiIconId } from "../kpi.js";
 import { widgetColors } from "./colors.js";
 
 /**
@@ -65,40 +65,9 @@ export default function KpiRenderer({
     );
   }
 
-  const measure = widget.data_binding?.measures?.[0];
-
-  let displayValue;
-
-  if (widget.kpi?.format === "percentage" && widget.kpi.numerator) {
-    const denomAlias = measure ? `${measure.field}_count` : null;
-
-    const denomValue = denomAlias
-      ? Number(firstRow[denomAlias] || 0)
-      : Number(Object.values(firstRow)[0] || 0);
-
-    const numRow = numRows ? numRows[0] : null;
-
-    const numValue = numRow && denomAlias
-      ? Number(numRow[denomAlias] || 0)
-      : numRow
-        ? Number(Object.values(numRow)[0] || 0)
-        : 0;
-
-    displayValue =
-      denomValue === 0
-        ? "0%"
-        : `${Math.round((numValue / denomValue) * 100)}%`;
-  } else {
-    const measureAlias = measure
-      ? `${measure.field}_${measure.aggregation.toLowerCase()}`
-      : null;
-
-    // Formatted for reading, never rounded on the way in: the value the
-    // server calculated is what the widget still holds.
-    displayValue = formatKpiValue(
-      measureAlias ? firstRow[measureAlias] : Object.values(firstRow)[0],
-    );
-  }
+  // Derived in kpi.js, so exporting this card's figure cannot disagree with
+  // the figure on it.
+  const displayValue = kpiDisplayValue(widget, rows, numRows);
 
   const symbol = iconSymbol(kpiIconId(widget));
 
