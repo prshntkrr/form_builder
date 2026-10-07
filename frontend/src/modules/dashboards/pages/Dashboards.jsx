@@ -58,7 +58,11 @@ import {
 import {
   CHIP_LIMIT,
   bindingFilters,
+  configuredDependencies,
   configuredFields,
+  dependencyDescendants,
+  dependencyParents,
+  dependencyProblem,
   fieldProblem,
   filterLabel,
   matchingOptions,
@@ -251,6 +255,16 @@ export default function Dashboards() {
   const [showFilterFields, setShowFilterFields] = useState(false);
   const [filterDraft, setFilterDraft] = useState([]);
   const [filterDraftError, setFilterDraftError] = useState("");
+
+  /* Dependency filter configuration: the working copy while the modal is
+     open, and a flag to show/hide it. */
+  const [showDependencyModal, setShowDependencyModal] = useState(false);
+  const [dependencyDraft, setDependencyDraft] = useState([]);
+  const [dependencyDraftError, setDependencyDraftError] = useState("");
+
+  /* A generation counter per dependent field, so a stale async response
+     cannot overwrite a newer selection's options. */
+  const depLoadGeneration = useRef({});
 
   const filterBarRef = useRef(null);
 
@@ -878,6 +892,7 @@ export default function Dashboards() {
     setFilterSearch({});
     setOpenFilter(null);
     setDashboardFilters([]);
+    depLoadGeneration.current = {};
   };
 
   /* The values one filter can be set to.
@@ -925,16 +940,28 @@ export default function Dashboards() {
         return null;
       }
 
-      loadFilterOptions(field);
+      /* A dependent field whose parent has a selection needs its options
+         narrowed by that selection — so it goes through the dependent
+         loader, which falls back to the normal one when no parents are
+         selected.  The non-dependent path is unchanged. */
+      const dependencies = configuredDependencies(dashboard);
+      const parents = dependencyParents(field, dependencies);
+
+      if (parents.length) {
+        loadDependentFilterOptions(field);
+      } else {
+        loadFilterOptions(field);
+      }
+
       return field;
     });
   };
 
   const toggleFilterValue = (field, value) =>
-    setFilterSelections((current) => toggleValue(current, field, value));
+    toggleFilterValueWithDeps(field, value);
 
   const clearFilterValue = (field, value) =>
-    setFilterSelections((current) => removeValue(current, field, value));
+    clearFilterValueWithDeps(field, value);
 
   /* Nothing is queried until this. Selections are turned into the ordinary
      `IN` filters the binding already carries, and every widget reloads
@@ -1030,6 +1057,210 @@ export default function Dashboards() {
 
     setShowFilterFields(false);
     setFilterDraftError("");
+  };
+
+  /* ── configuring which filters depend on which ────────────────── */
+
+  const openDependencyModal = () => {
+    setDependencyDraft(
+      configuredDependencies(dashboard).map((dep) => ({ ...dep })),
+    );
+    setDependencyDraftError("");
+    setShowDependencyModal(true);
+  };
+
+  const updateDependencyDraft = (index, changes) =>
+    setDependencyDraft((current) =>
+      current.map((entry, position) =>
+        position === index ? { ...entry, ...changes } : entry,
+      ),
+    );
+
+  const addDependencyDraftRule = () =>
+    setDependencyDraft((current) => [
+      ...current,
+      { primary: "", secondary: "" },
+    ]);
+
+  const removeDependencyDraftRule = (index) =>
+    setDependencyDraft((current) =>
+      current.filter((_, position) => position !== index),
+    );
+
+  const saveDependencies = () => {
+    const filterFields = configuredFields(dashboard);
+
+    for (let index = 0; index < dependencyDraft.length; index += 1) {
+      const problem = dependencyProblem(
+        dependencyDraft[index].primary,
+        dependencyDraft[index].secondary,
+        dependencyDraft,
+        index,
+        filterFields,
+      );
+
+      if (problem) {
+        setDependencyDraftError(problem);
+        return;
+      }
+    }
+
+    const configured = dependencyDraft
+      .filter((dep) => dep.primary && dep.secondary)
+      .map((dep) => ({
+        primary: dep.primary,
+        secondary: dep.secondary,
+      }));
+
+    setDashboard((current) =>
+      current ? { ...current, filter_dependencies: configured } : current,
+    );
+
+    setShowDependencyModal(false);
+    setDependencyDraftError("");
+
+    /* Invalidate cached options for any field that is now a dependent — its
+       options may need to be re-fetched with parent context next time. */
+    const dependents = new Set(configured.map((dep) => dep.secondary));
+
+    setFilterOptions((current) => {
+      const next = { ...current };
+
+      for (const field of dependents) {
+        delete next[field];
+      }
+
+      return next;
+    });
+  };
+
+  /* ── runtime dependency cascading ─────────────────────────────── */
+
+  const loadDependentFilterOptions = async (field) => {
+    if (!selectedSource) return;
+
+    const dependencies = configuredDependencies(dashboard);
+    const parents = dependencyParents(field, dependencies);
+
+    /* If this field has no parents, fall through to the normal loader. */
+    if (!parents.length) {
+      loadFilterOptions(field);
+      return;
+    }
+
+    /* Build parent filters from current selections. */
+    const parentFilters = parents
+      .filter((parentField) => {
+        const picked = filterSelections[parentField];
+        return picked && picked.length > 0;
+      })
+      .map((parentField) => ({
+        field: parentField,
+        values: filterSelections[parentField],
+      }));
+
+    /* No parents have been selected yet — load all values. */
+    if (!parentFilters.length) {
+      loadFilterOptions(field);
+      return;
+    }
+
+    const generation = (depLoadGeneration.current[field] || 0) + 1;
+    depLoadGeneration.current[field] = generation;
+
+    setFilterOptions((current) => ({
+      ...current,
+      [field]: { status: "loading", values: [], error: "" },
+    }));
+
+    try {
+      const answer = await api.getDependentFilterOptions(
+        selectedSource.name,
+        field,
+        parentFilters,
+      );
+
+      /* A newer load was started while this one was in flight. */
+      if (depLoadGeneration.current[field] !== generation) return;
+
+      setFilterOptions((current) => ({
+        ...current,
+        [field]: {
+          status: "ready",
+          values: answer.values || [],
+          error: "",
+        },
+      }));
+    } catch (error) {
+      if (depLoadGeneration.current[field] !== generation) return;
+
+      setFilterOptions((current) => ({
+        ...current,
+        [field]: {
+          status: "error",
+          values: [],
+          error: error?.message || "These values could not be loaded.",
+        },
+      }));
+    }
+  };
+
+  /* When a filter value is toggled and that field is a dependency parent,
+     clear all descendant selections and invalidate their cached options so
+     they are re-fetched with the new parent context. */
+  const toggleFilterValueWithDeps = (field, value) => {
+    const dependencies = configuredDependencies(dashboard);
+    const descendants = dependencyDescendants(field, dependencies);
+
+    setFilterSelections((current) => {
+      const next = toggleValue(current, field, value);
+
+      for (const descendant of descendants) {
+        delete next[descendant];
+      }
+
+      return next;
+    });
+
+    /* Invalidate cached options so the next open fetches with new parents. */
+    if (descendants.length) {
+      setFilterOptions((current) => {
+        const next = { ...current };
+
+        for (const descendant of descendants) {
+          delete next[descendant];
+        }
+
+        return next;
+      });
+    }
+  };
+
+  const clearFilterValueWithDeps = (field, value) => {
+    const dependencies = configuredDependencies(dashboard);
+    const descendants = dependencyDescendants(field, dependencies);
+
+    setFilterSelections((current) => {
+      const next = removeValue(current, field, value);
+
+      for (const descendant of descendants) {
+        delete next[descendant];
+      }
+
+      return next;
+    });
+
+    if (descendants.length) {
+      setFilterOptions((current) => {
+        const next = { ...current };
+
+        for (const descendant of descendants) {
+          delete next[descendant];
+        }
+
+        return next;
+      });
+    }
   };
 
   /* =========================================================
@@ -5239,14 +5470,26 @@ export default function Dashboards() {
               ))}
             </div>
 
-            <button
-              className="btn btn--sm"
-              type="button"
-              style={{ marginTop: 8 }}
-              onClick={addFilterDraftField}
+            <div
+              className="dash__filter-modal-buttons"
+              style={{ display: "flex", gap: 8, marginTop: 8 }}
             >
-              + Add Field
-            </button>
+              <button
+                className="btn btn--sm"
+                type="button"
+                onClick={addFilterDraftField}
+              >
+                + Add Field
+              </button>
+
+              <button
+                className="btn btn--sm"
+                type="button"
+                onClick={openDependencyModal}
+              >
+                Dependency Filter
+              </button>
+            </div>
 
             {filterDraftError && (
               <div
@@ -5272,6 +5515,135 @@ export default function Dashboards() {
                 onClick={saveFilterFields}
               >
                 Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =====================================================
+          DEPENDENCY FILTER — cascading relationships
+          ===================================================== */}
+
+      {showDependencyModal && (
+        <div className="modal-backdrop">
+          <div
+            className="modal modal--filters"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="dependency-filter-title"
+          >
+            <h2 id="dependency-filter-title">Dependency Filter</h2>
+
+            <p className="muted">
+              When one filter&apos;s options should depend on the selected
+              values of another. For example, selecting a state narrows the
+              districts to those in that state.
+            </p>
+
+            {dependencyDraft.length === 0 && (
+              <p className="tiny muted" style={{ marginTop: 12 }}>
+                No dependency rules yet — add one below.
+              </p>
+            )}
+
+            <div className="dash__filter-fields">
+              {dependencyDraft.map((dep, index) => (
+                <div className="dash__filter-field-row" key={index}>
+                  <label className="tiny muted">
+                    Primary column
+                    <select
+                      className="control"
+                      value={dep.primary}
+                      aria-label={`Dependency ${index + 1} primary`}
+                      onChange={(e) => {
+                        setDependencyDraftError("");
+                        updateDependencyDraft(index, {
+                          primary: e.target.value,
+                        });
+                      }}
+                    >
+                      <option value="">Select column</option>
+
+                      {configuredFields(dashboard).map((entry) => (
+                        <option key={entry.field} value={entry.field}>
+                          {filterLabel(entry, fields)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="tiny muted">
+                    Secondary column
+                    <select
+                      className="control"
+                      value={dep.secondary}
+                      aria-label={`Dependency ${index + 1} secondary`}
+                      onChange={(e) => {
+                        setDependencyDraftError("");
+                        updateDependencyDraft(index, {
+                          secondary: e.target.value,
+                        });
+                      }}
+                    >
+                      <option value="">Select column</option>
+
+                      {configuredFields(dashboard).map((entry) => (
+                        <option key={entry.field} value={entry.field}>
+                          {filterLabel(entry, fields)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <button
+                    className="btn btn--tiny"
+                    type="button"
+                    aria-label={`Remove dependency ${index + 1}`}
+                    onClick={() => {
+                      setDependencyDraftError("");
+                      removeDependencyDraftRule(index);
+                    }}
+                  >
+                    🗑
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <button
+              className="btn btn--sm"
+              type="button"
+              style={{ marginTop: 8 }}
+              onClick={addDependencyDraftRule}
+            >
+              + Add Rule
+            </button>
+
+            {dependencyDraftError && (
+              <div
+                className="alert alert--bad"
+                style={{ marginTop: 12 }}
+              >
+                {dependencyDraftError}
+              </div>
+            )}
+
+            <div className="dash__modal-actions">
+              <button
+                className="btn"
+                type="button"
+                onClick={() => setShowDependencyModal(false)}
+              >
+                Close
+              </button>
+
+              <button
+                className="btn btn--primary"
+                type="button"
+                onClick={saveDependencies}
+              >
+                Apply
               </button>
             </div>
           </div>

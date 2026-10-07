@@ -141,3 +141,141 @@ export function matchingOptions(values = [], search = "") {
     String(value).toLowerCase().includes(needle),
   );
 }
+
+// ── dependency configuration ─────────────────────────────────────
+
+/** The dependencies a dashboard has configured, from its specification. */
+export function configuredDependencies(dashboard) {
+  return dashboard?.filter_dependencies || [];
+}
+
+/**
+ * Why this dependency rule is invalid, or null.
+ *
+ * Catches self-dependencies, duplicates, and fields that are not among
+ * the dashboard's configured filter fields.
+ */
+export function dependencyProblem(primary, secondary, existing = [], skipIndex = -1, filterFields = []) {
+  if (!primary) return "Choose a primary column.";
+  if (!secondary) return "Choose a secondary column.";
+  if (primary === secondary) return "Primary and secondary columns must be different.";
+
+  const fields = new Set(filterFields.map((f) => f.field));
+  if (!fields.has(primary)) return `"${primary}" is not a configured filter field.`;
+  if (!fields.has(secondary)) return `"${secondary}" is not a configured filter field.`;
+
+  const duplicate = existing.some(
+    (dep, index) =>
+      index !== skipIndex &&
+      dep.primary === primary &&
+      dep.secondary === secondary,
+  );
+
+  if (duplicate) return "This dependency already exists.";
+
+  // Check for cycles: adding primary→secondary must not create one.
+  const edges = existing
+    .filter((_, index) => index !== skipIndex)
+    .map((dep) => [dep.primary, dep.secondary]);
+  edges.push([primary, secondary]);
+
+  if (hasCycle(edges)) return "This dependency would create a cycle.";
+
+  return null;
+}
+
+/**
+ * Whether a set of directed edges contains a cycle.
+ *
+ * Standard DFS cycle detection on a directed graph. Each edge is
+ * [from, to]. Returns true if any cycle exists.
+ */
+export function hasCycle(edges) {
+  const graph = new Map();
+
+  for (const [from, to] of edges) {
+    if (!graph.has(from)) graph.set(from, []);
+    graph.get(from).push(to);
+  }
+
+  const visited = new Set();
+  const inStack = new Set();
+
+  function dfs(node) {
+    if (inStack.has(node)) return true;
+    if (visited.has(node)) return false;
+
+    visited.add(node);
+    inStack.add(node);
+
+    for (const neighbor of graph.get(node) || []) {
+      if (dfs(neighbor)) return true;
+    }
+
+    inStack.delete(node);
+    return false;
+  }
+
+  for (const node of graph.keys()) {
+    if (dfs(node)) return true;
+  }
+
+  return false;
+}
+
+/**
+ * All descendants of a field in the dependency graph.
+ *
+ * If State → District → Municipality, then descendants of State are
+ * [District, Municipality]. Used to know which selections to clear
+ * when a parent changes.
+ */
+export function dependencyDescendants(field, dependencies) {
+  const children = new Map();
+
+  for (const dep of dependencies) {
+    if (!children.has(dep.primary)) children.set(dep.primary, []);
+    children.get(dep.primary).push(dep.secondary);
+  }
+
+  const result = [];
+  const queue = [field];
+
+  while (queue.length) {
+    const current = queue.shift();
+    for (const child of children.get(current) || []) {
+      if (!result.includes(child)) {
+        result.push(child);
+        queue.push(child);
+      }
+    }
+  }
+
+  return result;
+}
+
+/**
+ * The parent chain for a field: which fields must be selected before
+ * this one's options can be narrowed.
+ *
+ * If State → District → Municipality, then parents of Municipality are
+ * [District, State] — immediate parent first, root last. Each entry
+ * carries the primary field name.
+ */
+export function dependencyParents(field, dependencies) {
+  const parentOf = new Map();
+
+  for (const dep of dependencies) {
+    parentOf.set(dep.secondary, dep.primary);
+  }
+
+  const result = [];
+  let current = field;
+
+  while (parentOf.has(current)) {
+    current = parentOf.get(current);
+    result.push(current);
+  }
+
+  return result;
+}

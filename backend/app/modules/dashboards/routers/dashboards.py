@@ -37,6 +37,7 @@ from app.modules.dashboards.services.query_builder import (
 )
 from app.modules.dashboards.services.query_service import (
     count_dashboard_rows,
+    dependent_field_values,
     distinct_field_values,
     execute_dashboard_query,
 )
@@ -262,6 +263,70 @@ def get_filter_options(
     return {
         "field": field,
         "values": distinct_field_values(table, field),
+    }
+
+
+@router.post("/data-sources/{table_name}/filter-options")
+def get_dependent_filter_options(
+    table_name: str,
+    payload: Dict[str, Any],
+    user: Dict[str, Any] = Depends(dash_access.needs_for_table(DASHBOARDS_VIEW)),
+):
+    """Dependent filter options: distinct values narrowed by parent selections.
+
+    The request carries the child field and an array of parent filters, each
+    with its own field and selected values.  Every field is validated against
+    the table's columns — nothing from the request reaches SQL as text.
+    """
+    table = (table_name or "").strip()
+
+    if not table.endswith("_tabular"):
+        raise HTTPException(
+            status_code=400,
+            detail="Only tabular dashboard data sources are supported.",
+        )
+
+    columns = list_table_columns(
+        table_name=table,
+        schema_name=settings.db_schema,
+    )
+
+    if not columns:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Data source '{table}' was not found.",
+        )
+
+    column_names = {column["name"] for column in columns}
+
+    field = (payload.get("field") or "").strip()
+    if not field or field not in column_names:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Unknown filter field: {field}",
+        )
+
+    parent_filters = payload.get("parent_filters") or []
+    validated_parents = []
+
+    for pf in parent_filters:
+        pf_field = (pf.get("field") or "").strip()
+        pf_values = pf.get("values") or []
+
+        if not pf_field or pf_field not in column_names:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Unknown parent filter field: {pf_field}",
+            )
+
+        if not isinstance(pf_values, list) or not pf_values:
+            continue
+
+        validated_parents.append({"field": pf_field, "values": pf_values})
+
+    return {
+        "field": field,
+        "values": dependent_field_values(table, field, validated_parents),
     }
 
 

@@ -28,9 +28,13 @@ from app.modules.dashboards.services.query_builder import (
     build_distinct_query,
     build_select_query,
 )
-from app.modules.dashboards.routers.dashboards import get_filter_options
+from app.modules.dashboards.routers.dashboards import (
+    get_dependent_filter_options,
+    get_filter_options,
+)
 from app.modules.dashboards.services.query_service import (
     count_dashboard_rows,
+    dependent_field_values,
     distinct_field_values,
     execute_dashboard_query,
 )
@@ -303,4 +307,188 @@ class TestTheEndpoint:
 
         # Declared on the route, so a caller without one never reaches the
         # function called above.
+        assert isinstance(guard, params.Depends)
+
+
+# ── dependency configuration ───────────────────────────────────────
+
+class TestDependencyConfiguration:
+    """The filter_dependencies field on the dashboard specification."""
+
+    def test_a_dashboard_saved_before_dependencies_existed_still_validates(self):
+        assert spec().filter_dependencies == []
+
+    def test_a_valid_dependency_is_accepted(self):
+        s = spec(
+            filter_fields=[{"field": "district"}, {"field": "municipality"}],
+        )
+        s = DashboardSpecification(
+            **{**s.model_dump(), "filter_dependencies": [
+                {"primary": "district", "secondary": "municipality"},
+            ]},
+        )
+        assert len(s.filter_dependencies) == 1
+        assert s.filter_dependencies[0].primary == "district"
+        assert s.filter_dependencies[0].secondary == "municipality"
+
+    def test_a_self_dependency_is_rejected(self):
+        with pytest.raises(Exception, match="to itself"):
+            DashboardSpecification(
+                **{**spec([{"field": "district"}]).model_dump(),
+                   "filter_dependencies": [
+                       {"primary": "district", "secondary": "district"},
+                   ]},
+            )
+
+    def test_duplicate_dependencies_are_rejected(self):
+        with pytest.raises(Exception, match="Duplicate"):
+            DashboardSpecification(
+                **{**spec([{"field": "district"}, {"field": "municipality"}]).model_dump(),
+                   "filter_dependencies": [
+                       {"primary": "district", "secondary": "municipality"},
+                       {"primary": "district", "secondary": "municipality"},
+                   ]},
+            )
+
+    def test_a_cycle_is_rejected(self):
+        with pytest.raises(Exception, match="cycle"):
+            DashboardSpecification(
+                **{**spec([{"field": "district"}, {"field": "municipality"}]).model_dump(),
+                   "filter_dependencies": [
+                       {"primary": "district", "secondary": "municipality"},
+                       {"primary": "municipality", "secondary": "district"},
+                   ]},
+            )
+
+    def test_a_dependency_referencing_a_non_filter_field_is_rejected(self):
+        with pytest.raises(Exception, match="not a configured"):
+            DashboardSpecification(
+                **{**spec([{"field": "district"}]).model_dump(),
+                   "filter_dependencies": [
+                       {"primary": "district", "secondary": "municipality"},
+                   ]},
+            )
+
+    def test_dependency_fields_must_be_data_source_columns(self):
+        """The validator checks against the data source, not just filter_fields."""
+        s = DashboardSpecification(
+            **{**spec([{"field": "district"}, {"field": "municipality"}]).model_dump(),
+               "filter_dependencies": [
+                   {"primary": "district", "secondary": "municipality"},
+               ]},
+        )
+
+        assert validate_dashboard_spec(s, {"source_1": FIELDS})
+
+    def test_dependency_with_unknown_source_column_is_rejected(self):
+        """A dependency naming a column not in the data source fails validation."""
+        s = DashboardSpecification(
+            **{**spec([{"field": "district"}, {"field": "not_a_column"}]).model_dump(),
+               "filter_dependencies": [
+                   {"primary": "district", "secondary": "not_a_column"},
+               ]},
+        )
+
+        with pytest.raises(DashboardValidationError, match="not a column"):
+            validate_dashboard_spec(s, {"source_1": FIELDS})
+
+
+# ── dependent filter options ───────────────────────────────────────
+
+@needs_db
+class TestDependentOptions:
+    """Distinct values narrowed by parent selections."""
+
+    def test_dependent_values_are_narrowed_by_parent(self, table):
+        values = dependent_field_values(
+            TABLE, "municipality",
+            [{"field": "district", "values": ["Dudhuwa"]}],
+        )
+        assert values == ["Joshipur", "Raptisonari"]
+
+    def test_multiple_parent_values_produce_a_union(self, table):
+        values = dependent_field_values(
+            TABLE, "municipality",
+            [{"field": "district", "values": ["Dudhuwa", "Janaki"]}],
+        )
+        assert values == ["Joshipur", "Raptisonari"]
+
+    def test_a_parent_that_matches_nothing_returns_empty(self, table):
+        values = dependent_field_values(
+            TABLE, "municipality",
+            [{"field": "district", "values": ["Nonexistent"]}],
+        )
+        assert values == []
+
+    def test_no_parent_filters_returns_all_values(self, table):
+        values = dependent_field_values(TABLE, "municipality", [])
+        assert values == ["Joshipur", "Raptisonari"]
+
+    def test_parent_values_are_parameterized_not_interpolated(self, table):
+        """SQL injection through a parent value must be impossible."""
+        from app.modules.dashboards.services.query_builder import (
+            build_dependent_distinct_query,
+        )
+
+        query, params = build_dependent_distinct_query(
+            TABLE, "municipality",
+            [{"field": "district", "values": ["'; DROP TABLE x; --"]}],
+        )
+
+        with get_connection() as conn:
+            rendered = query.as_string(conn)
+
+        assert "'; DROP TABLE" not in rendered
+        assert "%s" in rendered
+
+    def test_the_dependent_endpoint_validates_fields(self, table):
+        """Unknown fields in the payload are refused."""
+        with pytest.raises(HTTPException) as refused:
+            get_dependent_filter_options(
+                TABLE,
+                {"field": "nonexistent", "parent_filters": []},
+                user={"username": "tester"},
+            )
+
+        assert refused.value.status_code == 422
+
+    def test_the_dependent_endpoint_validates_parent_fields(self, table):
+        with pytest.raises(HTTPException) as refused:
+            get_dependent_filter_options(
+                TABLE,
+                {
+                    "field": "municipality",
+                    "parent_filters": [
+                        {"field": "injected; DROP TABLE x", "values": ["v"]},
+                    ],
+                },
+                user={"username": "tester"},
+            )
+
+        assert refused.value.status_code == 422
+
+    def test_the_dependent_endpoint_returns_filtered_values(self, table):
+        result = get_dependent_filter_options(
+            TABLE,
+            {
+                "field": "municipality",
+                "parent_filters": [
+                    {"field": "district", "values": ["Rampur"]},
+                ],
+            },
+            user={"username": "tester"},
+        )
+
+        assert result["field"] == "municipality"
+        assert result["values"] == ["Joshipur", "Raptisonari"]
+
+    def test_the_dependent_endpoint_is_behind_a_permission(self):
+        import inspect
+
+        from fastapi import params
+
+        guard = inspect.signature(
+            get_dependent_filter_options
+        ).parameters["user"].default
+
         assert isinstance(guard, params.Depends)
