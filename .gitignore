@@ -20,7 +20,7 @@ htmlcov/
 # ── downloaded models ────────────────────────────────────────────────────────
 # The speaker-embedding model for voice sign-in (26 MB). Committed so deploys
 # do not depend on an external download that can require authentication.
-backend/models/*.onnx
+# backend/models/*.onnx
 
 # ── node / frontend ──────────────────────────────────────────────────────────
 node_modules/
