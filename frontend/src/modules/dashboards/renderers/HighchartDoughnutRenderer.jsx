@@ -20,10 +20,13 @@ export default function HighchartDoughnutRenderer({ widget, data, dashboard }) {
   // Sized and resized by its container, not by a 400px default.
   const chartComponentRef = useChartFit();
 
+  const wc = useMemo(() => widgetColors(widget, dashboard), [widget, dashboard]);
+
   // Match the existing hsl() colour palette from the Recharts renderer.
+  // series_colors overrides the named palette when set.
   const colors = useMemo(
-    () => paletteFor(data.length, widgetColors(widget, dashboard).palette),
-    [data, widget, dashboard],
+    () => paletteFor(data.length, wc.seriesColors || wc.palette),
+    [data, wc],
   );
 
   const options = useMemo(
@@ -31,7 +34,7 @@ export default function HighchartDoughnutRenderer({ widget, data, dashboard }) {
       chart: {
         type: "pie",
         backgroundColor: widget.presentation?.background_color || "transparent",
-        style: { fontFamily: "inherit" },
+        style: { fontFamily: widget.presentation?.font_family || "inherit" },
         // Highcharts keeps 10px around the plot and 15 under it, which is
         // a second margin inside a widget that already has one.
         spacing: [4, 4, 4, 4],

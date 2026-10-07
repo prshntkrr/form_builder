@@ -19,11 +19,14 @@ export default function HighchartHistogramRenderer({ widget, data, dashboard }) 
     // it cannot disagree about where the bucket edges are.
     const { categories, counts: seriesData } = histogramBins(widget, data);
 
+    const colors = widgetColors(widget, dashboard);
+
     return {
       chart: {
         type: "column",
         backgroundColor: "transparent",
         animation: false,
+        style: { fontFamily: p.font_family || "inherit" },
         // Highcharts keeps 10px around the plot and 15 under it, which is
         // a second margin inside a widget that already has one.
         spacing: [4, 4, 4, 4],
@@ -69,8 +72,13 @@ export default function HighchartHistogramRenderer({ widget, data, dashboard }) 
       series: [
         {
           name: "Frequency",
-          color: widgetColors(widget, dashboard).series || undefined,
-          data: seriesData
+          color: colors.series || undefined,
+          data: colors.seriesColors
+            ? seriesData.map((v, i) => ({
+                y: v,
+                color: colors.seriesColors[i % colors.seriesColors.length],
+              }))
+            : seriesData,
         }
       ]
     };

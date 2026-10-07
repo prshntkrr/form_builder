@@ -35,10 +35,14 @@ export default function KpiRenderer({
   const titleStyle = presentation.title_style || {};
   const subtitleStyle = presentation.subtitle_style || {};
 
+  const fontFamily = presentation.font_family || undefined;
+
   const headerTitleStyle = {
     ...(titleStyle.font_size ? { fontSize: `${titleStyle.font_size}px` } : {}),
     ...(titleStyle.bold ? { fontWeight: "bold" } : {}),
     ...(titleStyle.italic ? { fontStyle: "italic" } : {}),
+    ...(titleStyle.color ? { color: titleStyle.color } : {}),
+    ...(fontFamily ? { fontFamily } : {}),
   };
 
   const headerSubtitleStyle = {
@@ -47,6 +51,8 @@ export default function KpiRenderer({
       : {}),
     ...(subtitleStyle.bold ? { fontWeight: "bold" } : {}),
     ...(subtitleStyle.italic ? { fontStyle: "italic" } : {}),
+    ...(subtitleStyle.color ? { color: subtitleStyle.color } : {}),
+    ...(fontFamily ? { fontFamily } : {}),
   };
 
   const firstRow = rows[0];

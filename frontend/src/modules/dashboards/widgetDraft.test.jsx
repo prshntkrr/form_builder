@@ -366,3 +366,88 @@ describe('the filters a widget already had', () => {
     expect(after.data_binding.filters).toEqual(FILTER)
   })
 })
+
+describe('the new presentation properties', () => {
+  test('font_family is saved when set', () => {
+    const p = presentationFor({
+      type: 'bar',
+      presentation: { font_family: 'Georgia' },
+    })
+
+    expect(p.font_family).toBe('Georgia')
+  })
+
+  test('font_family is omitted when empty', () => {
+    const p = presentationFor({
+      type: 'bar',
+      presentation: { font_family: '' },
+    })
+
+    expect(p).not.toHaveProperty('font_family')
+  })
+
+  test('title_style.color is saved when set', () => {
+    const p = presentationFor({
+      type: 'bar',
+      presentation: { title_style: { color: '#cc0000' } },
+    })
+
+    expect(p.title_style.color).toBe('#cc0000')
+  })
+
+  test('subtitle_style.color is saved when set', () => {
+    const p = presentationFor({
+      type: 'bar',
+      presentation: { subtitle_style: { color: '#0000cc' } },
+    })
+
+    expect(p.subtitle_style.color).toBe('#0000cc')
+  })
+
+  test('title_style is omitted when all fields empty', () => {
+    const p = presentationFor({
+      type: 'bar',
+      presentation: { title_style: { font_size: '', bold: false, italic: false, color: '' } },
+    })
+
+    expect(p).not.toHaveProperty('title_style')
+  })
+
+  test('series_colors array is saved', () => {
+    const p = presentationFor({
+      type: 'bar',
+      presentation: { series_colors: ['#ff0000', '#00ff00'] },
+    })
+
+    expect(p.series_colors).toEqual(['#ff0000', '#00ff00'])
+  })
+
+  test('empty series_colors array is omitted', () => {
+    const p = presentationFor({
+      type: 'bar',
+      presentation: { series_colors: [] },
+    })
+
+    expect(p).not.toHaveProperty('series_colors')
+  })
+
+  test('an old widget without the new properties still works', () => {
+    const p = presentationFor({
+      type: 'bar',
+      presentation: { series_color: '#1a5f3f' },
+    })
+
+    expect(p.series_color).toBe('#1a5f3f')
+    expect(p).not.toHaveProperty('font_family')
+    expect(p).not.toHaveProperty('series_colors')
+  })
+
+  test('title_style.font_family is saved when set', () => {
+    const p = presentationFor({
+      type: 'bar',
+      presentation: { title_style: { font_family: 'Courier New' } },
+    })
+
+    expect(p.title_style.font_family).toBe('Courier New')
+  })
+})

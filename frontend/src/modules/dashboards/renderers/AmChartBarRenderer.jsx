@@ -56,6 +56,8 @@ export default function AmChartBarRenderer({ widget, data, rows, dashboard }) {
 
     root.setThemes([am5themes_Animated.new(root)]);
 
+    const fontFamily = widget.presentation?.font_family || undefined;
+
     const chart = root.container.children.push(
       am5xy.XYChart.new(root, {
         panX: false,
@@ -85,6 +87,7 @@ export default function AmChartBarRenderer({ widget, data, rows, dashboard }) {
 
     xAxis.get("renderer").labels.template.setAll({
       fontSize: 12,
+      fontFamily,
       rotation: -25,
       centerY: am5.p50,
       centerX: am5.p100,
@@ -103,7 +106,8 @@ export default function AmChartBarRenderer({ widget, data, rows, dashboard }) {
         centerX: am5.p50,
         fontWeight: widget.presentation.x_axis.bold ? "bold" : "normal",
         fontStyle: widget.presentation.x_axis.italic ? "italic" : "normal",
-        fontSize: widget.presentation.x_axis.font_size || undefined
+        fontSize: widget.presentation.x_axis.font_size || undefined,
+        fontFamily,
       }));
     }
 
@@ -117,6 +121,7 @@ export default function AmChartBarRenderer({ widget, data, rows, dashboard }) {
 
     yAxis.get("renderer").labels.template.setAll({
       fontSize: 12,
+      fontFamily,
     });
 
     if (widget.presentation?.y_axis?.title) {
@@ -128,7 +133,8 @@ export default function AmChartBarRenderer({ widget, data, rows, dashboard }) {
         rotation: -90,
         fontWeight: widget.presentation.y_axis.bold ? "bold" : "normal",
         fontStyle: widget.presentation.y_axis.italic ? "italic" : "normal",
-        fontSize: widget.presentation.y_axis.font_size || undefined
+        fontSize: widget.presentation.y_axis.font_size || undefined,
+        fontFamily,
       }));
     }
 
@@ -148,7 +154,9 @@ export default function AmChartBarRenderer({ widget, data, rows, dashboard }) {
       // between the two comparing modes, which is why they are one mode
       // setting and not two chart types.
       const stacked = mode === "stacked";
-      const shades = paletteFor(compared.series.length, colors.palette);
+      const shades = colors.seriesColors
+        ? paletteFor(compared.series.length, colors.seriesColors)
+        : paletteFor(compared.series.length, colors.palette);
 
       compared.series.forEach((name, index) => {
         const series = chart.series.push(
@@ -216,14 +224,28 @@ export default function AmChartBarRenderer({ widget, data, rows, dashboard }) {
         strokeOpacity: 0,
       });
 
-      /* The colour this widget was given, or the app's accent as before. */
-      const accent = colors.series || accentFallback();
-
-      if (accent) {
-        series.columns.template.setAll({
-          fill: am5.color(accent),
-          stroke: am5.color(accent),
+      if (colors.seriesColors) {
+        const sc = colors.seriesColors;
+        series.columns.template.adapters.add("fill", (fill, target) => {
+          const di = target.dataItem;
+          const index = di ? series.dataItems.indexOf(di) : 0;
+          return am5.color(sc[(index < 0 ? 0 : index) % sc.length]);
         });
+        series.columns.template.adapters.add("stroke", (stroke, target) => {
+          const di = target.dataItem;
+          const index = di ? series.dataItems.indexOf(di) : 0;
+          return am5.color(sc[(index < 0 ? 0 : index) % sc.length]);
+        });
+      } else {
+        /* The colour this widget was given, or the app's accent as before. */
+        const accent = colors.series || accentFallback();
+
+        if (accent) {
+          series.columns.template.setAll({
+            fill: am5.color(accent),
+            stroke: am5.color(accent),
+          });
+        }
       }
 
       series.data.setAll(data);
