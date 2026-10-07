@@ -18,11 +18,9 @@ __pycache__/
 htmlcov/
 
 # ── downloaded models ────────────────────────────────────────────────────────
-# The speaker-embedding model for voice sign-in: 26 MB of weights, identical on
-# every installation, and fetched once by the command in requirements.txt. Not
-# in git because a binary that large is not worth a repository's history, and
-# nothing here modifies it.
-backend/models/*.onnx
+# The speaker-embedding model for voice sign-in (26 MB). Committed so deploys
+# do not depend on an external download that can require authentication.
+# backend/models/*.onnx
 
 # ── node / frontend ──────────────────────────────────────────────────────────
 node_modules/
