@@ -60,6 +60,21 @@ class Settings(BaseSettings):
     # of relying on the log. Never enable this where users are real.
     auth_expose_reset_link: bool = False
 
+    # How closely a voice must match the enrolled voiceprint to sign in, as a
+    # cosine similarity from -1 to 1.
+    #
+    # A setting rather than a constant because it is the one number here that
+    # cannot be decided in a codebase: it trades somebody being turned away in a
+    # noisy field against somebody else getting in, and where it belongs depends
+    # on the handsets and the places this installation is used in. Measured on
+    # clean recordings when this was built, the same speaker scored 0.90 and
+    # different speakers 0.08 and 0.16 — so this default sits well clear of
+    # both, and should be moved only on evidence from real sign-ins.
+    #
+    # Raise it to turn more impostors away at the cost of more rejected staff;
+    # lower it for the reverse. Both failures are real.
+    voice_match_threshold: float = 0.50
+
     # S3, for the images, recordings and documents a form collects. Without a
     # bucket the media endpoints answer 503 and everything else works as before.
     #

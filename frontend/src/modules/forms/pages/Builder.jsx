@@ -4,7 +4,7 @@ import { api } from '../api.js'
 import { formsChanged } from '../../../core/events.js'
 import FieldEditor from '../components/FieldEditor.jsx'
 import { defaultLanguage, languageChoices } from '../translate.js'
-import { applicable, removeFieldFromRules, renameFieldInRules } from '../conditions.js'
+import { applicable, removeFieldFromRules, renameFieldInRules, rulesAffectedBySectionChange, removeRules } from '../conditions.js'
 import { MAX_IDENTIFIER, fieldHidden, identifier } from '../fieldTypes.js'
 import { generateLayout, layoutIsStale, removeFromLayout, withFieldReplaced } from '../formLayout.js'
 import * as recovery from '../draftRecovery.js'
@@ -851,10 +851,92 @@ export default function Builder() {
     setLifted(null)
     setOver(null)
     if (from == null || target == null || from === target) return
+
+    // Work out the new section BEFORE splicing — the target index points at the
+    // field being dropped onto, which still sits in its own section.
+    const oldSection = form.fields[from].section || null
+    const targetField = form.fields[target]
+    const newSection = targetField?.section || null
+
     const fields = [...form.fields]
     const [moved] = fields.splice(from, 1)
     fields.splice(target, 0, moved)
-    setForm({ ...form, fields: fields.map((f, n) => ({ ...f, order: n + 1 })) })
+
+    let rules = form.rules
+    const secs = form.sections || []
+    const secTitle = (key) => secs.find((s) => s.key === key)?.title || key
+
+    if (newSection !== oldSection) {
+      // Rules that break when this field leaves its old section.
+      if (oldSection) {
+        const remaining = fields.filter((f) => f !== moved && (f.section || null) === oldSection)
+        const affected = rulesAffectedBySectionChange(form.rules, moved.name, oldSection, remaining)
+
+        if (affected.length) {
+          const desc = affected.map((r) => {
+            const t = r.target || {}
+            const conds = (r.conditions || []).map((c) => c.field).join(', ')
+            const tName = t.type === 'section' ? `Section: ${secTitle(t.key)}` : t.name
+            return `  • "${tName}" (depends on: ${conds})`
+          }).join('\n')
+
+          if (!window.confirm(
+            `Moving "${moved.label || moved.name}" from "${secTitle(oldSection)}" to "${newSection ? secTitle(newSection) : 'No section'}" will remove ${affected.length} rule(s):\n\n${desc}\n\nContinue?`
+          )) return
+
+          rules = removeRules(form.rules, affected)
+        }
+      }
+
+    }
+
+    setForm({
+      ...form,
+      fields: fields.map((f, n) => ({
+        ...f,
+        order: n + 1,
+        // Apply the section change to the moved field.
+        ...(f === moved && newSection !== oldSection ? { section: newSection } : {}),
+      })),
+      rules,
+    })
+  }
+
+  const changeSection = (fieldIndex, newSectionKey) => {
+    const field = form.fields[fieldIndex]
+    if (!field) return
+    const oldSection = field.section || null
+    const newSection = newSectionKey || null
+    if (oldSection === newSection) return
+
+    let rules = form.rules
+    const secs = form.sections || []
+    const secTitle = (key) => secs.find((s) => s.key === key)?.title || key
+
+    if (oldSection) {
+      const remaining = form.fields.filter((f, i) => i !== fieldIndex && (f.section || null) === oldSection)
+      const affected = rulesAffectedBySectionChange(form.rules, field.name, oldSection, remaining)
+
+      if (affected.length) {
+        const desc = affected.map((r) => {
+          const t = r.target || {}
+          const conds = (r.conditions || []).map((c) => c.field).join(', ')
+          const tName = t.type === 'section' ? `Section: ${secTitle(t.key)}` : t.name
+          return `  • "${tName}" (depends on: ${conds})`
+        }).join('\n')
+
+        if (!window.confirm(
+          `Moving "${field.label || field.name}" from "${secTitle(oldSection)}" to "${newSection ? secTitle(newSection) : 'No section'}" will remove ${affected.length} rule(s):\n\n${desc}\n\nContinue?`
+        )) return
+
+        rules = removeRules(form.rules, affected)
+      }
+    }
+
+    const fields = form.fields.map((f, i) =>
+      i === fieldIndex ? { ...f, section: newSection } : f
+    )
+    setForm({ ...form, fields, rules })
   }
 
   /* Opening Design is what gives a form a layout: made once from its own
@@ -1242,37 +1324,115 @@ export default function Builder() {
                   </div>
 
                     <div className="rows">
-                    {form.fields.map((f, i) => (
-                     <FieldEditor
-                       key={f._uid}
-                       field={f}
-                       index={i}
-                       total={form.fields.length}
-                       sections={form.sections || []}
-                       onAddSection={addSection}
-                       allFields={form.fields}
-                       selected={f.name === chosen}
-                       onSelect={() => setChosen(f.name)}
-                       translating={translating}
-                       words={translating
-                         ? (((form.translations || {})[language] || {}).fields || {})[f.name] || {}
-                         : undefined}
-                       onWords={translating ? (changes) => translate(f.name, changes) : undefined}
-                       renamedFrom={f._orig && f._orig !== f.name ? f._orig : null}
-                       hasResponses={responses > 0}
-                       dragging={lifted === i}
-                       dropEdge={over === i && lifted !== null && lifted !== i
-                         ? (lifted < i ? 'below' : 'above')
-                         : null}
-                       onChange={put}
-                       onMove={move}
-                       onRemove={remove}
-                       onDragStart={setLifted}
-                       onDragOver={setOver}
-                       onDragEnd={() => { setLifted(null); setOver(null) }}
-                       onDrop={settle}
-                     />
-                    ))}
+                    {(() => {
+                      const secs = form.sections || []
+                      if (!secs.length) {
+                        // No sections — flat list, same as before.
+                        return form.fields.map((f, i) => (
+                          <FieldEditor
+                            key={f._uid}
+                            field={f}
+                            index={i}
+                            total={form.fields.length}
+                            sections={secs}
+                            onAddSection={addSection}
+                            onSectionChange={changeSection}
+                            allFields={form.fields}
+                            selected={f.name === chosen}
+                            onSelect={() => setChosen(f.name)}
+                            translating={translating}
+                            words={translating
+                              ? (((form.translations || {})[language] || {}).fields || {})[f.name] || {}
+                              : undefined}
+                            onWords={translating ? (changes) => translate(f.name, changes) : undefined}
+                            renamedFrom={f._orig && f._orig !== f.name ? f._orig : null}
+                            hasResponses={responses > 0}
+                            dragging={lifted === i}
+                            dropEdge={over === i && lifted !== null && lifted !== i
+                              ? (lifted < i ? 'below' : 'above')
+                              : null}
+                            onChange={put}
+                            onMove={move}
+                            onRemove={remove}
+                            onDragStart={setLifted}
+                            onDragOver={setOver}
+                            onDragEnd={() => { setLifted(null); setOver(null) }}
+                            onDrop={settle}
+                          />
+                        ))
+                      }
+
+                      // Group fields by section, preserving order within each group.
+                      const groups = []
+                      const byKey = new Map()
+                      for (let i = 0; i < form.fields.length; i++) {
+                        const f = form.fields[i]
+                        const key = f.section || '_none'
+                        let g = byKey.get(key)
+                        if (!g) {
+                          const sec = secs.find((s) => s.key === f.section)
+                          g = { key, title: sec?.title || null, items: [] }
+                          byKey.set(key, g)
+                          groups.push(g)
+                        }
+                        g.items.push({ field: f, index: i })
+                      }
+
+                      return groups.map((g) => (
+                        <div
+                          key={g.key}
+                          className={`section-group${lifted != null && (form.fields[lifted]?.section || null) !== (g.key === '_none' ? null : g.key) ? ' section-group--drop-target' : ''}`}
+                        >
+                          <div
+                            className="section-divider"
+                            onDragOver={(e) => e.preventDefault()}
+                            onDrop={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              if (lifted == null) return
+                              const lastInGroup = g.items[g.items.length - 1]
+                              settle(lastInGroup.index)
+                            }}
+                          >
+                            <span className="section-divider__label">
+                              {g.title || 'No section'}
+                            </span>
+                          </div>
+                          {g.items.map(({ field: f, index: i }) => (
+                            <FieldEditor
+                              key={f._uid}
+                              field={f}
+                              index={i}
+                              total={form.fields.length}
+                              sections={secs}
+                              onAddSection={addSection}
+                              onSectionChange={changeSection}
+                              allFields={form.fields}
+                              selected={f.name === chosen}
+                              onSelect={() => setChosen(f.name)}
+                              translating={translating}
+                              words={translating
+                                ? (((form.translations || {})[language] || {}).fields || {})[f.name] || {}
+                                : undefined}
+                              onWords={translating ? (changes) => translate(f.name, changes) : undefined}
+                              renamedFrom={f._orig && f._orig !== f.name ? f._orig : null}
+                              hasResponses={responses > 0}
+                              dragging={lifted === i}
+                              dropEdge={over === i && lifted !== null && lifted !== i
+                                ? (lifted < i ? 'below' : 'above')
+                                : null}
+                              onChange={put}
+                              onMove={move}
+                              onRemove={remove}
+                              onDragStart={setLifted}
+                              onDragOver={setOver}
+                              onDragEnd={() => { setLifted(null); setOver(null) }}
+                              onDrop={settle}
+                            />
+                          ))}
+                        </div>
+                      ))
+                    })()}
                     </div>
 
                     <button className="btn btn--quiet addfield" onClick={add}>Add a question</button>
@@ -1310,12 +1470,61 @@ export default function Builder() {
                   fields={form.fields}
                   chosen={chosen}
                   onSelect={setChosen}
-                  /* The first edit makes the layout somebody's own: from here
-                     it is no longer rebuilt when the sections change, because
-                     rebuilding it would throw away what they arranged. */
-                  onChange={(layout) => setForm({
-                    ...form, layout: { ...layout, auto: false },
-                  })}
+                  onChange={(layout) => {
+                    const next = { ...layout, auto: false }
+
+                    // Sync field.section when a field moves between layout sections.
+                    // Layout section ids are form section keys (generateLayout keeps them).
+                    const sectionOf = new Map()
+                    for (const sec of next.sections || []) {
+                      for (const row of sec.containers || []) {
+                        for (const cell of row.fields || []) {
+                          sectionOf.set(cell.fieldId, sec.id)
+                        }
+                      }
+                    }
+
+                    const secs = form.sections || []
+                    const knownKeys = new Set(secs.map((s) => s.key))
+                    let fields = form.fields
+                    let rules = form.rules
+                    let synced = false
+
+                    for (let i = 0; i < fields.length; i++) {
+                      const f = fields[i]
+                      const layoutSec = sectionOf.get(f.name)
+                      if (!layoutSec) continue
+                      // Map layout section id to form section key — they match when the
+                      // section was created from a form section (which is the normal case).
+                      const newSection = knownKeys.has(layoutSec) ? layoutSec : f.section
+                      if ((newSection || null) === (f.section || null)) continue
+
+                      // Check for affected rules before changing.
+                      const oldSection = f.section || null
+                      if (oldSection) {
+                        const remaining = fields.filter((o, j) => j !== i && (o.section || null) === oldSection)
+                        const secTitle = (key) => secs.find((s) => s.key === key)?.title || key
+                        const affected = rulesAffectedBySectionChange(rules, f.name, oldSection, remaining)
+                        if (affected.length) {
+                          const desc = affected.map((r) => {
+                            const t = r.target || {}
+                            const conds = (r.conditions || []).map((c) => c.field).join(', ')
+                            const tName = t.type === 'section' ? `Section: ${secTitle(t.key)}` : t.name
+                            return `  • "${tName}" (depends on: ${conds})`
+                          }).join('\n')
+                          if (!window.confirm(
+                            `Moving "${f.label || f.name}" from "${secTitle(oldSection)}" to "${newSection ? secTitle(newSection) : 'No section'}" will remove ${affected.length} rule(s):\n\n${desc}\n\nContinue?`
+                          )) continue
+                          rules = removeRules(rules, affected)
+                        }
+                      }
+
+                      if (!synced) { fields = [...fields]; synced = true }
+                      fields[i] = { ...f, section: newSection || null }
+                    }
+
+                    setForm({ ...form, layout: next, fields, rules })
+                  }}
                 />
               )}
 
@@ -1524,6 +1733,7 @@ export default function Builder() {
               total={form.fields.length}
               sections={form.sections || []}
               onAddSection={addSection}
+              onSectionChange={changeSection}
               allFields={form.fields}
               formRules={form.rules || []}
               onRules={(rules) => setForm({ ...form, rules })}

@@ -15,6 +15,7 @@ from app.core.schemas import (
     ForgotPasswordRequest,
     LoginRequest,
     ResetPasswordRequest,
+    VoiceLoginRequest,
 )
 
 logger = logging.getLogger(__name__)
@@ -26,6 +27,35 @@ def login(req: LoginRequest, user_agent: Optional[str] = Header(default=None)):
     """Exchange an email and password for a session token."""
     try:
         return auth_service.login(req.email, req.password, user_agent)
+    except auth_service.AuthError as exc:
+        raise HTTPException(status_code=401, detail=str(exc))
+
+
+@router.post("/login/voice")
+def login_with_voice(req: VoiceLoginRequest,
+                     user_agent: Optional[str] = Header(default=None)):
+    """Exchange a recording of somebody speaking for a session token.
+
+    A 401 means the same thing it means on `/login`: either the account is not
+    there, or the credential was wrong. Which of the two is deliberately not
+    said, and an account with no voice enrolled is one of the cases it covers.
+    """
+    from app.core import voiceprint
+
+    if not voiceprint.available():
+        raise HTTPException(
+            status_code=503,
+            detail="Voice sign-in is not set up on this server.")
+
+    try:
+        samples = voiceprint.from_pcm16(req.recording)
+        return auth_service.login_with_voice(req.email, samples, user_agent)
+    except voiceprint.VoiceError as exc:
+        # A recording that cannot be measured — too short, almost silent, not
+        # audio. About the recording and not the account, so it is a 400 with
+        # the sentence that says what to do differently, and the account's
+        # lockout counter is untouched.
+        raise HTTPException(status_code=400, detail=str(exc))
     except auth_service.AuthError as exc:
         raise HTTPException(status_code=401, detail=str(exc))
 

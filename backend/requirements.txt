@@ -16,3 +16,18 @@ httpx==0.28.1
 # Reading an external MySQL database (app/modules/external_db). Pure Python, so
 # it needs no build tools on the server. PostgreSQL sources use psycopg2 above.
 PyMySQL==1.1.1
+# Voice sign-in (app/core/voiceprint.py). Deliberately not PyTorch: the speaker
+# model is run through onnxruntime, which is about 70 MB with numpy instead of
+# 2 GB, and the vector it produces is identical. kaldi-native-fbank computes the
+# filterbank the model was trained on — hand-rolling that does not fail, it
+# quietly makes every voice resemble every other, so it is worth a dependency.
+#
+# The model file itself is not in the repository (26 MB of weights). Fetch it to
+# backend/models/ once per installation; until it is there, voice enrolment
+# reports itself unavailable and everything else works unchanged:
+#
+#   curl -L -o models/voxceleb_resnet34_LM.onnx \
+#     https://huggingface.co/Wespeaker/wespeaker-voxceleb-resnet34-LM/resolve/main/voxceleb_resnet34_LM.onnx
+numpy==2.2.6
+onnxruntime==1.23.2
+kaldi-native-fbank==1.22.3

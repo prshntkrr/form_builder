@@ -8,13 +8,21 @@ import { api as projectApi } from '../../projects/api.js'
  * Whether this form stands on its own, or its submissions belong to another
  * form's.
  *
- *     ( ) Independent form
+ *     ( ) Parent form
  *     (•) Child form
- *         Parent form  [ Farmer Registration ▼ ]
+ *         Which form is the parent  [ Farmer Registration ▼ ]
  *
  * The choice is written into the form definition as `relationship`, beside the
  * fields and the rules — it is part of what the form is, so it versions and
  * rolls back with everything else.
+ *
+ * "Parent form" is only what this choice is *called*. What is stored is still
+ * no relationship at all (`relationship: null`, `type: "independent"` in the
+ * schema), because a form that nothing hangs off yet and a form that is already
+ * somebody's parent are the same form — whether it has children is a fact about
+ * the other forms, not a setting on this one. Renaming the label is deliberate:
+ * "independent" read as a dead end, when it is the thing you pick first and
+ * attach children to later.
  *
  * The parent list is whatever the backend returns for the context this form
  * belongs to: a project's forms come from the project endpoint, the system
@@ -70,8 +78,11 @@ export default function FormRelationship({ form, formId, onChange }) {
           onChange={() => choose('independent')}
         />
         <span>
-          <b>Independent form</b>
-          <span className="tiny muted"> — its submissions stand on their own.</span>
+          <b>Parent form</b>
+          <span className="tiny muted">
+            {' '}— its submissions stand on their own, and other forms can hang
+            off them.
+          </span>
         </span>
       </label>
 
@@ -93,10 +104,13 @@ export default function FormRelationship({ form, formId, onChange }) {
 
       {isChild && (
         <label className="cat__field rel__parent">
-          <span className="minilabel">Parent form</span>
+          {/* Not "Parent form": that is now the name of the choice above, and
+              two different things under one name is how somebody picks the
+              wrong one. This asks which form it hangs off. */}
+          <span className="minilabel">Which form is the parent</span>
           <select
             className="control"
-            aria-label="Parent form"
+            aria-label="Which form is the parent"
             value={relationship?.parent_form_id || ''}
             onChange={(e) => onChange({
               relationship: { type: 'child', parent_form_id: e.target.value },

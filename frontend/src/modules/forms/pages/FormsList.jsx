@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../api.js'
 import { FORM_CHANNEL_NAMES } from '../channelCapabilities.js'
@@ -13,6 +13,53 @@ const ago = (value) => {
   if (mins < 1440) return `${Math.round(mins / 60)}h ago`
   if (mins < 10080) return `${Math.round(mins / 1440)}d ago`
   return then.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
+}
+
+function ActionsMenu({ form, onFlip, onRemove }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef()
+
+  useEffect(() => {
+    if (!open) return
+    const close = (e) => { if (!ref.current?.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [open])
+
+  return (
+    <div className="actions-menu" ref={ref}>
+      <button className="btn btn--sm btn--quiet actions-menu__trigger" onClick={() => setOpen(!open)}>
+        ⋮
+      </button>
+      {open && (
+        <div className="actions-menu__drop">
+          <Link className="actions-menu__item" to={`/forms/${form.form_id}/questions`}
+                onClick={() => setOpen(false)}>
+            Edit
+          </Link>
+          <Link className="actions-menu__item" to={`/forms/${form.form_id}/preview`}
+                onClick={() => setOpen(false)}>
+            Preview
+          </Link>
+          <Link className="actions-menu__item" to={`/forms/${form.form_id}/responses`}
+                onClick={() => setOpen(false)}>
+            Responses
+          </Link>
+          <div className="actions-menu__sep" />
+          <button className="actions-menu__item" onClick={() => { setOpen(false); api.exportExcel(form.form_id) }}>
+            Export to Excel
+          </button>
+          <div className="actions-menu__sep" />
+          <button className="actions-menu__item" onClick={() => { setOpen(false); onFlip(form) }}>
+            {form.form_status === 'Active' ? 'Pause' : 'Resume'}
+          </button>
+          <button className="actions-menu__item actions-menu__item--danger" onClick={() => { setOpen(false); onRemove(form) }}>
+            Remove
+          </button>
+        </div>
+      )}
+    </div>
+  )
 }
 
 export default function FormsList() {
@@ -48,14 +95,14 @@ export default function FormsList() {
           <h1>Forms</h1>
           <p className="lede">Everything your team is collecting.</p>
         </div>
-        <button className="btn btn--primary" onClick={() => navigate('/builder')}>New form</button>
+        <button className="btn btn--primary" onClick={() => navigate('/builder')}>+ New Form</button>
       </div>
 
       {(forms?.length > 0 || search) && (
         <input
           className="control"
           style={{ maxWidth: 300, marginBottom: 18 }}
-          placeholder="Search"
+          placeholder="Search forms..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -77,56 +124,50 @@ export default function FormsList() {
         </div>
       )}
 
-      <div className="stack-list">
-        {forms?.map((f) => (
-          <div className="item" key={f.form_id}>
-            <div className="item__body">
-              <div className="item__title">
-                <span className={`dot dot--${(f.form_status || '').toLowerCase()}`} title={f.form_status} />
-                <Link to={`/forms/${f.form_id}/questions`}>{f.form_title}</Link>
-              </div>
-              {f.form_description && <div className="item__sub">{f.form_description}</div>}
-              <div className="item__meta">
-                <span className="item__channel">{FORM_CHANNEL_NAMES[f.channel] || FORM_CHANNEL_NAMES.web_mobile}</span>
-                <span className="sep">·</span>
-                <span>{f.field_count} questions</span>
-                <span className="sep">·</span>
-                <Link
-                  to={`/forms/${f.form_id}/history`}
-                  style={{ color: 'inherit' }}
-                  title={f.latest_version > f.version_no
-                    ? `Rolled back — version ${f.version_no} is live, ${f.latest_version} exist`
-                    : 'Version history'}
-                >
-                  version {f.version_no ?? 1}
-                  {f.latest_version > f.version_no && ` of ${f.latest_version}`}
-                </Link>
-                <span className="sep">·</span>
-                <span>edited {ago(f.updated_on || f.created_on)}</span>
-                {f.created_by && (
-                  <>
-                    <span className="sep">·</span>
-                    <span>by {f.created_by}</span>
-                  </>
-                )}
-              </div>
-            </div>
-
-            <Link className="count" to={`/forms/${f.form_id}/responses`} style={{ color: 'inherit' }}>
-              <b>{f.submission_count ?? '—'}</b>
-              <span>{f.submission_count === 1 ? 'response' : 'responses'}</span>
-            </Link>
-
-            <div className="item__acts">
-              <a className="btn btn--sm" href={`/f/${f.form_id}`} target="_blank" rel="noreferrer">Open</a>
-              <button className="btn btn--sm btn--quiet" onClick={() => flip(f)}>
-                {f.form_status === 'Active' ? 'Pause' : 'Resume'}
-              </button>
-              <button className="btn btn--sm btn--quiet btn--danger" onClick={() => remove(f)}>Remove</button>
-            </div>
+      {forms?.length > 0 && (
+        <div className="forms-table">
+          <div className="forms-table__head">
+            <span className="forms-table__col forms-table__col--name">Form Name</span>
+            <span className="forms-table__col forms-table__col--status">Status</span>
+            <span className="forms-table__col forms-table__col--channel">Channel</span>
+            <span className="forms-table__col forms-table__col--responses">Responses</span>
+            <span className="forms-table__col forms-table__col--updated">Last Updated</span>
+            <span className="forms-table__col forms-table__col--actions">Actions</span>
           </div>
-        ))}
-      </div>
+          {forms.map((f) => (
+            <div className="forms-table__row" key={f.form_id}>
+              <span className="forms-table__col forms-table__col--name">
+                <span className={`dot dot--${(f.form_status || '').toLowerCase()}`} />
+                <Link to={`/forms/${f.form_id}/questions`}>{f.form_title}</Link>
+              </span>
+              <span className="forms-table__col forms-table__col--status">
+                <span className={`status-badge status-badge--${(f.form_status || '').toLowerCase()}`}>
+                  {f.form_status}
+                </span>
+              </span>
+              <span className="forms-table__col forms-table__col--channel">
+                {FORM_CHANNEL_NAMES[f.channel] || FORM_CHANNEL_NAMES.web_mobile}
+              </span>
+              <span className="forms-table__col forms-table__col--responses">
+                <Link to={`/forms/${f.form_id}/responses`} style={{ color: 'inherit' }}>
+                  {f.submission_count ?? 0}
+                </Link>
+              </span>
+              <span className="forms-table__col forms-table__col--updated">
+                {ago(f.updated_on || f.created_on)}
+              </span>
+              <span className="forms-table__col forms-table__col--actions">
+                <ActionsMenu
+                  form={f}
+                  onFlip={flip}
+                  onRemove={remove}
+                />
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
     </main>
   )
 }

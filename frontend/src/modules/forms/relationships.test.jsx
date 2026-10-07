@@ -87,10 +87,10 @@ describe('choosing a relationship in the builder', () => {
   test('a form is independent unless it says otherwise', async () => {
     await drawIt()
 
-    expect(screen.getByRole('radio', { name: /Independent form/ }).checked).toBe(true)
+    expect(screen.getByRole('radio', { name: /Parent form/ }).checked).toBe(true)
     expect(screen.getByRole('radio', { name: /Child form/ }).checked).toBe(false)
     // Nothing to choose a parent from until it is a child.
-    expect(screen.queryByRole('combobox', { name: 'Parent form' })).toBeNull()
+    expect(screen.queryByRole('combobox', { name: 'Which form is the parent' })).toBeNull()
   })
 
   test('choosing Child form asks which form it belongs to', async () => {
@@ -105,7 +105,7 @@ describe('choosing a relationship in the builder', () => {
   test('the parent list is the forms in this context, from the backend', async () => {
     await drawIt({ relationship: { type: 'child', parent_form_id: '' } })
 
-    const chooser = await screen.findByRole('combobox', { name: 'Parent form' })
+    const chooser = await screen.findByRole('combobox', { name: 'Which form is the parent' })
     const offered = within(chooser).getAllByRole('option').map((o) => o.textContent)
 
     expect(offered).toContain('Farmer Registration')
@@ -117,7 +117,7 @@ describe('choosing a relationship in the builder', () => {
   test('a form is never offered as its own parent', async () => {
     await drawIt({ relationship: { type: 'child', parent_form_id: '' } })
 
-    const chooser = await screen.findByRole('combobox', { name: 'Parent form' })
+    const chooser = await screen.findByRole('combobox', { name: 'Which form is the parent' })
     const offered = within(chooser).getAllByRole('option').map((o) => o.textContent)
 
     expect(offered).not.toContain('Plot Registration')
@@ -128,7 +128,7 @@ describe('choosing a relationship in the builder', () => {
     const changes = await drawIt({ relationship: { type: 'child', parent_form_id: '' } })
 
     await user.selectOptions(
-      await screen.findByRole('combobox', { name: 'Parent form' }), 'FRM00019')
+      await screen.findByRole('combobox', { name: 'Which form is the parent' }), 'FRM00019')
 
     expect(changes.at(-1)).toEqual({
       relationship: { type: 'child', parent_form_id: 'FRM00019' } })
@@ -138,7 +138,7 @@ describe('choosing a relationship in the builder', () => {
     const user = userEvent.setup()
     const changes = await drawIt({ relationship: { type: 'child', parent_form_id: 'FRM00019' } })
 
-    await user.click(screen.getByRole('radio', { name: /Independent form/ }))
+    await user.click(screen.getByRole('radio', { name: /Parent form/ }))
 
     expect(changes.at(-1)).toEqual({ relationship: null })
   })

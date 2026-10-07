@@ -275,3 +275,47 @@ export function removeFieldFromRules(rules, name) {
 
   return changed ? next : rules
 }
+
+/**
+ * Rules that would break if a field moved out of its current section.
+ *
+ * Two kinds:
+ *   1. A rule that targets the old section and uses this field as a condition —
+ *      the field is no longer in the section it controls.
+ *   2. A rule that targets this field and whose conditions reference fields
+ *      that stay in the old section — the dependency crosses sections now.
+ *
+ * Returns the affected rules (may be empty). The caller decides whether to warn
+ * and strip them.
+ */
+export function rulesAffectedBySectionChange(rules, fieldName, oldSection, fieldsInOldSection) {
+  if (!Array.isArray(rules) || !fieldName || !oldSection) return []
+
+  const inOld = new Set((fieldsInOldSection || []).map((f) => text(f.name || f)))
+
+  return rules.filter((rule) => {
+    if (!rule) return false
+    const target = rule.target || {}
+    const conditions = rule.conditions || []
+
+    if (target.type === 'section' && text(target.key) === text(oldSection)) {
+      if (conditions.some((c) => text(c?.field) === text(fieldName))) return true
+    }
+
+    if (target.type === 'field' && text(target.name) === text(fieldName)) {
+      if (conditions.some((c) => inOld.has(text(c?.field)) && text(c?.field) !== text(fieldName))) return true
+    }
+
+    return false
+  })
+}
+
+/**
+ * The rules, with every rule from the given list removed.
+ */
+export function removeRules(rules, toRemove) {
+  if (!toRemove?.length) return rules
+  const drop = new Set(toRemove)
+  const next = rules.filter((r) => !drop.has(r))
+  return next.length === rules.length ? rules : next
+}

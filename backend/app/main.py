@@ -15,6 +15,8 @@ from app.core.bootstrap import (
     ensure_admin_account,
     ensure_base_tables,
     ensure_roles,
+    ensure_user_identifiers,
+    ensure_voice_enrolment,
     missing_tables,
     run_module_migrations,
 )
@@ -36,6 +38,8 @@ async def lifespan(app: FastAPI):
     try:
         init_pool()
         ensure_base_tables()      # core schema, then every module's
+        ensure_user_identifiers()  # username / phone, on databases predating them
+        ensure_voice_enrolment()   # the voiceprint columns, likewise
         run_module_migrations()   # each module's idempotent ensure_*
         ensure_roles()            # after the modules, so their permissions exist
         ensure_admin_account()
