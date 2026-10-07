@@ -94,3 +94,25 @@ def distinct_field_values(
     rows = normalize_rows(fetch_all(rendered_query, params))
 
     return [row["value"] for row in rows if row.get("value") not in (None, "")]
+
+
+def dependent_field_values(
+    table_name: str,
+    field: str,
+    parent_filters: list,
+    limit: int = MAX_FILTER_OPTIONS,
+) -> List[Any]:
+    """Distinct values for a dependent field, narrowed by parent selections."""
+    from app.modules.dashboards.services.query_builder import build_dependent_distinct_query
+
+    query, params = build_dependent_distinct_query(
+        table_name, field, parent_filters, limit=limit,
+    )
+
+    from app.core.database import get_connection
+
+    with get_connection() as conn:
+        rendered_query = query.as_string(conn)
+
+    rows = normalize_rows(fetch_all(rendered_query, params))
+    return [row["value"] for row in rows if row.get("value") not in (None, "")]

@@ -51,6 +51,19 @@ export const api = {
         `/filter-options?field=${encodeURIComponent(field)}`,
     ),
 
+  /* Dependent filter options: distinct values narrowed by parent selections.
+
+     The same column validation as the non-dependent endpoint, plus each
+     parent field is checked too. Nothing from the request is SQL. */
+  getDependentFilterOptions: (tableName, field, parentFilters) =>
+    request(
+      `/dashboards/data-sources/${encodeURIComponent(tableName)}/filter-options`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ field, parent_filters: parentFilters }),
+      },
+    ),
+
   // -----------------------------
   // Version management
   // -----------------------------
