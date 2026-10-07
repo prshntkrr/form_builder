@@ -80,6 +80,17 @@ jobs:
             source venv/bin/activate
             pip install -r requirements.txt
 
+            echo "Ensuring the speaker model is present..."
+            ONNX="models/voxceleb_resnet34_LM.onnx"
+            if [ -f "$ONNX" ]; then
+                echo "  already here ($(du -h "$ONNX" | cut -f1))."
+            else
+                mkdir -p models
+                curl -fSL -o "$ONNX" \
+                  "https://huggingface.co/csukuangfj/wespeaker-models/resolve/main/voxceleb_resnet34_LM.onnx"
+                echo "  downloaded ($(du -h "$ONNX" | cut -f1))."
+            fi
+
             echo "Checking the new code can actually start..."
 
             # Before anything destructive. `git pull` can deliver a tree that
