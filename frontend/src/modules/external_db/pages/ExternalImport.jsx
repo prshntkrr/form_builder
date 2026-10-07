@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 
 import { api } from '../api.js'
 import { describe } from '../errors.js'
+import { useProjects } from '../../projects/active.js'
 
 /**
  * Copying a table out of another database into this one.
@@ -61,6 +62,10 @@ const SOURCE_NAMES = { postgresql: 'PostgreSQL', mysql: 'MySQL', databricks: 'Da
 export const POLL_MS = 45000
 
 export default function ExternalImport() {
+  // An imported table belongs to the active project — only that project's
+  // dashboards will see it. There is nowhere to put one in the system context.
+  const { projectId } = useProjects()
+
   const [connection, setConnection] = useState(EMPTY)
   const [connected, setConnected] = useState(false)
   // The saved connection in use, if one is. Its credential is not here — the
@@ -177,7 +182,9 @@ export default function ExternalImport() {
 
   const load = () => run('load', async () => {
     try {
-      setResult(await api.load(wire, schema, table, destination.trim()))
+      setResult(
+        await api.load(wire, schema, table, destination.trim(), projectId),
+      )
       setConnectionsChanged((n) => n + 1)
     } finally {
       // A failed attempt is recorded too, so the list has news either way.
@@ -185,7 +192,9 @@ export default function ExternalImport() {
     }
   })
 
-  const nameLooksRight = /^[A-Za-z_][A-Za-z0-9_]{0,62}$/.test(destination.trim())
+  const nameFormatOk = /^[A-Za-z_][A-Za-z0-9_]{0,62}$/.test(destination.trim())
+  // Also needs a project to import into — the table belongs to one.
+  const nameLooksRight = nameFormatOk && !!projectId
 
   return (
     <main className="main main--narrow">
@@ -470,9 +479,15 @@ export default function ExternalImport() {
               />
             </label>
 
-            {destination.trim() && !nameLooksRight && (
+            {destination.trim() && !nameFormatOk && (
               <span className="tiny" style={{ color: 'var(--rose)' }}>
                 Letters, digits and underscores only, starting with a letter.
+              </span>
+            )}
+
+            {!projectId && (
+              <span className="tiny" style={{ color: 'var(--rose)' }}>
+                Choose a project before importing — the table belongs to one.
               </span>
             )}
 

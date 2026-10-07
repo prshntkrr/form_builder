@@ -47,10 +47,22 @@ import {
   settleAggregation,
 } from "../chartConfig.js";
 import { useCapabilities } from "../../../core/auth.jsx";
+import { useProjects, useProject } from "../../projects/active.js";
+import WidgetContextMenu from "../components/WidgetContextMenu.jsx";
+import WidgetFullscreen from "../components/WidgetFullscreen.jsx";
+import {
+  downloadWidgetData,
+  downloadWidgetImage,
+  printWidget,
+} from "../widgetExport.js";
 import {
   CHIP_LIMIT,
   bindingFilters,
+  configuredDependencies,
   configuredFields,
+  dependencyDescendants,
+  dependencyParents,
+  dependencyProblem,
   fieldProblem,
   filterLabel,
   matchingOptions,
@@ -118,6 +130,21 @@ const ADD_MENU_HEIGHT = 170;
 
 export default function Dashboards() {
   const can = useCapabilities();
+
+  /* Dashboards and their data sources are scoped to one project. `projectId` is
+     null in the system context (no project chosen), where there is nothing to
+     show or build — a dashboard is only ever reachable from inside a project. */
+  const { projectId } = useProjects();
+
+  /* Inside a project the project role is the sole authority for dashboard
+     permissions — the account role is irrelevant. The server enforces the same
+     rule, so a button only shows where the project role allows it. */
+  const { can: projectCan } = useProject(projectId);
+  const mayBuild = projectId ? projectCan("dashboards.create") : can.build_dashboards;
+  const mayEdit = projectId ? projectCan("dashboards.edit") : can.edit_dashboards;
+  const mayImport = projectId
+    ? projectCan("dashboards.import_source")
+    : can.import_dashboard_source;
 
   const [dataSources, setDataSources] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -229,6 +256,16 @@ export default function Dashboards() {
   const [filterDraft, setFilterDraft] = useState([]);
   const [filterDraftError, setFilterDraftError] = useState("");
 
+  /* Dependency filter configuration: the working copy while the modal is
+     open, and a flag to show/hide it. */
+  const [showDependencyModal, setShowDependencyModal] = useState(false);
+  const [dependencyDraft, setDependencyDraft] = useState([]);
+  const [dependencyDraftError, setDependencyDraftError] = useState("");
+
+  /* A generation counter per dependent field, so a stale async response
+     cannot overwrite a newer selection's options. */
+  const depLoadGeneration = useRef({});
+
   const filterBarRef = useRef(null);
 
   /* =========================================================
@@ -305,6 +342,11 @@ export default function Dashboards() {
   /* Which page of each table is on screen. Keyed by widget, because two
      tables on one dashboard page independently. */
   const [tablePages, setTablePages] = useState({});
+
+  /* Which widget is filling the screen, by id rather than by value: holding
+     the widget itself would make a second copy that stops matching the one on
+     the dashboard the moment anything edits it. Null is the ordinary grid. */
+  const [fullscreenWidgetId, setFullscreenWidgetId] = useState(null);
 
   /* What the editor's preview is showing: the rows it drew, or why it has
      nothing to draw. Never mixed into `widgetData`, which belongs to the
@@ -509,10 +551,15 @@ export default function Dashboards() {
      ========================================================= */
 
   const loadSavedDashboards = async () => {
+    if (!projectId) {
+      setSavedDashboards([]);
+      return;
+    }
+
     setLoadingSavedDashboards(true);
 
     try {
-      const result = await api.listDashboards();
+      const result = await api.listDashboards(projectId);
 
       setSavedDashboards(Array.isArray(result) ? result : []);
     } catch (e) {
@@ -525,6 +572,12 @@ export default function Dashboards() {
   /* Read once on arrival, and again after an import adds one. Returns the
      list so the caller can act on what is now there. */
   const loadDataSources = async ({ showLoading = true } = {}) => {
+    if (!projectId) {
+      setDataSources([]);
+      if (showLoading) setLoading(false);
+      return [];
+    }
+
     if (showLoading) {
       setLoading(true);
     }
@@ -532,7 +585,7 @@ export default function Dashboards() {
     setError("");
 
     try {
-      const result = await api.listDataSources();
+      const result = await api.listDataSources(projectId);
       const sources = result.data_sources || [];
 
       setDataSources(sources);
@@ -549,10 +602,13 @@ export default function Dashboards() {
     }
   };
 
+  /* Reloads whenever the active project changes, so switching project swaps
+     both lists rather than leaving the previous project's showing. */
   useEffect(() => {
     loadDataSources();
     loadSavedDashboards();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]);
 
   /* =========================================================
      IMPORT A SPREADSHEET AS A DATA SOURCE
@@ -580,7 +636,11 @@ export default function Dashboards() {
     setImportError("");
 
     try {
-      const result = await api.importExcelSource(importFile, importName.trim());
+      const result = await api.importExcelSource(
+        importFile,
+        importName.trim(),
+        projectId,
+      );
 
       // The picker finds sources by their _tabular suffix, so the table that
       // was created is rarely named exactly what was typed. Select by what
@@ -832,6 +892,7 @@ export default function Dashboards() {
     setFilterSearch({});
     setOpenFilter(null);
     setDashboardFilters([]);
+    depLoadGeneration.current = {};
   };
 
   /* The values one filter can be set to.
@@ -879,16 +940,28 @@ export default function Dashboards() {
         return null;
       }
 
-      loadFilterOptions(field);
+      /* A dependent field whose parent has a selection needs its options
+         narrowed by that selection — so it goes through the dependent
+         loader, which falls back to the normal one when no parents are
+         selected.  The non-dependent path is unchanged. */
+      const dependencies = configuredDependencies(dashboard);
+      const parents = dependencyParents(field, dependencies);
+
+      if (parents.length) {
+        loadDependentFilterOptions(field);
+      } else {
+        loadFilterOptions(field);
+      }
+
       return field;
     });
   };
 
   const toggleFilterValue = (field, value) =>
-    setFilterSelections((current) => toggleValue(current, field, value));
+    toggleFilterValueWithDeps(field, value);
 
   const clearFilterValue = (field, value) =>
-    setFilterSelections((current) => removeValue(current, field, value));
+    clearFilterValueWithDeps(field, value);
 
   /* Nothing is queried until this. Selections are turned into the ordinary
      `IN` filters the binding already carries, and every widget reloads
@@ -986,6 +1059,210 @@ export default function Dashboards() {
     setFilterDraftError("");
   };
 
+  /* ── configuring which filters depend on which ────────────────── */
+
+  const openDependencyModal = () => {
+    setDependencyDraft(
+      configuredDependencies(dashboard).map((dep) => ({ ...dep })),
+    );
+    setDependencyDraftError("");
+    setShowDependencyModal(true);
+  };
+
+  const updateDependencyDraft = (index, changes) =>
+    setDependencyDraft((current) =>
+      current.map((entry, position) =>
+        position === index ? { ...entry, ...changes } : entry,
+      ),
+    );
+
+  const addDependencyDraftRule = () =>
+    setDependencyDraft((current) => [
+      ...current,
+      { primary: "", secondary: "" },
+    ]);
+
+  const removeDependencyDraftRule = (index) =>
+    setDependencyDraft((current) =>
+      current.filter((_, position) => position !== index),
+    );
+
+  const saveDependencies = () => {
+    const filterFields = configuredFields(dashboard);
+
+    for (let index = 0; index < dependencyDraft.length; index += 1) {
+      const problem = dependencyProblem(
+        dependencyDraft[index].primary,
+        dependencyDraft[index].secondary,
+        dependencyDraft,
+        index,
+        filterFields,
+      );
+
+      if (problem) {
+        setDependencyDraftError(problem);
+        return;
+      }
+    }
+
+    const configured = dependencyDraft
+      .filter((dep) => dep.primary && dep.secondary)
+      .map((dep) => ({
+        primary: dep.primary,
+        secondary: dep.secondary,
+      }));
+
+    setDashboard((current) =>
+      current ? { ...current, filter_dependencies: configured } : current,
+    );
+
+    setShowDependencyModal(false);
+    setDependencyDraftError("");
+
+    /* Invalidate cached options for any field that is now a dependent — its
+       options may need to be re-fetched with parent context next time. */
+    const dependents = new Set(configured.map((dep) => dep.secondary));
+
+    setFilterOptions((current) => {
+      const next = { ...current };
+
+      for (const field of dependents) {
+        delete next[field];
+      }
+
+      return next;
+    });
+  };
+
+  /* ── runtime dependency cascading ─────────────────────────────── */
+
+  const loadDependentFilterOptions = async (field) => {
+    if (!selectedSource) return;
+
+    const dependencies = configuredDependencies(dashboard);
+    const parents = dependencyParents(field, dependencies);
+
+    /* If this field has no parents, fall through to the normal loader. */
+    if (!parents.length) {
+      loadFilterOptions(field);
+      return;
+    }
+
+    /* Build parent filters from current selections. */
+    const parentFilters = parents
+      .filter((parentField) => {
+        const picked = filterSelections[parentField];
+        return picked && picked.length > 0;
+      })
+      .map((parentField) => ({
+        field: parentField,
+        values: filterSelections[parentField],
+      }));
+
+    /* No parents have been selected yet — load all values. */
+    if (!parentFilters.length) {
+      loadFilterOptions(field);
+      return;
+    }
+
+    const generation = (depLoadGeneration.current[field] || 0) + 1;
+    depLoadGeneration.current[field] = generation;
+
+    setFilterOptions((current) => ({
+      ...current,
+      [field]: { status: "loading", values: [], error: "" },
+    }));
+
+    try {
+      const answer = await api.getDependentFilterOptions(
+        selectedSource.name,
+        field,
+        parentFilters,
+      );
+
+      /* A newer load was started while this one was in flight. */
+      if (depLoadGeneration.current[field] !== generation) return;
+
+      setFilterOptions((current) => ({
+        ...current,
+        [field]: {
+          status: "ready",
+          values: answer.values || [],
+          error: "",
+        },
+      }));
+    } catch (error) {
+      if (depLoadGeneration.current[field] !== generation) return;
+
+      setFilterOptions((current) => ({
+        ...current,
+        [field]: {
+          status: "error",
+          values: [],
+          error: error?.message || "These values could not be loaded.",
+        },
+      }));
+    }
+  };
+
+  /* When a filter value is toggled and that field is a dependency parent,
+     clear all descendant selections and invalidate their cached options so
+     they are re-fetched with the new parent context. */
+  const toggleFilterValueWithDeps = (field, value) => {
+    const dependencies = configuredDependencies(dashboard);
+    const descendants = dependencyDescendants(field, dependencies);
+
+    setFilterSelections((current) => {
+      const next = toggleValue(current, field, value);
+
+      for (const descendant of descendants) {
+        delete next[descendant];
+      }
+
+      return next;
+    });
+
+    /* Invalidate cached options so the next open fetches with new parents. */
+    if (descendants.length) {
+      setFilterOptions((current) => {
+        const next = { ...current };
+
+        for (const descendant of descendants) {
+          delete next[descendant];
+        }
+
+        return next;
+      });
+    }
+  };
+
+  const clearFilterValueWithDeps = (field, value) => {
+    const dependencies = configuredDependencies(dashboard);
+    const descendants = dependencyDescendants(field, dependencies);
+
+    setFilterSelections((current) => {
+      const next = removeValue(current, field, value);
+
+      for (const descendant of descendants) {
+        delete next[descendant];
+      }
+
+      return next;
+    });
+
+    if (descendants.length) {
+      setFilterOptions((current) => {
+        const next = { ...current };
+
+        for (const descendant of descendants) {
+          delete next[descendant];
+        }
+
+        return next;
+      });
+    }
+  };
+
   /* =========================================================
      HANDLE DASHBOARD CHANGE LAYOUT  /* =========================================================
      HANDLE DASHBOARD CHANGE LAYOUT
@@ -1031,6 +1308,11 @@ export default function Dashboards() {
       return;
     }
 
+    if (!projectId) {
+      setSaveError("Choose a project before saving a dashboard.");
+      return;
+    }
+
     setSaving(true);
     setSaveError("");
 
@@ -1043,6 +1325,10 @@ export default function Dashboards() {
 
       const dashboardToSave = {
         ...dashboardWithLayout,
+
+        // The project the dashboard is created in; the server stores it and
+        // every later view of this project reads it back.
+        project_id: projectId,
 
         dashboard: {
           ...(dashboardWithLayout.dashboard || {}),
@@ -2235,6 +2521,21 @@ export default function Dashboards() {
      the dashboard's own, and `options.readOnly` leaves off the Edit and
      Remove buttons. Both are for the editor's preview, which is this same
      function so that a preview cannot drift from the widget it previews. */
+  /* Run one widget export and say so if it fails.
+
+     Nothing here touches the dashboard: no state the grid reads is set on the
+     way in, so asking for a picture does not redraw the other widgets, and a
+     failure leaves the dashboard exactly as it was. */
+  const runExport = async (work) => {
+    setExportError("");
+
+    try {
+      await work();
+    } catch (err) {
+      setExportError(err?.message || "That export did not work.");
+    }
+  };
+
   const renderWidget = (widget, options = {}) => {
     const {
       rows = NO_ROWS,
@@ -2280,6 +2581,30 @@ export default function Dashboards() {
       </div>
     );
 
+    /* The ⋮ and what it opens. Not in edit mode, where the card already
+       carries Select / Edit / Remove and is being dragged about, and not on a
+       widget drawn read-only inside a preview or the fullscreen view — the
+       menu belongs to the tile on the dashboard. */
+    const contextMenu = !isEditMode && !options.readOnly && (
+      <WidgetContextMenu
+        widget={widget}
+        onFullscreen={() => setFullscreenWidgetId(widget.id)}
+        onImage={(format, card) =>
+          runExport(() => downloadWidgetImage(widget, card, format))
+        }
+        onData={(format) =>
+          runExport(() =>
+            downloadWidgetData(
+              widget,
+              { rows, numRows, data: preparedData.get(widget.id), fields },
+              format,
+            ),
+          )
+        }
+        onPrint={(card) => runExport(() => printWidget(widget, card))}
+      />
+    );
+
     const presentation = widget.presentation || {};
     /* Whatever this widget should be coloured, decided once for every branch
        below rather than in each of them. */
@@ -2290,16 +2615,22 @@ export default function Dashboards() {
 
     const widgetStyle = presentation.background_color ? { backgroundColor: presentation.background_color } : {};
 
+    const widgetFontFamily = presentation.font_family || null;
+
     const headerTitleStyle = {
       ...(titleStyle.font_size ? { fontSize: `${titleStyle.font_size}px` } : {}),
       ...(titleStyle.bold ? { fontWeight: "bold" } : {}),
-      ...(titleStyle.italic ? { fontStyle: "italic" } : {})
+      ...(titleStyle.italic ? { fontStyle: "italic" } : {}),
+      ...(titleStyle.color ? { color: titleStyle.color } : {}),
+      ...(widgetFontFamily ? { fontFamily: widgetFontFamily } : {})
     };
 
     const headerSubtitleStyle = {
       ...(subtitleStyle.font_size ? { fontSize: `${subtitleStyle.font_size}px` } : {}),
       ...(subtitleStyle.bold ? { fontWeight: "bold" } : {}),
-      ...(subtitleStyle.italic ? { fontStyle: "italic" } : {})
+      ...(subtitleStyle.italic ? { fontStyle: "italic" } : {}),
+      ...(subtitleStyle.color ? { color: subtitleStyle.color } : {}),
+      ...(widgetFontFamily ? { fontFamily: widgetFontFamily } : {})
     };
 
     const renderHeader = () => (
@@ -2310,12 +2641,13 @@ export default function Dashboards() {
             {iconSymbol && <span style={{ marginLeft: "8px" }}>{iconSymbol}</span>}
           </h3>
           {presentation.subtitle && (
-            <div className="dash__widget-subtitle" style={{...headerSubtitleStyle, marginTop: "4px", color: "var(--text-muted, #666)"}}>
+            <div className="dash__widget-subtitle" style={{...headerSubtitleStyle, marginTop: "4px", ...(!subtitleStyle.color ? { color: "var(--text-muted, #666)" } : {})}}>
               {presentation.subtitle}
             </div>
           )}
         </div>
         {editButton}
+        {contextMenu}
       </div>
     );
 
@@ -2357,7 +2689,14 @@ export default function Dashboards() {
           rows={rows}
           numRows={numRows}
           dashboard={dashboard}
-          actions={editButton}
+          /* A KPI draws its own header, so its ⋮ travels with the edit
+             controls rather than through `renderHeader`. */
+          actions={
+            <>
+              {editButton}
+              {contextMenu}
+            </>
+          }
         />
       );
     }
@@ -2431,8 +2770,10 @@ export default function Dashboards() {
         subtitle: "",
         title_icon: "",
         background_color: "",
-        title_style: { font_size: "", bold: false, italic: false },
-        subtitle_style: { font_size: "", bold: false, italic: false },
+        font_family: "",
+        series_colors: [],
+        title_style: { font_size: "", bold: false, italic: false, color: "" },
+        subtitle_style: { font_size: "", bold: false, italic: false, color: "" },
         x_axis: { title: "", font_size: "", bold: false, italic: false },
         y_axis: { title: "", font_size: "", bold: false, italic: false }
       },
@@ -2561,15 +2902,19 @@ export default function Dashboards() {
         subtitle: p.subtitle || "",
         title_icon: p.title_icon || "",
         background_color: p.background_color || "",
+        font_family: p.font_family || "",
+        series_colors: Array.isArray(p.series_colors) ? [...p.series_colors] : [],
         title_style: {
           font_size: p.title_style?.font_size || "",
           bold: p.title_style?.bold || false,
-          italic: p.title_style?.italic || false
+          italic: p.title_style?.italic || false,
+          color: p.title_style?.color || ""
         },
         subtitle_style: {
           font_size: p.subtitle_style?.font_size || "",
           bold: p.subtitle_style?.bold || false,
-          italic: p.subtitle_style?.italic || false
+          italic: p.subtitle_style?.italic || false,
+          color: p.subtitle_style?.color || ""
         },
         x_axis: {
           title: p.x_axis?.title || "",
@@ -3272,6 +3617,18 @@ export default function Dashboards() {
     return prepared;
   }, [dashboard, widgetData]);
 
+  /* The widget filling the screen, looked up from the dashboard rather than
+     copied when it was opened — so it is the same object the grid is drawing
+     and cannot describe an older version of itself. Null closes the view,
+     which is also what happens if the widget is removed while it is open. */
+  const fullscreenWidget = useMemo(
+    () =>
+      (dashboard?.widgets || []).find(
+        (item) => item.id === fullscreenWidgetId,
+      ) || null,
+    [dashboard, fullscreenWidgetId],
+  );
+
   /* What each widget is worth on a printed page.
 
      The grid positions every widget absolutely, in pixels worked out from
@@ -3707,11 +4064,23 @@ export default function Dashboards() {
         </div>
       )}
 
+      {/* No project chosen. Dashboards live inside a project — there is nothing
+          to list or build in the system context. */}
+      {!projectId && (
+        <div className="blank">
+          <h2>Choose a project</h2>
+          <p>
+            Dashboards belong to a project. Pick one from “Working in” above to
+            see its dashboards and build new ones.
+          </p>
+        </div>
+      )}
+
       {/* API error */}
-      {error && <div className="alert alert--bad">{error}</div>}
+      {projectId && error && <div className="alert alert--bad">{error}</div>}
 
       {/* Loading */}
-      {loading && (
+      {projectId && loading && (
         <div className="stack-list">
           <div
             className="skeleton"
@@ -3730,18 +4099,23 @@ export default function Dashboards() {
       )}
 
       {/* No data sources */}
-      {view === "builder" && !loading && !error && dataSources.length === 0 && (
-        <div className="blank">
-          <h2>No data sources yet</h2>
+      {projectId &&
+        view === "builder" &&
+        !loading &&
+        !error &&
+        dataSources.length === 0 && (
+          <div className="blank">
+            <h2>No data sources yet</h2>
 
-          <p>
-            Create a form and submit some data to create a tabular data source.
-          </p>
-        </div>
-      )}
+            <p>
+              Add a form to this project and submit some data, or import a
+              spreadsheet or external table, to create a data source.
+            </p>
+          </div>
+        )}
 
       {/* Saved dashboards — where this page opens */}
-      {view === "list" && !loading && !error && (
+      {projectId && view === "list" && !loading && !error && (
         <section
           className="card card--pad"
           style={{
@@ -3767,7 +4141,7 @@ export default function Dashboards() {
               onChange={(e) => setListSearch(e.target.value)}
             />
 
-            {can.build_dashboards && (
+            {mayBuild && (
               <button
                 className="btn btn--primary"
                 type="button"
@@ -3873,14 +4247,14 @@ export default function Dashboards() {
       {/* Data source selector. It used to stay on screen above an opened
           dashboard, which is what made opening one look like nothing had
           happened. */}
-      {view === "builder" && !dashboard && !loading && !error && (
+      {projectId && view === "builder" && !dashboard && !loading && !error && (
         <section className="card card--pad">
           {/* The heading carries the import action, so bringing data in and
               choosing data are the same decision in the same place. */}
           <div className="dash__source-head">
             <h2>Select Data Source</h2>
 
-            {can.import_dashboard_source && (
+            {mayImport && (
               <button
                 className="btn"
                 type="button"
@@ -3912,9 +4286,7 @@ export default function Dashboards() {
           {dataSources.length === 0 && (
             <div className="tiny muted" style={{ marginBottom: 8 }}>
               No data sources yet.
-              {can.import_dashboard_source
-                ? " Import a spreadsheet to create one."
-                : ""}
+              {mayImport ? " Import a spreadsheet to create one." : ""}
             </div>
           )}
 
@@ -4182,7 +4554,7 @@ export default function Dashboards() {
                   <div className="dash__version-bar">
                     {/* Option B: if a latest draft exists, show Continue Editing.
                         Otherwise show Edit Dashboard. */}
-                    {can.edit_dashboards && (hasLatestDraft ? (
+                    {mayEdit && (hasLatestDraft ? (
                       <button
                         className="btn"
                         type="button"
@@ -4728,6 +5100,21 @@ export default function Dashboards() {
                     </div>
                   </div>
 
+                  {/* One widget filling the screen. Drawn from the dashboard's
+                      own widget list by id, through the same `renderWidget`,
+                      so it is the same specification with the same data and
+                      the same colours — a second instance of it, which leaves
+                      the tile in the grid (and a map's Google instance)
+                      exactly where it was. */}
+                  {fullscreenWidget && (
+                    <WidgetFullscreen
+                      widget={fullscreenWidget}
+                      onClose={() => setFullscreenWidgetId(null)}
+                    >
+                      {renderWidget(fullscreenWidget, { readOnly: true })}
+                    </WidgetFullscreen>
+                  )}
+
                   {/* Add a widget: a floating "+" where "+ Add Graph" stood,
                       opening to the three things a dashboard is made of. */}
                   {isEditMode && (
@@ -5083,14 +5470,26 @@ export default function Dashboards() {
               ))}
             </div>
 
-            <button
-              className="btn btn--sm"
-              type="button"
-              style={{ marginTop: 8 }}
-              onClick={addFilterDraftField}
+            <div
+              className="dash__filter-modal-buttons"
+              style={{ display: "flex", gap: 8, marginTop: 8 }}
             >
-              + Add Field
-            </button>
+              <button
+                className="btn btn--sm"
+                type="button"
+                onClick={addFilterDraftField}
+              >
+                + Add Field
+              </button>
+
+              <button
+                className="btn btn--sm"
+                type="button"
+                onClick={openDependencyModal}
+              >
+                Dependency Filter
+              </button>
+            </div>
 
             {filterDraftError && (
               <div
@@ -5116,6 +5515,135 @@ export default function Dashboards() {
                 onClick={saveFilterFields}
               >
                 Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =====================================================
+          DEPENDENCY FILTER — cascading relationships
+          ===================================================== */}
+
+      {showDependencyModal && (
+        <div className="modal-backdrop">
+          <div
+            className="modal modal--filters"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="dependency-filter-title"
+          >
+            <h2 id="dependency-filter-title">Dependency Filter</h2>
+
+            <p className="muted">
+              When one filter&apos;s options should depend on the selected
+              values of another. For example, selecting a state narrows the
+              districts to those in that state.
+            </p>
+
+            {dependencyDraft.length === 0 && (
+              <p className="tiny muted" style={{ marginTop: 12 }}>
+                No dependency rules yet — add one below.
+              </p>
+            )}
+
+            <div className="dash__filter-fields">
+              {dependencyDraft.map((dep, index) => (
+                <div className="dash__filter-field-row" key={index}>
+                  <label className="tiny muted">
+                    Primary column
+                    <select
+                      className="control"
+                      value={dep.primary}
+                      aria-label={`Dependency ${index + 1} primary`}
+                      onChange={(e) => {
+                        setDependencyDraftError("");
+                        updateDependencyDraft(index, {
+                          primary: e.target.value,
+                        });
+                      }}
+                    >
+                      <option value="">Select column</option>
+
+                      {configuredFields(dashboard).map((entry) => (
+                        <option key={entry.field} value={entry.field}>
+                          {filterLabel(entry, fields)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="tiny muted">
+                    Secondary column
+                    <select
+                      className="control"
+                      value={dep.secondary}
+                      aria-label={`Dependency ${index + 1} secondary`}
+                      onChange={(e) => {
+                        setDependencyDraftError("");
+                        updateDependencyDraft(index, {
+                          secondary: e.target.value,
+                        });
+                      }}
+                    >
+                      <option value="">Select column</option>
+
+                      {configuredFields(dashboard).map((entry) => (
+                        <option key={entry.field} value={entry.field}>
+                          {filterLabel(entry, fields)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <button
+                    className="btn btn--tiny"
+                    type="button"
+                    aria-label={`Remove dependency ${index + 1}`}
+                    onClick={() => {
+                      setDependencyDraftError("");
+                      removeDependencyDraftRule(index);
+                    }}
+                  >
+                    🗑
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <button
+              className="btn btn--sm"
+              type="button"
+              style={{ marginTop: 8 }}
+              onClick={addDependencyDraftRule}
+            >
+              + Add Rule
+            </button>
+
+            {dependencyDraftError && (
+              <div
+                className="alert alert--bad"
+                style={{ marginTop: 12 }}
+              >
+                {dependencyDraftError}
+              </div>
+            )}
+
+            <div className="dash__modal-actions">
+              <button
+                className="btn"
+                type="button"
+                onClick={() => setShowDependencyModal(false)}
+              >
+                Close
+              </button>
+
+              <button
+                className="btn btn--primary"
+                type="button"
+                onClick={saveDependencies}
+              >
+                Apply
               </button>
             </div>
           </div>
@@ -5767,12 +6295,97 @@ export default function Dashboards() {
 
             <h3 style={{ marginBottom: 16 }}>Appearance</h3>
 
-            {/* Colour, per kind of graph. Each control writes one key, and an
-                unset key means the graph keeps the colour it always had —
-                which is why every one of these has a Clear beside it. */}
-            {["bar", "line", "histogram", "bubble", "scatter"].includes(
+            <label className="dash__edit-label">Font Family</label>
+            <select
+              className="control"
+              value={widgetForm.presentation?.font_family || ""}
+              onChange={(e) =>
+                setWidgetForm((curr) => ({
+                  ...curr,
+                  presentation: { ...curr.presentation, font_family: e.target.value }
+                }))
+              }
+              style={{ marginBottom: 16 }}
+            >
+              <option value="">Default</option>
+              <option value="Arial">Arial</option>
+              <option value="Helvetica">Helvetica</option>
+              <option value="Georgia">Georgia</option>
+              <option value="Times New Roman">Times New Roman</option>
+              <option value="Courier New">Courier New</option>
+              <option value="Monaco">Monaco</option>
+            </select>
+
+            {/* Series colours: a list of colours applied cyclically to
+                categories (single series) or one-per-series (multi-series).
+                Chart types that have their own colour model are excluded. */}
+            {["bar", "line", "pie", "doughnut", "histogram", "bubble", "scatter"].includes(
               widgetForm.type,
             ) && (
+              <>
+                <label className="dash__edit-label">Series Colors</label>
+
+                {(widgetForm.presentation?.series_colors || []).map((color, index) => (
+                  <div className="dash__color-row" key={index} style={{ marginBottom: 6 }}>
+                    <span style={{ fontSize: 13, color: "var(--text-muted, #888)", minWidth: 20 }}>{index + 1}</span>
+                    <input
+                      className="control"
+                      type="color"
+                      aria-label={`Series color ${index + 1}`}
+                      value={color}
+                      onChange={(e) =>
+                        setWidgetForm((curr) => {
+                          const next = [...(curr.presentation?.series_colors || [])];
+                          next[index] = e.target.value;
+                          return { ...curr, presentation: { ...curr.presentation, series_colors: next } };
+                        })
+                      }
+                    />
+                    <span style={{ fontSize: 12, color: "var(--text-muted, #888)" }}>{color}</span>
+                    <button
+                      type="button"
+                      className="btn1"
+                      onClick={() =>
+                        setWidgetForm((curr) => {
+                          const next = [...(curr.presentation?.series_colors || [])];
+                          next.splice(index, 1);
+                          return { ...curr, presentation: { ...curr.presentation, series_colors: next } };
+                        })
+                      }
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+
+                {(widgetForm.presentation?.series_colors || []).length < 12 && (
+                  <button
+                    type="button"
+                    className="btn1"
+                    style={{ marginBottom: 16 }}
+                    onClick={() =>
+                      setWidgetForm((curr) => {
+                        const next = [...(curr.presentation?.series_colors || [])];
+                        next.push("#1a5f3f");
+                        return { ...curr, presentation: { ...curr.presentation, series_colors: next } };
+                      })
+                    }
+                  >
+                    + Add Color
+                  </button>
+                )}
+
+                {(widgetForm.presentation?.series_colors || []).length === 0 && (
+                  <p className="muted" style={{ fontSize: 12, marginBottom: 16 }}>No custom colors — using defaults.</p>
+                )}
+              </>
+            )}
+
+            {/* Legacy single-color and palette controls for types that still
+                use them as a fallback when no series_colors are set. */}
+            {["bar", "line", "histogram", "bubble", "scatter"].includes(
+              widgetForm.type,
+            ) && (widgetForm.presentation?.series_colors || []).length === 0 && (
               <>
                 <label className="dash__edit-label">
                   {widgetForm.type === "line" ? "Line Color" : "Bar / Point Color"}
@@ -5811,7 +6424,7 @@ export default function Dashboards() {
               </>
             )}
 
-            {["pie", "doughnut"].includes(widgetForm.type) && (
+            {["pie", "doughnut"].includes(widgetForm.type) && (widgetForm.presentation?.series_colors || []).length === 0 && (
               <>
                 <label className="dash__edit-label">Slice Colours</label>
 
@@ -6066,6 +6679,43 @@ export default function Dashboards() {
               </label>
             </div>
 
+            <label className="dash__edit-label">Title Color</label>
+            <div className="dash__color-row">
+              <input
+                className="control"
+                type="color"
+                aria-label="Title colour"
+                value={widgetForm.presentation?.title_style?.color || "#222222"}
+                onChange={(e) =>
+                  setWidgetForm((curr) => ({
+                    ...curr,
+                    presentation: {
+                      ...curr.presentation,
+                      title_style: { ...(curr.presentation?.title_style || {}), color: e.target.value }
+                    }
+                  }))
+                }
+              />
+              <span style={{ fontSize: 12, color: "var(--text-muted, #888)" }}>
+                {widgetForm.presentation?.title_style?.color || "default"}
+              </span>
+              <button
+                type="button"
+                className="btn1"
+                onClick={() =>
+                  setWidgetForm((curr) => ({
+                    ...curr,
+                    presentation: {
+                      ...curr.presentation,
+                      title_style: { ...(curr.presentation?.title_style || {}), color: "" }
+                    }
+                  }))
+                }
+              >
+                Clear
+              </button>
+            </div>
+
             <h3 style={{ marginBottom: 16, marginTop: 24 }}>Subtitle</h3>
             <label className="dash__edit-label">Subtitle Text</label>
             <input
@@ -6126,6 +6776,43 @@ export default function Dashboards() {
                 />{" "}
                 Italic
               </label>
+            </div>
+
+            <label className="dash__edit-label">Subtitle Color</label>
+            <div className="dash__color-row">
+              <input
+                className="control"
+                type="color"
+                aria-label="Subtitle colour"
+                value={widgetForm.presentation?.subtitle_style?.color || "#666666"}
+                onChange={(e) =>
+                  setWidgetForm((curr) => ({
+                    ...curr,
+                    presentation: {
+                      ...curr.presentation,
+                      subtitle_style: { ...(curr.presentation?.subtitle_style || {}), color: e.target.value }
+                    }
+                  }))
+                }
+              />
+              <span style={{ fontSize: 12, color: "var(--text-muted, #888)" }}>
+                {widgetForm.presentation?.subtitle_style?.color || "default"}
+              </span>
+              <button
+                type="button"
+                className="btn1"
+                onClick={() =>
+                  setWidgetForm((curr) => ({
+                    ...curr,
+                    presentation: {
+                      ...curr.presentation,
+                      subtitle_style: { ...(curr.presentation?.subtitle_style || {}), color: "" }
+                    }
+                  }))
+                }
+              >
+                Clear
+              </button>
             </div>
 
             {(widgetForm.type === "bar" || widgetForm.type === "line") && (

@@ -1,3 +1,4 @@
+from collections import defaultdict
 from typing import List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -319,6 +320,19 @@ class FilterFieldConfig(BaseModel):
     label: Optional[str] = None
 
 
+class FilterDependency(BaseModel):
+    """One cascading relationship between two configured filter fields.
+
+    primary → secondary means: the available values for secondary depend on
+    what has been selected for primary.  State → District, District →
+    Municipality, and so on — the fields themselves are generic.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    primary: str = Field(min_length=1)
+    secondary: str = Field(min_length=1)
+
+
 class DashboardSpecification(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -344,6 +358,12 @@ class DashboardSpecification(BaseModel):
         default_factory=list
     )
 
+    # Cascading relationships between filter fields.  Absent in every
+    # dashboard saved before dependencies could be configured.
+    filter_dependencies: List[FilterDependency] = Field(
+        default_factory=list
+    )
+
     @field_validator("filter_fields")
     @classmethod
     def _no_repeated_field(cls, value):
@@ -362,6 +382,75 @@ class DashboardSpecification(BaseModel):
                 )
 
             seen.add(entry.field)
+
+        return value
+
+    @field_validator("filter_dependencies")
+    @classmethod
+    def _valid_dependencies(cls, value, info):
+        """Every dependency must link two distinct, configured filter fields
+        without forming a cycle or appearing twice.
+        """
+        if not value:
+            return value
+
+        # Self-dependencies make no sense: a field cannot narrow itself.
+        for dep in value:
+            if dep.primary == dep.secondary:
+                raise ValueError(
+                    f"A filter dependency cannot link '{dep.primary}' to itself."
+                )
+
+        # Duplicate edges would fire the same cascade twice.
+        seen = set()
+        for dep in value:
+            pair = (dep.primary, dep.secondary)
+            if pair in seen:
+                raise ValueError(
+                    f"Duplicate dependency: '{dep.primary}' → '{dep.secondary}'."
+                )
+            seen.add(pair)
+
+        # Both ends must reference a configured filter field.
+        filter_fields = info.data.get("filter_fields") or []
+        configured = {ff.field for ff in filter_fields}
+
+        for dep in value:
+            if dep.primary not in configured:
+                raise ValueError(
+                    f"Dependency primary '{dep.primary}' is not a configured "
+                    f"filter field."
+                )
+            if dep.secondary not in configured:
+                raise ValueError(
+                    f"Dependency secondary '{dep.secondary}' is not a configured "
+                    f"filter field."
+                )
+
+        # A cycle means an infinite cascade: State → District → State would
+        # clear and refill both on every selection.
+        graph = defaultdict(list)
+        for dep in value:
+            graph[dep.primary].append(dep.secondary)
+
+        UNVISITED, IN_PROGRESS, DONE = 0, 1, 2
+        state = defaultdict(int)
+
+        def has_cycle(node):
+            state[node] = IN_PROGRESS
+            for neighbour in graph.get(node, []):
+                if state[neighbour] == IN_PROGRESS:
+                    return True
+                if state[neighbour] == UNVISITED and has_cycle(neighbour):
+                    return True
+            state[node] = DONE
+            return False
+
+        for node in graph:
+            if state[node] == UNVISITED and has_cycle(node):
+                raise ValueError(
+                    "Filter dependencies contain a cycle."
+                )
 
         return value
 

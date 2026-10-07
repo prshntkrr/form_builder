@@ -257,6 +257,8 @@ export default function SharedDashboard() {
                                   : {}),
                                 ...(titleStyle.bold ? { fontWeight: "bold" } : {}),
                                 ...(titleStyle.italic ? { fontStyle: "italic" } : {}),
+                                ...(titleStyle.color ? { color: titleStyle.color } : {}),
+                                ...(presentation.font_family ? { fontFamily: presentation.font_family } : {}),
                               }}
                             >
                               {widget.title}
@@ -267,12 +269,14 @@ export default function SharedDashboard() {
                                 className="dash__widget-subtitle"
                                 style={{
                                   marginTop: 4,
-                                  color: "var(--text-muted, #666)",
+                                  ...(!subtitleStyle.color ? { color: "var(--text-muted, #666)" } : {}),
                                   ...(subtitleStyle.font_size
                                     ? { fontSize: `${subtitleStyle.font_size}px` }
                                     : {}),
                                   ...(subtitleStyle.bold ? { fontWeight: "bold" } : {}),
                                   ...(subtitleStyle.italic ? { fontStyle: "italic" } : {}),
+                                  ...(subtitleStyle.color ? { color: subtitleStyle.color } : {}),
+                                  ...(presentation.font_family ? { fontFamily: presentation.font_family } : {}),
                                 }}
                               >
                                 {presentation.subtitle}

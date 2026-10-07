@@ -10,9 +10,14 @@ import { describe, expect, test } from 'vitest'
 import {
   CHIP_LIMIT,
   bindingFilters,
+  configuredDependencies,
   configuredFields,
+  dependencyDescendants,
+  dependencyParents,
+  dependencyProblem,
   fieldProblem,
   filterLabel,
+  hasCycle,
   matchingOptions,
   removeValue,
   selectedCount,
@@ -173,5 +178,129 @@ describe('searching the values', () => {
 
   test('and nothing matching is an empty list, not everything', () => {
     expect(matchingOptions(VALUES, 'zzz')).toEqual([])
+  })
+})
+
+// ── dependency configuration ─────────────────────────────────────
+
+describe('dependency configuration', () => {
+  test('a dashboard saved before dependencies existed has none', () => {
+    expect(configuredDependencies({ widgets: [] })).toEqual([])
+    expect(configuredDependencies(null)).toEqual([])
+  })
+
+  test('configured dependencies are returned from the specification', () => {
+    const dash = { filter_dependencies: [{ primary: 'state', secondary: 'district' }] }
+    expect(configuredDependencies(dash)).toEqual([{ primary: 'state', secondary: 'district' }])
+  })
+})
+
+describe('dependency validation', () => {
+  const FILTER_FIELDS = [
+    { field: 'state' },
+    { field: 'district' },
+    { field: 'municipality' },
+    { field: 'village' },
+  ]
+
+  test('a valid dependency is accepted', () => {
+    expect(dependencyProblem('state', 'district', [], -1, FILTER_FIELDS)).toBeNull()
+  })
+
+  test('missing primary is rejected', () => {
+    expect(dependencyProblem('', 'district', [], -1, FILTER_FIELDS)).toMatch(/primary/)
+  })
+
+  test('missing secondary is rejected', () => {
+    expect(dependencyProblem('state', '', [], -1, FILTER_FIELDS)).toMatch(/secondary/)
+  })
+
+  test('self-dependency is rejected', () => {
+    expect(dependencyProblem('state', 'state', [], -1, FILTER_FIELDS)).toMatch(/different/)
+  })
+
+  test('a field not in filter_fields is rejected', () => {
+    expect(dependencyProblem('country', 'district', [], -1, FILTER_FIELDS)).toMatch(/not a configured/)
+    expect(dependencyProblem('state', 'country', [], -1, FILTER_FIELDS)).toMatch(/not a configured/)
+  })
+
+  test('duplicate dependency is rejected', () => {
+    const existing = [{ primary: 'state', secondary: 'district' }]
+    expect(dependencyProblem('state', 'district', existing, -1, FILTER_FIELDS)).toMatch(/already exists/)
+  })
+
+  test('a row being edited is not a duplicate of itself', () => {
+    const existing = [{ primary: 'state', secondary: 'district' }]
+    expect(dependencyProblem('state', 'district', existing, 0, FILTER_FIELDS)).toBeNull()
+  })
+
+  test('a cycle is rejected', () => {
+    const existing = [{ primary: 'state', secondary: 'district' }]
+    expect(dependencyProblem('district', 'state', existing, -1, FILTER_FIELDS)).toMatch(/cycle/)
+  })
+
+  test('a longer cycle is rejected', () => {
+    const existing = [
+      { primary: 'state', secondary: 'district' },
+      { primary: 'district', secondary: 'municipality' },
+    ]
+    expect(dependencyProblem('municipality', 'state', existing, -1, FILTER_FIELDS)).toMatch(/cycle/)
+  })
+})
+
+describe('cycle detection', () => {
+  test('no edges means no cycle', () => {
+    expect(hasCycle([])).toBe(false)
+  })
+
+  test('a simple chain is fine', () => {
+    expect(hasCycle([['a', 'b'], ['b', 'c']])).toBe(false)
+  })
+
+  test('a direct cycle is detected', () => {
+    expect(hasCycle([['a', 'b'], ['b', 'a']])).toBe(true)
+  })
+
+  test('an indirect cycle is detected', () => {
+    expect(hasCycle([['a', 'b'], ['b', 'c'], ['c', 'a']])).toBe(true)
+  })
+})
+
+describe('dependency graph traversal', () => {
+  const DEPS = [
+    { primary: 'state', secondary: 'district' },
+    { primary: 'district', secondary: 'municipality' },
+    { primary: 'municipality', secondary: 'village' },
+  ]
+
+  test('descendants of the root', () => {
+    expect(dependencyDescendants('state', DEPS))
+      .toEqual(['district', 'municipality', 'village'])
+  })
+
+  test('descendants of a middle node', () => {
+    expect(dependencyDescendants('district', DEPS))
+      .toEqual(['municipality', 'village'])
+  })
+
+  test('descendants of a leaf', () => {
+    expect(dependencyDescendants('village', DEPS)).toEqual([])
+  })
+
+  test('descendants of an unrelated field', () => {
+    expect(dependencyDescendants('gender', DEPS)).toEqual([])
+  })
+
+  test('parents of a leaf', () => {
+    expect(dependencyParents('village', DEPS))
+      .toEqual(['municipality', 'district', 'state'])
+  })
+
+  test('parents of the root', () => {
+    expect(dependencyParents('state', DEPS)).toEqual([])
+  })
+
+  test('parents of an unrelated field', () => {
+    expect(dependencyParents('gender', DEPS)).toEqual([])
   })
 })

@@ -138,3 +138,136 @@ export function lineSeriesData(widget, data, rows) {
 
   return { rows: categories, series };
 }
+
+/* ---------------------------------------------------------------------------
+ * The three shapes below were worked out inside their renderers, which was
+ * fine while drawing was the only thing that needed them. Exporting a widget's
+ * data needs the same numbers — the ones on the screen, not the rows the
+ * server sent — so each is a function here and the renderer calls it. One
+ * implementation, so an export cannot drift from the picture it claims to be.
+ * ------------------------------------------------------------------------ */
+
+/** A finite number, or null. The test every one of these applies to a cell. */
+function numeric(raw) {
+  if (raw === null || raw === undefined) {
+    return null;
+  }
+
+  const num = Number(raw);
+
+  return Number.isFinite(num) ? num : null;
+}
+
+/**
+ * Which column of a row holds a bubble's x, y and size.
+ *
+ * A measure arrives aggregated and is read by its suffixed alias; a dimension
+ * arrives as it is. Y is the awkward one — it may be either, so the binding is
+ * asked before a suffix is assumed.
+ */
+export function bubbleAliases(widget) {
+  const bubble = widget?.bubble || {};
+  const dimensions = widget?.data_binding?.dimensions || [];
+
+  const yIsDimension = dimensions.some((entry) => entry.field === bubble.y);
+
+  return {
+    xAlias: bubble.x,
+
+    yAlias:
+      !yIsDimension && bubble.y_aggregation
+        ? `${bubble.y}_${String(bubble.y_aggregation).toLowerCase()}`
+        : bubble.y,
+
+    sizeAlias: bubble.size_aggregation
+      ? `${bubble.size}_${String(bubble.size_aggregation).toLowerCase()}`
+      : bubble.size,
+  };
+}
+
+/**
+ * A scatter's plotted points, as `[x, y]` pairs.
+ *
+ * Both columns are unaggregated, so both carry the `_none` alias the query
+ * builder writes. A row missing either value, or holding something that is not
+ * a number, is not a point — it is dropped here exactly as the chart drops it,
+ * so an export has the same number of points as the picture.
+ */
+export function scatterPoints(widget, rows) {
+  const { x, y } = widget?.scatter || {};
+
+  const xAlias = `${x}_none`;
+  const yAlias = `${y}_none`;
+
+  const points = [];
+
+  for (const row of rows || []) {
+    const numX = numeric(row[xAlias]);
+    const numY = numeric(row[yAlias]);
+
+    if (numX !== null && numY !== null) {
+      points.push([numX, numY]);
+    }
+  }
+
+  return points;
+}
+
+/**
+ * A histogram's buckets, counted here rather than by the database.
+ *
+ * The server returns the raw values; how many bars they fall into is the
+ * widget's own setting, so the counting has always happened in the browser.
+ *
+ *   returns  { categories: ['0 - 2.50', …], counts: [12, …] }
+ */
+export function histogramBins(widget, rows) {
+  const field = widget?.histogram?.field;
+  const alias = `${field}_none`;
+
+  const values = [];
+
+  for (const row of rows || []) {
+    const num = numeric(row[alias]);
+
+    if (num !== null) {
+      values.push(num);
+    }
+  }
+
+  if (!values.length) {
+    return { categories: [], counts: [] };
+  }
+
+  const lowest = Math.min(...values);
+  const highest = Math.max(...values);
+
+  // Every value the same: one bucket holding all of them. Splitting a range of
+  // zero into ten gives ten empty buckets and a division by zero.
+  if (lowest === highest) {
+    return { categories: [`${lowest}`], counts: [values.length] };
+  }
+
+  const count = Math.max(1, widget?.histogram?.bins || 10);
+  const width = (highest - lowest) / count;
+
+  // A long float makes an unreadable axis label; a whole number is left alone.
+  const label = (edge) => (Number.isInteger(edge) ? edge : edge.toFixed(2));
+
+  const categories = [];
+  const counts = new Array(count).fill(0);
+
+  for (let index = 0; index < count; index += 1) {
+    categories.push(
+      `${label(lowest + index * width)} - ${label(lowest + (index + 1) * width)}`,
+    );
+  }
+
+  for (const value of values) {
+    // The highest value sits on the last bucket's upper edge, which would index
+    // one past the end.
+    counts[value === highest ? count - 1 : Math.floor((value - lowest) / width)] += 1;
+  }
+
+  return { categories, counts };
+}
