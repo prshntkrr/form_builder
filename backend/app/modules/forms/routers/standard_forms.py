@@ -32,12 +32,16 @@ router = APIRouter(prefix="/api/standard-forms", tags=["standard forms"])
 def index(
     search: Optional[str] = None,
     category: Optional[str] = Query(None, description="Exact category match"),
+    project_id: Optional[str] = Query(None, description="Scope to a project (plus globals)"),
     user: Dict[str, Any] = Depends(needs(LIBRARY_VIEW)),
 ):
     """Look up standard forms by title, summary, category or tag."""
     return {
-        "categories": standard_library.categories(),
-        "forms": [entry.summary_entry() for entry in standard_library.search(search, category)],
+        "categories": standard_library.categories(project_id=project_id),
+        "forms": [
+            entry.summary_entry()
+            for entry in standard_library.search(search, category, project_id=project_id)
+        ],
     }
 
 
@@ -66,6 +70,7 @@ def add(req: AddToLibraryRequest, user: Dict[str, Any] = Depends(needs(LIBRARY_M
             tags=req.tags,
             summary=req.summary,
             added_by=req.added_by or auth_service.display_name(user),
+            project_id=req.project_id,
         )
     except form_service.FormNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc))
@@ -330,5 +335,6 @@ def save_imported(
             tags=req.tags,
             summary=req.summary,
             added_by=auth_service.display_name(user),
+            project_id=req.project_id,
         )
     return entry

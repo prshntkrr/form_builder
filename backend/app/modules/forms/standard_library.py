@@ -55,6 +55,8 @@ class StandardForm:
     version_no: Optional[int] = None
     added_by: Optional[str] = None
 
+    project_id: Optional[str] = None
+
     @property
     def field_count(self) -> int:
         return len(self._definition.get("fields") or [])
@@ -81,6 +83,7 @@ class StandardForm:
             "form_id": self.form_id,
             "version_no": self.version_no,
             "added_by": self.added_by,
+            "project_id": self.project_id,
         }
 
     def full_entry(self) -> Dict[str, Any]:
@@ -92,7 +95,7 @@ class StandardForm:
 # --------------------------------------------------------------------------- #
 _SELECT = """
     SELECT standard_id, form_json, title, category, tags, summary,
-           standard_version, form_id, version_no, added_by
+           standard_version, form_id, version_no, added_by, project_id
     FROM   standard_form_library
     ORDER  BY category, title
 """
@@ -112,11 +115,15 @@ def _from_row(row: Dict[str, Any]) -> StandardForm:
         form_id=row.get("form_id"),
         version_no=row.get("version_no"),
         added_by=row.get("added_by"),
+        project_id=row.get("project_id"),
     )
 
 
-def catalogue(cur=None) -> Dict[str, StandardForm]:
-    """Everything in the library. Read fresh — a row can appear at any moment."""
+def catalogue(cur=None, project_id=None) -> Dict[str, StandardForm]:
+    """Standards visible to a project: its own plus globals (project_id IS NULL).
+
+    With no project_id, returns everything — the old behaviour.
+    """
     def run(c) -> List[Dict[str, Any]]:
         c.execute(_SELECT)
         return [dict(r) for r in c.fetchall()]
@@ -128,11 +135,18 @@ def catalogue(cur=None) -> Dict[str, StandardForm]:
             with transaction() as own:
                 rows = run(own)
     except Exception as exc:
-        # A database that has not been migrated yet must not take the app down.
         logger.warning("Could not read standard_form_library: %s", exc)
         return {}
 
-    return {row["standard_id"]: _from_row(row) for row in rows}
+    result = {row["standard_id"]: _from_row(row) for row in rows}
+
+    if project_id is not None:
+        result = {
+            k: v for k, v in result.items()
+            if v.project_id is None or v.project_id == project_id
+        }
+
+    return result
 
 
 def known_ids(cur=None) -> List[str]:
@@ -143,15 +157,20 @@ def get(standard_id: str) -> Optional[StandardForm]:
     return catalogue().get(str(standard_id or "").strip())
 
 
-def categories() -> List[str]:
-    return sorted({entry.category for entry in catalogue().values()})
+def categories(project_id=None) -> List[str]:
+    return sorted({entry.category for entry in catalogue(project_id=project_id).values()})
 
 
 def search(
-    query: Optional[str] = None, category: Optional[str] = None
+    query: Optional[str] = None,
+    category: Optional[str] = None,
+    project_id: Optional[str] = None,
 ) -> List[StandardForm]:
     """Match on title, summary, category or tags — one box, everything searched."""
-    entries = sorted(catalogue().values(), key=lambda e: (e.category, e.title))
+    entries = sorted(
+        catalogue(project_id=project_id).values(),
+        key=lambda e: (e.category, e.title),
+    )
 
     if category:
         wanted = category.strip().lower()
@@ -220,6 +239,7 @@ def add_form(
     tags: Optional[Sequence[str]] = None,
     summary: Optional[str] = None,
     added_by: Optional[str] = None,
+    project_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Put a definition into the library as a standard others can start from.
 
@@ -250,8 +270,8 @@ def add_form(
         """
         INSERT INTO standard_form_library
               (standard_id, form_json, title, category, tags, summary,
-               standard_version, form_id, version_no, added_by)
-        VALUES (%s, %s, %s, %s, %s, %s, 1, %s, %s, %s)
+               standard_version, form_id, version_no, added_by, project_id)
+        VALUES (%s, %s, %s, %s, %s, %s, 1, %s, %s, %s, %s)
         ON CONFLICT (standard_id) DO UPDATE SET
               form_json        = EXCLUDED.form_json,
               title            = EXCLUDED.title,
@@ -262,14 +282,15 @@ def add_form(
               form_id          = EXCLUDED.form_id,
               version_no       = EXCLUDED.version_no,
               added_by         = EXCLUDED.added_by,
-              added_on         = CURRENT_TIMESTAMP
-        RETURNING standard_id, title, category, standard_version, form_id, version_no
+              added_on         = CURRENT_TIMESTAMP,
+              project_id       = EXCLUDED.project_id
+        RETURNING standard_id, title, category, standard_version, form_id, version_no, project_id
         """,
         (
             resolved, Json(entry["form"]),
             (title or entry["form"].get("title") or resolved)[:200],
             entry["category"][:50], Json(entry["tags"]), entry["summary"],
-            form_id, version_no, added_by,
+            form_id, version_no, added_by, project_id,
         ),
     )
     row = dict(cur.fetchone())

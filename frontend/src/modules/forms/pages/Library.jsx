@@ -3,10 +3,12 @@ import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../api.js'
 import ImportWorkbook from '../components/ImportWorkbook.jsx'
 import { typeName } from '../fieldTypes.js'
+import { useProjects } from '../../projects/active.js'
 
 /** Browse the standard form library and start a form from one. */
 export default function Library() {
   const navigate = useNavigate()
+  const { projectId } = useProjects()
   const [catalogue, setCatalogue] = useState(null)
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('')
@@ -15,8 +17,9 @@ export default function Library() {
   const [importing, setImporting] = useState(false)
 
   useEffect(() => {
-    api.listStandards().then(setCatalogue).catch((e) => setError(e.message))
-  }, [])
+    api.listStandards({ project_id: projectId || undefined })
+      .then(setCatalogue).catch((e) => setError(e.message))
+  }, [projectId])
 
   const forms = useMemo(() => {
     const needle = search.trim().toLowerCase()
@@ -39,7 +42,7 @@ export default function Library() {
     if (!ok) return
     try {
       await api.removeFromLibrary(entry.standard_id)
-      setCatalogue(await api.listStandards())
+      setCatalogue(await api.listStandards({ project_id: projectId || undefined }))
     } catch (e) {
       setError(e.message)
     }
@@ -205,10 +208,11 @@ export default function Library() {
     
       {importing && (
         <ImportWorkbook
+          projectId={projectId}
           onClose={() => setImporting(false)}
           onSaved={async (entry) => {
             setImporting(false)
-            setCatalogue(await api.listStandards())
+            setCatalogue(await api.listStandards({ project_id: projectId || undefined }))
           }}
         />
       )}

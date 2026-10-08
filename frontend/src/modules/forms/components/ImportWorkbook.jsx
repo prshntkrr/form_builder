@@ -14,7 +14,7 @@ import { applicable } from '../conditions.js'
  * language it is written in all come from the file and are shown here as they
  * are — nothing on this screen translates anything.
  */
-export default function ImportWorkbook({ onSaved, onClose }) {
+export default function ImportWorkbook({ projectId, onSaved, onClose }) {
   const fileInput = useRef(null)
   const [source, setSource] = useState('')
   const [drafts, setDrafts] = useState(null)
@@ -75,6 +75,7 @@ export default function ImportWorkbook({ onSaved, onClose }) {
           ? `Imported from ${source} (${draft.profile.profile_id})`
           : `Imported from ${source}`,
         source,
+        project_id: projectId || undefined,
       })
       onSaved?.(entry)
     } catch (e) {

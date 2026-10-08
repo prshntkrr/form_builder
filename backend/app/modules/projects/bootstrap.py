@@ -100,6 +100,63 @@ def ensure_project_api_key() -> bool:
     return True
 
 
+def ensure_standard_library_project() -> bool:
+    """Let a standard form library entry belong to a project.
+
+    Nullable — existing entries keep project_id = NULL and remain visible in
+    every project as a shared baseline.  New entries created inside a project
+    are scoped to that project.
+    """
+    with transaction() as cur:
+        if not table_exists(cur, "standard_form_library"):
+            return False
+
+        cur.execute(
+            """
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name = 'standard_form_library' AND column_name = 'project_id'
+            """
+        )
+        if cur.fetchone():
+            return True
+
+        cur.execute("ALTER TABLE standard_form_library ADD COLUMN project_id VARCHAR(20)")
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_standard_library_project "
+            "ON standard_form_library (project_id)"
+        )
+        logger.info("Added standard_form_library.project_id")
+
+    return True
+
+
+def ensure_standard_library_project_key() -> bool:
+    """FK from standard_form_library.project_id to project."""
+    with transaction() as cur:
+        if not table_exists(cur, "standard_form_library") or not table_exists(cur, "project"):
+            return False
+
+        cur.execute(
+            """
+            SELECT 1 FROM information_schema.table_constraints
+            WHERE table_name = 'standard_form_library'
+              AND constraint_name = 'fk_standard_library_project'
+            """
+        )
+        if cur.fetchone():
+            return True
+
+        cur.execute(
+            """
+            ALTER TABLE standard_form_library ADD CONSTRAINT fk_standard_library_project
+            FOREIGN KEY (project_id) REFERENCES project (project_id) ON DELETE SET NULL
+            """
+        )
+        logger.info("Added standard_form_library.project_id -> project")
+
+    return True
+
+
 def ensure_project_roles() -> bool:
     """Create the roles a project starts with, once.
 

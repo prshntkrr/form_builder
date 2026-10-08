@@ -1686,6 +1686,7 @@ export default function Builder() {
           formId={formId}
           title={form?.title}
           version={form?.version}
+          projectId={buildingIn || activeProjectId()}
           onClose={() => setContributing(false)}
         />
       )}
@@ -1694,6 +1695,7 @@ export default function Builder() {
         <LibraryPicker
           mode={picker}
           draft={picker === 'borrow' ? untag(form) : null}
+          projectId={buildingIn || activeProjectId()}
           onClose={() => setPicker(null)}
           onPick={(formJson) => {
             setForm(prep(form ? keepChannel(formJson) : { ...formJson, channel: newChannel }, editing))
