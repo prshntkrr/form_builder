@@ -11,7 +11,7 @@ const CATEGORIES = ['Registration', 'Survey', 'Soil', 'Crop', 'Inputs', 'Monitor
  * copy. So there is one definition, and the pinned version cannot drift when
  * the form is edited afterwards.
  */
-export default function ContributeToLibrary({ formId, title, version, onClose, onAdded }) {
+export default function ContributeToLibrary({ formId, title, version, projectId, onClose, onAdded }) {
   const [standardId, setStandardId] = useState('')
   const [category, setCategory] = useState('General')
   const [tags, setTags] = useState('')
@@ -30,6 +30,7 @@ export default function ContributeToLibrary({ formId, title, version, onClose, o
         category,
         tags: tags.split(',').map((t) => t.trim()).filter(Boolean),
         summary: summary || undefined,
+        project_id: projectId || undefined,
       })
       setAdded(result)
       onAdded?.(result)

@@ -48,6 +48,8 @@ MODULE = Module(
         bootstrap.ensure_form_project,
         bootstrap.ensure_form_project_key,
         bootstrap.ensure_project_api_key,
+        bootstrap.ensure_standard_library_project,
+        bootstrap.ensure_standard_library_project_key,
         bootstrap.ensure_project_roles,
     ],
 )
