@@ -4503,7 +4503,11 @@ export default function Dashboards() {
                 onClick={importExcel}
                 disabled={importBusy}
               >
-                {importBusy ? "Importing..." : "Import"}
+                {importBusy
+                  ? importSelectedSheet
+                    ? `Importing "${importSelectedSheet}"...`
+                    : "Importing..."
+                  : "Import"}
               </button>
             </div>
           </div>

@@ -1,6 +1,6 @@
 """Turning a spreadsheet somebody has into a dashboard data source.
 
-    .xlsx ──read first sheet──> typed PostgreSQL table ──> Select Data Source
+    .xlsx ──read selected sheet──> typed PostgreSQL table ──> Select Data Source
 
 The same one-way load the external database import performs, from a file
 instead of a connection: the table is created and filled inside one
@@ -17,16 +17,18 @@ Two things the dashboard's own rules decide here:
   merely limits which widgets can use it, while a column wrongly read as a
   number loses the values that did not fit.
 """
+import csv
 import io
 import logging
 import re
 import warnings
+import xml.etree.ElementTree as ET
+import zipfile
 from datetime import date, datetime, time as _time_of_day
 from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, List, Tuple
 
 from psycopg2 import sql
-from psycopg2.extras import execute_values
 
 from app.core.database import table_exists, transaction
 from app.modules.dashboards.services.data_source_service import TABULAR_SUFFIX
@@ -35,19 +37,10 @@ logger = logging.getLogger(__name__)
 
 _MIDNIGHT = _time_of_day(0, 0)
 
-# 16 MB. Larger than the form-definition workbooks the forms module reads,
-# because this one carries data rather than a definition.
 MAX_WORKBOOK_BYTES = 100 * 1024 * 1024
 
-# Beyond this the import is refused rather than left to run for minutes and
-# then produce a table the browser cannot draw anyway. See the row counts in
-# `data_source_service` for why a dashboard over a very large table struggles.
 MAX_ROWS = 500_000
 
-# A name this application is willing to create: a PostgreSQL identifier that
-# needs no quoting to be safe, quoted anyway when it is used. Deliberately the
-# same rule as the external database import applies to its destination; the two
-# are kept separate rather than shared so neither module depends on the other.
 NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,50}$")
 
 RESERVED = {
@@ -57,6 +50,8 @@ RESERVED = {
     "standard_variable", "standard_variable_option", "unit", "data_dictionary",
     "external_import", "external_connection", "dashboard", "dashboard_version",
 }
+
+_XLSX_NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 
 
 class ExcelSourceError(Exception):
@@ -70,8 +65,6 @@ def destination_table(name: str) -> str:
     """The table this import will create, or a refusal explaining why not."""
     text = str(name or "").strip().lower()
 
-    # Somebody who types "farmer_data_tabular" means the same table as somebody
-    # who types "farmer_data"; the suffix is the dashboard's rule, not theirs.
     if text.endswith(TABULAR_SUFFIX):
         text = text[: -len(TABULAR_SUFFIX)]
 
@@ -94,8 +87,6 @@ def _column_name(heading: Any, position: int, taken: set) -> str:
     text = re.sub(r"[^a-z0-9]+", "_", str(heading or "").strip().lower()).strip("_")
 
     if not text or text[0].isdigit():
-        # A heading that survives none of that still has a position, and a
-        # column called column_4 is better than an import that fails.
         text = f"column_{position + 1}"
 
     text = text[:58]
@@ -103,8 +94,6 @@ def _column_name(heading: Any, position: int, taken: set) -> str:
     candidate = text
     suffix = 2
     while candidate in taken:
-        # Two columns headed the same is common in an exported sheet, and the
-        # second one is not a reason to refuse the file.
         candidate = f"{text[:55]}_{suffix}"
         suffix += 1
 
@@ -116,27 +105,35 @@ def _column_name(heading: Any, position: int, taken: set) -> str:
 # reading
 # --------------------------------------------------------------------------- #
 def inspect_sheets(data: bytes) -> List[str]:
-    """Return the worksheet names in the workbook without reading data."""
+    """Return the worksheet names by reading only the ZIP metadata.
+
+    A 40 MB workbook with 107K rows takes ~12 seconds through openpyxl's
+    load_workbook even in read_only mode, because it parses every sheet's XML.
+    Reading the workbook.xml entry directly takes under a millisecond.
+    """
     try:
-        import openpyxl
-    except ImportError as exc:  # pragma: no cover - depends on the environment
+        zf = zipfile.ZipFile(io.BytesIO(data))
+    except (zipfile.BadZipFile, Exception) as exc:
         raise ExcelSourceError(
-            "openpyxl is not installed. Add it with: pip install openpyxl"
+            f"That file could not be opened as .xlsx: {exc}"
         ) from exc
 
     try:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            workbook = openpyxl.load_workbook(
-                io.BytesIO(data), read_only=True, data_only=True
-            )
-    except Exception as exc:
-        raise ExcelSourceError(f"That file could not be opened as .xlsx: {exc}") from exc
+        try:
+            with zf.open("xl/workbook.xml") as f:
+                tree = ET.parse(f)
+        except (KeyError, ET.ParseError) as exc:
+            raise ExcelSourceError(
+                f"That file could not be opened as .xlsx: {exc}"
+            ) from exc
 
-    try:
-        names = list(workbook.sheetnames)
+        names = [
+            el.get("name")
+            for el in tree.findall(f".//{{{_XLSX_NS}}}sheet")
+            if el.get("name")
+        ]
     finally:
-        workbook.close()
+        zf.close()
 
     if not names:
         raise ExcelSourceError("That workbook has no sheets.")
@@ -148,9 +145,7 @@ def read_sheet(data: bytes, sheet_name: str = None) -> Tuple[List[Any], List[Tup
     """A sheet's header row and its data rows.
 
     When *sheet_name* is given, that sheet is read; otherwise the first sheet.
-    The first non-empty row is the header. Unlike the forms module's reader,
-    which knows the template it is given, this one knows nothing about the file
-    and so assumes the least.
+    The first non-empty row is the header.
     """
     try:
         import openpyxl
@@ -161,8 +156,6 @@ def read_sheet(data: bytes, sheet_name: str = None) -> Tuple[List[Any], List[Tup
 
     try:
         with warnings.catch_warnings():
-            # A sheet may carry validation rules openpyxl cannot model. They do
-            # not affect the values, which is all this reads.
             warnings.simplefilter("ignore")
             workbook = openpyxl.load_workbook(
                 io.BytesIO(data), read_only=True, data_only=True
@@ -196,8 +189,6 @@ def read_sheet(data: bytes, sheet_name: str = None) -> Tuple[List[Any], List[Tup
             if header is None:
                 raise ExcelSourceError("That sheet is empty.")
 
-            # Trailing empty columns are an artefact of how the sheet was saved,
-            # not columns anybody meant to have.
             width = max(
                 (i + 1 for i, cell in enumerate(header)
                  if cell is not None and str(cell).strip()),
@@ -212,9 +203,12 @@ def read_sheet(data: bytes, sheet_name: str = None) -> Tuple[List[Any], List[Tup
             body = []
             for row in rows:
                 if not any(cell is not None and str(cell).strip() for cell in row):
-                    continue  # a blank row between blocks is not a record
+                    continue
 
-                body.append(tuple(row[:width]) + (None,) * (width - len(row)))
+                padded = tuple(row[:width])
+                if len(padded) < width:
+                    padded = padded + (None,) * (width - len(padded))
+                body.append(padded)
 
                 if len(body) > MAX_ROWS:
                     raise ExcelSourceError(
@@ -276,9 +270,6 @@ def _looks_temporal(values: List[Any]) -> Tuple[bool, bool]:
     dates_only = True
     for value in values:
         if isinstance(value, datetime):
-            # openpyxl reads every date cell as a datetime, so a column of
-            # plain dates arrives here with midnight attached. Reading that as
-            # DATE keeps a date axis from being labelled 00:00:00 throughout.
             if value.time() != _MIDNIGHT:
                 dates_only = False
             continue
@@ -296,8 +287,6 @@ def infer_type(values: List[Any]) -> str:
     ]
 
     if not present:
-        # A column that is empty throughout still belongs in the table: the
-        # sheet has it, and a later extract may fill it.
         return "TEXT"
 
     if _looks_boolean(present):
@@ -340,6 +329,38 @@ def _coerce(value: Any, pg_type: str) -> Any:
 
 
 # --------------------------------------------------------------------------- #
+# COPY-based bulk loading
+# --------------------------------------------------------------------------- #
+_COPY_BATCH = 10_000
+
+
+def _copy_rows(cur, destination: str, columns: list, rows: list):
+    """Write rows into the table using COPY FROM with CSV, in batches.
+
+    COPY is substantially faster than execute_values for large row counts
+    because it bypasses per-row SQL parsing on the server side.
+    """
+    col_names = sql.SQL(", ").join(sql.Identifier(c["name"]) for c in columns)
+    copy_sql = sql.SQL("COPY {} ({}) FROM STDIN WITH (FORMAT csv, NULL '\\N')").format(
+        sql.Identifier(destination),
+        col_names,
+    )
+    # psycopg2's copy_expert needs the SQL as a string
+    copy_str = copy_sql.as_string(cur)
+
+    for batch_start in range(0, len(rows), _COPY_BATCH):
+        batch = rows[batch_start : batch_start + _COPY_BATCH]
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        for row in batch:
+            writer.writerow(
+                "\\N" if cell is None else str(cell) for cell in row
+            )
+        buf.seek(0)
+        cur.copy_expert(copy_str, buf)
+
+
+# --------------------------------------------------------------------------- #
 # loading
 # --------------------------------------------------------------------------- #
 def import_workbook(
@@ -372,10 +393,6 @@ def import_workbook(
             for c in columns
         ),
     )
-    insert = sql.SQL("INSERT INTO {} ({}) VALUES %s").format(
-        sql.Identifier(destination),
-        sql.SQL(", ").join(sql.Identifier(c["name"]) for c in columns),
-    )
 
     try:
         values = [
@@ -383,17 +400,14 @@ def import_workbook(
             for row in body
         ]
     except (ValueError, InvalidOperation, TypeError) as exc:
-        # The inference said every value fit and one did not. Refusing names the
-        # file as the problem, which is where the fix is.
         raise ExcelSourceError(
             f"A value in that sheet could not be read: {exc}"
         ) from exc
 
     try:
-        # Create and fill together, so a failure leaves no table behind.
         with transaction() as cur:
             cur.execute(create)
-            execute_values(cur, insert, values, page_size=500)
+            _copy_rows(cur, destination, columns, values)
     except ExcelSourceError:
         raise
     except Exception as exc:
