@@ -67,7 +67,7 @@ class TestInspectSheets:
 class TestReadSheetSelection:
     def test_default_reads_first_sheet(self):
         header, body = read_sheet(MULTI)
-        assert header == ("info",)
+        assert header == ["info"]
 
     def test_named_sheet(self):
         header, body = read_sheet(MULTI, sheet_name="Logbooks")
@@ -90,4 +90,4 @@ class TestReadSheetSelection:
     def test_single_sheet_no_selection_needed(self):
         header, body = read_sheet(SINGLE)
         assert len(body) == 2
-        assert header == ("name", "age")
+        assert header == ["name", "age"]
