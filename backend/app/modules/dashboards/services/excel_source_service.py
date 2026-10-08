@@ -37,7 +37,7 @@ _MIDNIGHT = _time_of_day(0, 0)
 
 # 16 MB. Larger than the form-definition workbooks the forms module reads,
 # because this one carries data rather than a definition.
-MAX_WORKBOOK_BYTES = 16 * 1024 * 1024
+MAX_WORKBOOK_BYTES = 100 * 1024 * 1024
 
 # Beyond this the import is refused rather than left to run for minutes and
 # then produce a table the browser cannot draw anyway. See the row counts in
