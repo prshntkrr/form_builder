@@ -42,7 +42,7 @@ MAX_WORKBOOK_BYTES = 100 * 1024 * 1024
 # Beyond this the import is refused rather than left to run for minutes and
 # then produce a table the browser cannot draw anyway. See the row counts in
 # `data_source_service` for why a dashboard over a very large table struggles.
-MAX_ROWS = 100_000
+MAX_ROWS = 500_000
 
 # A name this application is willing to create: a PostgreSQL identifier that
 # needs no quoting to be safe, quoted anyway when it is used. Deliberately the
@@ -115,9 +115,39 @@ def _column_name(heading: Any, position: int, taken: set) -> str:
 # --------------------------------------------------------------------------- #
 # reading
 # --------------------------------------------------------------------------- #
-def read_sheet(data: bytes) -> Tuple[List[Any], List[Tuple]]:
-    """The first sheet's header row and its data rows.
+def inspect_sheets(data: bytes) -> List[str]:
+    """Return the worksheet names in the workbook without reading data."""
+    try:
+        import openpyxl
+    except ImportError as exc:  # pragma: no cover - depends on the environment
+        raise ExcelSourceError(
+            "openpyxl is not installed. Add it with: pip install openpyxl"
+        ) from exc
 
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            workbook = openpyxl.load_workbook(
+                io.BytesIO(data), read_only=True, data_only=True
+            )
+    except Exception as exc:
+        raise ExcelSourceError(f"That file could not be opened as .xlsx: {exc}") from exc
+
+    try:
+        names = list(workbook.sheetnames)
+    finally:
+        workbook.close()
+
+    if not names:
+        raise ExcelSourceError("That workbook has no sheets.")
+
+    return names
+
+
+def read_sheet(data: bytes, sheet_name: str = None) -> Tuple[List[Any], List[Tuple]]:
+    """A sheet's header row and its data rows.
+
+    When *sheet_name* is given, that sheet is read; otherwise the first sheet.
     The first non-empty row is the header. Unlike the forms module's reader,
     which knows the template it is given, this one knows nothing about the file
     and so assumes the least.
@@ -147,7 +177,14 @@ def read_sheet(data: bytes) -> Tuple[List[Any], List[Tuple]]:
             if not workbook.sheetnames:
                 raise ExcelSourceError("That workbook has no sheets.")
 
-            sheet = workbook[workbook.sheetnames[0]]
+            if sheet_name is not None:
+                if sheet_name not in workbook.sheetnames:
+                    raise ExcelSourceError(
+                        f"No sheet called '{sheet_name}' in that workbook."
+                    )
+                sheet = workbook[sheet_name]
+            else:
+                sheet = workbook[workbook.sheetnames[0]]
             rows = sheet.iter_rows(values_only=True)
 
             header = None
@@ -305,10 +342,12 @@ def _coerce(value: Any, pg_type: str) -> Any:
 # --------------------------------------------------------------------------- #
 # loading
 # --------------------------------------------------------------------------- #
-def import_workbook(data: bytes, table_name: str, imported_by: str = "") -> Dict[str, Any]:
+def import_workbook(
+    data: bytes, table_name: str, imported_by: str = "", sheet_name: str = None,
+) -> Dict[str, Any]:
     """Create the table and fill it, or change nothing at all."""
     destination = destination_table(table_name)
-    header, body = read_sheet(data)
+    header, body = read_sheet(data, sheet_name=sheet_name)
 
     taken = set()
     columns = [
@@ -369,7 +408,7 @@ def import_workbook(data: bytes, table_name: str, imported_by: str = "") -> Dict
         destination, len(values), len(columns), imported_by or "-",
     )
 
-    return {
+    result = {
         "table_name": destination,
         "rows_loaded": len(values),
         "columns_loaded": len(columns),
@@ -378,3 +417,6 @@ def import_workbook(data: bytes, table_name: str, imported_by: str = "") -> Dict
             for c in columns
         ],
     }
+    if sheet_name:
+        result["sheet_name"] = sheet_name
+    return result

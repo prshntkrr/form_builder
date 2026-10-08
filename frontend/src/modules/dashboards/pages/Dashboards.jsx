@@ -164,6 +164,8 @@ export default function Dashboards() {
   const [importBusy, setImportBusy] = useState(false);
   const [importError, setImportError] = useState("");
   const [importNotice, setImportNotice] = useState("");
+  const [importSheets, setImportSheets] = useState(null);
+  const [importSelectedSheet, setImportSelectedSheet] = useState("");
 
   const [prompt, setPrompt] = useState("");
   const [generating, setGenerating] = useState(false);
@@ -619,6 +621,34 @@ export default function Dashboards() {
     setImportFile(null);
     setImportName("");
     setImportError("");
+    setImportSheets(null);
+    setImportSelectedSheet("");
+  };
+
+  const inspectExcel = async () => {
+    if (!importFile) {
+      setImportError("Choose an .xlsx file first.");
+      return;
+    }
+
+    setImportBusy(true);
+    setImportError("");
+
+    try {
+      const info = await api.inspectExcelSheets(importFile, projectId);
+
+      if (info.sheets.length === 1) {
+        setImportSheets(null);
+        setImportSelectedSheet("");
+      } else {
+        setImportSheets(info.sheets);
+        setImportSelectedSheet("");
+      }
+    } catch (e) {
+      setImportError(e.message || "Could not read the workbook.");
+    } finally {
+      setImportBusy(false);
+    }
   };
 
   const importExcel = async () => {
@@ -632,19 +662,23 @@ export default function Dashboards() {
       return;
     }
 
+    if (importSheets && !importSelectedSheet) {
+      setImportError("Select a sheet to import.");
+      return;
+    }
+
     setImportBusy(true);
     setImportError("");
 
     try {
+      const sheetArg = importSheets ? importSelectedSheet : undefined;
       const result = await api.importExcelSource(
         importFile,
         importName.trim(),
         projectId,
+        sheetArg,
       );
 
-      // The picker finds sources by their _tabular suffix, so the table that
-      // was created is rarely named exactly what was typed. Select by what
-      // came back, never by what was entered.
       const sources = await loadDataSources({ showLoading: false });
       const created = sources.find((item) => item.name === result.table_name);
 
@@ -652,8 +686,11 @@ export default function Dashboards() {
         await selectDataSource(created);
       }
 
+      const sheetNote = result.sheet_name
+        ? ` from sheet '${result.sheet_name}'`
+        : "";
       setImportNotice(
-        `Imported ${result.rows_loaded.toLocaleString()} rows into ` +
+        `Imported ${result.rows_loaded.toLocaleString()} rows${sheetNote} into ` +
           `${result.table_name} (${result.columns_loaded} columns).`,
       );
 
@@ -4365,12 +4402,62 @@ export default function Dashboards() {
                 type="file"
                 accept=".xlsx,.xlsm"
                 disabled={importBusy}
-                onChange={(e) => {
-                  setImportFile(e.target.files?.[0] || null);
+                onChange={async (e) => {
+                  const f = e.target.files?.[0] || null;
+                  setImportFile(f);
                   setImportError("");
+                  setImportSheets(null);
+                  setImportSelectedSheet("");
+
+                  if (f) {
+                    setImportBusy(true);
+                    try {
+                      const info = await api.inspectExcelSheets(f, projectId);
+                      if (info.sheets.length > 1) {
+                        setImportSheets(info.sheets);
+                      }
+                    } catch (err) {
+                      setImportError(err.message || "Could not read the workbook.");
+                    } finally {
+                      setImportBusy(false);
+                    }
+                  }
                 }}
               />
             </label>
+
+            {importSheets && (
+              <div className="dash__field">
+                <span className="dash__field-label">Select Sheet</span>
+                <p className="tiny muted" style={{ margin: "0 0 6px" }}>
+                  This workbook contains {importSheets.length} sheets.
+                  Choose the one to import.
+                </p>
+                {importSheets.map((name) => (
+                  <label
+                    key={name}
+                    style={{
+                      display: "block",
+                      padding: "4px 0",
+                      cursor: importBusy ? "default" : "pointer",
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="import-sheet"
+                      value={name}
+                      checked={importSelectedSheet === name}
+                      disabled={importBusy}
+                      onChange={() => {
+                        setImportSelectedSheet(name);
+                        setImportError("");
+                      }}
+                    />{" "}
+                    {name}
+                  </label>
+                ))}
+              </div>
+            )}
 
             <label className="dash__field">
               <span className="dash__field-label">Table Name</span>

@@ -107,11 +107,19 @@ export const api = {
   // Creates the table and fills it in one call. The name comes back with the
   // _tabular suffix the picker discovers sources by, which is not always what
   // was typed — the caller shows what was actually created.
-  importExcelSource: (file, tableName, projectId) => {
+  inspectExcelSheets: (file, projectId) => {
+    const body = new FormData()
+    body.append('file', file)
+    body.append('project_id', projectId || '')
+    return request('/dashboards/data-sources/excel/inspect', { method: 'POST', body })
+  },
+
+  importExcelSource: (file, tableName, projectId, sheetName) => {
     const body = new FormData()
     body.append('file', file)
     body.append('table_name', tableName)
     body.append('project_id', projectId || '')
+    if (sheetName) body.append('sheet_name', sheetName)
     return request('/dashboards/data-sources/excel', { method: 'POST', body })
   },
 
