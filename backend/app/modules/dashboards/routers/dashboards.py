@@ -140,11 +140,58 @@ def list_data_sources(
         "data_sources": list_tabular_tables(project_id=project_id),
     }
 
+@router.post("/data-sources/excel/inspect")
+async def inspect_excel_sheets(
+    file: UploadFile = File(...),
+    project_id: str = Form(...),
+    user: Dict[str, Any] = Depends(current_user),
+):
+    """Return the worksheet names in an uploaded workbook.
+
+    The frontend calls this before importing so the user can choose which
+    sheet to bring in when there is more than one.
+    """
+    dash_access.require(user, DASHBOARDS_IMPORT, project_id)
+
+    from app.modules.dashboards.services.excel_source_service import (
+        ExcelSourceError,
+        MAX_WORKBOOK_BYTES,
+        inspect_sheets,
+    )
+
+    name = file.filename or "workbook.xlsx"
+
+    if not name.lower().endswith((".xlsx", ".xlsm")):
+        raise HTTPException(
+            status_code=400,
+            detail="That is not an .xlsx file. Save the spreadsheet as Excel and try again.",
+        )
+
+    data = await file.read()
+
+    if not data:
+        raise HTTPException(status_code=400, detail="That file is empty.")
+
+    if len(data) > MAX_WORKBOOK_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"That file is larger than {MAX_WORKBOOK_BYTES // (1024 * 1024)} MB.",
+        )
+
+    try:
+        sheets = inspect_sheets(data)
+    except ExcelSourceError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return {"filename": name, "sheets": sheets}
+
+
 @router.post("/data-sources/excel")
 async def import_excel_data_source(
     file: UploadFile = File(...),
     table_name: str = Form(...),
     project_id: str = Form(...),
+    sheet_name: Optional[str] = Form(None),
     user: Dict[str, Any] = Depends(current_user),
 ):
     """Create a data source from a spreadsheet, inside one project.
@@ -187,6 +234,7 @@ async def import_excel_data_source(
             data,
             table_name,
             imported_by=user.get("username", ""),
+            sheet_name=sheet_name or None,
         )
     except ExcelSourceError as exc:
         # Every one of these names what is wrong with the file or the name, and

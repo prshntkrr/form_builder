@@ -29,13 +29,18 @@ vi.mock('./api.js', () => ({
       calls.push(['fields', table])
       return { name: table, fields: [{ name: 'state', label: 'state', type: 'text' }] }
     }),
-    importExcelSource: vi.fn(async (file, tableName) => {
-      calls.push(['import', file.name, tableName])
+    inspectExcelSheets: vi.fn(async (file) => {
+      calls.push(['inspect', file.name])
+      return { filename: file.name, sheets: answers.sheets || ['Sheet1'] }
+    }),
+    importExcelSource: vi.fn(async (file, tableName, _pid, sheetName) => {
+      calls.push(['import', file.name, tableName, sheetName])
       if (answers.importFails) throw new Error(answers.importFails)
-      // What the server does with the name: suffix it, then report it back.
       const created = `${tableName.replace(/_tabular$/, '')}_tabular`
       answers.sources = [...answers.sources, { name: created }]
-      return { table_name: created, rows_loaded: 1234, columns_loaded: 7 }
+      const result = { table_name: created, rows_loaded: 1234, columns_loaded: 7 }
+      if (sheetName) result.sheet_name = sheetName
+      return result
     }),
   },
 }))
@@ -43,11 +48,24 @@ vi.mock('./api.js', () => ({
 vi.mock('html2canvas', () => ({ default: vi.fn() }))
 vi.mock('jspdf', () => ({ default: vi.fn() }))
 
+const projectMock = { canImport: true }
+
+vi.mock('../projects/active.js', () => ({
+  useProjects: () => ({ projectId: 'test-project', projects: [{ id: 'test-project', name: 'Test' }] }),
+  useProject: () => ({
+    can: (perm) => {
+      if (perm === 'dashboards.import_source') return projectMock.canImport
+      return true
+    },
+  }),
+}))
+
 beforeEach(() => {
   calls.length = 0
   vi.clearAllMocks()
   answers.sources = [{ name: 'farmer_registration_tabular' }]
   answers.importFails = null
+  projectMock.canImport = true
 })
 
 /** The page, as somebody whose role may import. */
@@ -84,7 +102,7 @@ describe('importing a spreadsheet', () => {
       await user.type(screen.getByLabelText('Table Name'), 'farmer_data')
       await user.click(screen.getByRole('button', { name: 'Import' }))
 
-      expect(calls).toContainEqual(['import', 'farmers.xlsx', 'farmer_data'])
+      expect(calls).toContainEqual(['import', 'farmers.xlsx', 'farmer_data', undefined])
 
       // Selected by what came back — farmer_data_tabular — not by what was typed.
       await waitFor(() =>
@@ -136,6 +154,7 @@ describe('importing a spreadsheet', () => {
   })
 
   test('a role without the permission is not offered it', async () => {
+    projectMock.canImport = false
     const user = userEvent.setup()
     await draw({ mayImport: false })
 
@@ -143,5 +162,79 @@ describe('importing a spreadsheet', () => {
     await screen.findByRole('heading', { name: 'Select Data Source' })
 
     expect(screen.queryByRole('button', { name: 'Import Excel' })).toBeNull()
+  })
+
+  test('single-sheet workbook does not show sheet selection', async () => {
+    answers.sheets = ['Data']
+    const user = userEvent.setup()
+    await draw()
+    await intoImport(user)
+
+    await user.upload(screen.getByLabelText('Excel File'), sheet())
+    await waitFor(() => expect(calls).toContainEqual(['inspect', 'farmers.xlsx']))
+
+    expect(screen.queryByText('Select Sheet')).toBeNull()
+  })
+
+  test('multi-sheet workbook shows sheet selection', async () => {
+    answers.sheets = ['About', 'Logbooks', 'Events']
+    const user = userEvent.setup()
+    await draw()
+    await intoImport(user)
+
+    await user.upload(screen.getByLabelText('Excel File'), sheet())
+    await screen.findByText('Select Sheet')
+
+    expect(screen.getByText('About')).toBeTruthy()
+    expect(screen.getByText('Logbooks')).toBeTruthy()
+    expect(screen.getByText('Events')).toBeTruthy()
+  })
+
+  test('multi-sheet import sends the selected sheet name', async () => {
+    answers.sheets = ['About', 'Logbooks', 'Events']
+    const user = userEvent.setup()
+    await draw()
+    await intoImport(user)
+
+    await user.upload(screen.getByLabelText('Excel File'), sheet())
+    await screen.findByText('Select Sheet')
+
+    await user.click(screen.getByLabelText('Logbooks'))
+    await user.type(screen.getByLabelText('Table Name'), 'sefader')
+    await user.click(screen.getByRole('button', { name: 'Import' }))
+
+    expect(calls).toContainEqual(['import', 'farmers.xlsx', 'sefader', 'Logbooks'])
+  })
+
+  test('multi-sheet import requires sheet selection', async () => {
+    answers.sheets = ['About', 'Logbooks']
+    const user = userEvent.setup()
+    await draw()
+    await intoImport(user)
+
+    await user.upload(screen.getByLabelText('Excel File'), sheet())
+    await screen.findByText('Select Sheet')
+
+    await user.type(screen.getByLabelText('Table Name'), 'sefader')
+    await user.click(screen.getByRole('button', { name: 'Import' }))
+
+    await screen.findByText(/Select a sheet to import/)
+    expect(calls.some(([k]) => k === 'import')).toBe(false)
+  })
+
+  test('success message includes sheet name for multi-sheet import', async () => {
+    answers.sheets = ['About', 'Logbooks']
+    const user = userEvent.setup()
+    await draw()
+    await intoImport(user)
+
+    await user.upload(screen.getByLabelText('Excel File'), sheet())
+    await screen.findByText('Select Sheet')
+
+    await user.click(screen.getByLabelText('Logbooks'))
+    await user.type(screen.getByLabelText('Table Name'), 'sefader')
+    await user.click(screen.getByRole('button', { name: 'Import' }))
+
+    await screen.findByText(/from sheet 'Logbooks'/)
   })
 })
