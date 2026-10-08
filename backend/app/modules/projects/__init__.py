@@ -25,7 +25,7 @@ from app.core.registry import Module
 
 from . import bootstrap
 from . import permissions  # noqa: F401  (importing registers them)
-from .routers import projects, review
+from .routers import data_api, projects, review
 
 MODULE = Module(
     name="projects",
@@ -35,10 +35,11 @@ MODULE = Module(
         projects.assignments_router,
         review.router,
         review.queue_router,
+        data_api.router,
     ],
     tables=[
         "project", "project_member", "project_group", "project_group_member",
-        "form_assignment", "submission_review",
+        "form_assignment", "submission_review", "project_api_key",
     ],
     schema_file=Path(__file__).resolve().parent / "schema.sql",
     # Order matters: the column, then the tables (schema.sql), then the key that
@@ -46,6 +47,7 @@ MODULE = Module(
     migrations=[
         bootstrap.ensure_form_project,
         bootstrap.ensure_form_project_key,
+        bootstrap.ensure_project_api_key,
         bootstrap.ensure_project_roles,
     ],
 )

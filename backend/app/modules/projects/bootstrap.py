@@ -70,6 +70,36 @@ def ensure_form_project_key() -> bool:
     return True
 
 
+def ensure_project_api_key() -> bool:
+    """Create the project_api_key table on installations that predate it."""
+    with transaction() as cur:
+        if not table_exists(cur, "project"):
+            return False
+        if table_exists(cur, "project_api_key"):
+            return True
+
+        cur.execute(
+            """
+            CREATE TABLE project_api_key (
+                key_id      VARCHAR(20)  NOT NULL PRIMARY KEY,
+                project_id  VARCHAR(20)  NOT NULL REFERENCES project (project_id) ON DELETE CASCADE,
+                key_hash    VARCHAR(64)  NOT NULL UNIQUE,
+                key_prefix  VARCHAR(10)  NOT NULL,
+                label       VARCHAR(200) NOT NULL DEFAULT '',
+                created_on  TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+                created_by  VARCHAR(50)  NOT NULL DEFAULT '',
+                revoked_on  TIMESTAMP
+            )
+            """
+        )
+        cur.execute(
+            "CREATE INDEX idx_project_api_key_project ON project_api_key (project_id)"
+        )
+        logger.info("Created project_api_key table")
+
+    return True
+
+
 def ensure_project_roles() -> bool:
     """Create the roles a project starts with, once.
 

@@ -12,9 +12,11 @@ from pydantic import BaseModel, Field
 from app.core import auth_service
 from app.core.deps import current_user, needs
 from app.modules.projects import access, project_service
+from app.modules.projects import api_key_service
 from app.modules.projects.permissions import (
     FORMS_ASSIGN,
     FORMS_VIEW_ALL,
+    PROJECT_API_KEYS,
     PROJECT_GROUPS_MANAGE,
     PROJECT_MEMBERS_MANAGE,
     PROJECT_VIEW,
@@ -399,3 +401,49 @@ def unassign(form_id: str, assignment_id: int, user: Dict[str, Any] = Depends(cu
     if not project_service.unassign_form(form_id, assignment_id):
         raise HTTPException(status_code=404, detail=f"No assignment {assignment_id}")
     return {"assignment_id": assignment_id, "removed": True}
+
+
+# --------------------------------------------------------------------------- #
+# API keys
+# --------------------------------------------------------------------------- #
+class CreateKeyRequest(BaseModel):
+    label: str = ""
+
+
+@router.get("/{project_id}/api-keys")
+def list_api_keys(project_id: str,
+                  user: Dict[str, Any] = Depends(access.needs_in_project(PROJECT_API_KEYS))):
+    return {"keys": api_key_service.list_keys(project_id)}
+
+
+@router.post("/{project_id}/api-keys", status_code=201)
+def create_api_key(project_id: str, req: CreateKeyRequest,
+                   user: Dict[str, Any] = Depends(access.needs_in_project(PROJECT_API_KEYS))):
+    result = api_key_service.create_key(
+        project_id, req.label, auth_service.display_name(user))
+    return result
+
+
+@router.post("/{project_id}/api-keys/{key_id}/revoke")
+def revoke_api_key(project_id: str, key_id: str,
+                   user: Dict[str, Any] = Depends(access.needs_in_project(PROJECT_API_KEYS))):
+    if not api_key_service.revoke_key(key_id, project_id):
+        raise HTTPException(status_code=404, detail="Key not found or already revoked")
+    return {"key_id": key_id, "revoked": True}
+
+
+@router.delete("/{project_id}/api-keys/{key_id}")
+def delete_api_key(project_id: str, key_id: str,
+                   user: Dict[str, Any] = Depends(access.needs_in_project(PROJECT_API_KEYS))):
+    if not api_key_service.delete_key(key_id, project_id):
+        raise HTTPException(status_code=404, detail="Key not found")
+    return {"key_id": key_id, "deleted": True}
+
+
+@router.post("/{project_id}/api-keys/{key_id}/rotate")
+def rotate_api_key(project_id: str, key_id: str,
+                   user: Dict[str, Any] = Depends(access.needs_in_project(PROJECT_API_KEYS))):
+    try:
+        return api_key_service.rotate_key(key_id, project_id, auth_service.display_name(user))
+    except api_key_service.KeyError_:
+        raise HTTPException(status_code=404, detail="Key not found")

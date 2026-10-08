@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
+import ApiKeys from '../components/ApiKeys.jsx'
 import Groups from '../components/Groups.jsx'
 import Members from '../components/Members.jsx'
 import ProjectForms from '../components/ProjectForms.jsx'
@@ -12,6 +13,7 @@ const TABS = [
   ['members', 'Members'],
   ['groups', 'Groups'],
   ['forms', 'Forms'],
+  ['api-keys', 'API Keys'],
 ]
 
 /**
@@ -104,6 +106,9 @@ export default function ProjectSettings() {
       {tab === 'forms' && (
         <ProjectForms key={projectId} projectId={projectId}
                       projectName={project.name} can={can} />
+      )}
+      {tab === 'api-keys' && (
+        <ApiKeys key={projectId} projectId={projectId} can={can} />
       )}
     </main>
   )

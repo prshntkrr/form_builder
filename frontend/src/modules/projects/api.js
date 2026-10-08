@@ -102,4 +102,19 @@ export const api = {
 
   resubmit: (formId, surveyId) =>
     request(`/submissions/${formId}/${surveyId}/submit`, { method: 'POST' }),
+
+  // --- API keys ---
+  apiKeys: (projectId) => request(`/projects/${projectId}/api-keys`),
+
+  createApiKey: (projectId, label) =>
+    request(`/projects/${projectId}/api-keys`, { method: 'POST', body: JSON.stringify({ label }) }),
+
+  revokeApiKey: (projectId, keyId) =>
+    request(`/projects/${projectId}/api-keys/${keyId}/revoke`, { method: 'POST' }),
+
+  deleteApiKey: (projectId, keyId) =>
+    request(`/projects/${projectId}/api-keys/${keyId}`, { method: 'DELETE' }),
+
+  rotateApiKey: (projectId, keyId) =>
+    request(`/projects/${projectId}/api-keys/${keyId}/rotate`, { method: 'POST' }),
 }
