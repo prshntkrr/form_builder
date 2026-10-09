@@ -15,10 +15,7 @@ export default {
   name: 'dashboards',
   label: 'Dashboards',
   order: 20,
-  navItems: [
-    { group: 'analytics', label: 'Dashboards', to: '/dashboards',
-      requires: 'view_dashboards' },
-  ],
+  navItems: [],
   home: () => null,        // forms still decides where people land
   routes: [
     { path: '/dashboards', element: <Dashboards />, requires: 'view_dashboards' },

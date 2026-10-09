@@ -43,22 +43,12 @@ export default {
      `NAV_GROUPS` in core/registry.js. `requires` is the same capability flag
      as on the route behind it, so the link and the screen cannot disagree. */
   navItems: [
-    { group: 'configuration', label: 'New form', to: '/builder',
-      requires: 'build_any_forms' },
-    { group: 'configuration', label: 'Standard forms', to: '/library',
-      requires: 'build_forms' },
-    /* What replaced the data dictionary: the institution's published
-       vocabulary rather than entries written here by hand, and chosen per
-       question rather than matched on its name. */
     { group: 'configuration', label: 'CIMMYT standard', to: '/cimmyt',
       requires: 'use_standards' },
     { group: 'configuration', label: 'Catalogue', to: '/catalogues',
       requires: 'use_client_catalogs' },
-    // Three separate vocabularies behind one screen, so one flag cannot gate it.
     { group: 'configuration', label: 'Standards', to: '/standards',
       requires: (can) => can.use_standards || can.use_ontology || can.use_crop_ontology },
-    { group: 'data', label: 'Channel routing', to: '/routing',
-      requires: 'manage_routing' },
   ],
   // /forms shows whichever context is active, so it is the right landing
   // place for a project member as much as for a builder.

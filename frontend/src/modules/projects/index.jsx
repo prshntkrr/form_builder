@@ -43,13 +43,9 @@ function ProjectsNav({ onNavigate }) {
       {!system && projectId && (
         <nav className="side__links">
           {link('/forms', 'Forms')}
-          {/* One queue, two readings of it: somebody who may review sees every
-              submission in the project, anybody else sees their own. A second
-              page over the same endpoint would be duplicate navigation. */}
+          {link('/library', 'Standard forms')}
+          {link('/dashboards', 'Dashboards')}
           {link('/review', can('project.submissions.review') ? 'Review' : 'My submissions')}
-          {/* Settings is people, groups and the project itself. Somebody who
-              manages none of those has nothing to do there — and the backend
-              refuses each of those calls in any case. */}
           {(can('project.members.manage') || can('project.groups.manage')) &&
             link(`/projects/${projectId}`, 'Project settings')}
         </nav>
@@ -73,9 +69,7 @@ export default {
   /* The project *selector* and this project's own screens are drawn by `Nav`
      above — they are the primary navigation and never fold away. Managing
      projects themselves is administration, and goes in the system groups. */
-  navItems: [
-    { group: 'administration', label: 'Projects', to: '/projects', end: true },
-  ],
+  navItems: [],
   // Somebody whose work here is reviewing lands on the queue. Decided by what
   // they may do — never by the name of a role — and only when there is nothing
   // to fill in, so anybody who does both keeps the ordinary landing page.
