@@ -167,6 +167,21 @@ export default function Dashboards() {
   const [importSheets, setImportSheets] = useState(null);
   const [importSelectedSheet, setImportSelectedSheet] = useState("");
 
+  /* Live Databricks data source */
+  const [liveOpen, setLiveOpen] = useState(false);
+  const [liveConnections, setLiveConnections] = useState([]);
+  const [liveLoading, setLiveLoading] = useState(false);
+  const [liveError, setLiveError] = useState("");
+  const [liveConnection, setLiveConnection] = useState(null);
+  const [liveSchemas, setLiveSchemas] = useState([]);
+  const [liveSchema, setLiveSchema] = useState("");
+  const [liveTables, setLiveTables] = useState([]);
+  const [liveTable, setLiveTable] = useState("");
+  const [liveFields, setLiveFields] = useState(null);
+  const [liveBrowsing, setLiveBrowsing] = useState(false);
+  /* The active live source for the current dashboard, if any. */
+  const [liveSource, setLiveSource] = useState(null);
+
   const [prompt, setPrompt] = useState("");
   const [generating, setGenerating] = useState(false);
   const [generationError, setGenerationError] = useState("");
@@ -613,6 +628,293 @@ export default function Dashboards() {
   }, [projectId]);
 
   /* =========================================================
+     LIVE DATA SOURCE (Databricks)
+     ========================================================= */
+
+  const openLiveSource = async () => {
+    setLiveOpen(true);
+    setLiveLoading(true);
+    setLiveError("");
+    setLiveConnection(null);
+    setLiveSchemas([]);
+    setLiveSchema("");
+    setLiveTables([]);
+    setLiveTable("");
+    setLiveFields(null);
+
+    try {
+      const result = await api.listLiveConnections(projectId);
+      setLiveConnections(result.connections || []);
+    } catch (e) {
+      setLiveError(e.message || "Failed to load connections.");
+    } finally {
+      setLiveLoading(false);
+    }
+  };
+
+  const closeLiveSource = () => {
+    setLiveOpen(false);
+    setLiveConnection(null);
+    setLiveSchemas([]);
+    setLiveSchema("");
+    setLiveTables([]);
+    setLiveTable("");
+    setLiveFields(null);
+    setLiveError("");
+  };
+
+  const selectLiveConnection = async (conn) => {
+    setLiveConnection(conn);
+    setLiveSchemas([]);
+    setLiveSchema("");
+    setLiveTables([]);
+    setLiveTable("");
+    setLiveFields(null);
+    setLiveBrowsing(true);
+    setLiveError("");
+
+    try {
+      const result = await api.getLiveSchemas(conn.connection_id);
+      setLiveSchemas(result.schemas || []);
+    } catch (e) {
+      setLiveError(e.message || "Failed to load schemas.");
+    } finally {
+      setLiveBrowsing(false);
+    }
+  };
+
+  const selectLiveSchema = async (schema) => {
+    setLiveSchema(schema);
+    setLiveTables([]);
+    setLiveTable("");
+    setLiveFields(null);
+    setLiveBrowsing(true);
+    setLiveError("");
+
+    try {
+      const result = await api.getLiveTables(liveConnection.connection_id, schema);
+      setLiveTables(result.tables || []);
+    } catch (e) {
+      setLiveError(e.message || "Failed to load tables.");
+    } finally {
+      setLiveBrowsing(false);
+    }
+  };
+
+  const selectLiveTable = async (table) => {
+    setLiveTable(table);
+    setLiveFields(null);
+    setLiveBrowsing(true);
+    setLiveError("");
+
+    try {
+      const result = await api.getLiveColumns(
+        liveConnection.connection_id,
+        liveSchema,
+        table,
+      );
+      setLiveFields(result.fields || []);
+    } catch (e) {
+      setLiveError(e.message || "Failed to load columns.");
+    } finally {
+      setLiveBrowsing(false);
+    }
+  };
+
+  const confirmLiveSource = () => {
+    if (!liveConnection || !liveSchema || !liveTable || !liveFields?.length) return;
+
+    const source = {
+      connection_id: liveConnection.connection_id,
+      connection_name: liveConnection.name,
+      catalog: liveConnection.catalog,
+      schema: liveSchema,
+      table: liveTable,
+      name: `live:${liveConnection.connection_id}:${liveSchema}:${liveTable}`,
+    };
+
+    setLiveSource(source);
+    setSelectedSource(source);
+    setFields(liveFields.map((f) => ({
+      name: f.name,
+      type: f.source_type || f.declared || "text",
+    })));
+    closeLiveSource();
+  };
+
+  const fetchLiveWidgetRows = async (widget, source, filters = []) => {
+    let binding = {
+      ...widget.data_binding,
+      filters: [...(widget.data_binding?.filters || []), ...filters],
+    };
+
+    const paging =
+      widget.type === "table"
+        ? {
+            page: 1,
+            page_size:
+              widget.presentation?.table_page_size || 10,
+          }
+        : null;
+
+    let numResult = null;
+
+    if (widget.type === "kpi" && widget.kpi?.format === "percentage") {
+      binding = {
+        ...binding,
+        measures: [
+          {
+            field: binding.measures[0]?.field || "id",
+            aggregation: "COUNT",
+            label: binding.measures[0]?.label || "Count",
+          },
+        ],
+      };
+
+      if (widget.kpi.numerator) {
+        const numBinding = {
+          ...binding,
+          filters: [...binding.filters, widget.kpi.numerator],
+        };
+
+        numResult = await api.getLiveData(
+          source.connection_id,
+          source.schema,
+          source.table,
+          numBinding,
+        );
+      }
+    }
+
+    const result = await api.getLiveData(
+      source.connection_id,
+      source.schema,
+      source.table,
+      binding,
+      paging,
+    );
+
+    return {
+      rows: result.rows || [],
+      numRows: numResult ? numResult.rows || [] : null,
+      paging: paging
+        ? {
+            page: result.page ?? 1,
+            pageSize: result.page_size ?? paging.page_size,
+            totalRows: result.total_rows ?? 0,
+            totalPages: result.total_pages ?? 1,
+          }
+        : null,
+    };
+  };
+
+  const generateLiveDashboard = async () => {
+    if (!liveSource || !prompt.trim()) return;
+
+    setGenerating(true);
+    setGenerationError("");
+    setDashboard(null);
+    setSavedDashboardId(null);
+    setIsEditMode(false);
+    setEditingWidgetId(null);
+    setShowAddWidget(false);
+    setEditError("");
+    setWidgetData({});
+
+    try {
+      const result = await api.generateLiveDashboard(
+        liveSource.connection_id,
+        liveSource.schema,
+        liveSource.table,
+        prompt.trim(),
+      );
+
+      if (result._live_source) {
+        setLiveSource((prev) => ({ ...prev, ...result._live_source }));
+      }
+
+      const initialLayout = buildInitialGridLayout(result?.widgets || []);
+      const dashboardWithLayout = {
+        ...result,
+        widgets: result.widgets.map((widget) => {
+          const layoutItem = initialLayout.find((item) => item.i === widget.id);
+          return {
+            ...widget,
+            layout: layoutItem
+              ? { ...widget.layout, x: layoutItem.x, y: layoutItem.y, w: layoutItem.w, h: layoutItem.h }
+              : widget.layout,
+          };
+        }),
+      };
+
+      setDashboard(dashboardWithLayout);
+      setGridLayout(initialLayout);
+      setSavedGridLayout(initialLayout);
+      setAllLayouts({ lg: initialLayout });
+
+      await loadLiveDashboardData(dashboardWithLayout, liveSource);
+    } catch (e) {
+      setGenerationError(e.message || "Failed to generate dashboard.");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const loadLiveDashboardData = async (
+    generatedDashboard,
+    source,
+    filtersOverride = dashboardFilters,
+  ) => {
+    if (!generatedDashboard?.widgets?.length || !source) {
+      setWidgetData({});
+      return;
+    }
+
+    setDataLoading(true);
+    setDataError("");
+
+    try {
+      const results = await Promise.allSettled(
+        generatedDashboard.widgets.map(async (widget) => {
+          const loaded = await fetchLiveWidgetRows(widget, source, filtersOverride);
+          return { widgetId: widget.id, ...loaded };
+        }),
+      );
+
+      const dataByWidget = {};
+      let failures = 0;
+
+      results.forEach((result, index) => {
+        if (result.status === "fulfilled") {
+          const { widgetId, rows, numRows, paging } = result.value;
+          dataByWidget[widgetId] = { rows, numRows };
+          if (paging) {
+            setTablePages((current) => ({ ...current, [widgetId]: paging }));
+          }
+          return;
+        }
+        failures += 1;
+        const widget = generatedDashboard.widgets[index];
+        dataByWidget[widget.id] = {
+          rows: [],
+          numRows: null,
+          error: result.reason?.message || "This widget's data could not be loaded.",
+        };
+      });
+
+      setWidgetData(dataByWidget);
+
+      if (failures === generatedDashboard.widgets.length) {
+        setDataError(results[0]?.reason?.message || "Failed to load dashboard data.");
+      }
+    } catch (e) {
+      setDataError(e.message || "Failed to load dashboard data.");
+    } finally {
+      setDataLoading(false);
+    }
+  };
+
+  /* =========================================================
      IMPORT A SPREADSHEET AS A DATA SOURCE
      ========================================================= */
 
@@ -718,7 +1020,7 @@ export default function Dashboards() {
    * point is that the browser never holds more than a page of a large table.
    */
   const changeTablePage = async (widget, page, pageSize) => {
-    const source = selectedSource;
+    const source = liveSource || selectedSource;
     if (!source) return;
 
     const size = pageSize || tablePages[widget.id]?.pageSize
@@ -738,10 +1040,15 @@ export default function Dashboards() {
     };
 
     try {
-      const result = await api.getDashboardData(source.name, binding, {
-        page,
-        page_size: size,
-      });
+      const result = source.connection_id
+        ? await api.getLiveData(
+            source.connection_id, source.schema, source.table,
+            binding, { page, page_size: size },
+          )
+        : await api.getDashboardData(source.name, binding, {
+            page,
+            page_size: size,
+          });
 
       setWidgetData((current) => ({
         ...current,
@@ -781,6 +1088,10 @@ export default function Dashboards() {
      same paging rule, same endpoint. A preview that fetched its own way
      would be a second answer to the same question. */
   const fetchWidgetRows = async (widget, source, filters = []) => {
+    if (source?.connection_id) {
+      return fetchLiveWidgetRows(widget, source, filters);
+    }
+
     let binding = {
       ...widget.data_binding,
       filters: [...(widget.data_binding?.filters || []), ...filters],
@@ -843,7 +1154,7 @@ export default function Dashboards() {
     sourceOverride = null,
     filtersOverride = dashboardFilters,
   ) => {
-    const source = sourceOverride || selectedSource;
+    const source = sourceOverride || liveSource || selectedSource;
 
     if (!generatedDashboard?.widgets?.length || !source) {
       setWidgetData({});
@@ -949,7 +1260,12 @@ export default function Dashboards() {
     }));
 
     try {
-      const answer = await api.getFilterOptions(selectedSource.name, field);
+      const source = liveSource || selectedSource;
+      const answer = source?.connection_id
+        ? await api.getLiveFilterOptions(
+            source.connection_id, source.schema, source.table, field,
+          )
+        : await api.getFilterOptions(source.name, field);
 
       setFilterOptions((current) => ({
         ...current,
@@ -1211,11 +1527,15 @@ export default function Dashboards() {
     }));
 
     try {
-      const answer = await api.getDependentFilterOptions(
-        selectedSource.name,
-        field,
-        parentFilters,
-      );
+      const depSource = liveSource || selectedSource;
+      const answer = depSource?.connection_id
+        ? await api.getLiveDependentFilterOptions(
+            depSource.connection_id, depSource.schema, depSource.table,
+            field, parentFilters,
+          )
+        : await api.getDependentFilterOptions(
+            depSource.name, field, parentFilters,
+          );
 
       /* A newer load was started while this one was in flight. */
       if (depLoadGeneration.current[field] !== generation) return;
@@ -1477,12 +1797,39 @@ export default function Dashboards() {
         return;
       }
 
+      /* Restore live source if this dashboard was built from one. */
+      const savedLive = openDashboard?._live_source;
+      if (savedLive?.connection_id) {
+        const live = {
+          connection_id: savedLive.connection_id,
+          connection_name: savedLive.connection_name || "",
+          catalog: savedLive.catalog || "",
+          schema: savedLive.schema,
+          table: savedLive.table,
+          name: sourceName,
+        };
+        setLiveSource(live);
+        setSelectedSource(live);
+        try {
+          const fieldResult = await api.getLiveColumns(
+            live.connection_id, live.schema, live.table,
+          );
+          setFields((fieldResult.fields || []).map((f) => ({
+            name: f.name,
+            type: f.source_type || f.declared || "text",
+          })));
+        } catch (_e) { /* fields are nice to have */ }
+        await loadDashboardData(openDashboard, live);
+        return;
+      }
+
       const source = dataSources.find((item) => item.name === sourceName);
 
       if (!source) {
         return;
       }
 
+      setLiveSource(null);
       setSelectedSource(source);
 
       try {
@@ -1512,6 +1859,7 @@ export default function Dashboards() {
     setGenerationError("");
     setDataError("");
     setIsEditMode(false);
+    setLiveSource(null);
   };
 
   /* Back to the list, leaving nothing half-open behind. */
@@ -1527,6 +1875,7 @@ export default function Dashboards() {
     setGenerationError("");
     setDataError("");
     setIsEditMode(false);
+    setLiveSource(null);
     loadSavedDashboards();
   };
 
@@ -1746,6 +2095,10 @@ export default function Dashboards() {
      ========================================================= */
 
   const generateDashboard = async () => {
+    if (liveSource) {
+      return generateLiveDashboard();
+    }
+
     if (!selectedSource || !prompt.trim()) {
       return;
     }
@@ -1847,7 +2200,7 @@ export default function Dashboards() {
       data_sources: [
         {
           id: selectedSource.name,
-          type: "postgresql_tabular",
+          type: liveSource ? "databricks" : "postgresql_tabular",
           name: selectedSource.name,
         },
       ],
@@ -4291,23 +4644,55 @@ export default function Dashboards() {
           <div className="dash__source-head">
             <h2>Select Data Source</h2>
 
-            {mayImport && (
+            <span className="spacer" />
+
+            <div style={{ display: 'flex', gap: 8 }}>
+              {mayImport && (
+                <button
+                  className="btn btn--primary"
+                  type="button"
+                  onClick={() => {
+                    setImportNotice("");
+                    setImportOpen(true);
+                  }}
+                >
+                  Import Excel
+                </button>
+              )}
+
               <button
-                className="btn"
+                className="btn btn--primary"
                 type="button"
-                onClick={() => {
-                  setImportNotice("");
-                  setImportOpen(true);
-                }}
+                onClick={openLiveSource}
               >
-                Import Excel
+                Live Data Source
               </button>
-            )}
+            </div>
           </div>
 
           <p className="muted">
             Search and select a table to inspect its available fields.
           </p>
+
+          {liveSource && (
+            <div className="alert alert--good" style={{ marginBottom: 12 }}>
+              Live source: <strong>{liveSource.connection_name}</strong>
+              {" — "}
+              {liveSource.schema}.{liveSource.table}
+              <button
+                className="btn btn--sm"
+                type="button"
+                style={{ marginLeft: 12 }}
+                onClick={() => {
+                  setLiveSource(null);
+                  setSelectedSource(null);
+                  setFields(null);
+                }}
+              >
+                Remove
+              </button>
+            </div>
+          )}
 
           {importNotice && (
             <div
@@ -4509,6 +4894,150 @@ export default function Dashboards() {
                     : "Importing..."
                   : "Import"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Live Data Source modal */}
+      {liveOpen && (
+        <div className="dash__modal-overlay" role="dialog" aria-modal="true">
+          <div className="dash__modal" style={{ maxWidth: 560, maxHeight: '80vh', overflow: 'auto' }}>
+            <h3>Live Data Source</h3>
+
+            {liveError && <div className="alert alert--bad">{liveError}</div>}
+
+            {liveLoading && <p className="muted">Loading connections...</p>}
+
+            {!liveLoading && !liveConnection && (
+              <>
+                <p className="muted">
+                  Select a Databricks connection to query live data.
+                </p>
+
+                {liveConnections.length === 0 && !liveLoading && (
+                  <p className="tiny muted">
+                    No Databricks connections found. Add one in External database import first.
+                  </p>
+                )}
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {liveConnections.map((conn) => (
+                    <button
+                      key={conn.connection_id}
+                      className="btn"
+                      type="button"
+                      style={{ textAlign: 'left', padding: '10px 16px' }}
+                      onClick={() => selectLiveConnection(conn)}
+                    >
+                      <strong>{conn.name}</strong>
+                      <span className="tiny muted" style={{ marginLeft: 8 }}>
+                        {conn.host} / {conn.catalog}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {liveConnection && (
+              <>
+                <p className="tiny muted" style={{ marginBottom: 8 }}>
+                  Connection: <strong>{liveConnection.name}</strong>
+                  {" — "}{liveConnection.host} / {liveConnection.catalog}
+                </p>
+
+                {/* Schema picker */}
+                <label className="dash__field">
+                  <span className="dash__field-label">Schema</span>
+                  <select
+                    className="control"
+                    value={liveSchema}
+                    disabled={liveBrowsing && !liveSchema}
+                    onChange={(e) => selectLiveSchema(e.target.value)}
+                  >
+                    <option value="">
+                      {liveBrowsing && !liveSchema ? "Loading schemas..." : "Select a schema..."}
+                    </option>
+                    {liveSchemas.map((s) => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                </label>
+
+                {/* Table picker */}
+                {liveSchema && (
+                  <label className="dash__field">
+                    <span className="dash__field-label">Table</span>
+                    <select
+                      className="control"
+                      value={liveTable}
+                      disabled={liveBrowsing && !liveTable}
+                      onChange={(e) => selectLiveTable(e.target.value)}
+                    >
+                      <option value="">
+                        {liveBrowsing && !liveTable ? "Loading tables..." : "Select a table..."}
+                      </option>
+                      {liveTables.map((t) => (
+                        <option key={t.name} value={t.name}>{t.name}</option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+
+                {/* Fields preview */}
+                {liveFields && (
+                  <div style={{ marginTop: 8 }}>
+                    <span className="dash__field-label">
+                      Fields ({liveFields.length})
+                    </span>
+                    <div className="dash__field-box">
+                      {liveFields.map((f) => (
+                        <span key={f.name} className="dash__field-chip">
+                          {f.name}
+                          <span className="tiny muted" style={{ marginLeft: 4 }}>
+                            {f.source_type || f.declared || ""}
+                          </span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            <div className="dash__modal-actions" style={{ marginTop: 16 }}>
+              {liveConnection && (
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={() => {
+                    setLiveConnection(null);
+                    setLiveSchemas([]);
+                    setLiveSchema("");
+                    setLiveTables([]);
+                    setLiveTable("");
+                    setLiveFields(null);
+                    setLiveError("");
+                  }}
+                >
+                  Back
+                </button>
+              )}
+
+              <button className="btn" type="button" onClick={closeLiveSource}>
+                Cancel
+              </button>
+
+              {liveFields?.length > 0 && (
+                <button
+                  className="btn btn--primary"
+                  type="button"
+                  onClick={confirmLiveSource}
+                >
+                  Use this table
+                </button>
+              )}
             </div>
           </div>
         </div>

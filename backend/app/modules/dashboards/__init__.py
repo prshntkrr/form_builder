@@ -11,11 +11,12 @@ from app.core.registry import Module
 from . import permissions  # noqa: F401  (importing registers the permissions)
 from . import bootstrap
 from .routers import dashboards
+from .routers import live_source
 
 MODULE = Module(
     name="dashboards",
     label="Dashboards",
-    routers=[dashboards.router],
+    routers=[dashboards.router, live_source.router],
     # Add table names here as schema.sql grows. Listing one makes the schema file
     # run on a fresh database and reports it in /api/health when it is absent.
     tables=["dashboard", "dashboard_version", "dashboard_data_source"],

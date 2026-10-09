@@ -166,6 +166,75 @@ export const api = {
     }),
 
   // -----------------------------
+  // Live Databricks data sources
+  // -----------------------------
+
+  listLiveConnections: (projectId) =>
+    request(
+      `/dashboards/live/connections?project_id=${encodeURIComponent(projectId || '')}`,
+    ),
+
+  getLiveSchemas: (connectionId) =>
+    request(`/dashboards/live/connections/${connectionId}/schemas`),
+
+  getLiveTables: (connectionId, schema) =>
+    request(
+      `/dashboards/live/connections/${connectionId}/tables?schema=${encodeURIComponent(schema)}`,
+    ),
+
+  getLiveColumns: (connectionId, schema, table) =>
+    request(
+      `/dashboards/live/connections/${connectionId}/columns` +
+        `?schema=${encodeURIComponent(schema)}&table=${encodeURIComponent(table)}`,
+    ),
+
+  generateLiveDashboard: (connectionId, schema, table, prompt) =>
+    request('/dashboards/live/generate', {
+      method: 'POST',
+      body: JSON.stringify({
+        connection_id: connectionId,
+        schema: schema,
+        table: table,
+        prompt,
+      }),
+    }),
+
+  getLiveData: (connectionId, schema, table, binding, paging = null) =>
+    request('/dashboards/live/data', {
+      method: 'POST',
+      body: JSON.stringify({
+        connection_id: connectionId,
+        schema: schema,
+        table: table,
+        binding,
+        ...(paging || {}),
+      }),
+    }),
+
+  getLiveFilterOptions: (connectionId, schema, table, field) =>
+    request('/dashboards/live/filter-options', {
+      method: 'POST',
+      body: JSON.stringify({
+        connection_id: connectionId,
+        schema: schema,
+        table: table,
+        field,
+      }),
+    }),
+
+  getLiveDependentFilterOptions: (connectionId, schema, table, field, parentFilters) =>
+    request('/dashboards/live/dependent-filter-options', {
+      method: 'POST',
+      body: JSON.stringify({
+        connection_id: connectionId,
+        schema: schema,
+        table: table,
+        field,
+        parent_filters: parentFilters,
+      }),
+    }),
+
+  // -----------------------------
   // Dashboard data
   // -----------------------------
 
