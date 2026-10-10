@@ -289,8 +289,8 @@
   margin: 0 0 8px;
 }
 
-.modal input {
-  
+.modal input:not([type="checkbox"]):not([type="radio"]):not([type="color"]) {
+  width: 100%;
   box-sizing: border-box;
 
   margin-top: 16px;
