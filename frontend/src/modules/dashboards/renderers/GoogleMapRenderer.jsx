@@ -187,9 +187,20 @@ export default function GoogleMapRenderer({ widget, data, dashboard }) {
         setGmap(new maps.Map(box, {
           center: DEFAULT_CENTER,
           zoom: DEFAULT_ZOOM,
+          mapTypeId: "hybrid",
           streetViewControl: false,
-          fullscreenControl: false,
-          mapTypeControl: false,
+          fullscreenControl: true,
+          mapTypeControl: true,
+          mapTypeControlOptions: {
+            style: maps.MapTypeControlStyle.HORIZONTAL_BAR,
+            position: maps.ControlPosition.TOP_LEFT,
+            mapTypeIds: [
+              maps.MapTypeId.ROADMAP,
+              maps.MapTypeId.SATELLITE,
+              maps.MapTypeId.HYBRID,
+              maps.MapTypeId.TERRAIN,
+            ],
+          },
         }));
       })
       .catch((e) => {
@@ -265,9 +276,6 @@ export default function GoogleMapRenderer({ widget, data, dashboard }) {
     function detailsOf(marker) {
       const row = marker.row || {};
 
-      /* The chosen fields, in the order they were chosen — or, for a map
-         saved before there was anything to choose, the first few fields the
-         row happens to carry. */
       const chosen = detailFields(widget);
 
       const entries = chosen.length
@@ -277,15 +285,26 @@ export default function GoogleMapRenderer({ widget, data, dashboard }) {
               field !== latitudeField && field !== longitudeField)
             .slice(0, DETAIL_FIELDS);
 
-      const rest = entries
+      const tableRows = entries
         .map(([field, value]) =>
-          `<div><strong>${escaped(fieldLabel(field))}:</strong> `
-          + `${escaped(value)}</div>`)
+          `<tr><td style="padding:4px 10px;font-weight:600;border:1px solid #e5e7eb">`
+          + `${escaped(fieldLabel(field))}</td>`
+          + `<td style="padding:4px 10px;border:1px solid #e5e7eb">`
+          + `${escaped(value)}</td></tr>`)
         .join("");
 
-      return `<div><strong>Plot Location</strong><br />`
-        + `Latitude: ${escaped(marker.latitude)}<br />`
-        + `Longitude: ${escaped(marker.longitude)}${rest}</div>`;
+      const coordValue = `${escaped(marker.latitude)},${escaped(marker.longitude)}`;
+
+      return `<div style="font-family:sans-serif;font-size:13px;min-width:200px">`
+        + `<table style="border-collapse:collapse;width:100%;margin-bottom:6px">`
+        + `<thead><tr>`
+        + `<th style="padding:6px 10px;background:#f3f4f6;border:1px solid #e5e7eb;text-align:left">Field</th>`
+        + `<th style="padding:6px 10px;background:#f3f4f6;border:1px solid #e5e7eb;text-align:left">Value</th>`
+        + `</tr></thead><tbody>`
+        + tableRows
+        + `</tbody></table>`
+        + `<div style="color:#6b7280;font-size:12px;padding:2px 0">Location: ${coordValue}</div>`
+        + `</div>`;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gmap, markers, markerColor, latitudeField, longitudeField, chosenFields]);
