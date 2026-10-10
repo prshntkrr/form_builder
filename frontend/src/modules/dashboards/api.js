@@ -182,10 +182,11 @@ export const api = {
       `/dashboards/live/connections/${connectionId}/tables?schema=${encodeURIComponent(schema)}`,
     ),
 
-  getLiveColumns: (connectionId, schema, table) =>
+  getLiveColumns: (connectionId, schema, table, { dashboard = false } = {}) =>
     request(
       `/dashboards/live/connections/${connectionId}/columns` +
-        `?schema=${encodeURIComponent(schema)}&table=${encodeURIComponent(table)}`,
+        `?schema=${encodeURIComponent(schema)}&table=${encodeURIComponent(table)}` +
+        (dashboard ? `&dashboard=true` : ``),
     ),
 
   generateLiveDashboard: (connectionId, schema, table, prompt) =>

@@ -1099,9 +1099,10 @@
    The editor with its preview beside it. Two panels on a desktop, one above
    the other when there is not the width for two, and each scrolling on its
    own so a long configuration never pushes the buttons off the screen. */
-.modal--builder {
-  width: min(1120px, calc(100vw - 32px));
-  max-height: 90vh;
+.modal.modal--builder {
+  width: calc(100vw - 64px);
+  max-width: none;
+  max-height: 92vh;
   display: flex;
   flex-direction: column;
 }
@@ -1124,6 +1125,68 @@
   overflow-y: auto;
   /* Room for the scrollbar, so a select is not under it. */
   padding-right: 10px;
+}
+
+.dash__config-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.dash__config-grid--2col {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.dash__config-cell {
+  display: grid;
+  grid-template-rows: auto 38px;
+  gap: 6px;
+  align-items: end;
+}
+
+.dash__config-cell .dash__edit-label {
+  margin: 0;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-2, #6b7280);
+  align-self: end;
+  line-height: 1.3;
+}
+
+.dash__config-cell .control {
+  font-size: 13px;
+  padding: 8px 10px;
+  margin-top: 30px;
+  height: 38px;
+  box-sizing: border-box;
+}
+
+.dash__config-cell .dash__color-row {
+  height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  /* overflow: hidden; */
+}
+
+.dash__config-cell .dash__color-row input[type="color"] {
+  height: 34px;
+  width: 48px;
+  padding: 1px;
+  border: 1px solid var(--line, #d1d5db);
+  border-radius: 4px;
+  cursor: pointer;
+  flex: none;
+}
+
+.dash__config-cell .dash__color-row .btn1 {
+  font-size: 12px;
+  padding: 6px 12px;
+  margin-top: 30px;
+  line-height: 2;
+  white-space: nowrap;
 }
 
 .dash__builder-preview {

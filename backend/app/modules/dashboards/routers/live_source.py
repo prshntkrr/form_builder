@@ -136,13 +136,19 @@ def list_columns(
     connection_id: int,
     schema: str = Query(...),
     table: str = Query(...),
+    dashboard: bool = Query(False),
     user: Dict[str, Any] = Depends(current_user),
 ):
     """Columns of a table in a Databricks connection, cached for a few minutes."""
-    from app.modules.dashboards.services.live_query_service import live_columns
+    from app.modules.dashboards.services.live_query_service import (
+        live_columns,
+        live_columns_for_dashboard,
+    )
 
     try:
-        cols = live_columns(user, connection_id, schema, table)
+        cols = (live_columns_for_dashboard(connection_id, schema, table)
+                if dashboard
+                else live_columns(user, connection_id, schema, table))
     except Exception as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -216,10 +222,10 @@ def get_live_data(
         execute_live_query,
         count_live_rows,
     )
-    from app.modules.external_db.connection_store import spec_for
+    from app.modules.external_db.connection_store import spec_for_dashboard
 
     try:
-        spec = spec_for(user, req.connection_id)
+        spec = spec_for_dashboard(req.connection_id)
     except Exception as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -260,10 +266,10 @@ def live_filter_options(
 ):
     """Distinct values for a filter field from a live Databricks table."""
     from app.modules.dashboards.services.live_query_service import live_distinct_values
-    from app.modules.external_db.connection_store import spec_for
+    from app.modules.external_db.connection_store import spec_for_dashboard
 
     try:
-        spec = spec_for(user, req.connection_id)
+        spec = spec_for_dashboard(req.connection_id)
         values = live_distinct_values(
             user, req.connection_id, spec["catalog"],
             req.schema_name, req.table, req.field,
@@ -281,10 +287,10 @@ def live_dependent_filter_options(
 ):
     """Dependent filter values from a live Databricks table."""
     from app.modules.dashboards.services.live_query_service import live_dependent_values
-    from app.modules.external_db.connection_store import spec_for
+    from app.modules.external_db.connection_store import spec_for_dashboard
 
     try:
-        spec = spec_for(user, req.connection_id)
+        spec = spec_for_dashboard(req.connection_id)
         values = live_dependent_values(
             user, req.connection_id, spec["catalog"],
             req.schema_name, req.table, req.field, req.parent_filters,
