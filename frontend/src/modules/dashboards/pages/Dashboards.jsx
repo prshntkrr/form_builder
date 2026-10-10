@@ -1812,7 +1812,7 @@ export default function Dashboards() {
         setSelectedSource(live);
         try {
           const fieldResult = await api.getLiveColumns(
-            live.connection_id, live.schema, live.table,
+            live.connection_id, live.schema, live.table, { dashboard: true },
           );
           setFields((fieldResult.fields || []).map((f) => ({
             name: f.name,

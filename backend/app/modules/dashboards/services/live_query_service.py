@@ -3,13 +3,18 @@
 The same interface as query_service.py but routes through the Databricks SQL
 Statement Execution API instead of local PostgreSQL. No data is stored; every
 call fetches fresh results.
+
+Discovery (live_columns during browsing) uses spec_for — the user must have
+access to the connection. Data queries (execute, count, filter values) use
+spec_for_dashboard — the authorization is "you can view this dashboard", not
+project membership in the connection's project.
 """
 import logging
 import time
 from typing import Any, Dict, List, Optional
 
 from app.modules.external_db import databricks
-from app.modules.external_db.connection_store import spec_for
+from app.modules.external_db.connection_store import spec_for, spec_for_dashboard
 from app.modules.dashboards.schemas import DashboardDataBinding
 from app.modules.dashboards.services.live_query_builder import (
     build_live_count,
@@ -46,6 +51,23 @@ def live_columns(
     return cols
 
 
+def live_columns_for_dashboard(
+    connection_id: int,
+    schema: str,
+    table: str,
+) -> List[Dict[str, Any]]:
+    key = _cache_key(connection_id, schema, table)
+    now = time.monotonic()
+    cached = _meta_cache.get(key)
+    if cached and now - cached["at"] < META_TTL:
+        return cached["columns"]
+
+    spec = spec_for_dashboard(connection_id)
+    cols = databricks.columns(spec, schema, table)
+    _meta_cache[key] = {"columns": cols, "at": now}
+    return cols
+
+
 def execute_live_query(
     user: Dict[str, Any],
     connection_id: int,
@@ -56,7 +78,7 @@ def execute_live_query(
     page: int = None,
     page_size: int = None,
 ) -> List[Dict[str, Any]]:
-    spec = spec_for(user, connection_id)
+    spec = spec_for_dashboard(connection_id)
     sql, params = build_live_query(catalog, schema, table, binding,
                                    page=page, page_size=page_size)
     columns, chunks, _ = databricks.execute(spec, sql, parameters=params or None,
@@ -74,7 +96,7 @@ def count_live_rows(
     table: str,
     binding: DashboardDataBinding,
 ) -> int:
-    spec = spec_for(user, connection_id)
+    spec = spec_for_dashboard(connection_id)
     sql, params = build_live_count(catalog, schema, table, binding)
     _, chunks, _ = databricks.execute(spec, sql, parameters=params or None)
     for chunk in chunks:
@@ -91,7 +113,7 @@ def live_distinct_values(
     table: str,
     field: str,
 ) -> List[Any]:
-    spec = spec_for(user, connection_id)
+    spec = spec_for_dashboard(connection_id)
     sql, params = build_live_distinct(catalog, schema, table, field)
     _, rows = databricks._all(spec, sql, parameters=params or None)
     return [r["value"] for r in rows if r.get("value") not in (None, "")]
@@ -106,7 +128,7 @@ def live_dependent_values(
     field: str,
     parent_filters: list,
 ) -> List[Any]:
-    spec = spec_for(user, connection_id)
+    spec = spec_for_dashboard(connection_id)
     sql, params = build_live_dependent_distinct(
         catalog, schema, table, field, parent_filters)
     _, rows = databricks._all(spec, sql, parameters=params or None)
