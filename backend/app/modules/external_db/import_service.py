@@ -23,7 +23,8 @@ half-built table to find later, which is the failure mode worth designing out.
 import logging
 import re
 import time
-from typing import Any, Dict, List, Optional
+import json
+from typing import Any, Dict, List, Optional, Tuple
 
 from psycopg2 import sql
 from psycopg2.extras import execute_values
@@ -282,6 +283,29 @@ def load(spec: Dict[str, Any], source_schema: str, source_table: str,
     _finished(import_id, rows=result["rows_loaded"], cols=result["columns_loaded"])
     return {**result, "import_id": import_id}
 
+def _clean_cell(val: Any, local_type: str) -> Any:
+    """Coerce values so PostgreSQL can safely cast them."""
+    if val is None:
+        return None
+    # MySQL tinyint(1) / bit (0 or 1) -> Python boolean
+    if local_type == "BOOLEAN":
+        if isinstance(val, (bytes, bytearray)):
+            return val != b"\x00"
+        if isinstance(val, (int, float)):
+            return bool(val)
+        if isinstance(val, str):
+            return val.strip().lower() in ("true", "t", "1", "yes", "y")
+        return bool(val)
+    # Python dict/list -> JSON string for JSONB columns
+    if local_type == "JSONB":
+        if isinstance(val, (dict, list)):
+            return json.dumps(val)
+        return str(val)
+    return val
+
+
+def _clean_row(row: Tuple, columns: List[Dict[str, Any]]) -> Tuple:
+    return tuple(_clean_cell(val, col["local_type"]) for val, col in zip(row, columns))
 
 def _load(checked: Dict[str, Any], schema: str, table: str,
           destination: str, loaded_by: str = "") -> Dict[str, Any]:
@@ -305,13 +329,15 @@ def _load(checked: Dict[str, Any], schema: str, table: str,
         sql.SQL(", ").join(sql.Identifier(c["name"]) for c in columns),
     )
 
+        # Build an explicit cast template: e.g. "(%s::INTEGER, %s::TEXT, %s::JSONB, %s::BOOLEAN)"
+    template = "(" + ", ".join(f"%s::{c['local_type']}" for c in columns) + ")"
+
     try:
-        # Create and fill together. A failure at any point rolls the whole thing
-        # back, so there is never a table here holding part of somebody's data.
         with transaction() as cur:
             cur.execute(create)
             for batch in connections.rows(checked, schema, table, batch_size):
-                execute_values(cur, insert, batch, page_size=batch_size)
+                cleaned_batch = [_clean_row(row, columns) for row in batch]
+                execute_values(cur, insert, cleaned_batch, template=template, page_size=batch_size)
                 rows_loaded += len(batch)
     except ExternalDbError:
         raise
