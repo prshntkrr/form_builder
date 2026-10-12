@@ -25,7 +25,7 @@ import { useProjects } from '../../projects/active.js'
    place they can be. */
 const CHANNELS = [
   ['whatsapp', 'WhatsApp', 'Keyword', '/routing/whatsapp'],
-  ['ivr', 'IVR', 'Option', null],
+  ['ivr', 'IVR', 'Option', '/routing/ivr'],
 ]
 
 const BLANK = { route_key: '', form_id: '' }

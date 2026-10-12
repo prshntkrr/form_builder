@@ -101,6 +101,17 @@ def me(user: Dict[str, Any] = Depends(current_user)):
 
     flags.update(_project_flags(user, flags))
 
+    # Dashboards are hybrid: a member may hold dashboard rights through a project
+    # role, which the account's own permissions cannot report. Widen each flag
+    # so the Dashboards section appears for them too. Each endpoint still checks
+    # the permission again for the project it acts on.
+    try:
+        from app.modules.dashboards import dash_access
+        for flag, in_project in dash_access.nav_flags(user).items():
+            flags[flag] = bool(flags.get(flag)) or in_project
+    except Exception:
+        logger.exception("Could not work out this account's dashboard navigation")
+
     return {
         "user": user,
         "permissions": held,

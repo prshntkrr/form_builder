@@ -237,6 +237,14 @@ class WhatsAppSettingsRequest(BaseModel):
     api_token: Optional[str] = None
 
 
+class WebhookRequest(BaseModel):
+    """Create or update a webhook endpoint."""
+    label: Optional[str] = None
+    project_id: Optional[str] = None
+    enabled: Optional[bool] = None
+    api_token: Optional[str] = None
+
+
 class IdentityRequest(BaseModel):
     """Which application account a phone number or channel id belongs to."""
     channel: str

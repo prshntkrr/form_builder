@@ -84,6 +84,15 @@ ROUTES: Tuple[Tuple[str, str], ...] = (
     # Administration too, and behind `mcdc.manage` like the rest of it.
     ("GET", r"/api/mcdc/whatsapp/settings"),
     ("PUT", r"/api/mcdc/whatsapp/settings"),
+    ("GET", r"/api/mcdc/ivr/settings"),
+    ("PUT", r"/api/mcdc/ivr/settings"),
+    ("GET", r"/api/mcdc/sarvam/settings"),
+    ("PUT", r"/api/mcdc/sarvam/settings"),
+    # Webhook management: multiple inbound endpoints per channel.
+    ("GET", r"/api/mcdc/whatsapp/webhooks"),
+    ("POST", r"/api/mcdc/whatsapp/webhooks"),
+    ("PUT", r"/api/mcdc/whatsapp/webhooks/[a-f0-9]{24}"),
+    ("DELETE", r"/api/mcdc/whatsapp/webhooks/[a-f0-9]{24}"),
 
     # Collecting: the published configuration, then the submission.
     ("GET", r"/api/forms/live/list"),

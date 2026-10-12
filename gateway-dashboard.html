@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MCDC API Gateway</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap">
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #181b24;
+    --surface-raised: #1f2330;
+    --border: #2a2e3b;
+    --fg: #e1e4ed;
+    --fg-muted: #8b90a0;
+    --accent: #4f8ff7;
+    --accent-dim: rgba(79,143,247,0.12);
+    --green: #34d399;
+    --green-dim: rgba(52,211,153,0.12);
+    --amber: #fbbf24;
+    --amber-dim: rgba(251,191,36,0.12);
+    --red: #f87171;
+    --red-dim: rgba(248,113,113,0.12);
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'Inter', system-ui, sans-serif;
+    color-scheme: dark;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #f5f6f8; --surface: #ffffff; --surface-raised: #f0f1f4;
+      --border: #dfe1e8; --fg: #1a1d28; --fg-muted: #6b7085;
+      --accent: #3b7de8; --accent-dim: rgba(59,125,232,0.08);
+      --green: #059669; --green-dim: rgba(5,150,105,0.08);
+      --amber: #d97706; --amber-dim: rgba(217,119,6,0.08);
+      --red: #dc2626; --red-dim: rgba(220,38,38,0.08);
+      color-scheme: light;
+    }
+  }
+  :root[data-theme="light"] {
+    --bg: #f5f6f8; --surface: #ffffff; --surface-raised: #f0f1f4;
+    --border: #dfe1e8; --fg: #1a1d28; --fg-muted: #6b7085;
+    --accent: #3b7de8; --accent-dim: rgba(59,125,232,0.08);
+    --green: #059669; --green-dim: rgba(5,150,105,0.08);
+    --amber: #d97706; --amber-dim: rgba(217,119,6,0.08);
+    --red: #dc2626; --red-dim: rgba(220,38,38,0.08);
+    color-scheme: light;
+  }
+  * { margin: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--fg); font-family: var(--sans);
+    padding: 0 16px; max-width: 1200px; margin: 0 auto;
+  }
+  .header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 24px 0 8px; border-bottom: 1px solid var(--border);
+    margin-bottom: 24px; flex-wrap: wrap;
+  }
+  .header h1 { font-family: var(--mono); font-size: 20px; font-weight: 600; letter-spacing: -0.3px; }
+  .status-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--green-dim); color: var(--green);
+    font-family: var(--mono); font-size: 12px; font-weight: 500;
+    padding: 4px 10px; border-radius: 4px; letter-spacing: 0.5px; text-transform: uppercase;
+  }
+  .status-dot { width: 6px; height: 6px; background: var(--green); border-radius: 50%; animation: pulse 2s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+  .subtitle { color: var(--fg-muted); font-size: 13px; margin-bottom: 24px; line-height: 1.5; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+  .stat-label { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.8px; color: var(--fg-muted); margin-bottom: 6px; }
+  .stat-value { font-family: var(--mono); font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .stat-note { font-size: 11px; color: var(--fg-muted); margin-top: 4px; }
+  .section { margin-bottom: 28px; }
+  .section-title { font-family: var(--mono); font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: var(--fg-muted); margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  .flow { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 24px; overflow-x: auto; }
+  .flow-row { display: flex; align-items: center; min-width: 700px; }
+  .flow-node { background: var(--surface-raised); border: 1px solid var(--border); border-radius: 6px; padding: 12px 16px; text-align: center; flex-shrink: 0; }
+  .flow-node.channel { min-width: 90px; }
+  .flow-node.gateway { background: var(--accent-dim); border-color: var(--accent); min-width: 160px; }
+  .flow-node.endpoint { min-width: 130px; }
+  .flow-node-label { font-family: var(--mono); font-size: 13px; font-weight: 600; }
+  .flow-node-sub { font-size: 11px; color: var(--fg-muted); margin-top: 4px; }
+  .flow-arrow { width: 40px; height: 2px; background: var(--border); position: relative; flex-shrink: 0; }
+  .flow-arrow::after { content: ''; position: absolute; right: 0; top: -4px; border: 5px solid transparent; border-left-color: var(--border); }
+  .flow-channels { display: flex; flex-direction: column; gap: 8px; }
+  .checks { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+  .check-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; display: flex; gap: 12px; align-items: flex-start; }
+  .check-icon { width: 32px; height: 32px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+  .check-icon.green { background: var(--green-dim); color: var(--green); }
+  .check-icon.blue { background: var(--accent-dim); color: var(--accent); }
+  .check-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .check-desc { font-size: 12px; color: var(--fg-muted); line-height: 1.5; }
+  .route-table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 600px; }
+  thead { border-bottom: 1px solid var(--border); }
+  th { text-align: left; padding: 10px 14px; font-family: var(--mono); font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.8px; color: var(--fg-muted); }
+  td { padding: 8px 14px; border-bottom: 1px solid var(--border); font-variant-numeric: tabular-nums; }
+  tr:last-child td { border-bottom: none; }
+  .method { font-family: var(--mono); font-weight: 600; font-size: 12px; padding: 2px 8px; border-radius: 3px; display: inline-block; }
+  .method.get { background: var(--accent-dim); color: var(--accent); }
+  .method.post { background: var(--green-dim); color: var(--green); }
+  .method.put { background: var(--amber-dim); color: var(--amber); }
+  .method.del { background: var(--red-dim); color: var(--red); }
+  .route-path { font-family: var(--mono); font-size: 12px; }
+  .route-purpose { color: var(--fg-muted); font-size: 12px; }
+  .code-block { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px 20px; font-family: var(--mono); font-size: 13px; line-height: 1.6; overflow-x: auto; white-space: pre; }
+  .code-key { color: var(--accent); }
+  .code-str { color: var(--green); }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 600px) { .two-col { grid-template-columns: 1fr; } }
+  .config-table td:first-child { font-family: var(--mono); font-size: 12px; white-space: nowrap; color: var(--accent); }
+  .footer { text-align: center; padding: 24px 0; font-size: 11px; color: var(--fg-muted); border-top: 1px solid var(--border); margin-top: 16px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>API Gateway</h1>
+  <span class="status-badge"><span class="status-dot"></span> Active</span>
+</div>
+<p class="subtitle">
+  Secure boundary for all channel traffic — Mobile, WhatsApp, and IVR.
+  Route validation, per-principal throttling, body inspection, and a unified error shape.
+</p>
+
+<div class="stats">
+  <div class="stat">
+    <div class="stat-label">Guarded routes</div>
+    <div class="stat-value">22</div>
+    <div class="stat-note">Exact-match allowlist</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">Channels</div>
+    <div class="stat-value">4</div>
+    <div class="stat-note">web · mobile · whatsapp · ivr</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">Checks per request</div>
+    <div class="stat-value">5</div>
+    <div class="stat-note">Route → Body → Envelope → Idempotency → Rate</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">Error shape</div>
+    <div class="stat-value">1</div>
+    <div class="stat-note">Uniform across all failures</div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">Request Flow</div>
+  <div class="flow">
+    <div class="flow-row">
+      <div class="flow-channels">
+        <div class="flow-node channel"><div class="flow-node-label">Mobile</div></div>
+        <div class="flow-node channel"><div class="flow-node-label">WhatsApp</div></div>
+        <div class="flow-node channel"><div class="flow-node-label">IVR</div></div>
+      </div>
+      <div class="flow-arrow"></div>
+      <div class="flow-node gateway">
+        <div class="flow-node-label" style="color:var(--accent)">GATEWAY</div>
+        <div class="flow-node-sub">Route · Body · Rate · Envelope</div>
+      </div>
+      <div class="flow-arrow"></div>
+      <div class="flow-channels">
+        <div class="flow-node endpoint"><div class="flow-node-label">/mcdc/*</div><div class="flow-node-sub">Channel routing</div></div>
+        <div class="flow-node endpoint"><div class="flow-node-label">/forms/*/package</div><div class="flow-node-sub">Form download</div></div>
+        <div class="flow-node endpoint"><div class="flow-node-label">/forms/*/submissions</div><div class="flow-node-sub">Data collection</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">Security Checks</div>
+  <div class="checks">
+    <div class="check-card">
+      <div class="check-icon green">&#10003;</div>
+      <div>
+        <div class="check-title">Route Allowlist</div>
+        <div class="check-desc">22 exact regex patterns. Unrecognised paths under /api/mcdc/ return 404 before reaching any handler. No wildcards, no path traversal.</div>
+      </div>
+    </div>
+    <div class="check-card">
+      <div class="check-icon green">&#10003;</div>
+      <div>
+        <div class="check-title">Body Validation</div>
+        <div class="check-desc">Size limit (configurable MB cap). Must be valid JSON, must be an object. Files bypass — uploads go direct to S3 on presigned URLs.</div>
+      </div>
+    </div>
+    <div class="check-card">
+      <div class="check-icon green">&#10003;</div>
+      <div>
+        <div class="check-title">Per-Principal Throttling</div>
+        <div class="check-desc">Sliding-window rate limiter keyed to token + caller identity. One busy surveyor cannot exhaust another's allowance. Returns Retry-After header.</div>
+      </div>
+    </div>
+    <div class="check-card">
+      <div class="check-icon green">&#10003;</div>
+      <div>
+        <div class="check-title">Envelope Inspection</div>
+        <div class="check-desc">Channel name must be one of four. form_version must be integer. survey_id shape-checked. Data must be an object. Catches malformed requests early.</div>
+      </div>
+    </div>
+    <div class="check-card">
+      <div class="check-icon blue">&#128274;</div>
+      <div>
+        <div class="check-title">Idempotency Key</div>
+        <div class="check-desc">Shape-validated (≤64 alphanumeric chars). Never rewritten — caller controls retry identity. Namespaced by principal downstream.</div>
+      </div>
+    </div>
+    <div class="check-card">
+      <div class="check-icon blue">&#128269;</div>
+      <div>
+        <div class="check-title">Structured Logging</div>
+        <div class="check-desc">One log line per request: method, path, channel, principal hash, status, latency. No tokens, no form data, no PII in logs.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">Route Allowlist</div>
+  <div class="route-table-wrap">
+    <table>
+      <thead><tr><th>Method</th><th>Path</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td><span class="method get">GET</span></td><td class="route-path">/api/mcdc/forms</td><td class="route-purpose">List fillable forms for mobile</td></tr>
+        <tr><td><span class="method get">GET</span></td><td class="route-path">/api/mcdc/whatsapp/routes</td><td class="route-purpose">Resolve WhatsApp keyword → form</td></tr>
+        <tr><td><span class="method get">GET</span></td><td class="route-path">/api/mcdc/ivr/routes</td><td class="route-purpose">Resolve IVR option → form</td></tr>
+        <tr><td><span class="method get">GET</span></td><td class="route-path">/api/mcdc/routes</td><td class="route-purpose">List all channel routes</td></tr>
+        <tr><td><span class="method post">POST</span></td><td class="route-path">/api/mcdc/routes</td><td class="route-purpose">Create a channel route</td></tr>
+        <tr><td><span class="method put">PUT</span></td><td class="route-path">/api/mcdc/routes/:id</td><td class="route-purpose">Update a channel route</td></tr>
+        <tr><td><span class="method del">DEL</span></td><td class="route-path">/api/mcdc/routes/:id</td><td class="route-purpose">Remove a channel route</td></tr>
+        <tr><td><span class="method post">POST</span></td><td class="route-path">/api/mcdc/identities</td><td class="route-purpose">Link phone → account</td></tr>
+        <tr><td><span class="method get">GET</span></td><td class="route-path">/api/forms/:id/package</td><td class="route-purpose">Download form package</td></tr>
+        <tr><td><span class="method post">POST</span></td><td class="route-path">/api/forms/:id/submissions</td><td class="route-purpose">Submit collected data</td></tr>
+        <tr><td><span class="method post">POST</span></td><td class="route-path">/api/forms/:id/submissions/start</td><td class="route-purpose">Start a multi-step submission</td></tr>
+        <tr><td><span class="method post">POST</span></td><td class="route-path">/api/forms/:id/.../upload-url</td><td class="route-purpose">Get presigned upload URL</td></tr>
+        <tr><td><span class="method get">GET</span></td><td class="route-path">/api/mcdc/whatsapp/settings</td><td class="route-purpose">Channel operation settings</td></tr>
+        <tr><td><span class="method put">PUT</span></td><td class="route-path">/api/mcdc/whatsapp/settings</td><td class="route-purpose">Update channel settings</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">Uniform Error Shape &amp; Configuration</div>
+  <div class="two-col">
+    <div>
+      <div class="code-block">{
+  <span class="code-key">"error"</span>: {
+    <span class="code-key">"code"</span>: <span class="code-str">"RATE_LIMITED"</span>,
+    <span class="code-key">"message"</span>: <span class="code-str">"Too many requests."</span>
+  },
+  <span class="code-key">"request_id"</span>: <span class="code-str">"a1b2c3d4..."</span>
+}</div>
+      <div style="margin-top:12px;font-size:12px;color:var(--fg-muted);line-height:1.6">
+        Every refusal — 400, 401, 403, 404, 413, 415, 429 — returns this shape. Clients parse one format. Codes: <code style="font-family:var(--mono);font-size:11px">ROUTE_NOT_ALLOWED</code>, <code style="font-family:var(--mono);font-size:11px">INVALID_REQUEST</code>, <code style="font-family:var(--mono);font-size:11px">REQUEST_TOO_LARGE</code>, <code style="font-family:var(--mono);font-size:11px">RATE_LIMITED</code>, <code style="font-family:var(--mono);font-size:11px">AUTHENTICATION_REQUIRED</code>, <code style="font-family:var(--mono);font-size:11px">FORBIDDEN</code>.
+      </div>
+    </div>
+    <div>
+      <div class="route-table-wrap">
+        <table class="config-table">
+          <thead><tr><th>Setting</th><th>Purpose</th></tr></thead>
+          <tbody>
+            <tr><td>MCDC_GATEWAY_ENABLED</td><td>Kill switch — disable without a deploy</td></tr>
+            <tr><td>MCDC_GATEWAY_RATE_LIMIT</td><td>Max requests per window per principal</td></tr>
+            <tr><td>MCDC_GATEWAY_RATE_WINDOW</td><td>Sliding window duration (seconds)</td></tr>
+            <tr><td>MCDC_GATEWAY_MAX_BODY_MB</td><td>Request body size cap</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="footer">MCDC API Gateway · e-Agrology Form Builder</div>
+
+</body>
+</html>

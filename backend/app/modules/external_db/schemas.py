@@ -73,6 +73,10 @@ class LoadRequest(BaseModel):
     source_schema: str = Field(alias="schema")
     source_table: str = Field(alias="table")
     destination_table: str
+    # The project the imported table belongs to. Only that project's dashboards
+    # will see it. Required: an import with no project has no dashboard that
+    # could ever use it.
+    project_id: str
 
     model_config = {"populate_by_name": True}
 

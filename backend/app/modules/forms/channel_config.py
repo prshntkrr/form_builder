@@ -96,12 +96,71 @@ def _normalize_whatsapp(raw: Any) -> Optional[Dict[str, Any]]:
     return config or None
 
 
+IVR_MESSAGES = ("welcome_message", "completion_message", "error_message",
+                "timeout_message", "invalid_input_message")
+
+
+def _normalize_ivr(raw: Any) -> Optional[Dict[str, Any]]:
+    if not isinstance(raw, dict):
+        return None
+
+    config: Dict[str, Any] = {}
+    for key in IVR_MESSAGES:
+        text = _text(raw.get(key))
+        if text:
+            config[key] = text
+
+    if "max_retries" in raw:
+        try:
+            config["max_retries"] = max(1, min(5, int(raw["max_retries"])))
+        except (TypeError, ValueError):
+            pass
+
+    if "input_timeout" in raw:
+        try:
+            config["input_timeout"] = max(3, min(30, int(raw["input_timeout"])))
+        except (TypeError, ValueError):
+            pass
+
+    order: List[str] = []
+    for name in raw.get("order") if isinstance(raw.get("order"), list) else []:
+        name = str(name).strip() if isinstance(name, str) else ""
+        if name and name not in order:
+            order.append(name)
+    if order:
+        config["order"] = order
+
+    fields: Dict[str, Dict[str, str]] = {}
+    for name, entry in (raw.get("fields") if isinstance(raw.get("fields"), dict) else {}).items():
+        if not isinstance(entry, dict):
+            continue
+        cleaned = {}
+        prompt = _text(entry.get("prompt"))
+        if prompt:
+            cleaned["prompt"] = prompt
+        interaction = str(entry.get("interaction") or "").strip().lower()
+        if interaction:
+            cleaned["interaction"] = interaction
+        if cleaned:
+            fields[str(name).strip()] = cleaned
+    if fields:
+        config["fields"] = fields
+
+    return config or None
+
+
 def normalize(raw: Any) -> Optional[Dict[str, Any]]:
     """The channel configuration, in the only shape it may take. None if empty."""
     if not isinstance(raw, dict):
         return None
+    result: Dict[str, Any] = {}
     whatsapp = _normalize_whatsapp(raw.get("whatsapp"))
-    return {"whatsapp": whatsapp} if whatsapp else None
+    if whatsapp:
+        result["whatsapp"] = whatsapp
+    ivr = _normalize_ivr(raw.get("ivr"))
+    if ivr:
+        result["ivr"] = ivr
+    return result or None
 
 
 def whatsapp_problems(form_json: Dict[str, Any]) -> List[Dict[str, str]]:
@@ -153,5 +212,53 @@ def whatsapp_problems(form_json: Dict[str, Any]) -> List[Dict[str, str]]:
         elif interaction not in allowed:
             found.append({"path": f"{path}.interaction", "message": (
                 f"'{label}' cannot be asked as {interaction} on WhatsApp. "
+                f"Use {' or '.join(allowed)}.")})
+    return found
+
+
+def ivr_problems(form_json: Dict[str, Any]) -> List[Dict[str, str]]:
+    """What is wrong with this form's IVR configuration. Empty when nothing."""
+    from app.modules.forms import channel_capabilities as caps
+    from app.modules.forms.form_schema import field_name
+
+    config = ((form_json.get("channel_config") or {}).get("ivr")) or {}
+    if not isinstance(config, dict):
+        return []
+
+    by_name = {field_name(f): f for f in form_json.get("fields") or []
+               if isinstance(f, dict) and field_name(f)}
+    found: List[Dict[str, str]] = []
+
+    for i, name in enumerate(config.get("order") or []):
+        if name not in by_name:
+            found.append({"path": f"channel_config.ivr.order.{i}",
+                          "message": f"'{name}' is not a question on this form"})
+
+    for name, entry in (config.get("fields") or {}).items():
+        path = f"channel_config.ivr.fields.{name}"
+        field = by_name.get(name)
+        if field is None:
+            found.append({"path": path,
+                          "message": f"'{name}' is not a question on this form"})
+            continue
+
+        label = field.get("label") or name
+        interaction = (entry or {}).get("interaction")
+        if not interaction:
+            continue
+        if interaction not in caps.IVR_INTERACTIONS:
+            found.append({"path": f"{path}.interaction", "message": (
+                f"'{interaction}' is not an IVR interaction "
+                f"({', '.join(caps.IVR_INTERACTIONS)})")})
+            continue
+
+        allowed = caps.ivr_interactions(field)
+        if not allowed:
+            reason = caps.capability("ivr", field.get("type") or "text").reason
+            found.append({"path": f"{path}.interaction",
+                          "message": f"'{label}' cannot be asked on IVR — {reason}"})
+        elif interaction not in allowed:
+            found.append({"path": f"{path}.interaction", "message": (
+                f"'{label}' cannot be asked as {interaction} on IVR. "
                 f"Use {' or '.join(allowed)}.")})
     return found

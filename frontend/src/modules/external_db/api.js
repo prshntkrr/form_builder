@@ -22,8 +22,16 @@ export const api = {
   preview: (connection, schema, table, limit = 20) =>
     post('preview', { connection, schema, table, limit }),
 
-  load: (connection, schema, table, destinationTable) =>
-    post('load', { connection, schema, table, destination_table: destinationTable }),
+  // `projectId` is the project the imported table belongs to; only that
+  // project's dashboards will see it.
+  load: (connection, schema, table, destinationTable, projectId) =>
+    post('load', {
+      connection,
+      schema,
+      table,
+      destination_table: destinationTable,
+      project_id: projectId,
+    }),
 
   // The import history: metadata only, no credentials, so a plain GET.
   imports: () => request('/external-db/imports'),

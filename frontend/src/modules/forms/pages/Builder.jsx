@@ -10,16 +10,19 @@ import { generateLayout, layoutIsStale, removeFromLayout, withFieldReplaced } fr
 import * as recovery from '../draftRecovery.js'
 import { FORM_CHANNEL_NAMES, PUBLISHABLE, formChannel } from '../channelCapabilities.js'
 import { conversationOrder, configOf, removeFromWhatsApp, renameInWhatsApp } from '../whatsappConfig.js'
+import { removeFromIvr, renameInIvr, conversationOrder as ivrConversationOrder } from '../ivrConfig.js'
 import { activeProjectId } from '../../projects/active.js'
 import ConditionEditor from '../components/ConditionEditor.jsx'
 import ExportPanel from '../components/ExportPanel.jsx'
 import FormRelationship from '../components/FormRelationship.jsx'
 import LocationSettings from '../components/LocationSettings.jsx'
-import ChannelPicker, { IvrPlaceholder } from '../components/ChannelPicker.jsx'
+import ChannelPicker from '../components/ChannelPicker.jsx'
 import WhatsAppBuilder, { ChatPreview } from '../components/WhatsAppBuilder.jsx'
+import IVRBuilder, { CallPreview } from '../components/IVRBuilder.jsx'
 import FormRenderer from '../components/FormRenderer.jsx'
 import LayoutDesigner from '../components/LayoutDesigner.jsx'
 import ContributeToLibrary from '../components/ContributeToLibrary.jsx'
+import Translations from '../components/Translations.jsx'
 import LibraryPicker from '../components/LibraryPicker.jsx'
 import StandardDrift from '../components/StandardDrift.jsx'
 import VersionDiff from '../components/VersionDiff.jsx'
@@ -165,6 +168,8 @@ export default function Builder() {
   const [ask, setAsk] = useState('')
   // Which language's wording the questions are being edited in.
   const [wording, setWording] = useState(null)
+  // Whether the translations sheet is open over the builder.
+  const [showTranslations, setShowTranslations] = useState(false)
 
   // Which project a new form is being built in. `?project=` when the builder
   // was opened from a project, otherwise whichever project is active. Only
@@ -477,13 +482,6 @@ export default function Builder() {
   /** The channel picked for the new form, while it is still a draft. */
   const pickChannel = (channel) => {
     if (form && !editing && channel !== form.channel) {
-      if (channel === 'ivr') {
-        // There is no IVR builder, so an IVR draft could only ever be saved as a
-        // form nobody can build or publish. The draft stays what it is.
-        setError('IVR forms are not supported yet. This draft stays '
-          + `${FORM_CHANNEL_NAMES[form.channel] || 'as it is'}.`)
-        return
-      }
       if (form.channel && form.fields?.length && !window.confirm(
         `Switch this unsaved draft to ${FORM_CHANNEL_NAMES[channel]}? Its questions are kept, `
         + `and it will open in the ${FORM_CHANNEL_NAMES[channel]} builder.`)) return
@@ -755,7 +753,9 @@ export default function Builder() {
     // reason follows the rename in the same update.
     const rules = next.name ? renameFieldInRules(replaced.rules, from, next.name) : replaced.rules
     const withRules = rules === replaced.rules ? replaced : { ...replaced, rules }
-    setForm(next.name ? renameInWhatsApp(withRules, from, next.name) : withRules)
+    let renamed = next.name ? renameInWhatsApp(withRules, from, next.name) : withRules
+    renamed = next.name ? renameInIvr(renamed, from, next.name) : renamed
+    setForm(renamed)
   }
   const knownAs = useRef({})
 
@@ -819,7 +819,7 @@ export default function Builder() {
     const rules = removeFieldFromRules(form.rules, form.fields[i]?.name)
     if (rules !== form.rules) kept.rules = rules
     // …nor in the WhatsApp conversation.
-    setForm(removeFromWhatsApp(kept, form.fields[i]?.name))
+    setForm(removeFromIvr(removeFromWhatsApp(kept, form.fields[i]?.name), form.fields[i]?.name))
   }
 
   const add = () => {
@@ -913,10 +913,10 @@ export default function Builder() {
   const tabs = channel === 'whatsapp'
     ? [['questions', 'WhatsApp'], ['preview', 'Chat preview'], ['json', 'JSON']]
     : channel === 'ivr'
-      ? [['questions', 'IVR'], ['json', 'JSON']]
+      ? [['questions', 'IVR'], ['preview', 'Call preview'], ['json', 'JSON']]
       : [['questions', 'Questions'], ['design', 'Design'], ['preview', 'Preview'], ['json', 'JSON']]
 
-  const workspace = Boolean(form) && channel !== 'ivr' && (pane === 'questions' || pane === 'design')
+  const workspace = Boolean(form) && (pane === 'questions' || pane === 'design')
   const chosenIndex = form ? form.fields.findIndex((f) => f.name === chosen) : -1
   const chosenField = chosenIndex < 0 ? null : form.fields[chosenIndex]
 
@@ -1131,16 +1131,30 @@ export default function Builder() {
                 being edited, exactly as a new one can. For a saved form the tab
                 is the page's address, so the sidebar and the tab agree. */}
             {(!editing || ['questions', 'design', 'preview', 'json'].includes(section)) && (
-              <div className="tabs">
-                {tabs.map(([id, name]) => (
-                  <button
-                    key={id}
-                    className={pane === id ? 'on' : undefined}
-                    onClick={() => (editing ? navigate(`/forms/${formId}/${id}`) : setDraftTab(id))}
-                  >
-                    {name}
+              <div className="tabbar">
+                <div className="tabs">
+                  {tabs.map(([id, name]) => (
+                    <button
+                      key={id}
+                      className={pane === id ? 'on' : undefined}
+                      onClick={() => (editing ? navigate(`/forms/${formId}/${id}`) : setDraftTab(id))}
+                    >
+                      {name}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Beside the tabs and not one of them: translating is a pass
+                    over the whole form rather than a view of it, and it opens
+                    over whichever tab you were on so you come back to it. */}
+                {form && (
+                  <button className="btn btn--sm btn--quiet tabs__aside"
+                          onClick={() => setShowTranslations(true)}>
+                    Translations
+                    {languageChoices(form).length > 1 &&
+                      ` · ${languageChoices(form).length}`}
                   </button>
-                ))}
+                )}
               </div>
             )}
 
@@ -1157,13 +1171,29 @@ export default function Builder() {
                 />
               )}
 
-              {channel === 'ivr' && pane !== 'json' && <IvrPlaceholder />}
+              {pane === 'questions' && channel === 'ivr' && (
+                <IVRBuilder
+                  form={form}
+                  chosen={chosen}
+                  onSelect={setChosen}
+                  onChange={setForm}
+                  onAdd={() => addField()}
+                />
+              )}
 
               {pane === 'preview' && channel === 'whatsapp' && (
                 <ChatPreview
                   form={form}
                   order={conversationOrder(form).map((n) => form.fields.find((f) => f.name === n)).filter(Boolean)}
                   config={configOf(form)}
+                />
+              )}
+
+              {pane === 'preview' && channel === 'ivr' && (
+                <CallPreview
+                  form={form}
+                  order={ivrConversationOrder(form).map((n) => form.fields.find((f) => f.name === n)).filter(Boolean)}
+                  config={form?.channel_config?.ivr || {}}
                 />
               )}
 
@@ -1397,6 +1427,15 @@ export default function Builder() {
                   Publish
                 </button>
               )}
+              {editing && (
+                <button
+                  className="btn btn--quiet btn--sm"
+                  onClick={() => api.exportExcel(formId)}
+                  title="Download the form definition as an Excel workbook"
+                >
+                  Export Excel
+                </button>
+              )}
               {editing && status === 'Active' && (
                 <button
                   className="btn btn--quiet btn--sm"
@@ -1509,6 +1548,46 @@ export default function Builder() {
         </aside>
       )}
      </div>
+
+      {/* Every word on the form, one column per language. It edits the same
+          `form` state the rest of the builder edits, so a translation is saved
+          by the ordinary save and versions with the questions it belongs to. */}
+      {showTranslations && form && (
+        <div className="sheet" onMouseDown={() => setShowTranslations(false)}>
+          <div
+            className="sheet__panel sheet__panel--wide"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="i18n-title"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div className="sheet__head">
+              <h2 id="i18n-title">Translations</h2>
+              <p className="muted">
+                The same form in more than one language. Question names, option
+                values and every rule stay exactly as they are — only the words
+                people read change, so answers collected in any language land in
+                the same columns.
+              </p>
+            </div>
+
+            <div className="sheet__body">
+              <Translations form={form} onChange={setForm} />
+            </div>
+
+            <div className="sheet__foot">
+              <span className="tiny muted">
+                Saved with the form — use Save when you are done.
+              </span>
+              <span className="spacer" />
+              <button className="btn btn--primary"
+                      onClick={() => setShowTranslations(false)}>
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   )
 }

@@ -96,7 +96,13 @@ def permissions_in(user: Dict[str, Any], project_id: str) -> Set[str]:
 
 def _every_project_permission() -> Set[str]:
     from app.modules.projects import permissions as catalogue
-    return {p.key for p in catalogue.CATALOGUE}
+    from app.core import permissions as core
+
+    # The project's own permissions, plus the `shared` ones another module makes
+    # usable inside a project (dashboards). So an account reaching in through
+    # `projects.view_all` can do everything a project role could, dashboards
+    # included, without this file naming another module's permissions.
+    return {p.key for p in catalogue.CATALOGUE} | set(core.SHARED)
 
 
 def can(user: Dict[str, Any], permission: str, project_id: str) -> bool:

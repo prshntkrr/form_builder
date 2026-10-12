@@ -175,3 +175,196 @@ def ensure_dashboard_version_table() -> bool:
         )
 
     return True
+
+
+def ensure_dashboard_project() -> bool:
+    """Give a dashboard a project to live in, and move the old ones into one.
+
+    Every dashboard belongs to exactly one project now — it is only ever
+    reachable from inside that project. A dashboard that predates this has no
+    project, so it is assigned to the oldest one the installation has (the
+    choice the user signed off on: "assign all existing dashboards to any single
+    project"). If there is no project at all, the column stays NULL and those
+    dashboards wait until there is one to put them in; nothing is lost.
+    """
+    with transaction() as cur:
+        if not table_exists(cur, "dashboard"):
+            return False
+
+        cur.execute(
+            """
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name = 'dashboard' AND column_name = 'project_id'
+            """
+        )
+        if not cur.fetchone():
+            cur.execute("ALTER TABLE dashboard ADD COLUMN project_id VARCHAR(20)")
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_dashboard_project "
+                "ON dashboard (project_id)"
+            )
+            logger.info("Added dashboard.project_id")
+
+        # Backfill once: only rows that have no project, and only if there is a
+        # project to give them. The oldest project is a stable, arbitrary pick.
+        if table_exists(cur, "project"):
+            cur.execute(
+                """
+                UPDATE dashboard
+                SET    project_id = (
+                           SELECT project_id FROM project
+                           ORDER BY created_on, project_id
+                           LIMIT 1
+                       )
+                WHERE  project_id IS NULL
+                  AND  EXISTS (SELECT 1 FROM project)
+                """
+            )
+            if cur.rowcount:
+                logger.info(
+                    "Assigned %d existing dashboard(s) to the oldest project",
+                    cur.rowcount,
+                )
+
+    return True
+
+
+def ensure_dashboard_project_key() -> bool:
+    """The foreign key, once both tables exist.
+
+    A dashboard whose project is deleted goes with it — a dashboard outside
+    every project is unreachable by design, so there is nothing to keep.
+    """
+    with transaction() as cur:
+        if not table_exists(cur, "dashboard") or not table_exists(cur, "project"):
+            return False
+
+        cur.execute(
+            """
+            SELECT 1 FROM information_schema.table_constraints
+            WHERE table_name = 'dashboard' AND constraint_name = 'fk_dashboard_project'
+            """
+        )
+        if cur.fetchone():
+            return True
+
+        cur.execute(
+            """
+            ALTER TABLE dashboard ADD CONSTRAINT fk_dashboard_project
+            FOREIGN KEY (project_id) REFERENCES project (project_id) ON DELETE CASCADE
+            """
+        )
+        logger.info("Added dashboard.project_id -> project")
+
+    return True
+
+
+def ensure_data_source_table() -> bool:
+    """Create ``dashboard_data_source`` on a database that predates it.
+
+    schema.sql creates it on a fresh database; this handles the ones that
+    already have the dashboard tables. Idempotent.
+    """
+    with transaction() as cur:
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS dashboard_data_source (
+                table_name   VARCHAR(128) NOT NULL PRIMARY KEY,
+                project_id   VARCHAR(20)  NOT NULL,
+                source_type  VARCHAR(20)  NOT NULL,
+                source_id    VARCHAR(50),
+                created_on   TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+                created_by   VARCHAR(50)
+            )
+            """
+        )
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_dashboard_data_source_project "
+            "ON dashboard_data_source (project_id)"
+        )
+
+    return True
+
+
+def ensure_data_source_project_key() -> bool:
+    """The registry's foreign key to project, once both tables exist.
+
+    A project's imported sources disappear with the project, same as its
+    dashboards and forms.
+    """
+    with transaction() as cur:
+        if not table_exists(cur, "dashboard_data_source") or not table_exists(
+            cur, "project"
+        ):
+            return False
+
+        cur.execute(
+            """
+            SELECT 1 FROM information_schema.table_constraints
+            WHERE table_name = 'dashboard_data_source'
+              AND constraint_name = 'fk_dashboard_data_source_project'
+            """
+        )
+        if cur.fetchone():
+            return True
+
+        cur.execute(
+            """
+            ALTER TABLE dashboard_data_source
+            ADD CONSTRAINT fk_dashboard_data_source_project
+            FOREIGN KEY (project_id) REFERENCES project (project_id)
+            ON DELETE CASCADE
+            """
+        )
+        logger.info("Added dashboard_data_source.project_id -> project")
+
+    return True
+
+
+def ensure_data_source_backfill() -> bool:
+    """Attribute existing external imports to a project, once.
+
+    An external import that came through a saved connection with a project can
+    be placed: the connection says which project. An ad-hoc import (no saved
+    connection) and every existing Excel upload cannot — nothing recorded where
+    they belonged — so they are left out and reappear when re-imported. Only
+    imports whose destination table still exists are registered.
+
+    Idempotent: ``ON CONFLICT DO NOTHING`` leaves a table that is already
+    registered where it is (the live registration is authoritative over this
+    one-time guess).
+    """
+    with transaction() as cur:
+        if not table_exists(cur, "dashboard_data_source"):
+            return False
+        if not table_exists(cur, "external_import") or not table_exists(
+            cur, "external_connection"
+        ):
+            return True
+
+        cur.execute(
+            """
+            INSERT INTO dashboard_data_source
+                   (table_name, project_id, source_type, source_id)
+            SELECT DISTINCT ON (i.destination_table)
+                   i.destination_table, c.project_id, 'import', i.import_id::text
+            FROM   external_import i
+            JOIN   external_connection c ON c.connection_id = i.connection_id
+            WHERE  i.status = 'succeeded'
+              AND  c.project_id IS NOT NULL
+              AND  EXISTS (
+                       SELECT 1 FROM information_schema.tables t
+                       WHERE t.table_schema = current_schema()
+                         AND t.table_name = i.destination_table
+                   )
+            ORDER BY i.destination_table, i.import_id DESC
+            ON CONFLICT (table_name) DO NOTHING
+            """
+        )
+        if cur.rowcount:
+            logger.info(
+                "Backfilled %d imported data source(s) into their project",
+                cur.rowcount,
+            )
+
+    return True

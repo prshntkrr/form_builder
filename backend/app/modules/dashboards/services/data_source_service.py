@@ -2,6 +2,7 @@ from typing import Any, Dict, List, Optional
 
 from app.core.database import fetch_all
 from app.modules.forms.form_service import list_forms
+from app.modules.dashboards.services import data_source_registry
 
 
 TABULAR_SUFFIX = "_tabular"
@@ -34,7 +35,8 @@ _PG_TYPE_TO_FIELD_TYPE = {
 _DEFAULT_FIELD_TYPE = "text"
 
 
-def list_tabular_tables() -> List[Dict[str, Any]]:
+def _existing_tabular_tables() -> set:
+    """Every `%_tabular` table that physically exists right now."""
     rows = fetch_all(
         """
         SELECT table_name
@@ -42,17 +44,49 @@ def list_tabular_tables() -> List[Dict[str, Any]]:
         WHERE table_schema = current_schema()
           AND table_type = 'BASE TABLE'
           AND table_name LIKE %s
-        ORDER BY table_name
         """,
         ("%\\_tabular",),
     )
+    return {row["table_name"] for row in rows}
+
+
+def list_tabular_tables(project_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    """The `_tabular` tables a project's dashboards may draw on.
+
+    A dashboard lives inside one project and sees only that project's data:
+
+    * the `<form>_tabular` table of every form in the project (forms carry their
+      own project, so this is read straight from the forms module), and
+    * every Excel upload and external-database import registered to the project
+      (`dashboard_data_source`).
+
+    Both are intersected with the tables that actually exist, so a form never
+    filled in, or a source whose table was dropped, does not appear.
+
+    Without a project (the system context) there is nothing to show: a dashboard
+    is never built or viewed outside a project, so the picker is empty there.
+    """
+    if not project_id:
+        return []
+
+    existing = _existing_tabular_tables()
+
+    names = set()
+
+    # Form sources: resolved through the forms module, which already knows which
+    # forms belong to this project. A high limit because this is the whole set,
+    # not a page.
+    for form in list_forms(project=project_id, limit=10000, offset=0):
+        table = form.get("table_name")
+        if table:
+            names.add(f"{table}{TABULAR_SUFFIX}")
+
+    # Imported sources: Excel uploads and external-database imports.
+    names.update(data_source_registry.tables_for_project(project_id))
 
     return [
-        {
-            "name": row["table_name"],
-            "type": "postgresql_tabular",
-        }
-        for row in rows
+        {"name": name, "type": "postgresql_tabular"}
+        for name in sorted(names & existing)
     ]
 
 

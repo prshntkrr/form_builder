@@ -128,7 +128,8 @@ def _interactive(message: Dict[str, Any]) -> Dict[str, Any]:
 
 
 async def send(number: str, message: Any, application: Any,
-               project_id: Optional[str] = None) -> None:
+               project_id: Optional[str] = None,
+               webhook_id: Optional[str] = None) -> None:
     """One message out, on the account configured for this scope.
 
     `message` is what `whatsapp_runtime` produced: `{text, interaction,
@@ -144,7 +145,11 @@ async def send(number: str, message: Any, application: Any,
         message = {"text": message}
     text = message.get("text") or ""
 
-    token = channel_settings.token(project_id)
+    if webhook_id:
+        from app.modules.forms import webhook_service
+        token = webhook_service.token_for(webhook_id)
+    else:
+        token = channel_settings.token(project_id)
     if not token:
         logger.error(
             "No WhatsApp token configured for %s, so nothing can be sent. "
@@ -336,16 +341,9 @@ def _read(body: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-@router.post("/webhook")
-async def webhook(request: Request, background: BackgroundTasks):
-    """One inbound WhatsApp message.
-
-    Answers 200 immediately whatever happens, and sends the reply in the
-    background: a provider that does not hear back quickly redelivers, and a
-    redelivery of a message already handled would be a second answer to the same
-    question. The idempotency that protects the *submission* is the session id;
-    this is what protects the conversation.
-    """
+async def _handle_webhook(request: Request, background: BackgroundTasks,
+                          webhook_id: Optional[str] = None):
+    """Shared handler for both the default and per-webhook endpoints."""
     _ensure_sweeping()
 
     try:
@@ -357,10 +355,11 @@ async def webhook(request: Request, background: BackgroundTasks):
     if not message["identity"] or (not message["text"] and not message["media_url"]):
         return {"status": "ok"}
 
-    logger.info("WhatsApp in from %s on %s (app %s, %d chars, media: %s)",
+    logger.info("WhatsApp in from %s on %s (app %s, %d chars, media: %s, webhook: %s)",
                 _masked(message["identity"]), _masked(message["receiver"]),
                 message["application"], len(message["text"]),
-                message["media_type"] if message["media_url"] else "none")
+                message["media_type"] if message["media_url"] else "none",
+                webhook_id or "default")
 
     try:
         answer = await asyncio.to_thread(
@@ -373,18 +372,41 @@ async def webhook(request: Request, background: BackgroundTasks):
         answer = "Sorry, something went wrong. Please try again in a moment."
 
     if answer:
+        project_id = _scope_of(message["identity"], message["receiver"],
+                               webhook_id=webhook_id)
         background.add_task(send, message["identity"], answer,
-                             message["application"],
-                             _scope_of(message["identity"], message["receiver"]))
+                             message["application"], project_id,
+                             webhook_id=webhook_id)
 
     return {"status": "ok"}
 
 
-def _scope_of(identity: str, receiver: str = "") -> Optional[str]:
+@router.post("/webhook")
+async def webhook(request: Request, background: BackgroundTasks):
+    """The default webhook — backwards compatible with existing Picky Assist configs."""
+    return await _handle_webhook(request, background)
+
+
+@router.post("/webhook/{webhook_id}")
+async def webhook_by_id(webhook_id: str, request: Request,
+                        background: BackgroundTasks):
+    """A specific webhook endpoint. The webhook_id identifies which config to use."""
+    from app.modules.forms import webhook_service
+
+    hook = webhook_service.get_webhook(webhook_id)
+    if not hook or not hook.get("enabled", True):
+        return {"status": "ok"}
+
+    return await _handle_webhook(request, background, webhook_id=webhook_id)
+
+
+def _scope_of(identity: str, receiver: str = "",
+              webhook_id: Optional[str] = None) -> Optional[str]:
     """Which project's Picky Assist account to answer on.
 
     In order:
 
+        the webhook's own project   if the message arrived on a configured webhook
         the conversation's own      mid-survey, the project whose form is
                                     being answered
         the number it arrived on    before there is a conversation — the
@@ -398,6 +420,15 @@ def _scope_of(identity: str, receiver: str = "") -> Optional[str]:
     nothing. The symptom was `No WhatsApp token configured for the system`
     while a token was plainly saved against the project.
     """
+    if webhook_id:
+        try:
+            from app.modules.forms import webhook_service
+            wp = webhook_service.project_for(webhook_id)
+            if wp:
+                return wp
+        except Exception:
+            logger.exception("Could not read project for webhook %s", webhook_id)
+
     try:
         session = whatsapp_session.live(identity) \
             or whatsapp_session.recently_finished(identity)

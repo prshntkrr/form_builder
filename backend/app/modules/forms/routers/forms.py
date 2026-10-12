@@ -398,7 +398,12 @@ def translate(req: TranslateRequest, user: Dict[str, Any] = Depends(_could_build
     """
     if not translations.is_supported(req.language):
         raise HTTPException(status_code=400, detail=f"Unsupported language '{req.language}'")
-    if req.language == translations.DEFAULT_LANGUAGE:
+    # The form's own base language, not English. A workbook imported from
+    # Spanish is a Spanish form, and translating it *into* English is the whole
+    # point — comparing against the installation default refused exactly that
+    # and allowed the pointless Spanish-to-Spanish call instead.
+    base = translations.default_language(req.form_json)
+    if req.language == base:
         raise HTTPException(
             status_code=400,
             detail="That is the language the form is already written in.",
@@ -525,6 +530,34 @@ def detail(form_id: str, user: Dict[str, Any] = Depends(current_user)):
         return form_service.get_form(form_id)
     except form_service.FormNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+
+
+@router.get("/{form_id}/export-excel")
+def export_excel(form_id: str, user: Dict[str, Any] = Depends(current_user)):
+    """Download the form definition as an Edit View Excel workbook."""
+    from fastapi.responses import Response
+    from app.modules.forms.excel_export import export_form
+
+    _may_read(form_id, user)
+    try:
+        form = form_service.get_form(form_id)
+    except form_service.FormNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+    form_json = form.get("form_json", {})
+    xlsx_bytes = export_form(form_json)
+
+    title = (form_json.get("title") or "form").strip()
+    safe_title = "".join(c if c.isalnum() or c in " _-" else "_" for c in title)
+    safe_title = safe_title.replace(" ", "_")
+    version = form_json.get("version", "")
+    filename = f"{safe_title}_v{version}.xlsx" if version else f"{safe_title}.xlsx"
+
+    return Response(
+        content=xlsx_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.put("/{form_id}")

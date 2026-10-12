@@ -528,6 +528,17 @@ them on the device for a good experience; MCDC checks them again regardless.
 
 Choice answers must be one of the offered values (5.3, 4.5).
 
+### 5.4a Questions hidden outright (`config.hide`)
+
+Every question carries `"config": {"hide": false}`. When it is `true`, **do not
+show that question and do not send an answer for it** — it is not asked, and it
+is not required even if `"required": true` sits beside it. The server refuses an
+answer to a hidden question exactly as it refuses one to a question a rule has
+hidden (5.5).
+
+A question saved before this existed has no `config` at all; treat that as
+`{"hide": false}`.
+
 ### 5.5 Conditional rules (`config.rules`)
 
 Rules decide which questions and groups apply, given the answers so far.
@@ -915,6 +926,51 @@ These are **not** in the package, because they change as records are collected:
 
 Every response carries an `X-Request-ID` header; include it when reporting a
 problem to the MCDC operator.
+
+### 8.1 Where each endpoint is implemented
+
+For whoever maintains the server side. Paths are from the repository root; a
+line number is where the route is declared today and will drift — the function
+name is the thing to search for.
+
+| Endpoint | Route declared in | What it calls |
+|---|---|---|
+| `POST /api/auth/login` | `backend/app/core/routers/auth.py` → `login` | `app/core/auth_service.py` (`login`), `app/core/security.py` |
+| `GET /api/auth/me` | `app/core/routers/auth.py` → `me` | `app/core/auth_service.py`, `app/core/permissions.py`, `app/core/role_service.py` |
+| `POST /api/auth/logout` | `app/core/routers/auth.py` → `logout` | `app/core/auth_service.py` |
+| `GET /api/mcdc/forms` | `app/modules/forms/routers/mcdc.py` → `mobile_forms` | `fillable_forms(..., channel="mobile")` — which lives in `app/modules/forms/routers/submissions.py`, not in the mcdc router — then `app/modules/forms/form_service.py` and `app/modules/projects/access.py` |
+| `GET /api/forms/{id}/package` | `app/modules/forms/routers/submissions.py` → `form_package` | `app/modules/forms/mobile_package.py` (`build`), `publishing.py`, `translations.py`, `channels.py` |
+| `POST /api/forms/{id}/submissions` | `app/modules/forms/routers/submissions.py` → `create_submission` | `app/modules/forms/submission_service.py` (`validate_payload`, `_check_field`, `_write`), `tabular_service.py`, `conditions.py`, `field_types.py`, `channels.py`, `ingestion.py` (`record_channel`) |
+| `POST /api/forms/{id}/submissions/start` | `app/modules/forms/routers/submissions.py` → `start_submission` | `app/modules/forms/submission_service.py` |
+| `POST …/media/upload-url` | `app/modules/forms/routers/submissions.py` → `media_upload_url` | `app/modules/forms/media_service.py` (S3 presigning) |
+| `POST …/media/{media_id}/complete` | `app/modules/forms/routers/submissions.py` → `media_complete` | `app/modules/forms/media_service.py` |
+| `GET /api/forms/{id}/parent-options` | `app/modules/forms/routers/submissions.py` → `parent_options` | `app/modules/forms/relationships.py` (`parents_for`) |
+
+**Option sets in the package** (§4.5) are resolved inside
+`mobile_package._option_set`, which reaches into three other modules:
+`app/modules/client_catalog/catalog_options.py`,
+`app/modules/standards/crop_ontology/dynamic_options.py` and
+`app/modules/standards/iso3166/service.py`. The package never holds a second
+copy of a definition — it is assembled from `publishing.py` and
+`translations.py`, and `CONFIG_KEYS` in `mobile_package.py` is the whitelist
+that keeps a table name or a creator out of it.
+
+**Shared by every endpoint above**
+
+| Concern | File |
+|---|---|
+| Request bodies (`SubmitRequest`, `IngestRequest`) | `app/modules/forms/schemas.py` |
+| `Depends(needs(...))`, `viewer` | `app/core/deps.py` |
+| Permission names (`RECORDS_CREATE`, …) | `app/modules/forms/permissions.py` |
+| `X-Request-ID`, body-size cap, rate limit, the `error.code` envelope in §8 | `app/core/gateway.py` |
+| Limits and timeouts (`SESSION_HOURS`, `MEDIA_MAX_MB`, S3, …) | `app/core/config.py`, template in `backend/.env.example` |
+| What a definition may contain | `app/modules/forms/form_schema.py`, `config_validation.py`, `field_types.py` |
+
+**Tests that cover this contract** — change these in the same commit:
+`backend/tests/modules/forms/test_mobile_flow.py`,
+`test_mobile_package.py`, `test_media_and_location.py`, `test_channels.py`,
+`test_single_channel.py`, `test_relationships.py`,
+`backend/tests/core/test_auth.py`, `backend/tests/core/test_gateway.py`.
 
 ### Error body shapes
 

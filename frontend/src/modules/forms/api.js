@@ -32,6 +32,18 @@ export const api = {
       body: JSON.stringify({ form_json: formJson, instruction }),
     }),
 
+  // --- languages ---
+  // The languages a form can be offered in, and one language's wording drafted
+  // by the model. Translations are stored in the form itself, so there is no
+  // endpoint to save them — they go with the next save of the form.
+  languages: () => request('/forms/languages'),
+
+  translateForm: (formJson, language) =>
+    request('/forms/translate', {
+      method: 'POST',
+      body: JSON.stringify({ form_json: formJson, language }),
+    }),
+
   validate: (formJson) =>
     request('/forms/validate', { method: 'POST', body: JSON.stringify({ form_json: formJson }) }),
 
@@ -246,6 +258,37 @@ export const api = {
     return request(`/forms/${formId}/diff${qs.toString() ? `?${qs}` : ''}`)
   },
 
+  // Saving a form. `whatsapp` is the number and keyword that reach it, sent
+  // inside the same request so the route row is written in the same transaction
+  // as the questions — a WhatsApp form and the way to reach it are stored
+  // together or not at all. Absent leaves routing alone, which is every form
+  // that is not answered on WhatsApp.
+  createForm: (formJson, createdBy, status = 'Active', projectId, whatsapp) =>
+    request('/forms', {
+      method: 'POST',
+      body: JSON.stringify({
+        form_json: formJson,
+        created_by: createdBy,
+        form_status: status,
+        project_id: projectId || null,
+        whatsapp: whatsapp || null,
+      }),
+    }),
+
+  // `renames` is old field key -> new one. The server moves the stored answers
+  // with them, so responses collected before the rename keep matching the
+  // definition — which is why a rename cannot be sent twice.
+  updateForm: (formId, formJson, updatedBy, renames, whatsapp) =>
+    request(`/forms/${formId}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        form_json: formJson,
+        updated_by: updatedBy,
+        renames: renames && Object.keys(renames).length ? renames : null,
+        whatsapp: whatsapp || null,
+      }),
+    }),
+
   setStatus: (formId, status) =>
     request(`/forms/${formId}/status`, {
       method: 'PATCH',
@@ -253,6 +296,27 @@ export const api = {
     }),
 
   deleteForm: (formId) => request(`/forms/${formId}`, { method: 'DELETE' }),
+
+  // A dry run: the answers are validated and nothing is stored. `formJson` lets
+  // the builder try edits that have not been saved yet.
+  testSubmission: (formId, data, formJson, language) =>
+    request(`/forms/${formId}/test-submission`, {
+      method: 'POST',
+      body: JSON.stringify({ data, form_json: formJson, language }),
+    }),
+
+  // Stored responses against the current definition, after an edit by hand.
+  // `fix` false reports only; true also re-coerces what it can.
+  revalidate: (formId, fix = false) =>
+    request(`/forms/${formId}/revalidate`, {
+      method: 'POST',
+      body: JSON.stringify({ fix }),
+    }),
+
+  // Rebuild the flat reporting mirror from the JSONB answers. It happens by
+  // itself whenever columns change; this is for a form whose mirror drifted.
+  rebuildTabular: (formId) =>
+    request(`/forms/${formId}/rebuild-tabular`, { method: 'POST' }),
 
   renderForm: (formId, language) =>
     request(`/forms/${formId}/render${language ? `?language=${language}` : ''}`),
@@ -367,6 +431,35 @@ export const api = {
     request(`/mcdc/whatsapp/settings${project ? `?project=${project}` : ''}`,
             { method: 'PUT', body: JSON.stringify(settings) }),
 
+  ivrSettings: (project) =>
+    request(`/mcdc/ivr/settings${project ? `?project=${project}` : ''}`),
+
+  saveIvrSettings: (project, settings) =>
+    request(`/mcdc/ivr/settings${project ? `?project=${project}` : ''}`,
+            { method: 'PUT', body: JSON.stringify(settings) }),
+
+  sarvamSettings: (project) =>
+    request(`/mcdc/sarvam/settings${project ? `?project=${project}` : ''}`),
+
+  saveSarvamSettings: (project, settings) =>
+    request(`/mcdc/sarvam/settings${project ? `?project=${project}` : ''}`,
+            { method: 'PUT', body: JSON.stringify(settings) }),
+
+  webhooks: (project) =>
+    request(`/mcdc/whatsapp/webhooks${project ? `?project=${project}` : ''}`)
+      .then((r) => r.webhooks || []),
+
+  createWebhook: (data) =>
+    request('/mcdc/whatsapp/webhooks',
+            { method: 'POST', body: JSON.stringify(data) }),
+
+  updateWebhook: (id, data) =>
+    request(`/mcdc/whatsapp/webhooks/${id}`,
+            { method: 'PUT', body: JSON.stringify(data) }),
+
+  deleteWebhook: (id) =>
+    request(`/mcdc/whatsapp/webhooks/${id}`, { method: 'DELETE' }),
+
   // --- one form's submissions hanging off another's ---
   // What this form is attached to, and what is attached to it.
   formRelationship: (formId) => request(`/forms/${formId}/relationship`),
@@ -408,6 +501,9 @@ export const api = {
 
   // Saved through `download`, not linked to: the token is a header, and a plain
   // link sends none — which is why the old Export CSV link handed back a 401.
+  exportExcel: (formId) =>
+    download(`/forms/${formId}/export-excel`, `form_${formId}.xlsx`),
+
   exportSubmissions: (formId, { format = 'csv', columns = [], from, to } = {}) =>
     download(
       `/forms/${formId}/submissions/export?format=${format}`

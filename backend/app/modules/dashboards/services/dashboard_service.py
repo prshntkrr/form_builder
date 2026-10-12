@@ -158,8 +158,12 @@ def create_dashboard(
     title: str,
     dashboard_json: Dict[str, Any],
     created_by: Optional[str] = None,
+    project_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Create and persist a dashboard with an initial draft version."""
+    """Create and persist a dashboard with an initial draft version.
+
+    A dashboard belongs to one project and is only reachable from inside it.
+    """
 
     dashboard_id = _generate_dashboard_id()
 
@@ -171,9 +175,10 @@ def create_dashboard(
                 title,
                 dashboard_json,
                 created_by,
+                project_id,
                 latest_version
             )
-            VALUES (%s, %s, %s, %s, 1)
+            VALUES (%s, %s, %s, %s, %s, 1)
             RETURNING
                 dashboard_id,
                 title,
@@ -182,6 +187,7 @@ def create_dashboard(
                 created_on,
                 updated_on,
                 created_by,
+                project_id,
                 latest_version,
                 publish_version
             """,
@@ -190,6 +196,7 @@ def create_dashboard(
                 title,
                 Json(dashboard_json),
                 created_by,
+                project_id,
             ),
         )
 
@@ -219,8 +226,16 @@ def create_dashboard(
     return dict(row)
 
 
-def list_dashboards() -> list[Dict[str, Any]]:
-    """Return all active dashboards."""
+def list_dashboards(project_id: Optional[str] = None) -> list[Dict[str, Any]]:
+    """Return the active dashboards in one project.
+
+    A dashboard is only reachable from inside its own project, so a listing
+    without a project is empty rather than global — there is no cross-project
+    view.
+    """
+
+    if not project_id:
+        return []
 
     with transaction() as cur:
         cur.execute(
@@ -232,12 +247,15 @@ def list_dashboards() -> list[Dict[str, Any]]:
                 created_on,
                 updated_on,
                 created_by,
+                project_id,
                 latest_version,
                 publish_version
             FROM dashboard
             WHERE status = 'Active'
+              AND project_id = %s
             ORDER BY updated_on DESC, created_on DESC
-            """
+            """,
+            (project_id,),
         )
 
         rows = cur.fetchall()

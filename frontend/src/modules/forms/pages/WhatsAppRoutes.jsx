@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../api.js'
 import { useProjects } from '../../projects/active.js'
 import WhatsAppSettings from '../components/WhatsAppSettings.jsx'
+import WebhookManager from '../components/WebhookManager.jsx'
 
 /**
  * Every WhatsApp form in this context, and how somebody reaches it.
@@ -107,6 +108,8 @@ export default function WhatsAppRoutes() {
       </div>
 
       {settings && <WhatsAppSettings projectId={projectId} />}
+
+      <WebhookManager projectId={projectId} />
 
       {error && <div className="note note--bad" style={{ margin: '12px 0' }}>{error}</div>}
 

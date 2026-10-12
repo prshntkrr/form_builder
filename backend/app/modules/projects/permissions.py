@@ -119,15 +119,31 @@ PROJECT_SCOPED = {p.key for p in CATALOGUE} - SYSTEM_WIDE
 
 
 def is_project_role(held) -> bool:
-    """Whether a role only means anything inside a project.
+    """Whether a role belongs on the project side.
 
-    Every permission it holds is a project-scoped one. "Holds at least one" will
-    not do: the administrator holds every permission there is, and is very much
-    a system role — a role belongs to the project side only when it has nothing
-    to say anywhere else.
+    Two conditions, and both are needed:
+
+    * it holds at least one genuinely project-scoped permission (a `project.*`
+      one), and
+    * everything it holds is either project-scoped or `shared` — a permission
+      another module marks as usable inside a project, dashboards being the
+      first.
+
+    The anchor is what keeps the two sides apart. A role holding *only* shared
+    permissions — say a dashboards-only account role — is not a project role;
+    it has no standing inside a project on its own. And the administrator, who
+    holds every permission there is, holds account-only ones too, so it stays a
+    system role. Adding "See dashboards" to a Reviewer no longer knocks it off
+    the project side, which is the whole point of `shared`.
 
     Used by both `GET /api/projects/roles` and `GET /api/users/roles`, so a role
     is offered on exactly one of them.
     """
+    from app.core import permissions as core
+
     held = set(held or [])
-    return bool(held) and held <= PROJECT_SCOPED
+    if not held:
+        return False
+
+    allowed = PROJECT_SCOPED | set(core.SHARED)
+    return bool(held & PROJECT_SCOPED) and held <= allowed

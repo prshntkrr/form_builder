@@ -88,7 +88,9 @@ async function open(path) {
 const why = () => document.querySelector('#create-why')?.textContent || ''
 const WEB = /Web \/ Mobile/
 
-const tabNames = () => [...document.querySelectorAll('.editor__top ~ .tabs button')].map((b) => b.textContent)
+// Scoped to `.tabs` itself, so what sits *beside* the tabs — Translations, and
+// anything added there later — is not counted as one of them.
+const tabNames = () => [...document.querySelectorAll('.editor__top ~ .tabbar .tabs button')].map((b) => b.textContent)
 
 async function stored(user) {
   await user.click(screen.getByRole('button', { name: 'JSON' }))
@@ -469,5 +471,47 @@ describe('the forms table', () => {
     expect(channelOf('Market Survey')).toBe('WhatsApp')
     expect(channelOf('IVR Survey')).toBe('IVR')
     expect(channelOf('Old form')).toBe('Web / Mobile')
+  })
+})
+
+// --------------------------------------------------------------------------- //
+// Translating a form. It is reached from the builder and not from a screen of
+// its own, so the thing worth pinning is that the button reaches it at all:
+// the editor existed for a long time with nothing importing it.
+describe('translations', () => {
+  test('the builder opens them, and they are not a tab', async () => {
+    current = saved({})
+    const user = userEvent.setup()
+    await open('/forms/FRM1/questions')
+
+    await screen.findByRole('button', { name: /Translations/ })
+    expect(tabNames()).not.toContain('Translations')
+
+    await user.click(screen.getByRole('button', { name: /Translations/ }))
+
+    const sheet = await screen.findByRole('dialog')
+    expect(within(sheet).getByRole('heading', { name: 'Translations' })).toBeTruthy()
+    // Opened on the form being edited, which so far is written in one language.
+    expect(within(sheet).getByText(/one language so far/i)).toBeTruthy()
+  })
+
+  test('the count beside it is the languages the form offers', async () => {
+    current = saved({ default_language: 'en', languages: ['en', 'hi'],
+                      translations: { hi: { title: 'बाज़ार सर्वेक्षण' } } })
+    await open('/forms/FRM1/questions')
+
+    expect(await screen.findByRole('button', { name: /Translations · 2/ })).toBeTruthy()
+  })
+
+  test('closing it leaves the tab you were on', async () => {
+    current = saved({})
+    const user = userEvent.setup()
+    await open('/forms/FRM1/design')
+
+    await user.click(await screen.findByRole('button', { name: /Translations/ }))
+    await user.click(screen.getByRole('button', { name: 'Done' }))
+
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.getByTestId('where').textContent).toBe('/forms/FRM1/design')
   })
 })
