@@ -135,3 +135,23 @@ CREATE TABLE IF NOT EXISTS submission_review (
 
 CREATE INDEX IF NOT EXISTS idx_submission_review_status
     ON submission_review (form_id, status);
+
+-- API keys for external data access (Databricks, etc).
+--
+-- The key itself is never stored — only a SHA-256 hash, same as session tokens.
+-- A prefix (first 8 chars) is kept so an admin can tell keys apart without the
+-- raw value.
+CREATE TABLE IF NOT EXISTS project_api_key (
+    key_id      VARCHAR(20)  NOT NULL PRIMARY KEY,
+    project_id  VARCHAR(20)  NOT NULL REFERENCES project (project_id) ON DELETE CASCADE,
+    key_hash    VARCHAR(64)  NOT NULL,
+    key_prefix  VARCHAR(10)  NOT NULL,
+    label       VARCHAR(200) NOT NULL DEFAULT '',
+    created_on  TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+    created_by  VARCHAR(50)  NOT NULL DEFAULT '',
+    revoked_on  TIMESTAMP,
+    UNIQUE (key_hash)
+);
+
+CREATE INDEX IF NOT EXISTS idx_project_api_key_project
+    ON project_api_key (project_id);

@@ -13,6 +13,7 @@ is acceptable is worked out again on this side, from the polygon stored on the
 form. A page can say "you look outside the area" as a courtesy, and a page that
 lies about it changes nothing.
 """
+import math
 from typing import Any, Dict, List, Optional, Tuple
 
 
@@ -89,6 +90,31 @@ def point_in_ring(longitude: float, latitude: float,
             inside = not inside
 
     return inside
+
+
+EARTH_RADIUS = 6_371_000  # metres
+
+
+def polygon_area(ring: List[List[float]]) -> float:
+    """Area in square metres of a polygon given as [lng, lat] pairs.
+
+    Uses the spherical excess formula — accurate enough for field-sized polygons
+    (farms, plots) and needs no projection or geodesy library.
+    """
+    n = len(ring)
+    if n < 4:  # closed ring: first == last, so min 4 points for a triangle
+        return 0.0
+
+    rads = [(math.radians(lng), math.radians(lat)) for lng, lat in ring]
+
+    total = 0.0
+    for i in range(n - 1):
+        lng1, lat1 = rads[i]
+        lng2, lat2 = rads[(i + 1) % (n - 1)]
+        total += (lng2 - lng1) * (2 + math.sin(lat1) + math.sin(lat2))
+
+    area = abs(total) * EARTH_RADIUS * EARTH_RADIUS / 2.0
+    return round(area, 2)
 
 
 def check(form_json: Dict[str, Any], raw: Any) -> Tuple[Optional[Dict[str, Any]], None]:

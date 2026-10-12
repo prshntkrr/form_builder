@@ -92,6 +92,7 @@ class AddToLibraryRequest(BaseModel):
     tags: List[str] = Field(default_factory=list)
     summary: Optional[str] = None
     added_by: Optional[str] = Field(default=None, max_length=50)
+    project_id: Optional[str] = Field(default=None, max_length=20)
 
 
 class BorrowRequest(BaseModel):
@@ -296,6 +297,7 @@ class SaveImportedFormRequest(BaseModel):
     tags: List[str] = Field(default_factory=list)
     summary: Optional[str] = None
     source: Optional[str] = None
+    project_id: Optional[str] = Field(default=None, max_length=20)
 
 
 class TranslateRequest(BaseModel):

@@ -326,3 +326,44 @@ def build_distinct_query(
     ).format(column=column, table=sql.Identifier(table_name))
 
     return query, [max(1, min(int(limit), MAX_FILTER_OPTIONS))]
+
+
+def build_dependent_distinct_query(
+    table_name: str,
+    field: str,
+    parent_filters: list,
+    limit: int = MAX_FILTER_OPTIONS,
+) -> Tuple[sql.Composed, List[Any]]:
+    """Distinct values for a dependent filter field, narrowed by parent selections.
+
+    Each parent filter contributes a WHERE clause: field IN (values).
+    The column and every parent field are Identifiers; every value is a
+    bound parameter.
+    """
+    if not table_name:
+        raise ValueError("Table name is required")
+    if not field:
+        raise ValueError("A field is required")
+
+    column = sql.Identifier(field)
+    parts = [sql.SQL("{column} IS NOT NULL").format(column=column)]
+    params: List[Any] = []
+
+    for pf in parent_filters:
+        if not pf.get("field") or not pf.get("values"):
+            continue
+        parent_col = sql.Identifier(pf["field"])
+        placeholders = sql.SQL(", ").join([sql.SQL("%s")] * len(pf["values"]))
+        parts.append(
+            sql.SQL("{col} IN ({ph})").format(col=parent_col, ph=placeholders)
+        )
+        params.extend(pf["values"])
+
+    where = sql.SQL(" AND ").join(parts)
+
+    query = sql.SQL(
+        "SELECT DISTINCT {column} AS value FROM {table} WHERE {where} ORDER BY 1 LIMIT %s"
+    ).format(column=column, table=sql.Identifier(table_name), where=where)
+
+    params.append(max(1, min(int(limit), MAX_FILTER_OPTIONS)))
+    return query, params

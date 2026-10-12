@@ -10,7 +10,7 @@ from app.core.permissions import USERS_DELETE, USERS_MANAGE
 from app.core.role_migration import NOT_OFFERED
 from app.core.config import settings
 from app.core.security import WeakPassword
-from app.core.schemas import CreateUserRequest, UpdateUserRequest
+from app.core.schemas import CreateUserRequest, EnrolVoiceRequest, UpdateUserRequest
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/users", tags=["users"])
@@ -58,6 +58,29 @@ def _is_project_role(held) -> bool:
     return projects.is_project_role(held)
 
 
+@router.get("/voice-enrolment")
+def voice_enrolment(user: Dict[str, Any] = Depends(needs(USERS_MANAGE))):
+    """Whether voice sign-in can be set up here, and what it asks for.
+
+    Declared above `/{user_id}` because FastAPI matches in declaration order and
+    a literal path below a parameter is unreachable.
+
+    The numbers come from the service rather than being repeated on the screen:
+    a form telling somebody to speak for two seconds while the server wants
+    three is a failure nobody can see the cause of.
+    """
+    from app.core import voiceprint
+
+    return {
+        "available": voiceprint.available(),
+        "recordings_needed": voiceprint.SAMPLES_WANTED,
+        "min_seconds": voiceprint.MIN_SECONDS,
+        "max_seconds": voiceprint.MAX_SECONDS,
+        "sample_rate": voiceprint.SAMPLE_RATE,
+        "model": voiceprint.MODEL,
+    }
+
+
 @router.get("")
 def index(user: Dict[str, Any] = Depends(needs(USERS_MANAGE))):
     return auth_service.list_users()
@@ -70,6 +93,7 @@ def create(req: CreateUserRequest, user: Dict[str, Any] = Depends(needs(USERS_MA
         return auth_service.create_user(
             req.email, req.password,
             full_name=req.full_name, role=req.role,
+            username=req.username, phone=req.phone,
             created_by=auth_service.display_name(user),
         )
     except auth_service.UserExists as exc:
@@ -140,6 +164,40 @@ def delete(user_id: str, user: Dict[str, Any] = Depends(needs(USERS_DELETE))):
         raise HTTPException(status_code=400, detail=str(exc))
 
 
+@router.post("/{user_id}/voiceprint")
+def enrol_voice(user_id: str, req: EnrolVoiceRequest,
+                user: Dict[str, Any] = Depends(needs(USERS_MANAGE))):
+    """Set up voice sign-in for somebody from recordings of them speaking.
+
+    The recordings are used to compute one voiceprint and then discarded — they
+    are not written to disk, to the database or to the log.
+    """
+    from app.core import voiceprint
+
+    try:
+        clips = [voiceprint.from_pcm16(one) for one in req.recordings]
+        return auth_service.enrol_voice(user_id, clips, consented=req.consent)
+    except voiceprint.VoiceError as exc:
+        # These say what to do differently — speak longer, somewhere quieter —
+        # so they are shown rather than flattened into "bad request".
+        raise HTTPException(status_code=400, detail=str(exc))
+    except auth_service.UserNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except auth_service.AuthError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.delete("/{user_id}/voiceprint")
+def forget_voice(user_id: str, user: Dict[str, Any] = Depends(needs(USERS_MANAGE))):
+    """Delete somebody's voiceprint. They sign in by password afterwards."""
+    try:
+        return auth_service.forget_voice(user_id)
+    except auth_service.UserNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except auth_service.AuthError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
 @router.post("/{user_id}/reset-link")
 def reset_link(user_id: str, user: Dict[str, Any] = Depends(needs(USERS_MANAGE))):
     """Issue a reset link for someone who cannot get in.
@@ -152,13 +210,23 @@ def reset_link(user_id: str, user: Dict[str, Any] = Depends(needs(USERS_MANAGE))
     except auth_service.UserNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc))
 
+    # A reset is a link sent to an address. An account that signs in by username
+    # or phone alone has nowhere to send it, so say so rather than issuing a
+    # token that reaches nobody — its password is set directly instead.
+    if not target.get("email"):
+        raise HTTPException(
+            status_code=400,
+            detail="That account has no email address, so a reset link has "
+                   "nowhere to go. Set a password for it instead.")
+
     issued = auth_service.begin_password_reset(target["email"])
     if not issued:
         raise HTTPException(status_code=400, detail="That account is not active")
 
     token, _ = issued
     auth_service.deliver_reset(target["email"], token)
-    logger.info("%s issued a reset link for %s", user["email"], target["email"])
+    logger.info("%s issued a reset link for %s",
+                auth_service.display_name(user), target["email"])
 
     answer = {"email": target["email"], "sent": True}
     if settings.auth_expose_reset_link:

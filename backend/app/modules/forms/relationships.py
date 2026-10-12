@@ -136,7 +136,7 @@ def check_configuration(form_id: Optional[str], form_json: Dict[str, Any],
     if form_id and parent == form_id:
         raise RelationshipError(
             "A form cannot be its own parent. Choose another form, or make this "
-            "one independent."
+            "one a parent form."
         )
 
     with transaction() as cur:

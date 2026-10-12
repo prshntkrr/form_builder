@@ -308,6 +308,13 @@ def validate_payload(
         if error:
             errors[name] = error
 
+    # Compute area for polygon fields — a derived value, not user input.
+    for field in form_json.get("fields") or []:
+        fname = field_name(field)
+        if fname and field.get("type") == "polygon" and isinstance(clean.get(fname), list):
+            from app.modules.forms.geolocation import polygon_area
+            clean[f"{fname}_area"] = polygon_area(clean[fname])
+
     # Last, because it works on the coerced answers, and after the form's own
     # min/max rules because those are the client's rules in the client's unit.
     # A figure collected in centimetres is stored in the metres its standard

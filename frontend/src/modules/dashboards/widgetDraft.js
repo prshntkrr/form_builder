@@ -221,12 +221,16 @@ export function presentationFor(form) {
     }
   });
 
+  if (p.font_family) clean.font_family = p.font_family;
+
   const textStyle = (style = {}) => {
     const out = {};
 
     if (style.font_size) out.font_size = Number(style.font_size);
     if (style.bold) out.bold = style.bold;
     if (style.italic) out.italic = style.italic;
+    if (style.font_family) out.font_family = style.font_family;
+    if (style.color) out.color = style.color;
 
     return out;
   };

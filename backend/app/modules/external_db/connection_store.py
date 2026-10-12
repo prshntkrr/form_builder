@@ -180,6 +180,35 @@ def spec_for(user: Dict[str, Any], connection_id: int) -> Dict[str, Any]:
     return _spec_of(row, credential)
 
 
+def spec_for_dashboard(connection_id: int) -> Dict[str, Any]:
+    """A saved connection unsealed for a dashboard query.
+
+    The caller's authorization is "they can view the dashboard that references
+    this connection", not project membership in the connection's own project.
+    The connection must exist and be enabled, but no per-user check is made.
+    """
+    row = _row(connection_id)
+    if row is None:
+        raise NoSuchConnection("There is no saved connection with that id.")
+    if not row["enabled"]:
+        raise ExternalDbError(
+            f"The saved connection '{row['name']}' is turned off.",
+            "CONFLICT")
+    if not row["secret"]:
+        raise ExternalDbError(
+            f"The saved connection '{row['name']}' has no stored credential.",
+            "VALIDATION_ERROR")
+    try:
+        credential = secrets.unseal(row["secret"], aad=f"external_connection:{connection_id}")
+    except secrets.SecretUnavailable as exc:
+        raise ExternalDbError(str(exc), "VALIDATION_ERROR") from exc
+    except secrets.SecretTampered as exc:
+        logger.warning("Stored credential for connection %s could not be opened",
+                       connection_id)
+        raise ExternalDbError(str(exc), "VALIDATION_ERROR") from exc
+    return _spec_of(row, credential)
+
+
 # --------------------------------------------------------------------------- #
 # writing
 # --------------------------------------------------------------------------- #

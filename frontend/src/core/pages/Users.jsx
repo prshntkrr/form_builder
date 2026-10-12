@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react'
 import { api } from '../api.js'
 import { useAuth } from '../auth.jsx'
 import PasswordField from '../PasswordField.jsx'
+import VoiceEnrolment from '../VoiceEnrolment.jsx'
 
 const when = (value) =>
   value ? new Date(value).toLocaleString(undefined, {
@@ -10,19 +11,31 @@ const when = (value) =>
 
 function AddPerson({ roles, onAdded, onClose }) {
   const [form, setForm] = useState({
-    email: '', full_name: '', password: '', role: roles[0]?.role_id || '',
+    email: '', username: '', phone: '', full_name: '', password: '', role: roles[0]?.role_id || '',
   })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  // Whether to go on to voice enrolment once the account exists. Not part of
+  // the form: enrolment needs a user_id, and the person has to be here to speak.
+  const [withVoice, setWithVoice] = useState(false)
 
   const set = (key) => (e) => setForm({ ...form, [key]: e.target.value })
 
+  // Any one of the three names the account; the server enforces the same rule.
+  // Checked here too so the answer is immediate rather than a round trip.
+  const named = [form.email, form.username, form.phone].some((v) => v.trim())
+
   const submit = async (e) => {
     e.preventDefault()
+    if (!named) {
+      setError('Give an email address, a username or a phone number — '
+               + 'whichever they will sign in with.')
+      return
+    }
     setBusy(true)
     setError('')
     try {
-      onAdded(await api.createUser(form))
+      onAdded(await api.createUser(form), withVoice)
     } catch (err) {
       setError(err.message)
       setBusy(false)
@@ -36,7 +49,9 @@ function AddPerson({ roles, onAdded, onClose }) {
           <div>
             <h2>Add someone</h2>
             <p className="lede tiny">
-              They sign in with this email and password, and can change it afterwards.
+              They sign in with their password and any one of the three below —
+              give at least one. Without an email address there is nowhere to
+              send a password reset, so theirs has to be set for them.
             </p>
           </div>
           <button type="button" className="iconbtn" onClick={onClose} aria-label="Close">✕</button>
@@ -47,13 +62,34 @@ function AddPerson({ roles, onAdded, onClose }) {
 
           <div className="frow__grid" style={{ paddingRight: 0 }}>
             <label className="col">
-              <span className="minilabel">Email</span>
-              <input className="control" type="email" required autoFocus
+              <span className="minilabel">Email <span className="faint">— optional</span></span>
+              <input className="control" type="email" autoFocus
                      value={form.email} onChange={set('email')} />
             </label>
             <label className="col">
               <span className="minilabel">Full name</span>
               <input className="control" value={form.full_name} onChange={set('full_name')} />
+            </label>
+          </div>
+
+          <div className="frow__grid" style={{ paddingRight: 0, marginTop: 14 }}>
+            <label className="col">
+              <span className="minilabel">Username <span className="faint">— optional</span></span>
+              <input className="control" value={form.username} onChange={set('username')}
+                     autoComplete="off" placeholder="asha.devi" />
+              <span className="tiny muted">
+                Letters, digits, dots, dashes or underscores. No “@”, and not
+                all digits — those read as an email and a phone number.
+              </span>
+            </label>
+            <label className="col">
+              <span className="minilabel">Phone <span className="faint">— optional</span></span>
+              <input className="control" type="tel" value={form.phone} onChange={set('phone')}
+                     autoComplete="off" placeholder="+91 98765 43210" />
+              <span className="tiny muted">
+                With the country code, so the same number is one number however
+                it is written.
+              </span>
             </label>
           </div>
 
@@ -75,6 +111,16 @@ function AddPerson({ roles, onAdded, onClose }) {
           <p className="tiny muted" style={{ marginTop: 12 }}>
             {roles.find((r) => r.role_id === form.role)?.description}
           </p>
+
+          <label className="row" style={{ marginTop: 14, gap: 10, alignItems: 'flex-start' }}>
+            <input type="checkbox" checked={withVoice}
+                   onChange={(e) => setWithVoice(e.target.checked)} />
+            <span className="tiny">
+              <b>Set up voice sign-in as well.</b> Recording follows once the
+              account exists, so they need to be here to speak. It can also be
+              done later from the <b>Voice</b> button beside them.
+            </span>
+          </label>
         </div>
 
         <div className="sheet__foot">
@@ -97,6 +143,10 @@ export default function Users() {
   // clicking once next to Deactivate.
   const [removing, setRemoving] = useState(null)
   const [adding, setAdding] = useState(false)
+  // The account whose voice enrolment is open. Enrolment needs a user_id, so it
+  // belongs on an account that exists rather than inside the Add someone form —
+  // which is also why adding somebody offers it straight afterwards.
+  const [enrolling, setEnrolling] = useState(null)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState(null)
 
@@ -178,6 +228,7 @@ export default function Users() {
                   {person.full_name || person.email}
                   {isMe && <span className="tag">you</span>}
                   {person.locked && <span className="tag tag--del">locked out</span>}
+                  {person.voice_enrolled && <span className="tag">voice</span>}
                   {!person.is_active && <span className="tag">deactivated</span>}
                 </div>
                 <div className="item__sub">{person.email}</div>
@@ -207,6 +258,9 @@ export default function Users() {
               <div className="item__acts">
                 <button className="btn btn--sm btn--quiet" onClick={() => sendReset(person)}>
                   Reset link
+                </button>
+                <button className="btn btn--sm btn--quiet" onClick={() => setEnrolling(person)}>
+                  {person.voice_enrolled ? 'Voice ✓' : 'Voice'}
                 </button>
                 {person.locked && (
                   <button className="btn btn--sm btn--quiet" onClick={() => unlock(person)}>
@@ -249,7 +303,22 @@ export default function Users() {
         <AddPerson
           roles={roles}
           onClose={() => setAdding(false)}
-          onAdded={() => { setAdding(false); load() }}
+          onAdded={(created, withVoice) => {
+            setAdding(false)
+            load()
+            // Enrolment needs the account to exist, so it follows the create
+            // rather than living inside that form — and only if it was asked
+            // for, because the person has to be in the room to record.
+            if (withVoice) setEnrolling(created)
+          }}
+        />
+      )}
+
+      {enrolling && (
+        <VoiceEnrolment
+          person={enrolling}
+          onClose={() => setEnrolling(null)}
+          onDone={() => { setEnrolling(null); load() }}
         />
       )}
     </main>

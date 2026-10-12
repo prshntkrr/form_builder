@@ -71,6 +71,21 @@ def validate_dashboard_spec(
                     f"dashboard's data source."
                 )
 
+        # Dependencies reference filter fields (already checked above) and,
+        # through them, real columns. The Pydantic validator handles self-deps,
+        # duplicates, and cycles; this ensures the columns exist in the source.
+        for dep in specification.filter_dependencies:
+            if dep.primary not in known:
+                raise DashboardValidationError(
+                    f"Dependency primary '{dep.primary}' is not a column of "
+                    f"this dashboard's data source."
+                )
+            if dep.secondary not in known:
+                raise DashboardValidationError(
+                    f"Dependency secondary '{dep.secondary}' is not a column "
+                    f"of this dashboard's data source."
+                )
+
     for widget in specification.widgets:
         validate_widget_layout(widget)
 

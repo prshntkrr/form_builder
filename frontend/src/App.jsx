@@ -92,6 +92,48 @@ function ThemeButton() {
   )
 }
 
+function AdminMenu() {
+  const { can } = useAuth()
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  const items = [
+    { to: '/routing', label: 'Channel routing', show: can.manage_routing },
+    { to: '/projects', label: 'Projects', show: true },
+    { to: '/roles', label: 'Roles', show: can.manage_roles },
+    { to: '/users', label: 'Users', show: can.manage_users },
+  ].filter((i) => i.show)
+
+  if (!items.length) return null
+
+  return (
+    <div className="topbar__account" ref={ref}>
+      <button className="topbar__btn" onClick={() => setOpen(!open)} title="Administration">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
+             strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="3" />
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+        </svg>
+      </button>
+      {open && (
+        <div className="topbar__dropdown" style={{ minWidth: 200 }}>
+          {items.map((item) => (
+            <Link
+              key={item.to}
+              to={item.to}
+              className="topbar__dropdown-item"
+              style={{ textDecoration: 'none' }}
+              onClick={() => setOpen(false)}
+            >
+              {item.label}
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function TopbarAccount() {
   const { user, signOut } = useAuth()
   const navigate = useNavigate()
@@ -157,6 +199,7 @@ function Shell() {
           </Link>
           <span className="grow" />
           <ThemeButton />
+          <AdminMenu />
           <TopbarAccount />
         </div>
         <Outlet />

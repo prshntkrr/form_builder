@@ -198,9 +198,8 @@ export const api = {
 
   // --- standard form library ---
   listStandards: (params = {}) => {
-    const qs = new URLSearchParams(
-      Object.entries(params).filter(([, v]) => v !== '' && v != null),
-    ).toString()
+    const entries = Object.entries(params).filter(([, v]) => v !== '' && v != null)
+    const qs = new URLSearchParams(entries).toString()
     return request(`/standard-forms${qs ? `?${qs}` : ''}`)
   },
 

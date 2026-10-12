@@ -246,3 +246,136 @@ def ensure_admin_account() -> Optional[str]:
         logger.error("Could not create the first admin account: %s", exc)
         return None
 
+
+
+def ensure_user_identifiers() -> bool:
+    """Give `app_user` a username and a phone number to sign in with.
+
+    Both are optional and both are unique. Optional because every account that
+    exists signs in by email and must keep doing so untouched; unique because an
+    identifier that matched two accounts would be a way in to whichever one the
+    query happened to return first.
+
+    Postgres allows many NULLs under a UNIQUE constraint, so "most accounts have
+    neither" costs nothing and needs no backfill.
+
+    Idempotent, and returns whether it changed anything.
+    """
+    from psycopg2 import sql
+
+    changed = False
+
+    with transaction() as cur:
+        if not table_exists(cur, "app_user"):
+            return False                      # schema.sql will create it first
+
+        for column, declared in (("username", "VARCHAR(50)"),
+                                 ("phone", "VARCHAR(20)")):
+            cur.execute(
+                "SELECT 1 FROM information_schema.columns "
+                "WHERE table_schema = %s AND table_name = 'app_user' "
+                "  AND column_name = %s",
+                (settings.db_schema, column),
+            )
+            if cur.fetchone() is not None:
+                continue
+
+            cur.execute(sql.SQL("ALTER TABLE {}.app_user ADD COLUMN {} {}").format(
+                sql.Identifier(settings.db_schema), sql.Identifier(column),
+                sql.SQL(declared)))
+            # Named, so re-running finds it rather than adding a second one.
+            cur.execute(sql.SQL(
+                "ALTER TABLE {}.app_user ADD CONSTRAINT {} UNIQUE ({})").format(
+                sql.Identifier(settings.db_schema),
+                sql.Identifier(f"uq_app_user_{column}"),
+                sql.Identifier(column)))
+            changed = True
+
+        # Email stops being required once there is another way to sign in.
+        # An account may have any one of the three; which ones it has is
+        # `ensure_one_identifier` below, not a NOT NULL on one of them.
+        cur.execute(
+            "SELECT is_nullable FROM information_schema.columns "
+            "WHERE table_schema = %s AND table_name = 'app_user' "
+            "  AND column_name = 'email'",
+            (settings.db_schema,),
+        )
+        held = cur.fetchone()
+        if held and held["is_nullable"] == "NO":
+            cur.execute(sql.SQL(
+                "ALTER TABLE {}.app_user ALTER COLUMN email DROP NOT NULL"
+            ).format(sql.Identifier(settings.db_schema)))
+            changed = True
+
+        # At least one way in, whichever it is. In the database rather than only
+        # in the service, because an account nobody can sign in to is not a
+        # thing any code path should be able to leave behind.
+        cur.execute(
+            "SELECT 1 FROM pg_constraint c JOIN pg_class t ON t.oid = c.conrelid "
+            "WHERE t.relname = 'app_user' AND c.conname = 'ck_app_user_identifier'"
+        )
+        if cur.fetchone() is None:
+            cur.execute(sql.SQL(
+                "ALTER TABLE {}.app_user ADD CONSTRAINT ck_app_user_identifier "
+                "CHECK (email IS NOT NULL OR username IS NOT NULL "
+                "       OR phone IS NOT NULL)"
+            ).format(sql.Identifier(settings.db_schema)))
+            changed = True
+
+    if changed:
+        logger.info("app_user: username, phone, and an optional email")
+    return changed
+
+
+def ensure_voice_enrolment() -> bool:
+    """Room on `app_user` for a voiceprint.
+
+    Four columns and no new table, because a voiceprint is 1 KB and there is
+    exactly one per account — the same shape as `password_hash`, and it belongs
+    in the same place for the same reason.
+
+    What is *not* here is the audio. The recordings are discarded the moment the
+    vector exists; see `core/voiceprint.py` for why keeping them would be the
+    only genuinely dangerous part of this feature.
+
+    Every column is nullable: an account without a voiceprint is the normal
+    case, signs in by password as it always did, and needs no backfill.
+
+    Idempotent, and returns whether it changed anything.
+    """
+    from psycopg2 import sql
+
+    changed = False
+
+    with transaction() as cur:
+        if not table_exists(cur, "app_user"):
+            return False                      # schema.sql will create it first
+
+        for column, declared in (
+            ("voiceprint", "BYTEA"),
+            # Which pipeline produced it. Vectors from two different models are
+            # not comparable, so without this a model change would silently
+            # invalidate every enrolment with no way to tell which ones.
+            ("voiceprint_model", "VARCHAR(40)"),
+            ("voiceprint_on", "TIMESTAMP"),
+            # Voice is biometric data. When they agreed to it being held is part
+            # of the record, not a thing to reconstruct from a log later.
+            ("voiceprint_consent_on", "TIMESTAMP"),
+        ):
+            cur.execute(
+                "SELECT 1 FROM information_schema.columns "
+                "WHERE table_schema = %s AND table_name = 'app_user' "
+                "  AND column_name = %s",
+                (settings.db_schema, column),
+            )
+            if cur.fetchone() is not None:
+                continue
+
+            cur.execute(sql.SQL("ALTER TABLE {}.app_user ADD COLUMN {} {}").format(
+                sql.Identifier(settings.db_schema), sql.Identifier(column),
+                sql.SQL(declared)))
+            changed = True
+
+    if changed:
+        logger.info("app_user: voiceprint columns")
+    return changed

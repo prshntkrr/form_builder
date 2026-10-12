@@ -127,6 +127,16 @@ export function widgetColors(widget, dashboard) {
   const palette =
     resolvePalette(own.palette) || resolvePalette(shared.palette) || null;
 
+  /* A per-widget list of colours, applied cyclically to categories (single
+     series) or mapped one-per-series (multi-series). An old single-colour
+     widget is wrapped into a one-element list so every renderer has one
+     shape to consume. */
+  const rawSeriesColors = own.series_colors;
+  const seriesColors =
+    Array.isArray(rawSeriesColors) && rawSeriesColors.length > 0
+      ? rawSeriesColors
+      : null;
+
   return {
     /* A dashboard-wide palette colours the single-series charts too, with its
        first colour — otherwise "make everything green" would leave every bar
@@ -134,11 +144,19 @@ export function widgetColors(widget, dashboard) {
     series:
       own.series_color || shared.series_color || (palette ? palette[0] : null),
 
+    seriesColors,
+
     palette,
 
     value: own.value_color || null,
 
     marker: own.marker_color || null,
+
+    titleColor: own.title_style?.color || null,
+
+    subtitleColor: own.subtitle_style?.color || null,
+
+    fontFamily: own.font_family || null,
 
     table: {
       headerBackground: own.table_header_background || null,
@@ -158,6 +176,7 @@ export function widgetColors(widget, dashboard) {
  */
 export const COLOR_KEYS = [
   "series_color",
+  "series_colors",
   "palette",
   "value_color",
   "marker_color",

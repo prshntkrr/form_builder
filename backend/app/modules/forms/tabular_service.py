@@ -78,11 +78,13 @@ def column_for(field_name: str) -> str:
 def _field_columns(form_json: Dict[str, Any]) -> List[Tuple[str, str]]:
     """(column, type) for each question, skipping any that would shadow the
     envelope — `form_schema` already keeps those names clear."""
-    return [
-        (column_for(f["name"]), pg_type_for(f["type"]))
-        for f in form_json.get("fields") or []
-        if f["name"] not in ENVELOPE_NAMES
-    ]
+    cols = []
+    for f in form_json.get("fields") or []:
+        if f["name"] not in ENVELOPE_NAMES:
+            cols.append((column_for(f["name"]), pg_type_for(f["type"])))
+            if f.get("type") == "polygon":
+                cols.append((column_for(f"{f['name']}_area"), "DOUBLE PRECISION"))
+    return cols
 
 
 # --------------------------------------------------------------------------- #
@@ -283,9 +285,9 @@ def _row_values(form_json: Dict[str, Any], form_data: Dict[str, Any]) -> Dict[st
         try:
             out[column] = flatten(coerce_value(field["type"], raw))
         except Exception:
-            # A historic answer that no longer fits the current type leaves the
-            # cell empty. form_data keeps the original, and revalidate reports it.
             out[column] = None
+        if field.get("type") == "polygon":
+            out[column_for(f"{name}_area")] = (form_data or {}).get(f"{name}_area")
     return out
 
 

@@ -521,6 +521,32 @@ textarea.control { resize: vertical; line-height: 1.6; }
 .frow--drop-above { box-shadow: inset 0 2px 0 var(--accent); }
 .frow--drop-below { box-shadow: inset 0 -2px 0 var(--accent); }
 
+.section-group {
+  border: 1px solid var(--line); border-radius: var(--r);
+  margin-bottom: 10px; padding: 0 0 4px;
+  transition: box-shadow .15s, border-color .15s;
+}
+.section-group--drop-target {
+  border-color: var(--accent); border-style: dashed;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+.section-divider {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px 4px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-2, var(--surface-2, #f7f7f8));
+  border-radius: var(--r) var(--r) 0 0;
+}
+.section-divider__label {
+  font-size: 12px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .04em; color: var(--ink-3);
+  white-space: nowrap;
+}
+.section-divider::after {
+  content: ''; flex: 1; height: 1px;
+  background: var(--line);
+}
+
 .frow__name {
   flex: 1; min-width: 100px; border: none; background: none;
   font: inherit; font-weight: 550; outline: none;
@@ -779,7 +805,6 @@ table.data td { max-width: 240px; overflow: hidden; text-overflow: ellipsis; whi
 .gate__sub { margin-bottom: 8px; text-align: center; font-size: 14px; }
 .gate__card .note { margin-top: 12px; }
 
-<<<<<<< Updated upstream
 .gate__remember {
   display: flex; align-items: center; gap: 8px; margin-top: 14px;
   font-size: 13.5px; color: var(--ink-2); cursor: pointer; user-select: none;
@@ -788,6 +813,15 @@ table.data td { max-width: 240px; overflow: hidden; text-overflow: ellipsis; whi
 
 .gate__submit { margin-top: 20px; width: 100%; justify-content: center; }
 .gate__forgot { margin-top: 16px; text-align: center; }
+
+/* A button that reads as a link. Used where the action changes what the form is
+   asking for rather than going anywhere — swapping a password for a voice is
+   not a navigation, so it must not be an <a> with nowhere to point. */
+.linkish {
+  background: none; border: 0; padding: 0; font: inherit; cursor: pointer;
+  color: var(--accent); text-decoration: underline; text-underline-offset: 2px;
+}
+.linkish:hover { opacity: 0.78; }
 
 /* field with a leading icon (sign-in inputs) */
 .field { position: relative; display: block; }
@@ -802,12 +836,9 @@ table.data td { max-width: 240px; overflow: hidden; text-overflow: ellipsis; whi
   .gate__art { display: none; }
 }
 
-.account { display: flex; align-items: center; gap: 9px; padding: 4px 2px; }
-=======
 .account-wrap { position: relative; padding: 0 8px 8px; }
 .account { display: flex; align-items: center; gap: 9px; padding: 6px 8px; border-radius: var(--r-sm); }
 .account:hover { background: var(--accent-wash); }
->>>>>>> Stashed changes
 .account__id {
   display: flex; flex-direction: column; min-width: 0; flex: 1; line-height: 1.25;
 }
@@ -988,6 +1019,139 @@ table.data td { max-width: 240px; overflow: hidden; text-overflow: ellipsis; whi
   overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
 }
 
+/* ══ forms table ═════════════════════════════════════════════════════════ */
+/* Scrolls sideways rather than clipping. This was `overflow: hidden` — there to
+   keep the rounded corners off the rows — which meant a table wider than its
+   column simply lost its last columns, with no way to reach them. The radius is
+   still clipped; only the overflow behaviour changed.
+
+   `min-width` is what makes the scroll do anything: the rows are grids of fixed
+   columns plus one flexible name, so without a floor the fixed ones hold and the
+   name squeezes to nothing instead of the table becoming wider than the page. */
+.forms-table { border: 1px solid var(--line); border-radius: var(--r); overflow: auto; }
+.forms-table__head,
+.forms-table__row { min-width: 760px; }
+.forms-table__head {
+  display: grid; grid-template-columns: 2fr 100px 110px 90px 120px 60px;
+  gap: 0; padding: 10px 16px; background: var(--card); border-bottom: 1px solid var(--line);
+  font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-2);
+}
+.forms-table__row {
+  display: grid; grid-template-columns: 2fr 100px 110px 90px 120px 60px;
+  gap: 0; padding: 12px 16px; border-bottom: 1px solid var(--line);
+  align-items: center; font-size: 14px;
+}
+.forms-table__row:last-child { border-bottom: none; }
+.forms-table__row:hover { background: var(--accent-wash); }
+.forms-table__col { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.forms-table__col--name { display: flex; align-items: center; gap: 8px; }
+.forms-table__col--name a { color: var(--ink); font-weight: 500; text-decoration: none; }
+.forms-table__col--name a:hover { color: var(--accent-deep); }
+.forms-table__col--responses { text-align: center; }
+.forms-table__col--actions { text-align: center; }
+
+.status-badge {
+  display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 500;
+}
+.status-badge--active { background: #dcfce7; color: #166534; }
+.status-badge--inactive { background: #fef3c7; color: #92400e; }
+.status-badge--deleted { background: #fee2e2; color: #991b1b; }
+
+/* ══ actions menu ════════════════════════════════════════════════════════ */
+.actions-menu { position: relative; }
+.actions-menu__trigger { font-size: 18px; line-height: 1; padding: 2px 8px; min-width: 0; }
+.actions-menu__drop {
+  position: absolute; right: 0; top: 100%; z-index: 100;
+  min-width: 200px; padding: 6px 0; background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--r); box-shadow: var(--shadow);
+}
+.actions-menu__item {
+  display: block; width: 100%; padding: 8px 16px; border: none; background: none;
+  text-align: left; font-size: 13.5px; color: var(--ink); cursor: pointer;
+  text-decoration: none; font-family: inherit;
+}
+.actions-menu__item:hover { background: var(--accent-wash); }
+.actions-menu__item--danger { color: var(--rose); }
+.actions-menu__item--danger:hover { background: var(--rose-wash); }
+.actions-menu__sep { height: 1px; margin: 4px 0; background: var(--line); }
+
+/* ══ modal overlay ═══════════════════════════════════════════════════════ */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 1000;
+  background: rgba(0, 0, 0, .45); display: flex; align-items: flex-start;
+  justify-content: center; padding: 40px 16px; overflow-y: auto;
+}
+.modal {
+  background: var(--card); border-radius: var(--r); box-shadow: var(--shadow-lg);
+  width: min(680px, calc(100vw - 32px)); max-height: calc(100vh - 80px);
+  overflow-y: auto; color: var(--ink);
+}
+.modal__head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 20px 24px 16px; border-bottom: 1px solid var(--line);
+}
+.modal__head h2 { margin: 0; font-size: 18px; }
+.modal__close {
+  background: none; border: none; font-size: 22px; cursor: pointer;
+  color: var(--ink-2); padding: 4px 8px; border-radius: var(--r-sm);
+}
+.modal__close:hover { background: rgba(0, 0, 0, .06); }
+.modal__body { padding: 24px; }
+
+/* ══ databricks modal ═══════════════════════════════════════════════════ */
+.databricks-modal { width: min(720px, calc(100vw - 32px)); }
+.databricks-modal__field {
+  display: flex; gap: 12px; margin-bottom: 8px; font-size: 14px;
+}
+.databricks-modal__label { font-weight: 600; min-width: 70px; color: var(--ink-2); }
+.databricks-modal__section { margin-top: 24px; }
+.databricks-modal__section h3 { margin: 0 0 12px; font-size: 15px; }
+.databricks-modal__status { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.databricks-modal__hint { font-family: monospace; font-size: 13px; color: var(--ink-2); }
+.databricks-modal__meta { font-size: 12px; color: var(--ink-3); }
+.databricks-modal__key-reveal { margin: 12px 0; }
+.databricks-modal__key-box {
+  display: flex; align-items: center; gap: 8px; margin-top: 8px;
+  padding: 10px 12px; background: var(--paper); border: 1px solid var(--line);
+  border-radius: var(--r-sm); overflow-x: auto;
+}
+.databricks-modal__key-value { font-size: 13px; word-break: break-all; flex: 1; }
+.databricks-modal__actions { display: flex; gap: 8px; margin-top: 16px; }
+.databricks-modal__endpoint {
+  display: flex; align-items: center; gap: 8px; padding: 10px 12px;
+  background: var(--paper); border: 1px solid var(--line); border-radius: var(--r-sm);
+  overflow-x: auto;
+}
+.databricks-modal__method {
+  font-weight: 700; font-size: 12px; padding: 2px 8px; border-radius: 4px;
+  background: #dcfce7; color: #166534; flex-shrink: 0;
+}
+.databricks-modal__endpoint code { font-size: 13px; flex: 1; }
+.databricks-modal__curl {
+  display: flex; align-items: center; gap: 8px; padding: 10px 12px;
+  background: var(--paper); border: 1px solid var(--line); border-radius: var(--r-sm);
+  overflow-x: auto; margin-top: 8px;
+}
+.databricks-modal__curl code { font-size: 12px; white-space: nowrap; flex: 1; }
+.databricks-modal__params { width: 100%; border-collapse: collapse; font-size: 13px; }
+.databricks-modal__params th {
+  text-align: left; padding: 8px 12px; background: var(--paper);
+  border-bottom: 1px solid var(--line); font-weight: 600; font-size: 12px;
+}
+.databricks-modal__params td { padding: 8px 12px; border-bottom: 1px solid var(--line); }
+.databricks-modal__json {
+  padding: 12px 16px; background: var(--paper); border: 1px solid var(--line);
+  border-radius: var(--r-sm); font-size: 12px; overflow-x: auto; margin-top: 8px;
+}
+
+@media (max-width: 768px) {
+  .forms-table__head { display: none; }
+  .forms-table__row {
+    display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 16px;
+  }
+  .forms-table__col--name { flex: 1 1 100%; }
+}
+
 /* ══ dark mode ════════════════════════════════════════════════════════════ */
 :root[data-theme="dark"] {
   --paper: #161816;
@@ -1012,6 +1176,10 @@ table.data td { max-width: 240px; overflow: hidden; text-overflow: ellipsis; whi
 :root[data-theme="dark"] .brand__mark { background: linear-gradient(150deg, #5aad73, #3a7f53); }
 :root[data-theme="dark"] ::selection { background: #2a4a33; }
 :root[data-theme="dark"] .pw__eye:hover { background: rgba(255, 255, 255, .08); }
+:root[data-theme="dark"] .modal__close:hover { background: rgba(255, 255, 255, .08); }
+:root[data-theme="dark"] .status-badge--active { background: #1a2e1f; color: #5aad73; }
+:root[data-theme="dark"] .status-badge--inactive { background: #2a2310; color: #d4a44a; }
+:root[data-theme="dark"] .databricks-modal__method { background: #1a2e1f; color: #5aad73; }
 :root[data-theme="dark"] .nav__head:hover,
 :root[data-theme="dark"] .side__form:hover,
 :root[data-theme="dark"] .side__section:hover,

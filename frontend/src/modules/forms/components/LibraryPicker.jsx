@@ -8,7 +8,7 @@ import { api } from '../api.js'
  * `mode="borrow"` hands back the draft in hand with a standard's fields — or
  * one of its sections — merged in.
  */
-export default function LibraryPicker({ mode = 'start', draft, onPick, onClose }) {
+export default function LibraryPicker({ mode = 'start', draft, projectId, onPick, onClose }) {
   const [catalogue, setCatalogue] = useState(null)
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('')
@@ -17,8 +17,9 @@ export default function LibraryPicker({ mode = 'start', draft, onPick, onClose }
   const [error, setError] = useState('')
 
   useEffect(() => {
-    api.listStandards().then(setCatalogue).catch((e) => setError(e.message))
-  }, [])
+    api.listStandards({ project_id: projectId || undefined })
+      .then(setCatalogue).catch((e) => setError(e.message))
+  }, [projectId])
 
   useEffect(() => {
     const onEscape = (e) => e.key === 'Escape' && onClose()

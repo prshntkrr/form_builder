@@ -186,6 +186,7 @@ export default function FieldEditor({
   sections = [],
   // Create a section from here and put this question in it: (title, index).
   onAddSection,
+  onSectionChange,     // (index, newSectionKey) — handles rule warnings on section move
   allFields = [],      // every field on the form, for a dependent catalogue
   formRules = [],      // the form's conditional logic, and how to change it
   onRules,
@@ -333,9 +334,12 @@ export default function FieldEditor({
                   className="control"
                   aria-label="Section"
                   value={field.section || ''}
-                  onChange={(e) => (e.target.value === '__new__'
-                    ? setNewSection('')
-                    : patch({ section: e.target.value || null }))}
+                  onChange={(e) => {
+                    if (e.target.value === '__new__') return setNewSection('')
+                    const next = e.target.value || null
+                    if (onSectionChange) onSectionChange(index, next)
+                    else patch({ section: next })
+                  }}
                 >
                   <option value="">No section</option>
                   {sections.map((s) => (

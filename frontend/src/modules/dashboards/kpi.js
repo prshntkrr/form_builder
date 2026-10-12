@@ -116,3 +116,57 @@ const ICONS = {
 export function iconSymbol(iconId) {
   return ICONS[iconId] || null
 }
+
+/**
+ * The one number a KPI card shows, as the card writes it.
+ *
+ * This was worked out inside the renderer, which was enough while drawing the
+ * card was the only thing that needed it. Exporting a KPI's data has to
+ * produce the figure somebody is looking at — not the raw row, which for a
+ * percentage card is the denominator and reads as a wildly different number.
+ * So the derivation lives here and the card calls it.
+ *
+ * Returns null when there is no row at all, which is the card's "No data
+ * available." and an export with nothing to say.
+ */
+export function kpiDisplayValue(widget, rows = [], numRows = null) {
+  const firstRow = rows?.[0]
+
+  if (!firstRow) {
+    return null
+  }
+
+  const measure = widget?.data_binding?.measures?.[0]
+
+  if (widget?.kpi?.format === "percentage" && widget.kpi.numerator) {
+    // A percentage card counts rows, so its denominator is a COUNT whatever
+    // the measure's own aggregation says.
+    const denomAlias = measure ? `${measure.field}_count` : null
+
+    const denomValue = denomAlias
+      ? Number(firstRow[denomAlias] || 0)
+      : Number(Object.values(firstRow)[0] || 0)
+
+    const numRow = numRows ? numRows[0] : null
+
+    const numValue = numRow && denomAlias
+      ? Number(numRow[denomAlias] || 0)
+      : numRow
+        ? Number(Object.values(numRow)[0] || 0)
+        : 0
+
+    return denomValue === 0
+      ? "0%"
+      : `${Math.round((numValue / denomValue) * 100)}%`
+  }
+
+  const measureAlias = measure
+    ? `${measure.field}_${measure.aggregation.toLowerCase()}`
+    : null
+
+  // Formatted for reading, never rounded on the way in: the value the
+  // server calculated is what the widget still holds.
+  return formatKpiValue(
+    measureAlias ? firstRow[measureAlias] : Object.values(firstRow)[0],
+  )
+}

@@ -34,6 +34,8 @@ SUBMISSIONS_VIEW_ALL = "project.submissions.view_all"
 SUBMISSIONS_REVIEW = "project.submissions.review"
 SUBMISSIONS_DELETE = "project.submissions.delete"
 
+PROJECT_API_KEYS = "project.api_keys"
+
 GROUP = "Projects"
 
 CATALOGUE = [
@@ -64,6 +66,9 @@ CATALOGUE = [
                "Take a submission under review, approve it, or reject it", GROUP),
     Permission(SUBMISSIONS_DELETE, "Delete submissions",
                "Remove a submission from the project", GROUP),
+
+    Permission(PROJECT_API_KEYS, "Manage API keys",
+               "Create, view, revoke and rotate data API keys for external access", GROUP),
 ]
 
 # The roles a project starts with. Held per project, so somebody can be a
@@ -77,6 +82,7 @@ PROJECT_ROLES = {
             PROJECT_VIEW, PROJECT_MEMBERS_MANAGE, PROJECT_GROUPS_MANAGE,
             FORMS_VIEW_ALL, FORMS_MANAGE, FORMS_ASSIGN, FORMS_FILL,
             SUBMISSIONS_VIEW_ALL, SUBMISSIONS_REVIEW, SUBMISSIONS_DELETE,
+            PROJECT_API_KEYS,
         ],
     },
     "surveyor": {

@@ -376,6 +376,7 @@ def add_to_library(
     tags: Optional[List[str]] = None,
     summary: Optional[str] = None,
     added_by: Optional[str] = None,
+    project_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Offer one of this form's versions as a standard others can start from.
 
@@ -394,13 +395,11 @@ def add_to_library(
         if not row:
             raise FormServiceError(f"{form_id} has no version {pinned}")
 
-        # The definition is copied into the library, so what happens to this
-        # form afterwards — edits, deletion — cannot affect the standard.
         return standard_library.add_form(
             cur, row["form_json"] or {},
             form_id=form_id, version_no=pinned, standard_id=standard_id,
             title=form["form_title"], category=category, tags=tags,
-            summary=summary, added_by=added_by,
+            summary=summary, added_by=added_by, project_id=project_id,
         )
 
 

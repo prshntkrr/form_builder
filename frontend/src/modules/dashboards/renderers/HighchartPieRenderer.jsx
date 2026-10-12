@@ -21,11 +21,13 @@ export default function HighchartPieRenderer({ widget, data, dashboard }) {
   // Sized and resized by its container, not by a 400px default.
   const chartComponentRef = useChartFit();
 
-  // One slice colour each, from the palette this widget or its dashboard was
-  // given. With none chosen this is the hsl() ramp the chart always drew.
+  const wc = useMemo(() => widgetColors(widget, dashboard), [widget, dashboard]);
+
+  // One slice colour each, from series_colors if set, then the palette, then
+  // the default ramp.
   const colors = useMemo(
-    () => paletteFor(data.length, widgetColors(widget, dashboard).palette),
-    [data, widget, dashboard],
+    () => paletteFor(data.length, wc.seriesColors || wc.palette),
+    [data, wc],
   );
 
   const options = useMemo(
@@ -33,7 +35,7 @@ export default function HighchartPieRenderer({ widget, data, dashboard }) {
       chart: {
         type: "pie",
         backgroundColor: widget.presentation?.background_color || "transparent",
-        style: { fontFamily: "inherit" },
+        style: { fontFamily: widget.presentation?.font_family || "inherit" },
         // Highcharts keeps 10px around the plot and 15 under it, which is
         // a second margin inside a widget that already has one.
         spacing: [4, 4, 4, 4],

@@ -652,6 +652,8 @@ export function SavedConnections({ refresh = 0, inUse = null, onUse, onChanged }
   const [items, setItems] = useState(null)
   const [failed, setFailed] = useState(null)
   const [editing, setEditing] = useState(null)
+  const [confirmDelete, setConfirmDelete] = useState(null)
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     let alive = true
@@ -702,9 +704,49 @@ export function SavedConnections({ refresh = 0, inUse = null, onUse, onChanged }
               Use
             </button>
             <button className="btn btn--sm btn--quiet" onClick={() => setEditing(c)}>Edit</button>
+            <button className="btn btn--sm btn--quiet"
+                    style={{ color: 'var(--rose, #c0392b)' }}
+                    onClick={() => setConfirmDelete(c)}>
+              Delete
+            </button>
           </div>
         ))}
       </div>
+
+      {confirmDelete && (
+        <div className="dash__modal-overlay" role="dialog" aria-modal="true">
+          <div className="dash__modal" style={{ maxWidth: 420 }}>
+            <h3>Delete connection</h3>
+            <p>
+              Are you sure you want to delete <b>{confirmDelete.name}</b>?
+              Imported tables will not be affected.
+            </p>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+              <button className="btn" disabled={deleting}
+                      onClick={() => setConfirmDelete(null)}>
+                Cancel
+              </button>
+              <button className="btn btn--danger" disabled={deleting}
+                      style={{ background: 'var(--rose, #c0392b)', color: '#fff' }}
+                      onClick={async () => {
+                        setDeleting(true)
+                        try {
+                          await api.deleteConnection(confirmDelete.connection_id)
+                          setConfirmDelete(null)
+                          onChanged()
+                        } catch (e) {
+                          setFailed(describe(e))
+                          setConfirmDelete(null)
+                        } finally {
+                          setDeleting(false)
+                        }
+                      }}>
+                {deleting ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {editing && (
         <ConnectionEditor

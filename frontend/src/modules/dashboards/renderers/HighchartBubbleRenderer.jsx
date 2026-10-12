@@ -4,6 +4,7 @@ import HighchartsReact from "highcharts-react-official";
 
 import { widgetColors } from "./colors.js";
 import { useChartFit } from "./useChartFit.js";
+import { bubbleAliases } from "./prepareChartData.js";
 import HC_more from "highcharts/highcharts-more";
 
 if (typeof Highcharts === "object") {
@@ -21,22 +22,9 @@ export default function HighchartBubbleRenderer({ widget, data, dashboard }) {
   const options = useMemo(() => {
     const p = widget.presentation || {};
     
-    const xAlias = widget.bubble?.x;
-    let yAlias = widget.bubble?.y;
-    let sizeAlias = widget.bubble?.size;
-
-    const dimensions = widget.data_binding?.dimensions || [];
-    
-    // Check if Y is a categorical dimension
-    const isYDim = dimensions.some(d => d.field === widget.bubble?.y);
-    
-    if (!isYDim && widget.bubble?.y_aggregation) {
-      yAlias = `${widget.bubble.y}_${widget.bubble.y_aggregation.toLowerCase()}`;
-    }
-
-    if (widget.bubble?.size_aggregation) {
-      sizeAlias = `${widget.bubble.size}_${widget.bubble.size_aggregation.toLowerCase()}`;
-    }
+    // Resolved in prepareChartData, so an export reads the same three columns
+    // off a row that the chart plots.
+    const { xAlias, yAlias, sizeAlias } = bubbleAliases(widget);
 
     const seriesData = data.map(row => {
       const rawX = row[xAlias];
@@ -122,6 +110,7 @@ export default function HighchartBubbleRenderer({ widget, data, dashboard }) {
         type: "bubble",
         backgroundColor: "transparent",
         animation: false,
+        style: { fontFamily: p.font_family || "inherit" },
         // Highcharts keeps 10px around the plot and 15 under it, which is
         // a second margin inside a widget that already has one.
         spacing: [4, 4, 4, 4],

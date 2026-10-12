@@ -57,8 +57,15 @@ export function AuthProvider({ children }) {
     return () => window.removeEventListener('ea_session_expired', onExpired)
   }, [forget])
 
-  const signIn = async (email, password) => {
-    const result = await api.login(email, password)
+  /**
+   * Take up a session that the server has just issued.
+   *
+   * Which credential earned it is the server's business and makes no difference
+   * from here, so both ways in share this — a second copy of it is how one of
+   * them ends up with a stale `can` or a token in local storage and not in the
+   * header.
+   */
+  const begin = async (result) => {
     setExpired(false)
     localStorage.setItem(TOKEN_KEY, result.token)
     setAuthToken(result.token)
@@ -69,6 +76,12 @@ export function AuthProvider({ children }) {
     setModules(live || [])
     return me
   }
+
+  const signIn = async (email, password) => begin(await api.login(email, password))
+
+  // `recording` is base64 16 kHz mono 16-bit PCM — audio, never a voiceprint.
+  const signInByVoice = async (email, recording) =>
+    begin(await api.loginByVoice(email, recording))
 
   const signOut = async () => {
     try {
@@ -82,7 +95,8 @@ export function AuthProvider({ children }) {
   return (
     <AuthContext.Provider
       value={{
-        user, can, permissions, modules, checking, expired, signIn, signOut, refresh: forget,
+        user, can, permissions, modules, checking, expired,
+        signIn, signInByVoice, signOut, refresh: forget,
         // The permission list is the real answer; `can` is a convenience for
         // deciding which whole sections of the app to show.
         has: (permission) => permissions.includes(permission),

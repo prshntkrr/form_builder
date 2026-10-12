@@ -48,10 +48,21 @@ import {
 } from "../chartConfig.js";
 import { useCapabilities } from "../../../core/auth.jsx";
 import { useProjects, useProject } from "../../projects/active.js";
+import WidgetContextMenu from "../components/WidgetContextMenu.jsx";
+import WidgetFullscreen from "../components/WidgetFullscreen.jsx";
+import {
+  downloadWidgetData,
+  downloadWidgetImage,
+  printWidget,
+} from "../widgetExport.js";
 import {
   CHIP_LIMIT,
   bindingFilters,
+  configuredDependencies,
   configuredFields,
+  dependencyDescendants,
+  dependencyParents,
+  dependencyProblem,
   fieldProblem,
   filterLabel,
   matchingOptions,
@@ -153,6 +164,23 @@ export default function Dashboards() {
   const [importBusy, setImportBusy] = useState(false);
   const [importError, setImportError] = useState("");
   const [importNotice, setImportNotice] = useState("");
+  const [importSheets, setImportSheets] = useState(null);
+  const [importSelectedSheet, setImportSelectedSheet] = useState("");
+
+  /* Live Databricks data source */
+  const [liveOpen, setLiveOpen] = useState(false);
+  const [liveConnections, setLiveConnections] = useState([]);
+  const [liveLoading, setLiveLoading] = useState(false);
+  const [liveError, setLiveError] = useState("");
+  const [liveConnection, setLiveConnection] = useState(null);
+  const [liveSchemas, setLiveSchemas] = useState([]);
+  const [liveSchema, setLiveSchema] = useState("");
+  const [liveTables, setLiveTables] = useState([]);
+  const [liveTable, setLiveTable] = useState("");
+  const [liveFields, setLiveFields] = useState(null);
+  const [liveBrowsing, setLiveBrowsing] = useState(false);
+  /* The active live source for the current dashboard, if any. */
+  const [liveSource, setLiveSource] = useState(null);
 
   const [prompt, setPrompt] = useState("");
   const [generating, setGenerating] = useState(false);
@@ -245,6 +273,16 @@ export default function Dashboards() {
   const [filterDraft, setFilterDraft] = useState([]);
   const [filterDraftError, setFilterDraftError] = useState("");
 
+  /* Dependency filter configuration: the working copy while the modal is
+     open, and a flag to show/hide it. */
+  const [showDependencyModal, setShowDependencyModal] = useState(false);
+  const [dependencyDraft, setDependencyDraft] = useState([]);
+  const [dependencyDraftError, setDependencyDraftError] = useState("");
+
+  /* A generation counter per dependent field, so a stale async response
+     cannot overwrite a newer selection's options. */
+  const depLoadGeneration = useRef({});
+
   const filterBarRef = useRef(null);
 
   /* =========================================================
@@ -321,6 +359,11 @@ export default function Dashboards() {
   /* Which page of each table is on screen. Keyed by widget, because two
      tables on one dashboard page independently. */
   const [tablePages, setTablePages] = useState({});
+
+  /* Which widget is filling the screen, by id rather than by value: holding
+     the widget itself would make a second copy that stops matching the one on
+     the dashboard the moment anything edits it. Null is the ordinary grid. */
+  const [fullscreenWidgetId, setFullscreenWidgetId] = useState(null);
 
   /* What the editor's preview is showing: the rows it drew, or why it has
      nothing to draw. Never mixed into `widgetData`, which belongs to the
@@ -585,6 +628,293 @@ export default function Dashboards() {
   }, [projectId]);
 
   /* =========================================================
+     LIVE DATA SOURCE (Databricks)
+     ========================================================= */
+
+  const openLiveSource = async () => {
+    setLiveOpen(true);
+    setLiveLoading(true);
+    setLiveError("");
+    setLiveConnection(null);
+    setLiveSchemas([]);
+    setLiveSchema("");
+    setLiveTables([]);
+    setLiveTable("");
+    setLiveFields(null);
+
+    try {
+      const result = await api.listLiveConnections(projectId);
+      setLiveConnections(result.connections || []);
+    } catch (e) {
+      setLiveError(e.message || "Failed to load connections.");
+    } finally {
+      setLiveLoading(false);
+    }
+  };
+
+  const closeLiveSource = () => {
+    setLiveOpen(false);
+    setLiveConnection(null);
+    setLiveSchemas([]);
+    setLiveSchema("");
+    setLiveTables([]);
+    setLiveTable("");
+    setLiveFields(null);
+    setLiveError("");
+  };
+
+  const selectLiveConnection = async (conn) => {
+    setLiveConnection(conn);
+    setLiveSchemas([]);
+    setLiveSchema("");
+    setLiveTables([]);
+    setLiveTable("");
+    setLiveFields(null);
+    setLiveBrowsing(true);
+    setLiveError("");
+
+    try {
+      const result = await api.getLiveSchemas(conn.connection_id);
+      setLiveSchemas(result.schemas || []);
+    } catch (e) {
+      setLiveError(e.message || "Failed to load schemas.");
+    } finally {
+      setLiveBrowsing(false);
+    }
+  };
+
+  const selectLiveSchema = async (schema) => {
+    setLiveSchema(schema);
+    setLiveTables([]);
+    setLiveTable("");
+    setLiveFields(null);
+    setLiveBrowsing(true);
+    setLiveError("");
+
+    try {
+      const result = await api.getLiveTables(liveConnection.connection_id, schema);
+      setLiveTables(result.tables || []);
+    } catch (e) {
+      setLiveError(e.message || "Failed to load tables.");
+    } finally {
+      setLiveBrowsing(false);
+    }
+  };
+
+  const selectLiveTable = async (table) => {
+    setLiveTable(table);
+    setLiveFields(null);
+    setLiveBrowsing(true);
+    setLiveError("");
+
+    try {
+      const result = await api.getLiveColumns(
+        liveConnection.connection_id,
+        liveSchema,
+        table,
+      );
+      setLiveFields(result.fields || []);
+    } catch (e) {
+      setLiveError(e.message || "Failed to load columns.");
+    } finally {
+      setLiveBrowsing(false);
+    }
+  };
+
+  const confirmLiveSource = () => {
+    if (!liveConnection || !liveSchema || !liveTable || !liveFields?.length) return;
+
+    const source = {
+      connection_id: liveConnection.connection_id,
+      connection_name: liveConnection.name,
+      catalog: liveConnection.catalog,
+      schema: liveSchema,
+      table: liveTable,
+      name: `live:${liveConnection.connection_id}:${liveSchema}:${liveTable}`,
+    };
+
+    setLiveSource(source);
+    setSelectedSource(source);
+    setFields(liveFields.map((f) => ({
+      name: f.name,
+      type: f.source_type || f.declared || "text",
+    })));
+    closeLiveSource();
+  };
+
+  const fetchLiveWidgetRows = async (widget, source, filters = []) => {
+    let binding = {
+      ...widget.data_binding,
+      filters: [...(widget.data_binding?.filters || []), ...filters],
+    };
+
+    const paging =
+      widget.type === "table"
+        ? {
+            page: 1,
+            page_size:
+              widget.presentation?.table_page_size || 10,
+          }
+        : null;
+
+    let numResult = null;
+
+    if (widget.type === "kpi" && widget.kpi?.format === "percentage") {
+      binding = {
+        ...binding,
+        measures: [
+          {
+            field: binding.measures[0]?.field || "id",
+            aggregation: "COUNT",
+            label: binding.measures[0]?.label || "Count",
+          },
+        ],
+      };
+
+      if (widget.kpi.numerator) {
+        const numBinding = {
+          ...binding,
+          filters: [...binding.filters, widget.kpi.numerator],
+        };
+
+        numResult = await api.getLiveData(
+          source.connection_id,
+          source.schema,
+          source.table,
+          numBinding,
+        );
+      }
+    }
+
+    const result = await api.getLiveData(
+      source.connection_id,
+      source.schema,
+      source.table,
+      binding,
+      paging,
+    );
+
+    return {
+      rows: result.rows || [],
+      numRows: numResult ? numResult.rows || [] : null,
+      paging: paging
+        ? {
+            page: result.page ?? 1,
+            pageSize: result.page_size ?? paging.page_size,
+            totalRows: result.total_rows ?? 0,
+            totalPages: result.total_pages ?? 1,
+          }
+        : null,
+    };
+  };
+
+  const generateLiveDashboard = async () => {
+    if (!liveSource || !prompt.trim()) return;
+
+    setGenerating(true);
+    setGenerationError("");
+    setDashboard(null);
+    setSavedDashboardId(null);
+    setIsEditMode(false);
+    setEditingWidgetId(null);
+    setShowAddWidget(false);
+    setEditError("");
+    setWidgetData({});
+
+    try {
+      const result = await api.generateLiveDashboard(
+        liveSource.connection_id,
+        liveSource.schema,
+        liveSource.table,
+        prompt.trim(),
+      );
+
+      if (result._live_source) {
+        setLiveSource((prev) => ({ ...prev, ...result._live_source }));
+      }
+
+      const initialLayout = buildInitialGridLayout(result?.widgets || []);
+      const dashboardWithLayout = {
+        ...result,
+        widgets: result.widgets.map((widget) => {
+          const layoutItem = initialLayout.find((item) => item.i === widget.id);
+          return {
+            ...widget,
+            layout: layoutItem
+              ? { ...widget.layout, x: layoutItem.x, y: layoutItem.y, w: layoutItem.w, h: layoutItem.h }
+              : widget.layout,
+          };
+        }),
+      };
+
+      setDashboard(dashboardWithLayout);
+      setGridLayout(initialLayout);
+      setSavedGridLayout(initialLayout);
+      setAllLayouts({ lg: initialLayout });
+
+      await loadLiveDashboardData(dashboardWithLayout, liveSource);
+    } catch (e) {
+      setGenerationError(e.message || "Failed to generate dashboard.");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const loadLiveDashboardData = async (
+    generatedDashboard,
+    source,
+    filtersOverride = dashboardFilters,
+  ) => {
+    if (!generatedDashboard?.widgets?.length || !source) {
+      setWidgetData({});
+      return;
+    }
+
+    setDataLoading(true);
+    setDataError("");
+
+    try {
+      const results = await Promise.allSettled(
+        generatedDashboard.widgets.map(async (widget) => {
+          const loaded = await fetchLiveWidgetRows(widget, source, filtersOverride);
+          return { widgetId: widget.id, ...loaded };
+        }),
+      );
+
+      const dataByWidget = {};
+      let failures = 0;
+
+      results.forEach((result, index) => {
+        if (result.status === "fulfilled") {
+          const { widgetId, rows, numRows, paging } = result.value;
+          dataByWidget[widgetId] = { rows, numRows };
+          if (paging) {
+            setTablePages((current) => ({ ...current, [widgetId]: paging }));
+          }
+          return;
+        }
+        failures += 1;
+        const widget = generatedDashboard.widgets[index];
+        dataByWidget[widget.id] = {
+          rows: [],
+          numRows: null,
+          error: result.reason?.message || "This widget's data could not be loaded.",
+        };
+      });
+
+      setWidgetData(dataByWidget);
+
+      if (failures === generatedDashboard.widgets.length) {
+        setDataError(results[0]?.reason?.message || "Failed to load dashboard data.");
+      }
+    } catch (e) {
+      setDataError(e.message || "Failed to load dashboard data.");
+    } finally {
+      setDataLoading(false);
+    }
+  };
+
+  /* =========================================================
      IMPORT A SPREADSHEET AS A DATA SOURCE
      ========================================================= */
 
@@ -593,6 +923,34 @@ export default function Dashboards() {
     setImportFile(null);
     setImportName("");
     setImportError("");
+    setImportSheets(null);
+    setImportSelectedSheet("");
+  };
+
+  const inspectExcel = async () => {
+    if (!importFile) {
+      setImportError("Choose an .xlsx file first.");
+      return;
+    }
+
+    setImportBusy(true);
+    setImportError("");
+
+    try {
+      const info = await api.inspectExcelSheets(importFile, projectId);
+
+      if (info.sheets.length === 1) {
+        setImportSheets(null);
+        setImportSelectedSheet("");
+      } else {
+        setImportSheets(info.sheets);
+        setImportSelectedSheet("");
+      }
+    } catch (e) {
+      setImportError(e.message || "Could not read the workbook.");
+    } finally {
+      setImportBusy(false);
+    }
   };
 
   const importExcel = async () => {
@@ -606,19 +964,23 @@ export default function Dashboards() {
       return;
     }
 
+    if (importSheets && !importSelectedSheet) {
+      setImportError("Select a sheet to import.");
+      return;
+    }
+
     setImportBusy(true);
     setImportError("");
 
     try {
+      const sheetArg = importSheets ? importSelectedSheet : undefined;
       const result = await api.importExcelSource(
         importFile,
         importName.trim(),
         projectId,
+        sheetArg,
       );
 
-      // The picker finds sources by their _tabular suffix, so the table that
-      // was created is rarely named exactly what was typed. Select by what
-      // came back, never by what was entered.
       const sources = await loadDataSources({ showLoading: false });
       const created = sources.find((item) => item.name === result.table_name);
 
@@ -626,8 +988,11 @@ export default function Dashboards() {
         await selectDataSource(created);
       }
 
+      const sheetNote = result.sheet_name
+        ? ` from sheet '${result.sheet_name}'`
+        : "";
       setImportNotice(
-        `Imported ${result.rows_loaded.toLocaleString()} rows into ` +
+        `Imported ${result.rows_loaded.toLocaleString()} rows${sheetNote} into ` +
           `${result.table_name} (${result.columns_loaded} columns).`,
       );
 
@@ -655,7 +1020,7 @@ export default function Dashboards() {
    * point is that the browser never holds more than a page of a large table.
    */
   const changeTablePage = async (widget, page, pageSize) => {
-    const source = selectedSource;
+    const source = liveSource || selectedSource;
     if (!source) return;
 
     const size = pageSize || tablePages[widget.id]?.pageSize
@@ -675,10 +1040,15 @@ export default function Dashboards() {
     };
 
     try {
-      const result = await api.getDashboardData(source.name, binding, {
-        page,
-        page_size: size,
-      });
+      const result = source.connection_id
+        ? await api.getLiveData(
+            source.connection_id, source.schema, source.table,
+            binding, { page, page_size: size },
+          )
+        : await api.getDashboardData(source.name, binding, {
+            page,
+            page_size: size,
+          });
 
       setWidgetData((current) => ({
         ...current,
@@ -718,6 +1088,10 @@ export default function Dashboards() {
      same paging rule, same endpoint. A preview that fetched its own way
      would be a second answer to the same question. */
   const fetchWidgetRows = async (widget, source, filters = []) => {
+    if (source?.connection_id) {
+      return fetchLiveWidgetRows(widget, source, filters);
+    }
+
     let binding = {
       ...widget.data_binding,
       filters: [...(widget.data_binding?.filters || []), ...filters],
@@ -780,7 +1154,7 @@ export default function Dashboards() {
     sourceOverride = null,
     filtersOverride = dashboardFilters,
   ) => {
-    const source = sourceOverride || selectedSource;
+    const source = sourceOverride || liveSource || selectedSource;
 
     if (!generatedDashboard?.widgets?.length || !source) {
       setWidgetData({});
@@ -866,6 +1240,7 @@ export default function Dashboards() {
     setFilterSearch({});
     setOpenFilter(null);
     setDashboardFilters([]);
+    depLoadGeneration.current = {};
   };
 
   /* The values one filter can be set to.
@@ -885,7 +1260,12 @@ export default function Dashboards() {
     }));
 
     try {
-      const answer = await api.getFilterOptions(selectedSource.name, field);
+      const source = liveSource || selectedSource;
+      const answer = source?.connection_id
+        ? await api.getLiveFilterOptions(
+            source.connection_id, source.schema, source.table, field,
+          )
+        : await api.getFilterOptions(source.name, field);
 
       setFilterOptions((current) => ({
         ...current,
@@ -913,16 +1293,28 @@ export default function Dashboards() {
         return null;
       }
 
-      loadFilterOptions(field);
+      /* A dependent field whose parent has a selection needs its options
+         narrowed by that selection — so it goes through the dependent
+         loader, which falls back to the normal one when no parents are
+         selected.  The non-dependent path is unchanged. */
+      const dependencies = configuredDependencies(dashboard);
+      const parents = dependencyParents(field, dependencies);
+
+      if (parents.length) {
+        loadDependentFilterOptions(field);
+      } else {
+        loadFilterOptions(field);
+      }
+
       return field;
     });
   };
 
   const toggleFilterValue = (field, value) =>
-    setFilterSelections((current) => toggleValue(current, field, value));
+    toggleFilterValueWithDeps(field, value);
 
   const clearFilterValue = (field, value) =>
-    setFilterSelections((current) => removeValue(current, field, value));
+    clearFilterValueWithDeps(field, value);
 
   /* Nothing is queried until this. Selections are turned into the ordinary
      `IN` filters the binding already carries, and every widget reloads
@@ -1018,6 +1410,214 @@ export default function Dashboards() {
 
     setShowFilterFields(false);
     setFilterDraftError("");
+  };
+
+  /* ── configuring which filters depend on which ────────────────── */
+
+  const openDependencyModal = () => {
+    setDependencyDraft(
+      configuredDependencies(dashboard).map((dep) => ({ ...dep })),
+    );
+    setDependencyDraftError("");
+    setShowDependencyModal(true);
+  };
+
+  const updateDependencyDraft = (index, changes) =>
+    setDependencyDraft((current) =>
+      current.map((entry, position) =>
+        position === index ? { ...entry, ...changes } : entry,
+      ),
+    );
+
+  const addDependencyDraftRule = () =>
+    setDependencyDraft((current) => [
+      ...current,
+      { primary: "", secondary: "" },
+    ]);
+
+  const removeDependencyDraftRule = (index) =>
+    setDependencyDraft((current) =>
+      current.filter((_, position) => position !== index),
+    );
+
+  const saveDependencies = () => {
+    const filterFields = configuredFields(dashboard);
+
+    for (let index = 0; index < dependencyDraft.length; index += 1) {
+      const problem = dependencyProblem(
+        dependencyDraft[index].primary,
+        dependencyDraft[index].secondary,
+        dependencyDraft,
+        index,
+        filterFields,
+      );
+
+      if (problem) {
+        setDependencyDraftError(problem);
+        return;
+      }
+    }
+
+    const configured = dependencyDraft
+      .filter((dep) => dep.primary && dep.secondary)
+      .map((dep) => ({
+        primary: dep.primary,
+        secondary: dep.secondary,
+      }));
+
+    setDashboard((current) =>
+      current ? { ...current, filter_dependencies: configured } : current,
+    );
+
+    setShowDependencyModal(false);
+    setDependencyDraftError("");
+
+    /* Invalidate cached options for any field that is now a dependent — its
+       options may need to be re-fetched with parent context next time. */
+    const dependents = new Set(configured.map((dep) => dep.secondary));
+
+    setFilterOptions((current) => {
+      const next = { ...current };
+
+      for (const field of dependents) {
+        delete next[field];
+      }
+
+      return next;
+    });
+  };
+
+  /* ── runtime dependency cascading ─────────────────────────────── */
+
+  const loadDependentFilterOptions = async (field) => {
+    if (!selectedSource) return;
+
+    const dependencies = configuredDependencies(dashboard);
+    const parents = dependencyParents(field, dependencies);
+
+    /* If this field has no parents, fall through to the normal loader. */
+    if (!parents.length) {
+      loadFilterOptions(field);
+      return;
+    }
+
+    /* Build parent filters from current selections. */
+    const parentFilters = parents
+      .filter((parentField) => {
+        const picked = filterSelections[parentField];
+        return picked && picked.length > 0;
+      })
+      .map((parentField) => ({
+        field: parentField,
+        values: filterSelections[parentField],
+      }));
+
+    /* No parents have been selected yet — load all values. */
+    if (!parentFilters.length) {
+      loadFilterOptions(field);
+      return;
+    }
+
+    const generation = (depLoadGeneration.current[field] || 0) + 1;
+    depLoadGeneration.current[field] = generation;
+
+    setFilterOptions((current) => ({
+      ...current,
+      [field]: { status: "loading", values: [], error: "" },
+    }));
+
+    try {
+      const depSource = liveSource || selectedSource;
+      const answer = depSource?.connection_id
+        ? await api.getLiveDependentFilterOptions(
+            depSource.connection_id, depSource.schema, depSource.table,
+            field, parentFilters,
+          )
+        : await api.getDependentFilterOptions(
+            depSource.name, field, parentFilters,
+          );
+
+      /* A newer load was started while this one was in flight. */
+      if (depLoadGeneration.current[field] !== generation) return;
+
+      setFilterOptions((current) => ({
+        ...current,
+        [field]: {
+          status: "ready",
+          values: answer.values || [],
+          error: "",
+        },
+      }));
+    } catch (error) {
+      if (depLoadGeneration.current[field] !== generation) return;
+
+      setFilterOptions((current) => ({
+        ...current,
+        [field]: {
+          status: "error",
+          values: [],
+          error: error?.message || "These values could not be loaded.",
+        },
+      }));
+    }
+  };
+
+  /* When a filter value is toggled and that field is a dependency parent,
+     clear all descendant selections and invalidate their cached options so
+     they are re-fetched with the new parent context. */
+  const toggleFilterValueWithDeps = (field, value) => {
+    const dependencies = configuredDependencies(dashboard);
+    const descendants = dependencyDescendants(field, dependencies);
+
+    setFilterSelections((current) => {
+      const next = toggleValue(current, field, value);
+
+      for (const descendant of descendants) {
+        delete next[descendant];
+      }
+
+      return next;
+    });
+
+    /* Invalidate cached options so the next open fetches with new parents. */
+    if (descendants.length) {
+      setFilterOptions((current) => {
+        const next = { ...current };
+
+        for (const descendant of descendants) {
+          delete next[descendant];
+        }
+
+        return next;
+      });
+    }
+  };
+
+  const clearFilterValueWithDeps = (field, value) => {
+    const dependencies = configuredDependencies(dashboard);
+    const descendants = dependencyDescendants(field, dependencies);
+
+    setFilterSelections((current) => {
+      const next = removeValue(current, field, value);
+
+      for (const descendant of descendants) {
+        delete next[descendant];
+      }
+
+      return next;
+    });
+
+    if (descendants.length) {
+      setFilterOptions((current) => {
+        const next = { ...current };
+
+        for (const descendant of descendants) {
+          delete next[descendant];
+        }
+
+        return next;
+      });
+    }
   };
 
   /* =========================================================
@@ -1197,12 +1797,39 @@ export default function Dashboards() {
         return;
       }
 
+      /* Restore live source if this dashboard was built from one. */
+      const savedLive = openDashboard?._live_source;
+      if (savedLive?.connection_id) {
+        const live = {
+          connection_id: savedLive.connection_id,
+          connection_name: savedLive.connection_name || "",
+          catalog: savedLive.catalog || "",
+          schema: savedLive.schema,
+          table: savedLive.table,
+          name: sourceName,
+        };
+        setLiveSource(live);
+        setSelectedSource(live);
+        try {
+          const fieldResult = await api.getLiveColumns(
+            live.connection_id, live.schema, live.table, { dashboard: true },
+          );
+          setFields((fieldResult.fields || []).map((f) => ({
+            name: f.name,
+            type: f.source_type || f.declared || "text",
+          })));
+        } catch (_e) { /* fields are nice to have */ }
+        await loadDashboardData(openDashboard, live);
+        return;
+      }
+
       const source = dataSources.find((item) => item.name === sourceName);
 
       if (!source) {
         return;
       }
 
+      setLiveSource(null);
       setSelectedSource(source);
 
       try {
@@ -1232,6 +1859,7 @@ export default function Dashboards() {
     setGenerationError("");
     setDataError("");
     setIsEditMode(false);
+    setLiveSource(null);
   };
 
   /* Back to the list, leaving nothing half-open behind. */
@@ -1247,6 +1875,7 @@ export default function Dashboards() {
     setGenerationError("");
     setDataError("");
     setIsEditMode(false);
+    setLiveSource(null);
     loadSavedDashboards();
   };
 
@@ -1466,6 +2095,10 @@ export default function Dashboards() {
      ========================================================= */
 
   const generateDashboard = async () => {
+    if (liveSource) {
+      return generateLiveDashboard();
+    }
+
     if (!selectedSource || !prompt.trim()) {
       return;
     }
@@ -1567,7 +2200,7 @@ export default function Dashboards() {
       data_sources: [
         {
           id: selectedSource.name,
-          type: "postgresql_tabular",
+          type: liveSource ? "databricks" : "postgresql_tabular",
           name: selectedSource.name,
         },
       ],
@@ -2278,6 +2911,21 @@ export default function Dashboards() {
      the dashboard's own, and `options.readOnly` leaves off the Edit and
      Remove buttons. Both are for the editor's preview, which is this same
      function so that a preview cannot drift from the widget it previews. */
+  /* Run one widget export and say so if it fails.
+
+     Nothing here touches the dashboard: no state the grid reads is set on the
+     way in, so asking for a picture does not redraw the other widgets, and a
+     failure leaves the dashboard exactly as it was. */
+  const runExport = async (work) => {
+    setExportError("");
+
+    try {
+      await work();
+    } catch (err) {
+      setExportError(err?.message || "That export did not work.");
+    }
+  };
+
   const renderWidget = (widget, options = {}) => {
     const {
       rows = NO_ROWS,
@@ -2323,6 +2971,30 @@ export default function Dashboards() {
       </div>
     );
 
+    /* The ⋮ and what it opens. Not in edit mode, where the card already
+       carries Select / Edit / Remove and is being dragged about, and not on a
+       widget drawn read-only inside a preview or the fullscreen view — the
+       menu belongs to the tile on the dashboard. */
+    const contextMenu = !isEditMode && !options.readOnly && (
+      <WidgetContextMenu
+        widget={widget}
+        onFullscreen={() => setFullscreenWidgetId(widget.id)}
+        onImage={(format, card) =>
+          runExport(() => downloadWidgetImage(widget, card, format))
+        }
+        onData={(format) =>
+          runExport(() =>
+            downloadWidgetData(
+              widget,
+              { rows, numRows, data: preparedData.get(widget.id), fields },
+              format,
+            ),
+          )
+        }
+        onPrint={(card) => runExport(() => printWidget(widget, card))}
+      />
+    );
+
     const presentation = widget.presentation || {};
     /* Whatever this widget should be coloured, decided once for every branch
        below rather than in each of them. */
@@ -2333,16 +3005,22 @@ export default function Dashboards() {
 
     const widgetStyle = presentation.background_color ? { backgroundColor: presentation.background_color } : {};
 
+    const widgetFontFamily = presentation.font_family || null;
+
     const headerTitleStyle = {
       ...(titleStyle.font_size ? { fontSize: `${titleStyle.font_size}px` } : {}),
       ...(titleStyle.bold ? { fontWeight: "bold" } : {}),
-      ...(titleStyle.italic ? { fontStyle: "italic" } : {})
+      ...(titleStyle.italic ? { fontStyle: "italic" } : {}),
+      ...(titleStyle.color ? { color: titleStyle.color } : {}),
+      ...(widgetFontFamily ? { fontFamily: widgetFontFamily } : {})
     };
 
     const headerSubtitleStyle = {
       ...(subtitleStyle.font_size ? { fontSize: `${subtitleStyle.font_size}px` } : {}),
       ...(subtitleStyle.bold ? { fontWeight: "bold" } : {}),
-      ...(subtitleStyle.italic ? { fontStyle: "italic" } : {})
+      ...(subtitleStyle.italic ? { fontStyle: "italic" } : {}),
+      ...(subtitleStyle.color ? { color: subtitleStyle.color } : {}),
+      ...(widgetFontFamily ? { fontFamily: widgetFontFamily } : {})
     };
 
     const renderHeader = () => (
@@ -2353,12 +3031,13 @@ export default function Dashboards() {
             {iconSymbol && <span style={{ marginLeft: "8px" }}>{iconSymbol}</span>}
           </h3>
           {presentation.subtitle && (
-            <div className="dash__widget-subtitle" style={{...headerSubtitleStyle, marginTop: "4px", color: "var(--text-muted, #666)"}}>
+            <div className="dash__widget-subtitle" style={{...headerSubtitleStyle, marginTop: "4px", ...(!subtitleStyle.color ? { color: "var(--text-muted, #666)" } : {})}}>
               {presentation.subtitle}
             </div>
           )}
         </div>
         {editButton}
+        {contextMenu}
       </div>
     );
 
@@ -2400,7 +3079,14 @@ export default function Dashboards() {
           rows={rows}
           numRows={numRows}
           dashboard={dashboard}
-          actions={editButton}
+          /* A KPI draws its own header, so its ⋮ travels with the edit
+             controls rather than through `renderHeader`. */
+          actions={
+            <>
+              {editButton}
+              {contextMenu}
+            </>
+          }
         />
       );
     }
@@ -2474,8 +3160,10 @@ export default function Dashboards() {
         subtitle: "",
         title_icon: "",
         background_color: "",
-        title_style: { font_size: "", bold: false, italic: false },
-        subtitle_style: { font_size: "", bold: false, italic: false },
+        font_family: "",
+        series_colors: [],
+        title_style: { font_size: "", bold: false, italic: false, color: "" },
+        subtitle_style: { font_size: "", bold: false, italic: false, color: "" },
         x_axis: { title: "", font_size: "", bold: false, italic: false },
         y_axis: { title: "", font_size: "", bold: false, italic: false }
       },
@@ -2604,15 +3292,19 @@ export default function Dashboards() {
         subtitle: p.subtitle || "",
         title_icon: p.title_icon || "",
         background_color: p.background_color || "",
+        font_family: p.font_family || "",
+        series_colors: Array.isArray(p.series_colors) ? [...p.series_colors] : [],
         title_style: {
           font_size: p.title_style?.font_size || "",
           bold: p.title_style?.bold || false,
-          italic: p.title_style?.italic || false
+          italic: p.title_style?.italic || false,
+          color: p.title_style?.color || ""
         },
         subtitle_style: {
           font_size: p.subtitle_style?.font_size || "",
           bold: p.subtitle_style?.bold || false,
-          italic: p.subtitle_style?.italic || false
+          italic: p.subtitle_style?.italic || false,
+          color: p.subtitle_style?.color || ""
         },
         x_axis: {
           title: p.x_axis?.title || "",
@@ -3315,6 +4007,18 @@ export default function Dashboards() {
     return prepared;
   }, [dashboard, widgetData]);
 
+  /* The widget filling the screen, looked up from the dashboard rather than
+     copied when it was opened — so it is the same object the grid is drawing
+     and cannot describe an older version of itself. Null closes the view,
+     which is also what happens if the widget is removed while it is open. */
+  const fullscreenWidget = useMemo(
+    () =>
+      (dashboard?.widgets || []).find(
+        (item) => item.id === fullscreenWidgetId,
+      ) || null,
+    [dashboard, fullscreenWidgetId],
+  );
+
   /* What each widget is worth on a printed page.
 
      The grid positions every widget absolutely, in pixels worked out from
@@ -3940,23 +4644,55 @@ export default function Dashboards() {
           <div className="dash__source-head">
             <h2>Select Data Source</h2>
 
-            {mayImport && (
+            <span className="spacer" />
+
+            <div style={{ display: 'flex', gap: 8 }}>
+              {mayImport && (
+                <button
+                  className="btn btn--primary"
+                  type="button"
+                  onClick={() => {
+                    setImportNotice("");
+                    setImportOpen(true);
+                  }}
+                >
+                  Import Excel
+                </button>
+              )}
+
               <button
-                className="btn"
+                className="btn btn--primary"
                 type="button"
-                onClick={() => {
-                  setImportNotice("");
-                  setImportOpen(true);
-                }}
+                onClick={openLiveSource}
               >
-                Import Excel
+                Live Data Source
               </button>
-            )}
+            </div>
           </div>
 
           <p className="muted">
             Search and select a table to inspect its available fields.
           </p>
+
+          {liveSource && (
+            <div className="alert alert--good" style={{ marginBottom: 12 }}>
+              Live source: <strong>{liveSource.connection_name}</strong>
+              {" — "}
+              {liveSource.schema}.{liveSource.table}
+              <button
+                className="btn btn--sm"
+                type="button"
+                style={{ marginLeft: 12 }}
+                onClick={() => {
+                  setLiveSource(null);
+                  setSelectedSource(null);
+                  setFields(null);
+                }}
+              >
+                Remove
+              </button>
+            </div>
+          )}
 
           {importNotice && (
             <div
@@ -4051,12 +4787,62 @@ export default function Dashboards() {
                 type="file"
                 accept=".xlsx,.xlsm"
                 disabled={importBusy}
-                onChange={(e) => {
-                  setImportFile(e.target.files?.[0] || null);
+                onChange={async (e) => {
+                  const f = e.target.files?.[0] || null;
+                  setImportFile(f);
                   setImportError("");
+                  setImportSheets(null);
+                  setImportSelectedSheet("");
+
+                  if (f) {
+                    setImportBusy(true);
+                    try {
+                      const info = await api.inspectExcelSheets(f, projectId);
+                      if (info.sheets.length > 1) {
+                        setImportSheets(info.sheets);
+                      }
+                    } catch (err) {
+                      setImportError(err.message || "Could not read the workbook.");
+                    } finally {
+                      setImportBusy(false);
+                    }
+                  }
                 }}
               />
             </label>
+
+            {importSheets && (
+              <div className="dash__field">
+                <span className="dash__field-label">Select Sheet</span>
+                <p className="tiny muted" style={{ margin: "0 0 6px" }}>
+                  This workbook contains {importSheets.length} sheets.
+                  Choose the one to import.
+                </p>
+                {importSheets.map((name) => (
+                  <label
+                    key={name}
+                    style={{
+                      display: "block",
+                      padding: "4px 0",
+                      cursor: importBusy ? "default" : "pointer",
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="import-sheet"
+                      value={name}
+                      checked={importSelectedSheet === name}
+                      disabled={importBusy}
+                      onChange={() => {
+                        setImportSelectedSheet(name);
+                        setImportError("");
+                      }}
+                    />{" "}
+                    {name}
+                  </label>
+                ))}
+              </div>
+            )}
 
             <label className="dash__field">
               <span className="dash__field-label">Table Name</span>
@@ -4102,8 +4888,156 @@ export default function Dashboards() {
                 onClick={importExcel}
                 disabled={importBusy}
               >
-                {importBusy ? "Importing..." : "Import"}
+                {importBusy
+                  ? importSelectedSheet
+                    ? `Importing "${importSelectedSheet}"...`
+                    : "Importing..."
+                  : "Import"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Live Data Source modal */}
+      {liveOpen && (
+        <div className="dash__modal-overlay" role="dialog" aria-modal="true">
+          <div className="dash__modal" style={{ maxWidth: 560, maxHeight: '80vh', overflow: 'auto' }}>
+            <h3>Live Data Source</h3>
+
+            {liveError && <div className="alert alert--bad">{liveError}</div>}
+
+            {liveLoading && <p className="muted">Loading connections...</p>}
+
+            {!liveLoading && !liveConnection && (
+              <>
+                <p className="muted">
+                  Select a Databricks connection to query live data.
+                </p>
+
+                {liveConnections.length === 0 && !liveLoading && (
+                  <p className="tiny muted">
+                    No Databricks connections found. Add one in External database import first.
+                  </p>
+                )}
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {liveConnections.map((conn) => (
+                    <button
+                      key={conn.connection_id}
+                      className="btn"
+                      type="button"
+                      style={{ textAlign: 'left', padding: '10px 16px' }}
+                      onClick={() => selectLiveConnection(conn)}
+                    >
+                      <strong>{conn.name}</strong>
+                      <span className="tiny muted" style={{ marginLeft: 8 }}>
+                        {conn.host} / {conn.catalog}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {liveConnection && (
+              <>
+                <p className="tiny muted" style={{ marginBottom: 8 }}>
+                  Connection: <strong>{liveConnection.name}</strong>
+                  {" — "}{liveConnection.host} / {liveConnection.catalog}
+                </p>
+
+                {/* Schema picker */}
+                <label className="dash__field">
+                  <span className="dash__field-label">Schema</span>
+                  <select
+                    className="control"
+                    value={liveSchema}
+                    disabled={liveBrowsing && !liveSchema}
+                    onChange={(e) => selectLiveSchema(e.target.value)}
+                  >
+                    <option value="">
+                      {liveBrowsing && !liveSchema ? "Loading schemas..." : "Select a schema..."}
+                    </option>
+                    {liveSchemas.map((s) => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                </label>
+
+                {/* Table picker */}
+                {liveSchema && (
+                  <label className="dash__field">
+                    <span className="dash__field-label">Table</span>
+                    <select
+                      className="control"
+                      value={liveTable}
+                      disabled={liveBrowsing && !liveTable}
+                      onChange={(e) => selectLiveTable(e.target.value)}
+                    >
+                      <option value="">
+                        {liveBrowsing && !liveTable ? "Loading tables..." : "Select a table..."}
+                      </option>
+                      {liveTables.map((t) => (
+                        <option key={t.name} value={t.name}>{t.name}</option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+
+                {/* Fields preview */}
+                {liveFields && (
+                  <div style={{ marginTop: 8 }}>
+                    <span className="dash__field-label">
+                      Fields ({liveFields.length})
+                    </span>
+                    <div className="dash__field-box">
+                      {liveFields.map((f) => (
+                        <span key={f.name} className="dash__field-chip">
+                          {f.name}
+                          <span className="tiny muted" style={{ marginLeft: 4 }}>
+                            {f.source_type || f.declared || ""}
+                          </span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            <div className="dash__modal-actions" style={{ marginTop: 16 }}>
+              {liveConnection && (
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={() => {
+                    setLiveConnection(null);
+                    setLiveSchemas([]);
+                    setLiveSchema("");
+                    setLiveTables([]);
+                    setLiveTable("");
+                    setLiveFields(null);
+                    setLiveError("");
+                  }}
+                >
+                  Back
+                </button>
+              )}
+
+              <button className="btn" type="button" onClick={closeLiveSource}>
+                Cancel
+              </button>
+
+              {liveFields?.length > 0 && (
+                <button
+                  className="btn btn--primary"
+                  type="button"
+                  onClick={confirmLiveSource}
+                >
+                  Use this table
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -4786,6 +5720,21 @@ export default function Dashboards() {
                     </div>
                   </div>
 
+                  {/* One widget filling the screen. Drawn from the dashboard's
+                      own widget list by id, through the same `renderWidget`,
+                      so it is the same specification with the same data and
+                      the same colours — a second instance of it, which leaves
+                      the tile in the grid (and a map's Google instance)
+                      exactly where it was. */}
+                  {fullscreenWidget && (
+                    <WidgetFullscreen
+                      widget={fullscreenWidget}
+                      onClose={() => setFullscreenWidgetId(null)}
+                    >
+                      {renderWidget(fullscreenWidget, { readOnly: true })}
+                    </WidgetFullscreen>
+                  )}
+
                   {/* Add a widget: a floating "+" where "+ Add Graph" stood,
                       opening to the three things a dashboard is made of. */}
                   {isEditMode && (
@@ -5141,14 +6090,26 @@ export default function Dashboards() {
               ))}
             </div>
 
-            <button
-              className="btn btn--sm"
-              type="button"
-              style={{ marginTop: 8 }}
-              onClick={addFilterDraftField}
+            <div
+              className="dash__filter-modal-buttons"
+              style={{ display: "flex", gap: 8, marginTop: 8 }}
             >
-              + Add Field
-            </button>
+              <button
+                className="btn btn--sm"
+                type="button"
+                onClick={addFilterDraftField}
+              >
+                + Add Field
+              </button>
+
+              <button
+                className="btn btn--sm"
+                type="button"
+                onClick={openDependencyModal}
+              >
+                Dependency Filter
+              </button>
+            </div>
 
             {filterDraftError && (
               <div
@@ -5181,6 +6142,135 @@ export default function Dashboards() {
       )}
 
       {/* =====================================================
+          DEPENDENCY FILTER — cascading relationships
+          ===================================================== */}
+
+      {showDependencyModal && (
+        <div className="modal-backdrop">
+          <div
+            className="modal modal--filters"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="dependency-filter-title"
+          >
+            <h2 id="dependency-filter-title">Dependency Filter</h2>
+
+            <p className="muted">
+              When one filter&apos;s options should depend on the selected
+              values of another. For example, selecting a state narrows the
+              districts to those in that state.
+            </p>
+
+            {dependencyDraft.length === 0 && (
+              <p className="tiny muted" style={{ marginTop: 12 }}>
+                No dependency rules yet — add one below.
+              </p>
+            )}
+
+            <div className="dash__filter-fields">
+              {dependencyDraft.map((dep, index) => (
+                <div className="dash__filter-field-row" key={index}>
+                  <label className="tiny muted">
+                    Primary column
+                    <select
+                      className="control"
+                      value={dep.primary}
+                      aria-label={`Dependency ${index + 1} primary`}
+                      onChange={(e) => {
+                        setDependencyDraftError("");
+                        updateDependencyDraft(index, {
+                          primary: e.target.value,
+                        });
+                      }}
+                    >
+                      <option value="">Select column</option>
+
+                      {configuredFields(dashboard).map((entry) => (
+                        <option key={entry.field} value={entry.field}>
+                          {filterLabel(entry, fields)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="tiny muted">
+                    Secondary column
+                    <select
+                      className="control"
+                      value={dep.secondary}
+                      aria-label={`Dependency ${index + 1} secondary`}
+                      onChange={(e) => {
+                        setDependencyDraftError("");
+                        updateDependencyDraft(index, {
+                          secondary: e.target.value,
+                        });
+                      }}
+                    >
+                      <option value="">Select column</option>
+
+                      {configuredFields(dashboard).map((entry) => (
+                        <option key={entry.field} value={entry.field}>
+                          {filterLabel(entry, fields)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <button
+                    className="btn btn--tiny"
+                    type="button"
+                    aria-label={`Remove dependency ${index + 1}`}
+                    onClick={() => {
+                      setDependencyDraftError("");
+                      removeDependencyDraftRule(index);
+                    }}
+                  >
+                    🗑
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <button
+              className="btn btn--sm"
+              type="button"
+              style={{ marginTop: 8 }}
+              onClick={addDependencyDraftRule}
+            >
+              + Add Rule
+            </button>
+
+            {dependencyDraftError && (
+              <div
+                className="alert alert--bad"
+                style={{ marginTop: 12 }}
+              >
+                {dependencyDraftError}
+              </div>
+            )}
+
+            <div className="dash__modal-actions">
+              <button
+                className="btn"
+                type="button"
+                onClick={() => setShowDependencyModal(false)}
+              >
+                Close
+              </button>
+
+              <button
+                className="btn btn--primary"
+                type="button"
+                onClick={saveDependencies}
+              >
+                Apply
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =====================================================
           WIDGET EDITOR / ADD GRAPH MODAL
           ===================================================== */}
 
@@ -5203,110 +6293,93 @@ export default function Dashboards() {
             <div className="dash__builder">
               <div className="dash__builder-config">
 
-            <label className="dash__edit-label" htmlFor="widget-title">
-              Chart Title
-            </label>
-
-            <input
-              id="widget-title"
-              className="control"
-              type="text"
-              value={widgetForm.title}
-              onChange={(e) =>
-                setWidgetForm((current) => ({
-                  ...current,
-                  title: e.target.value,
-                }))
-              }
-              placeholder="Graph title"
-            />
-
-            <label
-              className="dash__edit-label"
-              htmlFor="widget-type"
-              style={{
-                marginTop: 16,
-              }}
-            >
-              Chart Type
-            </label>
-
-            <select
-              id="widget-type"
-              className="control"
-              value={widgetForm.type}
-              onChange={(e) =>
-                setWidgetForm((current) => ({
-                  ...current,
-                  type: e.target.value,
-                }))
-              }
-            >
-              <option value="bar">Bar</option>
-
-              <option value="line">Line</option>
-
-              <option value="pie">Pie</option>
-
-              <option value="doughnut">Doughnut</option>
-
-              <option value="kpi">KPI</option>
-
-              <option value="table">Table</option>
-
-              <option value="map">Map</option>
-
-              <option value="bubble">Bubble</option>
-              <option value="histogram">Histogram</option>
-              <option value="scatter">Scatter</option>
-            </select>
-
-            {widgetForm.type === "map" ? (
-              <>
-                <label
-                  className="dash__edit-label"
-                  htmlFor="widget-map-lat"
-                  style={{
-                    marginTop: 16,
-                  }}
-                >
-                  Latitude
+            <div className="dash__config-grid dash__config-grid--2col">
+              <div className="dash__config-cell">
+                <label className="dash__edit-label" htmlFor="widget-title">
+                  Chart Title
                 </label>
-
-                <select
-                  id="widget-map-lat"
+                <input
+                  id="widget-title"
                   className="control"
-                  value={widgetForm.dimension}
+                  type="text"
+                  value={widgetForm.title}
                   onChange={(e) =>
                     setWidgetForm((current) => ({
                       ...current,
-                      dimension: e.target.value,
+                      title: e.target.value,
+                    }))
+                  }
+                  placeholder="Graph title"
+                />
+              </div>
+
+              <div className="dash__config-cell">
+                <label className="dash__edit-label" htmlFor="widget-type">
+                  Chart Type
+                </label>
+                <select
+                  id="widget-type"
+                  className="control"
+                  value={widgetForm.type}
+                  onChange={(e) =>
+                    setWidgetForm((current) => ({
+                      ...current,
+                      type: e.target.value,
                     }))
                   }
                 >
-                  <option value="">Select latitude field</option>
-
-                  {fields?.map((field) => (
-                    <option key={field.name} value={field.name}>
-                      {field.name}
-                    </option>
-                  ))}
+                  <option value="bar">Bar</option>
+                  <option value="line">Line</option>
+                  <option value="pie">Pie</option>
+                  <option value="doughnut">Doughnut</option>
+                  <option value="kpi">KPI</option>
+                  <option value="table">Table</option>
+                  <option value="map">Map</option>
+                  <option value="bubble">Bubble</option>
+                  <option value="histogram">Histogram</option>
+                  <option value="scatter">Scatter</option>
                 </select>
+              </div>
+            </div>
 
-                <label
-                  className="dash__edit-label"
-                  htmlFor="widget-map-lng"
-                  style={{
-                    marginTop: 16,
-                  }}
-                >
-                  Longitude
-                </label>
+            {widgetForm.type === "map" ? (
+              <>
+                <div className="dash__config-grid dash__config-grid--2col" style={{ marginTop: 16 }}>
+                <div className="dash__config-cell">
+                  <label className="dash__edit-label" htmlFor="widget-map-lat">
+                    Latitude
+                  </label>
 
-                <select
-                  id="widget-map-lng"
-                  className="control"
-                  value={widgetForm.measure}
+                  <select
+                    id="widget-map-lat"
+                    className="control"
+                    value={widgetForm.dimension}
+                    onChange={(e) =>
+                      setWidgetForm((current) => ({
+                        ...current,
+                        dimension: e.target.value,
+                      }))
+                    }
+                  >
+                    <option value="">Select latitude field</option>
+
+                    {fields?.map((field) => (
+                      <option key={field.name} value={field.name}>
+                        {field.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="dash__config-cell">
+                  <label className="dash__edit-label" htmlFor="widget-map-lng">
+                    Longitude
+                  </label>
+
+                  <select
+                    id="widget-map-lng"
+                    className="control"
+                    value={widgetForm.measure}
                   onChange={(e) => {
                     const newMeasure = e.target.value;
                     const measureField = fields?.find(f => f.name === newMeasure);
@@ -5331,6 +6404,8 @@ export default function Dashboards() {
                     </option>
                   ))}
                 </select>
+                </div>
+                </div>
 
                 <label
                   className="dash__edit-label"
@@ -5465,9 +6540,10 @@ export default function Dashboards() {
                 <>
                   {/* One chart type, three arrangements — not three types, so
                       an existing bar chart stays the thing it already is. */}
+                  <div className="dash__config-grid" style={{ marginTop: 16 }}>
                   {widgetForm.type === "bar" && (
-                    <>
-                      <label className="dash__edit-label" htmlFor="widget-bar-mode" style={{ marginTop: 16 }}>
+                    <div className="dash__config-cell">
+                      <label className="dash__edit-label" htmlFor="widget-bar-mode">
                         Bar Mode
                       </label>
 
@@ -5479,9 +6555,6 @@ export default function Dashboards() {
                           setWidgetForm((current) => ({
                             ...current,
                             barMode: e.target.value,
-                            // Leaving a comparing mode drops the second field:
-                            // it would otherwise be saved and silently turn the
-                            // chart back into a comparing one on reload.
                             compareBy: isComparingMode(e.target.value)
                               ? current.compareBy
                               : "",
@@ -5494,44 +6567,38 @@ export default function Dashboards() {
                           </option>
                         ))}
                       </select>
-                    </>
+                    </div>
                   )}
 
-                  <label
-                    htmlFor="widget-group-by"
-                    className="dash__edit-label"
-                    style={{
-                      marginTop: 16,
-                    }}
-                  >
-                    Group by
-                  </label>
+                  <div className="dash__config-cell">
+                    <label className="dash__edit-label" htmlFor="widget-group-by">
+                      Group by
+                    </label>
 
-                  <select
-                    id="widget-group-by"
-                    className="control"
-                    value={widgetForm.dimension}
-                    onChange={(e) =>
-                      setWidgetForm((current) => ({
-                        ...current,
-                        dimension: e.target.value,
-                      }))
-                    }
-                  >
-                    <option value="">Choose a field</option>
+                    <select
+                      id="widget-group-by"
+                      className="control"
+                      value={widgetForm.dimension}
+                      onChange={(e) =>
+                        setWidgetForm((current) => ({
+                          ...current,
+                          dimension: e.target.value,
+                        }))
+                      }
+                    >
+                      <option value="">Choose a field</option>
 
-                    {fields?.map((field) => (
-                      <option key={field.name} value={field.name}>
-                        {fieldLabel(field)}
-                      </option>
-                    ))}
-                  </select>
+                      {fields?.map((field) => (
+                        <option key={field.name} value={field.name}>
+                          {fieldLabel(field)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-                  {/* Only where it means something: a single bar chart has
-                      nothing to compare within a group. */}
                   {widgetForm.type === "bar" && isComparingMode(widgetForm.barMode) && (
-                    <>
-                      <label className="dash__edit-label" htmlFor="widget-compare-by" style={{ marginTop: 16 }}>
+                    <div className="dash__config-cell">
+                      <label className="dash__edit-label" htmlFor="widget-compare-by">
                         Compare by
                       </label>
 
@@ -5556,12 +6623,9 @@ export default function Dashboards() {
                             </option>
                           ))}
                       </select>
-
-                      <p className="tiny muted" style={{ marginTop: 6 }}>
-                        One bar per value of this field, inside every group.
-                      </p>
-                    </>
+                    </div>
                   )}
+                  </div>
                 </>
               )
               )
@@ -5570,197 +6634,203 @@ export default function Dashboards() {
             {widgetForm.type === "line" && renderLineSeriesEditor()}
 
             {widgetForm.type !== "map" && widgetForm.type !== "table" && widgetForm.type !== "line" && widgetForm.type !== "bubble" && widgetForm.type !== "histogram" && widgetForm.type !== "scatter" && (
-              <>
-                <label
-                  htmlFor="widget-what-to-show"
-                  className="dash__edit-label"
-                  style={{
-                    marginTop: 16,
-                  }}
-                >
-                  What to show
-                </label>
+              <div className="dash__config-grid dash__config-grid--2col" style={{ marginTop: 16 }}>
+                <div className="dash__config-cell">
+                  <label className="dash__edit-label" htmlFor="widget-what-to-show">
+                    What to show
+                  </label>
 
-                <select
-                  id="widget-what-to-show"
-                  className="control"
-                  value={widgetForm.measure}
-                  onChange={(e) => {
-                    const chosen = fields?.find((f) => f.name === e.target.value);
+                  <select
+                    id="widget-what-to-show"
+                    className="control"
+                    value={widgetForm.measure}
+                    onChange={(e) => {
+                      const chosen = fields?.find((f) => f.name === e.target.value);
 
-                    setWidgetForm((current) => ({
-                      ...current,
-                      measure: e.target.value,
-                      // A calculation the new field cannot take would be
-                      // refused on save; it settles to Count instead.
-                      aggregation: settleAggregation(chosen, current.aggregation),
-                    }));
-                  }}
-                >
-                  <option value="">Choose a field</option>
+                      setWidgetForm((current) => ({
+                        ...current,
+                        measure: e.target.value,
+                        aggregation: settleAggregation(chosen, current.aggregation),
+                      }));
+                    }}
+                  >
+                    <option value="">Choose a field</option>
 
-                  {fields?.map((field) => (
-                    <option key={field.name} value={field.name}>
-                      {fieldLabel(field)}
-                    </option>
-                  ))}
-                </select>
+                    {fields?.map((field) => (
+                      <option key={field.name} value={field.name}>
+                        {fieldLabel(field)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-                <label
-                  htmlFor="widget-calculate"
-                  className="dash__edit-label"
-                  style={{
-                    marginTop: 16,
-                  }}
-                >
-                  Calculate
-                </label>
+                <div className="dash__config-cell">
+                  <label className="dash__edit-label" htmlFor="widget-calculate">
+                    Calculate
+                  </label>
 
-                <select
-                  id="widget-calculate"
-                  className="control"
-                  value={widgetForm.aggregation}
-                  disabled={widgetForm.type === "kpi" && widgetForm.kpiFormat === "percentage"}
-                  onChange={(e) =>
-                    setWidgetForm((current) => ({
-                      ...current,
-                      aggregation: e.target.value,
-                    }))
-                  }
-                >
-                  {/* Only what this field can actually be asked for — the
-                      server refuses a sum of a word, so it is not offered. */}
-                  {aggregationsFor(
-                    fields?.find((f) => f.name === widgetForm.measure),
-                  ).map((key) => (
-                    <option key={key} value={key}>
-                      {AGGREGATION_LABELS[key]}
-                    </option>
-                  ))}
-                </select>
-              </>
+                  <select
+                    id="widget-calculate"
+                    className="control"
+                    value={widgetForm.aggregation}
+                    disabled={widgetForm.type === "kpi" && widgetForm.kpiFormat === "percentage"}
+                    onChange={(e) =>
+                      setWidgetForm((current) => ({
+                        ...current,
+                        aggregation: e.target.value,
+                      }))
+                    }
+                  >
+                    {aggregationsFor(
+                      fields?.find((f) => f.name === widgetForm.measure),
+                    ).map((key) => (
+                      <option key={key} value={key}>
+                        {AGGREGATION_LABELS[key]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
             )}
 
             {widgetForm.type === "bubble" && (
-              <>
-                <label className="dash__edit-label" style={{ marginTop: 16 }}>X Axis (Dimension)</label>
-                <select
-                  className="control"
-                  value={widgetForm.bubbleX}
-                  onChange={(e) => setWidgetForm((current) => ({ ...current, bubbleX: e.target.value }))}
-                >
-                  <option value="">Select X field</option>
-                  {fields?.map((field) => (
-                    <option key={field.name} value={field.name}>{field.name}</option>
-                  ))}
-                </select>
+              <div className="dash__config-grid" style={{ marginTop: 16 }}>
+                <div className="dash__config-cell">
+                  <label className="dash__edit-label">X Axis (Dimension)</label>
+                  <select
+                    className="control"
+                    value={widgetForm.bubbleX}
+                    onChange={(e) => setWidgetForm((current) => ({ ...current, bubbleX: e.target.value }))}
+                  >
+                    <option value="">Select X field</option>
+                    {fields?.map((field) => (
+                      <option key={field.name} value={field.name}>{field.name}</option>
+                    ))}
+                  </select>
+                </div>
 
-                <label className="dash__edit-label" style={{ marginTop: 16 }}>Y Axis (Measure)</label>
-                <select
-                  className="control"
-                  value={widgetForm.bubbleY}
-                  onChange={(e) => setWidgetForm((current) => ({ ...current, bubbleY: e.target.value }))}
-                >
-                  <option value="">Select Y field</option>
-                  {fields?.map((field) => (
-                    <option key={field.name} value={field.name}>{field.name}</option>
-                  ))}
-                </select>
+                <div className="dash__config-cell">
+                  <label className="dash__edit-label">Y Axis (Measure)</label>
+                  <select
+                    className="control"
+                    value={widgetForm.bubbleY}
+                    onChange={(e) => setWidgetForm((current) => ({ ...current, bubbleY: e.target.value }))}
+                  >
+                    <option value="">Select Y field</option>
+                    {fields?.map((field) => (
+                      <option key={field.name} value={field.name}>{field.name}</option>
+                    ))}
+                  </select>
+                </div>
 
-                <label className="dash__edit-label" style={{ marginTop: 16 }}>Y Aggregation</label>
-                <select
-                  className="control"
-                  value={widgetForm.bubbleYAggregation}
-                  onChange={(e) => setWidgetForm((current) => ({ ...current, bubbleYAggregation: e.target.value }))}
-                >
-                  <option value="COUNT">COUNT</option>
-                  <option value="COUNT_DISTINCT">COUNT DISTINCT</option>
-                  <option value="SUM">SUM</option>
-                  <option value="AVG">AVG</option>
-                  <option value="MIN">MIN</option>
-                  <option value="MAX">MAX</option>
-                </select>
+                <div className="dash__config-cell">
+                  <label className="dash__edit-label">Y Aggregation</label>
+                  <select
+                    className="control"
+                    value={widgetForm.bubbleYAggregation}
+                    onChange={(e) => setWidgetForm((current) => ({ ...current, bubbleYAggregation: e.target.value }))}
+                  >
+                    <option value="COUNT">COUNT</option>
+                    <option value="COUNT_DISTINCT">COUNT DISTINCT</option>
+                    <option value="SUM">SUM</option>
+                    <option value="AVG">AVG</option>
+                    <option value="MIN">MIN</option>
+                    <option value="MAX">MAX</option>
+                  </select>
+                </div>
 
-                <label className="dash__edit-label" style={{ marginTop: 16 }}>Bubble Size (Measure)</label>
-                <select
-                  className="control"
-                  value={widgetForm.bubbleSize}
-                  onChange={(e) => setWidgetForm((current) => ({ ...current, bubbleSize: e.target.value }))}
-                >
-                  <option value="">Select Size field</option>
-                  {fields?.map((field) => (
-                    <option key={field.name} value={field.name}>{field.name}</option>
-                  ))}
-                </select>
+                <div className="dash__config-cell">
+                  <label className="dash__edit-label">Bubble Size (Measure)</label>
+                  <select
+                    className="control"
+                    value={widgetForm.bubbleSize}
+                    onChange={(e) => setWidgetForm((current) => ({ ...current, bubbleSize: e.target.value }))}
+                  >
+                    <option value="">Select Size field</option>
+                    {fields?.map((field) => (
+                      <option key={field.name} value={field.name}>{field.name}</option>
+                    ))}
+                  </select>
+                </div>
 
-                <label className="dash__edit-label" style={{ marginTop: 16 }}>Size Aggregation</label>
-                <select
-                  className="control"
-                  value={widgetForm.bubbleSizeAggregation}
-                  onChange={(e) => setWidgetForm((current) => ({ ...current, bubbleSizeAggregation: e.target.value }))}
-                >
-                  <option value="COUNT">COUNT</option>
-                  <option value="COUNT_DISTINCT">COUNT DISTINCT</option>
-                  <option value="SUM">SUM</option>
-                  <option value="AVG">AVG</option>
-                  <option value="MIN">MIN</option>
-                  <option value="MAX">MAX</option>
-                </select>
-              </>
+                <div className="dash__config-cell">
+                  <label className="dash__edit-label">Size Aggregation</label>
+                  <select
+                    className="control"
+                    value={widgetForm.bubbleSizeAggregation}
+                    onChange={(e) => setWidgetForm((current) => ({ ...current, bubbleSizeAggregation: e.target.value }))}
+                  >
+                    <option value="COUNT">COUNT</option>
+                    <option value="COUNT_DISTINCT">COUNT DISTINCT</option>
+                    <option value="SUM">SUM</option>
+                    <option value="AVG">AVG</option>
+                    <option value="MIN">MIN</option>
+                    <option value="MAX">MAX</option>
+                  </select>
+                </div>
+              </div>
             )}
 
             {widgetForm.type === "histogram" && (
-              <>
-                <label className="dash__edit-label" style={{ marginTop: 16 }}>Histogram Field (Numeric)</label>
-                <select
-                  className="control"
-                  value={widgetForm.histogramField}
-                  onChange={(e) => setWidgetForm((current) => ({ ...current, histogramField: e.target.value }))}
-                >
-                  <option value="">Select numeric field</option>
-                  {fields?.map((field) => (
-                    <option key={field.name} value={field.name}>{field.name}</option>
-                  ))}
-                </select>
+              <div className="dash__config-grid dash__config-grid--2col" style={{ marginTop: 16 }}>
+                <div className="dash__config-cell">
+                  <label className="dash__edit-label">Histogram Field (Numeric)</label>
+                  <select
+                    className="control"
+                    value={widgetForm.histogramField}
+                    onChange={(e) => setWidgetForm((current) => ({ ...current, histogramField: e.target.value }))}
+                  >
+                    <option value="">Select numeric field</option>
+                    {fields?.map((field) => (
+                      <option key={field.name} value={field.name}>{field.name}</option>
+                    ))}
+                  </select>
+                </div>
 
-                <label className="dash__edit-label" style={{ marginTop: 16 }}>Number of Bins</label>
-                <input
-                  type="number"
-                  className="control"
-                  value={widgetForm.histogramBins}
-                  onChange={(e) => setWidgetForm((current) => ({ ...current, histogramBins: e.target.value }))}
-                  min={1}
-                  step={1}
-                />
-              </>
+                <div className="dash__config-cell">
+                  <label className="dash__edit-label">Number of Bins</label>
+                  <input
+                    type="number"
+                    className="control"
+                    value={widgetForm.histogramBins}
+                    onChange={(e) => setWidgetForm((current) => ({ ...current, histogramBins: e.target.value }))}
+                    min={1}
+                    step={1}
+                  />
+                </div>
+              </div>
             )}
 
             {widgetForm.type === "scatter" && (
-              <>
-                <label className="dash__edit-label" style={{ marginTop: 16 }}>X Axis (Numeric)</label>
-                <select
-                  className="control"
-                  value={widgetForm.scatterX}
-                  onChange={(e) => setWidgetForm((current) => ({ ...current, scatterX: e.target.value }))}
-                >
-                  <option value="">Select numeric X field</option>
-                  {fields?.map((field) => (
-                    <option key={field.name} value={field.name}>{field.name}</option>
-                  ))}
-                </select>
+              <div className="dash__config-grid dash__config-grid--2col" style={{ marginTop: 16 }}>
+                <div className="dash__config-cell">
+                  <label className="dash__edit-label">X Axis (Numeric)</label>
+                  <select
+                    className="control"
+                    value={widgetForm.scatterX}
+                    onChange={(e) => setWidgetForm((current) => ({ ...current, scatterX: e.target.value }))}
+                  >
+                    <option value="">Select numeric X field</option>
+                    {fields?.map((field) => (
+                      <option key={field.name} value={field.name}>{field.name}</option>
+                    ))}
+                  </select>
+                </div>
 
-                <label className="dash__edit-label" style={{ marginTop: 16 }}>Y Axis (Numeric)</label>
-                <select
-                  className="control"
-                  value={widgetForm.scatterY}
-                  onChange={(e) => setWidgetForm((current) => ({ ...current, scatterY: e.target.value }))}
-                >
-                  <option value="">Select numeric Y field</option>
-                  {fields?.map((field) => (
-                    <option key={field.name} value={field.name}>{field.name}</option>
-                  ))}
-                </select>
-              </>
+                <div className="dash__config-cell">
+                  <label className="dash__edit-label">Y Axis (Numeric)</label>
+                  <select
+                    className="control"
+                    value={widgetForm.scatterY}
+                    onChange={(e) => setWidgetForm((current) => ({ ...current, scatterY: e.target.value }))}
+                  >
+                    <option value="">Select numeric Y field</option>
+                    {fields?.map((field) => (
+                      <option key={field.name} value={field.name}>{field.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
             )}
 
             {widgetForm.type === "kpi" && (
@@ -5823,171 +6893,225 @@ export default function Dashboards() {
 
             <hr style={{ margin: "24px 0", border: "none", borderTop: "1px solid var(--border-color, #eee)" }} />
 
-            <h3 style={{ marginBottom: 16 }}>Appearance</h3>
+            <h3 style={{ marginBottom: 12 }}>Appearance</h3>
 
-            {/* Colour, per kind of graph. Each control writes one key, and an
-                unset key means the graph keeps the colour it always had —
-                which is why every one of these has a Clear beside it. */}
-            {["bar", "line", "histogram", "bubble", "scatter"].includes(
-              widgetForm.type,
-            ) && (
-              <>
-                <label className="dash__edit-label">
-                  {widgetForm.type === "line" ? "Line Color" : "Bar / Point Color"}
-                </label>
-
-                <div className="dash__color-row">
-                  <input
-                    className="control"
-                    type="color"
-                    aria-label="Series colour"
-                    value={widgetForm.presentation?.series_color || "#1a5f3f"}
-                    onChange={(e) =>
-                      setWidgetForm((curr) => ({
-                        ...curr,
-                        presentation: {
-                          ...curr.presentation,
-                          series_color: e.target.value,
-                        },
-                      }))
-                    }
-                  />
-
-                  <button
-                    type="button"
-                    className="btn1"
-                    onClick={() =>
-                      setWidgetForm((curr) => ({
-                        ...curr,
-                        presentation: { ...curr.presentation, series_color: "" },
-                      }))
-                    }
-                  >
-                    Clear
-                  </button>
-                </div>
-              </>
-            )}
-
-            {["pie", "doughnut"].includes(widgetForm.type) && (
-              <>
-                <label className="dash__edit-label">Slice Colours</label>
-
+            <div className="dash__config-grid">
+              <div className="dash__config-cell">
+                <label className="dash__edit-label">Font Family</label>
                 <select
                   className="control"
-                  aria-label="Slice palette"
-                  value={
-                    typeof widgetForm.presentation?.palette === "string"
-                      ? widgetForm.presentation.palette
-                      : ""
-                  }
+                  value={widgetForm.presentation?.font_family || ""}
                   onChange={(e) =>
                     setWidgetForm((curr) => ({
                       ...curr,
-                      presentation: {
-                        ...curr.presentation,
-                        palette: e.target.value || "",
-                      },
+                      presentation: { ...curr.presentation, font_family: e.target.value }
                     }))
                   }
-                  style={{ marginBottom: 16 }}
                 >
-                  <option value="">Default colours</option>
-
-                  {PALETTE_NAMES.map((name) => (
-                    <option key={name} value={name}>
-                      {name[0].toUpperCase() + name.slice(1)}
-                    </option>
-                  ))}
+                  <option value="">Default</option>
+                  <option value="Arial">Arial</option>
+                  <option value="Helvetica">Helvetica</option>
+                  <option value="Georgia">Georgia</option>
+                  <option value="Times New Roman">Times New Roman</option>
+                  <option value="Courier New">Courier New</option>
+                  <option value="Monaco">Monaco</option>
                 </select>
-              </>
-            )}
+              </div>
 
-            {widgetForm.type === "kpi" && (
-              <>
-                <label className="dash__edit-label">Value Color</label>
+              {/* Bar / Point / Line / Value / Slice color — type-specific */}
+              {["bar", "line", "histogram", "bubble", "scatter"].includes(widgetForm.type) &&
+                (widgetForm.presentation?.series_colors || []).length === 0 && (
+                <div className="dash__config-cell">
+                  <label className="dash__edit-label">
+                    {widgetForm.type === "line" ? "Line Color" : "Bar / Point Color"}
+                  </label>
+                  <div className="dash__color-row">
+                    <input
+                      className="control"
+                      type="color"
+                      aria-label="Series colour"
+                      value={widgetForm.presentation?.series_color || "#1a5f3f"}
+                      onChange={(e) =>
+                        setWidgetForm((curr) => ({
+                          ...curr,
+                          presentation: { ...curr.presentation, series_color: e.target.value },
+                        }))
+                      }
+                      style={{ height: 38, width: 52, padding: "2px 4px" }}
+                    />
+                    <button type="button" className="btn1"
+                      onClick={() => setWidgetForm((curr) => ({ ...curr, presentation: { ...curr.presentation, series_color: "" } }))}
+                    >Clear</button>
+                  </div>
+                </div>
+              )}
 
+              {["pie", "doughnut"].includes(widgetForm.type) &&
+                (widgetForm.presentation?.series_colors || []).length === 0 && (
+                <div className="dash__config-cell">
+                  <label className="dash__edit-label">Slice Colours</label>
+                  <select
+                    className="control"
+                    aria-label="Slice palette"
+                    value={typeof widgetForm.presentation?.palette === "string" ? widgetForm.presentation.palette : ""}
+                    onChange={(e) =>
+                      setWidgetForm((curr) => ({
+                        ...curr,
+                        presentation: { ...curr.presentation, palette: e.target.value || "" },
+                      }))
+                    }
+                  >
+                    <option value="">Default colours</option>
+                    {PALETTE_NAMES.map((name) => (
+                      <option key={name} value={name}>{name[0].toUpperCase() + name.slice(1)}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {widgetForm.type === "kpi" && (
+                <div className="dash__config-cell">
+                  <label className="dash__edit-label">Value Color</label>
+                  <div className="dash__color-row">
+                    <input
+                      className="control"
+                      type="color"
+                      aria-label="Value colour"
+                      value={widgetForm.presentation?.value_color || "#1a5f3f"}
+                      onChange={(e) =>
+                        setWidgetForm((curr) => ({
+                          ...curr,
+                          presentation: { ...curr.presentation, value_color: e.target.value },
+                        }))
+                      }
+                      style={{ height: 38, width: 52, padding: "2px 4px" }}
+                    />
+                    <button type="button" className="btn1"
+                      onClick={() => setWidgetForm((curr) => ({ ...curr, presentation: { ...curr.presentation, value_color: "" } }))}
+                    >Clear</button>
+                  </div>
+                </div>
+              )}
+
+              {widgetForm.type === "map" && (
+                <div className="dash__config-cell">
+                  <label className="dash__edit-label">Marker Color</label>
+                  <div className="dash__color-row">
+                    <input
+                      className="control"
+                      type="color"
+                      aria-label="Marker colour"
+                      value={widgetForm.presentation?.marker_color || "#1a5f3f"}
+                      onChange={(e) =>
+                        setWidgetForm((curr) => ({
+                          ...curr,
+                          presentation: { ...curr.presentation, marker_color: e.target.value },
+                        }))
+                      }
+                      style={{ height: 38, width: 52, padding: "2px 4px" }}
+                    />
+                    <button type="button" className="btn1"
+                      onClick={() => setWidgetForm((curr) => ({ ...curr, presentation: { ...curr.presentation, marker_color: "" } }))}
+                    >Clear</button>
+                  </div>
+                </div>
+              )}
+
+              <div className="dash__config-cell">
+                <label className="dash__edit-label">Background Color</label>
                 <div className="dash__color-row">
                   <input
                     className="control"
                     type="color"
-                    aria-label="Value colour"
-                    value={widgetForm.presentation?.value_color || "#1a5f3f"}
+                    value={widgetForm.presentation?.background_color || "#ffffff"}
                     onChange={(e) =>
                       setWidgetForm((curr) => ({
                         ...curr,
-                        presentation: {
-                          ...curr.presentation,
-                          value_color: e.target.value,
-                        },
+                        presentation: { ...curr.presentation, background_color: e.target.value }
                       }))
                     }
+                    style={{ height: 38, width: 52, padding: "2px 4px" }}
                   />
-
                   <button
                     type="button"
                     className="btn1"
-                    onClick={() =>
-                      setWidgetForm((curr) => ({
-                        ...curr,
-                        presentation: { ...curr.presentation, value_color: "" },
-                      }))
-                    }
+                    onClick={() => setWidgetForm((curr) => ({ ...curr, presentation: { ...curr.presentation, background_color: "" } }))}
                   >
                     Clear
                   </button>
                 </div>
-              </>
-            )}
+              </div>
+            </div>
 
-            {widgetForm.type === "map" && (
-              <>
-                <label className="dash__edit-label">Marker Color</label>
-
-                <div className="dash__color-row">
-                  <input
-                    className="control"
-                    type="color"
-                    aria-label="Marker colour"
-                    value={widgetForm.presentation?.marker_color || "#1a5f3f"}
-                    onChange={(e) =>
-                      setWidgetForm((curr) => ({
-                        ...curr,
-                        presentation: {
-                          ...curr.presentation,
-                          marker_color: e.target.value,
-                        },
-                      }))
-                    }
-                  />
-
-                  <button
-                    type="button"
-                    className="btn1"
-                    onClick={() =>
-                      setWidgetForm((curr) => ({
-                        ...curr,
-                        presentation: { ...curr.presentation, marker_color: "" },
-                      }))
-                    }
-                  >
-                    Clear
-                  </button>
+            {["bar", "line", "pie", "doughnut", "histogram", "bubble", "scatter"].includes(widgetForm.type) && (
+              <div style={{ marginTop: 8 }}>
+                <label className="dash__edit-label" style={{ marginBottom: 4, display: "block" }}>Series Colors</label>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+                  {(widgetForm.presentation?.series_colors || []).map((color, index) => (
+                    <div key={index} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                      <input
+                        className="control"
+                        type="color"
+                        aria-label={`Series color ${index + 1}`}
+                        value={color}
+                        onChange={(e) =>
+                          setWidgetForm((curr) => {
+                            const next = [...(curr.presentation?.series_colors || [])];
+                            next[index] = e.target.value;
+                            return { ...curr, presentation: { ...curr.presentation, series_colors: next } };
+                          })
+                        }
+                        style={{ height: 30, width: 30, padding: 1, border: "1px solid var(--line, #ddd)", borderRadius: 4 }}
+                      />
+                      <button
+                        type="button"
+                        className="btn1"
+                        style={{ fontSize: 11, padding: "0 4px", lineHeight: "20px" }}
+                        onClick={() =>
+                          setWidgetForm((curr) => {
+                            const next = [...(curr.presentation?.series_colors || [])];
+                            next.splice(index, 1);
+                            return { ...curr, presentation: { ...curr.presentation, series_colors: next } };
+                          })
+                        }
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                  {(widgetForm.presentation?.series_colors || []).length < 12 && (
+                    <button
+                      type="button"
+                      className="btn1"
+                      style={{ fontSize: 12 }}
+                      onClick={() =>
+                        setWidgetForm((curr) => {
+                          const next = [...(curr.presentation?.series_colors || [])];
+                          next.push("#1a5f3f");
+                          return { ...curr, presentation: { ...curr.presentation, series_colors: next } };
+                        })
+                      }
+                    >
+                      + Add
+                    </button>
+                  )}
                 </div>
-              </>
+                {(widgetForm.presentation?.series_colors || []).length === 0 && (
+                  <p className="muted" style={{ fontSize: 11, margin: "4px 0 0" }}>No custom colors — using defaults.</p>
+                )}
+              </div>
             )}
 
             {widgetForm.type === "table" && (
-              <>
+              <div className="dash__config-grid" style={{ marginTop: 8 }}>
                 {[
-                  ["table_header_background", "Header Background"],
+                  ["table_header_background", "Header Bg"],
                   ["table_header_color", "Header Text"],
                   ["table_text_color", "Row Text"],
                   ["table_border_color", "Borders"],
                 ].map(([key, label]) => (
-                  <div key={key}>
+                  <div className="dash__config-cell" key={key}>
                     <label className="dash__edit-label">{label}</label>
-
                     <div className="dash__color-row">
                       <input
                         className="control"
@@ -5997,106 +7121,116 @@ export default function Dashboards() {
                         onChange={(e) =>
                           setWidgetForm((curr) => ({
                             ...curr,
-                            presentation: {
-                              ...curr.presentation,
-                              [key]: e.target.value,
-                            },
+                            presentation: { ...curr.presentation, [key]: e.target.value },
                           }))
                         }
+                        style={{ height: 38, width: 52, padding: "2px 4px" }}
                       />
-
-                      <button
-                        type="button"
-                        className="btn1"
-                        onClick={() =>
-                          setWidgetForm((curr) => ({
-                            ...curr,
-                            presentation: { ...curr.presentation, [key]: "" },
-                          }))
-                        }
-                      >
-                        Clear
-                      </button>
+                      <button type="button" className="btn1"
+                        onClick={() => setWidgetForm((curr) => ({ ...curr, presentation: { ...curr.presentation, [key]: "" } }))}
+                      >Clear</button>
                     </div>
                   </div>
                 ))}
-              </>
+              </div>
             )}
 
-            <label className="dash__edit-label">Background Color</label>
-            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
-              <input
-                className="control"
-                type="color"
-                value={widgetForm.presentation?.background_color || "#ffffff"}
-                onChange={(e) =>
-                  setWidgetForm((curr) => ({
-                    ...curr,
-                    presentation: { ...curr.presentation, background_color: e.target.value }
-                  }))
-                }
-                style={{ height: 40, width: 60, padding: "2px 4px" }}
-              />
-              <button
-                type="button"
-                className="btn1"
-                onClick={() => setWidgetForm((curr) => ({ ...curr, presentation: { ...curr.presentation, background_color: "" } }))}
-              >
-                Clear
-              </button>
+            <hr style={{ margin: "16px 0", border: "none", borderTop: "1px solid var(--border-color, #eee)" }} />
+
+            <h3 style={{ marginBottom: 12 }}>Title</h3>
+
+            <div className="dash__config-grid">
+              <div className="dash__config-cell">
+                <label className="dash__edit-label">Title Icon</label>
+                <select
+                  className="control"
+                  value={widgetForm.presentation?.title_icon || ""}
+                  onChange={(e) =>
+                    setWidgetForm((curr) => ({
+                      ...curr,
+                      presentation: { ...curr.presentation, title_icon: e.target.value }
+                    }))
+                  }
+                >
+                  <option value="">None</option>
+                  <option value="users">👥 Users</option>
+                  <option value="user">👤 User</option>
+                  <option value="students">🎓 Students</option>
+                  <option value="school">🏫 School</option>
+                  <option value="chart">📊 Chart</option>
+                  <option value="money">💰 Money</option>
+                  <option value="location">📍 Location</option>
+                  <option value="agriculture">🌾 Agriculture</option>
+                  <option value="farm">🚜 Farm</option>
+                  <option value="calendar">📅 Calendar</option>
+                  <option value="male">👨 Male</option>
+                  <option value="female">👩 Female</option>
+                  <option value="land">🗺️ Land</option>
+                  <option value="production">📦 Production</option>
+                  <option value="percent">％ Percentage</option>
+                </select>
+              </div>
+
+              <div className="dash__config-cell">
+                <label className="dash__edit-label">Font Size (px)</label>
+                <input
+                  className="control"
+                  type="number"
+                  min="1"
+                  value={widgetForm.presentation?.title_style?.font_size || ""}
+                  onChange={(e) =>
+                    setWidgetForm((curr) => ({
+                      ...curr,
+                      presentation: {
+                        ...curr.presentation,
+                        title_style: { ...(curr.presentation?.title_style || {}), font_size: e.target.value }
+                      }
+                    }))
+                  }
+                  placeholder="e.g. 18"
+                />
+              </div>
+
+              <div className="dash__config-cell">
+                <label className="dash__edit-label">Title Color</label>
+                <div className="dash__color-row">
+                  <input
+                    className="control"
+                    type="color"
+                    aria-label="Title colour"
+                    value={widgetForm.presentation?.title_style?.color || "#222222"}
+                    onChange={(e) =>
+                      setWidgetForm((curr) => ({
+                        ...curr,
+                        presentation: {
+                          ...curr.presentation,
+                          title_style: { ...(curr.presentation?.title_style || {}), color: e.target.value }
+                        }
+                      }))
+                    }
+                    style={{ height: 38, width: 52, padding: "2px 4px" }}
+                  />
+                  <button
+                    type="button"
+                    className="btn1"
+                    onClick={() =>
+                      setWidgetForm((curr) => ({
+                        ...curr,
+                        presentation: {
+                          ...curr.presentation,
+                          title_style: { ...(curr.presentation?.title_style || {}), color: "" }
+                        }
+                      }))
+                    }
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
             </div>
 
-            <h3 style={{ marginBottom: 16, marginTop: 24 }}>Title</h3>
-
-            <label className="dash__edit-label">Title Icon</label>
-            <select
-              className="control"
-              value={widgetForm.presentation?.title_icon || ""}
-              onChange={(e) =>
-                setWidgetForm((curr) => ({
-                  ...curr,
-                  presentation: { ...curr.presentation, title_icon: e.target.value }
-                }))
-              }
-              style={{ marginBottom: 16 }}
-            >
-              <option value="">None</option>
-              <option value="users">👥 Users</option>
-              <option value="user">👤 User</option>
-              <option value="students">🎓 Students</option>
-              <option value="school">🏫 School</option>
-              <option value="chart">📊 Chart</option>
-              <option value="money">💰 Money</option>
-              <option value="location">📍 Location</option>
-              <option value="agriculture">🌾 Agriculture</option>
-              <option value="farm">🚜 Farm</option>
-              <option value="calendar">📅 Calendar</option>
-              <option value="male">👨 Male</option>
-              <option value="female">👩 Female</option>
-              <option value="land">🗺️ Land</option>
-              <option value="production">📦 Production</option>
-              <option value="percent">％ Percentage</option>
-            </select>
-
-            <label className="dash__edit-label">Title Font Size (px)</label>
-            <input
-              className="control"
-              type="number"
-              min="1"
-              value={widgetForm.presentation?.title_style?.font_size || ""}
-              onChange={(e) =>
-                setWidgetForm((curr) => ({
-                  ...curr,
-                  presentation: {
-                    ...curr.presentation,
-                    title_style: { ...(curr.presentation?.title_style || {}), font_size: e.target.value }
-                  }
-                }))
-              }
-              placeholder="e.g. 18"
-            />
-            <div style={{ display: "flex", gap: 16, marginTop: 8, marginBottom: 16 }}>
-              <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 14 }}>
+            <div style={{ display: "flex", gap: 16, marginTop: 4, marginBottom: 12 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13 }}>
                 <input
                   type="checkbox"
                   checked={widgetForm.presentation?.title_style?.bold || false}
@@ -6109,7 +7243,7 @@ export default function Dashboards() {
                 />{" "}
                 Bold
               </label>
-              <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 14 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13 }}>
                 <input
                   type="checkbox"
                   checked={widgetForm.presentation?.title_style?.italic || false}
@@ -6124,41 +7258,87 @@ export default function Dashboards() {
               </label>
             </div>
 
-            <h3 style={{ marginBottom: 16, marginTop: 24 }}>Subtitle</h3>
-            <label className="dash__edit-label">Subtitle Text</label>
-            <input
-              className="control"
-              type="text"
-              value={widgetForm.presentation?.subtitle || ""}
-              onChange={(e) =>
-                setWidgetForm((curr) => ({
-                  ...curr,
-                  presentation: { ...curr.presentation, subtitle: e.target.value }
-                }))
-              }
-              placeholder="Optional subtitle"
-              style={{ marginBottom: 16 }}
-            />
+            <hr style={{ margin: "16px 0", border: "none", borderTop: "1px solid var(--border-color, #eee)" }} />
 
-            <label className="dash__edit-label">Subtitle Font Size (px)</label>
-            <input
-              className="control"
-              type="number"
-              min="1"
-              value={widgetForm.presentation?.subtitle_style?.font_size || ""}
-              onChange={(e) =>
-                setWidgetForm((curr) => ({
-                  ...curr,
-                  presentation: {
-                    ...curr.presentation,
-                    subtitle_style: { ...(curr.presentation?.subtitle_style || {}), font_size: e.target.value }
+            <h3 style={{ marginBottom: 12 }}>Subtitle</h3>
+
+            <div className="dash__config-grid">
+              <div className="dash__config-cell">
+                <label className="dash__edit-label">Subtitle Text</label>
+                <input
+                  className="control"
+                  type="text"
+                  value={widgetForm.presentation?.subtitle || ""}
+                  onChange={(e) =>
+                    setWidgetForm((curr) => ({
+                      ...curr,
+                      presentation: { ...curr.presentation, subtitle: e.target.value }
+                    }))
                   }
-                }))
-              }
-              placeholder="e.g. 14"
-            />
-            <div style={{ display: "flex", gap: 16, marginTop: 8, marginBottom: 16 }}>
-              <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 14 }}>
+                  placeholder="Optional subtitle"
+                />
+              </div>
+
+              <div className="dash__config-cell">
+                <label className="dash__edit-label">Font Size (px)</label>
+                <input
+                  className="control"
+                  type="number"
+                  min="1"
+                  value={widgetForm.presentation?.subtitle_style?.font_size || ""}
+                  onChange={(e) =>
+                    setWidgetForm((curr) => ({
+                      ...curr,
+                      presentation: {
+                        ...curr.presentation,
+                        subtitle_style: { ...(curr.presentation?.subtitle_style || {}), font_size: e.target.value }
+                      }
+                    }))
+                  }
+                  placeholder="e.g. 14"
+                />
+              </div>
+
+              <div className="dash__config-cell">
+                <label className="dash__edit-label">Subtitle Color</label>
+                <div className="dash__color-row">
+                  <input
+                    className="control"
+                    type="color"
+                    aria-label="Subtitle colour"
+                    value={widgetForm.presentation?.subtitle_style?.color || "#666666"}
+                    onChange={(e) =>
+                      setWidgetForm((curr) => ({
+                        ...curr,
+                        presentation: {
+                          ...curr.presentation,
+                          subtitle_style: { ...(curr.presentation?.subtitle_style || {}), color: e.target.value }
+                        }
+                      }))
+                    }
+                    style={{ height: 38, width: 52, padding: "2px 4px" }}
+                  />
+                  <button
+                    type="button"
+                    className="btn1"
+                    onClick={() =>
+                      setWidgetForm((curr) => ({
+                        ...curr,
+                        presentation: {
+                          ...curr.presentation,
+                          subtitle_style: { ...(curr.presentation?.subtitle_style || {}), color: "" }
+                        }
+                      }))
+                    }
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 16, marginTop: 4, marginBottom: 12 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13 }}>
                 <input
                   type="checkbox"
                   checked={widgetForm.presentation?.subtitle_style?.bold || false}
@@ -6171,7 +7351,7 @@ export default function Dashboards() {
                 />{" "}
                 Bold
               </label>
-              <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 14 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13 }}>
                 <input
                   type="checkbox"
                   checked={widgetForm.presentation?.subtitle_style?.italic || false}
@@ -6188,38 +7368,42 @@ export default function Dashboards() {
 
             {(widgetForm.type === "bar" || widgetForm.type === "line") && (
               <>
-                <h3 style={{ marginBottom: 16, marginTop: 24 }}>X Axis</h3>
-                <label className="dash__edit-label">X-Axis Title</label>
-                <input
-                  className="control"
-                  type="text"
-                  value={widgetForm.presentation?.x_axis?.title || ""}
-                  onChange={(e) =>
-                    setWidgetForm((curr) => ({
-                      ...curr,
-                      presentation: { ...curr.presentation, x_axis: { ...(curr.presentation?.x_axis || {}), title: e.target.value } }
-                    }))
-                  }
-                  placeholder="X-Axis title"
-                  style={{ marginBottom: 16 }}
-                />
-
-                <label className="dash__edit-label">X-Axis Font Size (px)</label>
-                <input
-                  className="control"
-                  type="number"
-                  min="1"
-                  value={widgetForm.presentation?.x_axis?.font_size || ""}
-                  onChange={(e) =>
-                    setWidgetForm((curr) => ({
-                      ...curr,
-                      presentation: { ...curr.presentation, x_axis: { ...(curr.presentation?.x_axis || {}), font_size: e.target.value } }
-                    }))
-                  }
-                  placeholder="Size"
-                />
-                <div style={{ display: "flex", gap: 16, marginTop: 8, marginBottom: 16 }}>
-                  <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 14 }}>
+                <h3 style={{ marginBottom: 12, marginTop: 24 }}>X Axis</h3>
+                <div className="dash__config-grid">
+                  <div className="dash__config-cell" style={{ gridColumn: "span 2" }}>
+                    <label className="dash__edit-label">Title</label>
+                    <input
+                      className="control"
+                      type="text"
+                      value={widgetForm.presentation?.x_axis?.title || ""}
+                      onChange={(e) =>
+                        setWidgetForm((curr) => ({
+                          ...curr,
+                          presentation: { ...curr.presentation, x_axis: { ...(curr.presentation?.x_axis || {}), title: e.target.value } }
+                        }))
+                      }
+                      placeholder="X-Axis title"
+                    />
+                  </div>
+                  <div className="dash__config-cell">
+                    <label className="dash__edit-label">Font Size (px)</label>
+                    <input
+                      className="control"
+                      type="number"
+                      min="1"
+                      value={widgetForm.presentation?.x_axis?.font_size || ""}
+                      onChange={(e) =>
+                        setWidgetForm((curr) => ({
+                          ...curr,
+                          presentation: { ...curr.presentation, x_axis: { ...(curr.presentation?.x_axis || {}), font_size: e.target.value } }
+                        }))
+                      }
+                      placeholder="Size"
+                    />
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 16, marginBottom: 8 }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13 }}>
                     <input
                       type="checkbox"
                       checked={widgetForm.presentation?.x_axis?.bold || false}
@@ -6232,7 +7416,7 @@ export default function Dashboards() {
                     />{" "}
                     Bold
                   </label>
-                  <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 14 }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13 }}>
                     <input
                       type="checkbox"
                       checked={widgetForm.presentation?.x_axis?.italic || false}
@@ -6247,38 +7431,42 @@ export default function Dashboards() {
                   </label>
                 </div>
 
-                <h3 style={{ marginBottom: 16, marginTop: 24 }}>Y Axis</h3>
-                <label className="dash__edit-label">Y-Axis Title</label>
-                <input
-                  className="control"
-                  type="text"
-                  value={widgetForm.presentation?.y_axis?.title || ""}
-                  onChange={(e) =>
-                    setWidgetForm((curr) => ({
-                      ...curr,
-                      presentation: { ...curr.presentation, y_axis: { ...(curr.presentation?.y_axis || {}), title: e.target.value } }
-                    }))
-                  }
-                  placeholder="Y-Axis title"
-                  style={{ marginBottom: 16 }}
-                />
-
-                <label className="dash__edit-label">Y-Axis Font Size (px)</label>
-                <input
-                  className="control"
-                  type="number"
-                  min="1"
-                  value={widgetForm.presentation?.y_axis?.font_size || ""}
-                  onChange={(e) =>
-                    setWidgetForm((curr) => ({
-                      ...curr,
-                      presentation: { ...curr.presentation, y_axis: { ...(curr.presentation?.y_axis || {}), font_size: e.target.value } }
-                    }))
-                  }
-                  placeholder="Size"
-                />
-                <div style={{ display: "flex", gap: 16, marginTop: 8, marginBottom: 16 }}>
-                  <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 14 }}>
+                <h3 style={{ marginBottom: 12, marginTop: 24 }}>Y Axis</h3>
+                <div className="dash__config-grid">
+                  <div className="dash__config-cell" style={{ gridColumn: "span 2" }}>
+                    <label className="dash__edit-label">Title</label>
+                    <input
+                      className="control"
+                      type="text"
+                      value={widgetForm.presentation?.y_axis?.title || ""}
+                      onChange={(e) =>
+                        setWidgetForm((curr) => ({
+                          ...curr,
+                          presentation: { ...curr.presentation, y_axis: { ...(curr.presentation?.y_axis || {}), title: e.target.value } }
+                        }))
+                      }
+                      placeholder="Y-Axis title"
+                    />
+                  </div>
+                  <div className="dash__config-cell">
+                    <label className="dash__edit-label">Font Size (px)</label>
+                    <input
+                      className="control"
+                      type="number"
+                      min="1"
+                      value={widgetForm.presentation?.y_axis?.font_size || ""}
+                      onChange={(e) =>
+                        setWidgetForm((curr) => ({
+                          ...curr,
+                          presentation: { ...curr.presentation, y_axis: { ...(curr.presentation?.y_axis || {}), font_size: e.target.value } }
+                        }))
+                      }
+                      placeholder="Size"
+                    />
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 16, marginBottom: 8 }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13 }}>
                     <input
                       type="checkbox"
                       checked={widgetForm.presentation?.y_axis?.bold || false}
@@ -6291,7 +7479,7 @@ export default function Dashboards() {
                     />{" "}
                     Bold
                   </label>
-                  <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 14 }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13 }}>
                     <input
                       type="checkbox"
                       checked={widgetForm.presentation?.y_axis?.italic || false}

@@ -89,8 +89,6 @@ export const moduleLists = (live) =>
 export const NAV_GROUPS = [
   ['configuration', 'Configuration'],
   ['data', 'Data & Channels'],
-  ['analytics', 'Analytics'],
-  ['administration', 'Administration'],
 ]
 
 /**
@@ -100,12 +98,7 @@ export const NAV_GROUPS = [
  * outside the structure it defines — and so `SystemNav` has one import rather
  * than an import cycle back into the component that renders it.
  */
-export const CORE_NAV_ITEMS = [
-  { group: 'administration', label: 'Roles', to: '/roles', requires: 'manage_roles',
-    order: 9001 },
-  { group: 'administration', label: 'Users', to: '/users', requires: 'manage_users',
-    order: 9002 },
-]
+export const CORE_NAV_ITEMS = []
 
 /**
  * Every system link every enabled module contributes, gathered by group.

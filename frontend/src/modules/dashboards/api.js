@@ -51,6 +51,19 @@ export const api = {
         `/filter-options?field=${encodeURIComponent(field)}`,
     ),
 
+  /* Dependent filter options: distinct values narrowed by parent selections.
+
+     The same column validation as the non-dependent endpoint, plus each
+     parent field is checked too. Nothing from the request is SQL. */
+  getDependentFilterOptions: (tableName, field, parentFilters) =>
+    request(
+      `/dashboards/data-sources/${encodeURIComponent(tableName)}/filter-options`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ field, parent_filters: parentFilters }),
+      },
+    ),
+
   // -----------------------------
   // Version management
   // -----------------------------
@@ -94,11 +107,19 @@ export const api = {
   // Creates the table and fills it in one call. The name comes back with the
   // _tabular suffix the picker discovers sources by, which is not always what
   // was typed — the caller shows what was actually created.
-  importExcelSource: (file, tableName, projectId) => {
+  inspectExcelSheets: (file, projectId) => {
+    const body = new FormData()
+    body.append('file', file)
+    body.append('project_id', projectId || '')
+    return request('/dashboards/data-sources/excel/inspect', { method: 'POST', body })
+  },
+
+  importExcelSource: (file, tableName, projectId, sheetName) => {
     const body = new FormData()
     body.append('file', file)
     body.append('table_name', tableName)
     body.append('project_id', projectId || '')
+    if (sheetName) body.append('sheet_name', sheetName)
     return request('/dashboards/data-sources/excel', { method: 'POST', body })
   },
 
@@ -142,6 +163,76 @@ export const api = {
     request(`/dashboards/shared/${encodeURIComponent(token)}/data`, {
       method: 'POST',
       body: JSON.stringify({ widget_id: widgetId }),
+    }),
+
+  // -----------------------------
+  // Live Databricks data sources
+  // -----------------------------
+
+  listLiveConnections: (projectId) =>
+    request(
+      `/dashboards/live/connections?project_id=${encodeURIComponent(projectId || '')}`,
+    ),
+
+  getLiveSchemas: (connectionId) =>
+    request(`/dashboards/live/connections/${connectionId}/schemas`),
+
+  getLiveTables: (connectionId, schema) =>
+    request(
+      `/dashboards/live/connections/${connectionId}/tables?schema=${encodeURIComponent(schema)}`,
+    ),
+
+  getLiveColumns: (connectionId, schema, table, { dashboard = false } = {}) =>
+    request(
+      `/dashboards/live/connections/${connectionId}/columns` +
+        `?schema=${encodeURIComponent(schema)}&table=${encodeURIComponent(table)}` +
+        (dashboard ? `&dashboard=true` : ``),
+    ),
+
+  generateLiveDashboard: (connectionId, schema, table, prompt) =>
+    request('/dashboards/live/generate', {
+      method: 'POST',
+      body: JSON.stringify({
+        connection_id: connectionId,
+        schema: schema,
+        table: table,
+        prompt,
+      }),
+    }),
+
+  getLiveData: (connectionId, schema, table, binding, paging = null) =>
+    request('/dashboards/live/data', {
+      method: 'POST',
+      body: JSON.stringify({
+        connection_id: connectionId,
+        schema: schema,
+        table: table,
+        binding,
+        ...(paging || {}),
+      }),
+    }),
+
+  getLiveFilterOptions: (connectionId, schema, table, field) =>
+    request('/dashboards/live/filter-options', {
+      method: 'POST',
+      body: JSON.stringify({
+        connection_id: connectionId,
+        schema: schema,
+        table: table,
+        field,
+      }),
+    }),
+
+  getLiveDependentFilterOptions: (connectionId, schema, table, field, parentFilters) =>
+    request('/dashboards/live/dependent-filter-options', {
+      method: 'POST',
+      body: JSON.stringify({
+        connection_id: connectionId,
+        schema: schema,
+        table: table,
+        field,
+        parent_filters: parentFilters,
+      }),
     }),
 
   // -----------------------------

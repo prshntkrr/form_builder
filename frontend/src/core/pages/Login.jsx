@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Link, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../auth.jsx'
 import PasswordField from '../PasswordField.jsx'
+import { startRecording, toPcm16, supported as canRecord } from '../voiceRecorder.js'
 
 import slide1 from '../../assets/1000453125.png'
 import slide2 from '../../assets/1000453126.png'
@@ -14,13 +15,22 @@ const SLIDES = [slide1, slide2, slide3, slide4]
 const INTERVAL = 5000 // ms between slides
 
 export default function Login() {
-  const { user, signIn, expired } = useAuth()
+  const { user, signIn, signInByVoice, expired } = useAuth()
   const location = useLocation()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [remember, setRemember] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  // Which credential this form is asking for. Voice is an alternative to the
+  // password, not an extra step before it, so the two swap rather than stack.
+  const [byVoice, setByVoice] = useState(false)
+  const [listening, setListening] = useState(false)
+  const stopper = useRef(null)
+
+  // Leaving the page mid-recording must still free the microphone, or the tab
+  // keeps a recording indicator on with nothing to explain it.
+  useEffect(() => () => { if (stopper.current) stopper.current() }, [])
 
   if (user) return <Navigate to={location.state?.from || '/'} replace />
 
@@ -30,6 +40,39 @@ export default function Login() {
     setError('')
     try {
       await signIn(email.trim(), password)
+    } catch (err) {
+      setError(err.message)
+      setBusy(false)
+    }
+  }
+
+  const listen = async () => {
+    setError('')
+    if (!email.trim()) {
+      // Voice confirms who somebody is; it does not work out who they are.
+      // Searching every account for the closest voice gets slower and less
+      // accurate with every account added, and the wrong answer is a sign-in to
+      // somebody else's account.
+      setError('Enter your email, username or phone number first, then speak.')
+      return
+    }
+    try {
+      stopper.current = await startRecording()
+      setListening(true)
+    } catch {
+      setError('The microphone is not available. Allow microphone access for '
+               + 'this site, and open the app at localhost rather than by its '
+               + 'IP address — browsers block the microphone otherwise.')
+    }
+  }
+
+  const speak = async () => {
+    const stop = stopper.current
+    stopper.current = null
+    setListening(false)
+    setBusy(true)
+    try {
+      await signInByVoice(email.trim(), await toPcm16(await stop()))
     } catch (err) {
       setError(err.message)
       setBusy(false)
@@ -66,39 +109,88 @@ export default function Login() {
           {error && <div className="note note--bad">{error}</div>}
 
           <label className="col" style={{ marginTop: 16 }}>
-            <span className="minilabel">Username or Email</span>
+            <span className="minilabel">Email, username or phone</span>
             <span className="field">
               <UserIcon />
-              <input className="control field__input" type="email" autoComplete="username"
-                     required autoFocus placeholder="Enter your e-agrology username"
+              {/* `text`, not `email`: the browser's own validation refuses
+                  anything without an "@", so an email-typed box would reject a
+                  username or a phone number before the form was even sent. */}
+              <input className="control field__input" type="text" autoComplete="username"
+                     required autoFocus placeholder="Email, username or phone number"
                      value={email} onChange={(e) => setEmail(e.target.value)} />
             </span>
           </label>
 
-          <label className="col" style={{ marginTop: 14 }}>
-            <span className="minilabel">Password</span>
-            <span className="field">
-              <LockIcon />
-              <PasswordField className="control field__input" autoComplete="current-password"
-                             required placeholder="Enter your password"
-                             value={password} onChange={(e) => setPassword(e.target.value)} />
-            </span>
-          </label>
+          {byVoice ? (
+            <>
+              <div className="col" style={{ marginTop: 14 }}>
+                <span className="minilabel">Your voice</span>
+                <p className="tiny muted" style={{ margin: '2px 0 10px' }}>
+                  {listening
+                    ? 'Listening — say a sentence or two, then press Done.'
+                    : 'Press Speak and say a sentence or two in your normal voice.'}
+                </p>
+                {listening ? (
+                  <button className="btn btn--danger gate__submit" type="button"
+                          onClick={speak}>
+                    <span className="spin" /> Done
+                  </button>
+                ) : (
+                  <button className="btn btn--primary gate__submit" type="button"
+                          onClick={listen} disabled={busy}>
+                    {busy && <span className="spin" />}
+                    {busy ? 'Checking your voice' : 'Speak'}
+                  </button>
+                )}
+              </div>
 
-          <label className="gate__remember">
-            <input type="checkbox" checked={remember}
-                   onChange={(e) => setRemember(e.target.checked)} />
-            <span>Remember me</span>
-          </label>
+              <p className="tiny gate__forgot">
+                <button type="button" className="linkish"
+                        onClick={() => { setByVoice(false); setError('') }}>
+                  Use my password instead
+                </button>
+              </p>
+            </>
+          ) : (
+            <>
+              <label className="col" style={{ marginTop: 14 }}>
+                <span className="minilabel">Password</span>
+                <span className="field">
+                  <LockIcon />
+                  <PasswordField className="control field__input" autoComplete="current-password"
+                                 required placeholder="Enter your password"
+                                 value={password} onChange={(e) => setPassword(e.target.value)} />
+                </span>
+              </label>
 
-          <button className="btn btn--primary gate__submit" type="submit" disabled={busy}>
-            {busy && <span className="spin" />}
-            {busy ? 'Logging in' : 'Log in'}
-          </button>
+              <label className="gate__remember">
+                <input type="checkbox" checked={remember}
+                       onChange={(e) => setRemember(e.target.checked)} />
+                <span>Remember me</span>
+              </label>
 
-          <p className="tiny gate__forgot">
-            <Link to="/forgot-password">Forgot your password?</Link>
-          </p>
+              <button className="btn btn--primary gate__submit" type="submit" disabled={busy}>
+                {busy && <span className="spin" />}
+                {busy ? 'Logging in' : 'Log in'}
+              </button>
+
+              {/* Offered to everyone, deliberately. Showing it only for accounts
+                  with a voice enrolled would mean answering "does this person
+                  have an account here" to anyone who typed a guess. */}
+              {canRecord() && (
+                <p className="tiny gate__forgot" style={{ marginTop: 14 }}>
+                  <button type="button" className="linkish"
+                          onClick={() => { setByVoice(true); setError('') }}>
+                    Sign in with my voice
+                  </button>
+                </p>
+              )}
+
+              <p className="tiny gate__forgot">
+                <Link to="/forgot-password">Forgot your password?</Link>
+              </p>
+            </>
+          )}
         </form>
       </section>
     </main>

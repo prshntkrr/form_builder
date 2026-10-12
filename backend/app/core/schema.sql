@@ -36,7 +36,17 @@ CREATE TABLE IF NOT EXISTS role_permission (
 
 CREATE TABLE IF NOT EXISTS app_user (
     user_id       VARCHAR(20)  NOT NULL PRIMARY KEY,
-    email         VARCHAR(255) NOT NULL UNIQUE,
+    -- Optional, like the two below it: an account signs in with any one of
+    -- the three. What is required is that it has at least one of them,
+    -- which `ck_app_user_identifier` enforces.
+    email         VARCHAR(255) UNIQUE,
+    -- Two more ways to sign in, both optional and both unique. Optional because
+    -- every account that existed before them signs in by email; unique because
+    -- an identifier matching two accounts would be a way into whichever one the
+    -- query returned first. Postgres allows many NULLs under UNIQUE, so the
+    -- accounts that have neither cost nothing.
+    username      VARCHAR(50)  UNIQUE,
+    phone         VARCHAR(20)  UNIQUE,
     full_name     VARCHAR(120),
     role_id       VARCHAR(20)  REFERENCES app_role (role_id),
     password_hash TEXT         NOT NULL,
@@ -46,7 +56,20 @@ CREATE TABLE IF NOT EXISTS app_user (
     last_login_on TIMESTAMP,
     created_on    TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
     updated_on    TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
-    created_by    VARCHAR(50)
+    created_by    VARCHAR(50),
+    -- Voice enrolment. 256 float32 = 1 KB, one per account, so it lives beside
+    -- password_hash rather than in a table of its own. The *recordings* are
+    -- never stored anywhere — see app/core/voiceprint.py.
+    voiceprint             BYTEA,
+    -- Which model produced the vector above. Vectors from two models are not
+    -- comparable, so a voiceprint without its model's name is unusable.
+    voiceprint_model       VARCHAR(40),
+    voiceprint_on          TIMESTAMP,
+    -- Voice is biometric data; when they agreed to it is part of the record.
+    voiceprint_consent_on  TIMESTAMP,
+    -- An account nobody can sign in to is not an account.
+    CONSTRAINT ck_app_user_identifier CHECK (
+        email IS NOT NULL OR username IS NOT NULL OR phone IS NOT NULL)
 );
 
 -- The index on app_user.role_id is created in bootstrap.ensure_roles(), after

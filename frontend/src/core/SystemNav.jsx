@@ -88,51 +88,25 @@ export default function SystemNav({ onNavigate }) {
     })
   }
 
-  if (!groups.length) return null
+  const allItems = groups.flatMap((g) => g.items)
+  if (!allItems.length) return null
 
   return (
     <>
-      <div className="side__label" style={{ cursor: 'pointer' }} onClick={toggleSection}>
-        <Chevron open={sectionOpen} />
-        System
-      </div>
-
-      <div className="nav" hidden={!sectionOpen}>
-        {groups.map((group) => {
-        const shown = isOpen(group) || holdsCurrent(group)
-
-        return (
-          <div className="nav__group" key={group.key}>
-            <button
-              type="button"
-              className="nav__head"
-              aria-expanded={shown}
-              aria-controls={`nav-group-${group.key}`}
-              onClick={() => toggle(group)}
-            >
-              <Chevron open={shown} />
-              <span className="grow">{group.label}</span>
-            </button>
-
-            {/* `hidden` rather than unmounting: the links stay in the document
-                for a find-in-page, and the group cannot lose its place. */}
-            <nav className="nav__items" id={`nav-group-${group.key}`} hidden={!shown}>
-              {group.items.map((item) => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  end={item.end}
-                  className={({ isActive }) => `side__form${isActive ? ' on' : ''}`}
-                  onClick={onNavigate}
-                >
-                  <span className="grow">{item.label}</span>
-                </NavLink>
-              ))}
-            </nav>
-          </div>
-          )
-        })}
-      </div>
+      <div className="side__label">System</div>
+      <nav className="side__links">
+        {allItems.map((item) => (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            end={item.end}
+            className={({ isActive }) => `side__form${isActive ? ' on' : ''}`}
+            onClick={onNavigate}
+          >
+            <span className="grow">{item.label}</span>
+          </NavLink>
+        ))}
+      </nav>
     </>
   )
 }
