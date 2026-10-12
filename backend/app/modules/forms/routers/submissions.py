@@ -439,6 +439,8 @@ def _answered(stored: Dict[str, Any], response: Response) -> Dict[str, Any]:
 def create_submission(form_id: str, req: SubmitRequest, response: Response,
                       idempotency_key: Optional[str] = Header(None),
                       user: Dict[str, Any] = Depends(needs(RECORDS_CREATE))):
+    print(req)
+    print("anuj");
     form = _load(form_id, user, filling=True)
     return _answered(_store(
         form, user, data=req.data, language=req.language,
