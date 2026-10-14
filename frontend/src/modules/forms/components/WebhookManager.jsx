@@ -18,11 +18,16 @@ export default function WebhookManager({ projectId, channel = 'whatsapp' }) {
 
   const channelLabel = channel === 'ivr' ? 'IVR' : 'WhatsApp'
   const resolveUrl = (h) => {
-    if (h.webhook_url && !h.webhook_url.includes('127.0.0.1') && !h.webhook_url.includes('localhost')) {
-      return h.webhook_url
-    }
-    return `${window.location.origin}/api/integrations/${channel}/webhook/${h.webhook_id}`
+  let url = h.webhook_url
+  if (!url || url.includes('127.0.0.1') || url.includes('localhost')) {
+    url = `${window.location.origin}/api/integrations/${channel}/webhook/${h.webhook_id}`
   }
+  // If not running on localhost, force https://
+  if (!url.includes('localhost') && !url.includes('127.0.0.1') && url.startsWith('http://')) {
+    url = url.replace('http://', 'https://')
+  }
+  return url
+}
 
   const load = useCallback(() => {
     api.webhooks(projectId || 'none')
