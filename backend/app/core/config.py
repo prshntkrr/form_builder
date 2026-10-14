@@ -49,6 +49,8 @@ class Settings(BaseSettings):
     default_user: str = "system"
     # Where the frontend is served from — used to build password reset links.
     app_url: str = "http://localhost:5173"
+    # Public URL of the backend (e.g. https://eagrology-revamp.indevconsultancy.in), used to build webhook URLs
+    public_url: str = ""
 
     # Auth
     session_hours: int = 12

@@ -561,6 +561,7 @@ def ensure_webhook_config() -> bool:
             CREATE TABLE webhook_config (
                 webhook_id   VARCHAR(32)  PRIMARY KEY,
                 label        VARCHAR(100) NOT NULL DEFAULT '',
+                phone_number VARCHAR(32)  NOT NULL DEFAULT '',
                 channel      VARCHAR(20)  NOT NULL DEFAULT 'whatsapp'
                                           CHECK (channel IN ('whatsapp', 'ivr')),
                 project_id   VARCHAR(20),
@@ -574,6 +575,70 @@ def ensure_webhook_config() -> bool:
         """)
 
     logger.info("Created webhook_config table")
+    return True
+
+
+def ensure_webhook_phone_number() -> bool:
+    """Give `webhook_config` the phone_number column if missing.
+
+    Idempotent, and returns whether it changed anything.
+    """
+    from psycopg2 import sql
+
+    with transaction() as cur:
+        if not table_exists(cur, "webhook_config"):
+            return False
+
+        cur.execute(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_schema = %s AND table_name = 'webhook_config' "
+            "  AND column_name = 'phone_number'",
+            (settings.db_schema,),
+        )
+        if cur.fetchone() is not None:
+            return False
+
+        cur.execute(sql.SQL(
+            "ALTER TABLE {}.webhook_config "
+            "ADD COLUMN phone_number VARCHAR(32) NOT NULL DEFAULT ''"
+        ).format(sql.Identifier(settings.db_schema)))
+
+    logger.info("webhook_config gained its phone_number column")
+    return True
+
+
+def ensure_whatsapp_session_receiver_index() -> bool:
+    """Ensure `uq_whatsapp_session_live` scopes active sessions by receiver_number.
+
+    This prevents cross-number collision when a user interacts with multiple
+    WhatsApp Business numbers from the same phone.
+    """
+    from psycopg2 import sql
+
+    with transaction() as cur:
+        if not table_exists(cur, "whatsapp_session"):
+            return False
+
+        cur.execute(
+            "SELECT indexname, indexdef FROM pg_indexes "
+            "WHERE schemaname = %s AND tablename = 'whatsapp_session' "
+            "  AND indexname = 'uq_whatsapp_session_live'",
+            (settings.db_schema,),
+        )
+        row = cur.fetchone()
+        if row and "receiver_number" in (row.get("indexdef") or ""):
+            return False
+
+        if row:
+            cur.execute(sql.SQL("DROP INDEX {}.uq_whatsapp_session_live").format(
+                sql.Identifier(settings.db_schema)))
+
+        cur.execute(sql.SQL(
+            "CREATE UNIQUE INDEX uq_whatsapp_session_live ON {}.whatsapp_session "
+            "(channel, identity, receiver_number) WHERE status = 'ACTIVE'"
+        ).format(sql.Identifier(settings.db_schema)))
+
+    logger.info("Rebuilt uq_whatsapp_session_live to include receiver_number")
     return True
 
 

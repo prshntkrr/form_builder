@@ -63,21 +63,36 @@ def start(identity: str, receiver_number: str, route: Dict[str, Any],
     """Begin a conversation, replacing whatever this number was in the middle of.
 
     Sending a keyword while already answering something is a person starting
-    again, not a second conversation: the previous session is expired first —
-    which keeps whatever it had collected, exactly as a timeout would — and then
-    this one becomes the live one. Both in one transaction, so the unique index
-    on live sessions is never briefly violated.
+    again, not a second conversation: the previous session on this receiver line
+    is expired first — which keeps whatever it had collected, exactly as a timeout
+    would — and then this one becomes the live one.
     """
     session_id = uuid.uuid4().hex[:32]
+    receiver_clean = (receiver_number or "").strip()
 
     with transaction() as cur:
+        from app.modules.forms import routing
+
         cur.execute(
-            "UPDATE whatsapp_session SET status = %s, completed_on = CURRENT_TIMESTAMP "
-            "WHERE channel = %s AND identity = %s AND status = %s "
-            "RETURNING session_id, form_id, form_version, answers, project_id",
-            (EXPIRED, channel, identity, ACTIVE),
+            "SELECT session_id, receiver_number FROM whatsapp_session "
+            "WHERE channel = %s AND identity = %s AND status = %s",
+            (channel, identity, ACTIVE),
         )
-        replaced = [dict(r) for r in cur.fetchall()]
+        active_sessions = cur.fetchall()
+        to_expire = [
+            s["session_id"] for s in active_sessions
+            if not receiver_clean or not s.get("receiver_number")
+            or routing.same_number(s["receiver_number"], receiver_clean)
+        ]
+        replaced = []
+        if to_expire:
+            cur.execute(
+                "UPDATE whatsapp_session SET status = %s, completed_on = CURRENT_TIMESTAMP "
+                "WHERE session_id = ANY(%s) "
+                "RETURNING session_id, form_id, form_version, answers, project_id",
+                (EXPIRED, to_expire),
+            )
+            replaced = [dict(r) for r in cur.fetchall()]
 
         cur.execute(
             """
@@ -89,7 +104,7 @@ def start(identity: str, receiver_number: str, route: Dict[str, Any],
                     CURRENT_TIMESTAMP + make_interval(secs => %s))
             RETURNING *
             """,
-            (session_id, identity, receiver_number or "", route.get("route_id"),
+            (session_id, identity, receiver_clean, route.get("route_id"),
              route["form_id"], route["version"], route.get("project_id"),
              user_id, CONSENT, Json({}), ACTIVE, channel, int(timeout_seconds)),
         )
@@ -101,8 +116,9 @@ def start(identity: str, receiver_number: str, route: Dict[str, Any],
     return session
 
 
-def live(identity: str, channel: str = "whatsapp") -> Optional[Dict[str, Any]]:
-    """The conversation this number is in, or None.
+def live(identity: str, receiver: str = "",
+         channel: str = "whatsapp") -> Optional[Dict[str, Any]]:
+    """The conversation this number is in on this receiver line, or None.
 
     Expiry is decided here, on the way in, because a webhook is the only clock
     this has: a message arriving after the deadline is answered as a new
@@ -111,21 +127,32 @@ def live(identity: str, channel: str = "whatsapp") -> Optional[Dict[str, Any]]:
     nobody sends anything.
     """
     with transaction() as cur:
-        # Postgres decides whether the deadline has passed, not this process:
-        # the timestamps were written by the database and comparing them to a
-        # Python clock would make expiry depend on which machine answered.
         cur.execute(
             "SELECT *, (expires_on <= CURRENT_TIMESTAMP) AS due "
             "FROM whatsapp_session "
-            "WHERE channel = %s AND identity = %s AND status = %s",
+            "WHERE channel = %s AND identity = %s AND status = %s "
+            "ORDER BY created_on DESC",
             (channel, identity, ACTIVE),
         )
-        row = cur.fetchone()
+        rows = [dict(r) for r in cur.fetchall()]
 
-    if row is None:
+    if not rows:
         return None
 
-    session = _shown(dict(row))
+    matched_row = None
+    if receiver:
+        from app.modules.forms import routing
+        for r in rows:
+            if not r.get("receiver_number") or routing.same_number(r["receiver_number"], receiver):
+                matched_row = r
+                break
+    else:
+        matched_row = rows[0]
+
+    if not matched_row:
+        return None
+
+    session = _shown(matched_row)
     if session.pop("due", False):
         expire(session["session_id"])
         return None
@@ -178,7 +205,8 @@ def finish(session_id: str, status: str, survey_id: Optional[str] = None) -> Non
         )
 
 
-def recently_finished(identity: str, seconds: int = 300) -> Optional[Dict[str, Any]]:
+def recently_finished(identity: str, receiver: str = "",
+                      seconds: int = 300) -> Optional[Dict[str, Any]]:
     """The conversation this number just finished, if it did.
 
     So a duplicate delivery of the reply that completed a survey is answered
@@ -189,11 +217,22 @@ def recently_finished(identity: str, seconds: int = 300) -> Optional[Dict[str, A
             "SELECT * FROM whatsapp_session "
             "WHERE channel = 'whatsapp' AND identity = %s AND status <> %s "
             "  AND completed_on > CURRENT_TIMESTAMP - make_interval(secs => %s) "
-            "ORDER BY completed_on DESC LIMIT 1",
+            "ORDER BY completed_on DESC",
             (identity, ACTIVE, int(seconds)),
         )
-        row = cur.fetchone()
-    return _shown(dict(row)) if row else None
+        rows = [dict(r) for r in cur.fetchall()]
+
+    if not rows:
+        return None
+
+    if receiver:
+        from app.modules.forms import routing
+        for r in rows:
+            if not r.get("receiver_number") or routing.same_number(r["receiver_number"], receiver):
+                return _shown(r)
+        return None
+
+    return _shown(rows[0])
 
 
 # --------------------------------------------------------------------------- #

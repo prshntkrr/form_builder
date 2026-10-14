@@ -424,6 +424,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_channel_settings_global
 CREATE TABLE IF NOT EXISTS webhook_config (
     webhook_id   VARCHAR(32)  PRIMARY KEY,
     label        VARCHAR(100) NOT NULL DEFAULT '',
+    phone_number VARCHAR(32)  NOT NULL DEFAULT '',
     channel      VARCHAR(20)  NOT NULL DEFAULT 'whatsapp'
                               CHECK (channel IN ('whatsapp', 'ivr')),
     project_id   VARCHAR(20),
@@ -495,9 +496,8 @@ CREATE TABLE IF NOT EXISTS whatsapp_session (
     completed_on   TIMESTAMP
 );
 
--- One live conversation per number. A second one would mean two questions
--- outstanding with no way for the person to say which they are answering.
+-- One live conversation per user per receiver number.
 CREATE UNIQUE INDEX IF NOT EXISTS uq_whatsapp_session_live
-    ON whatsapp_session (channel, identity) WHERE status = 'ACTIVE';
+    ON whatsapp_session (channel, identity, receiver_number) WHERE status = 'ACTIVE';
 CREATE INDEX IF NOT EXISTS ix_whatsapp_session_sweep
     ON whatsapp_session (expires_on) WHERE status = 'ACTIVE';
