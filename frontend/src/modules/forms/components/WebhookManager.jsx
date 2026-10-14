@@ -7,11 +7,22 @@ export default function WebhookManager({ projectId, channel = 'whatsapp' }) {
   const [error, setError] = useState('')
   const [adding, setAdding] = useState(false)
   const [label, setLabel] = useState('')
+  const [phone, setPhone] = useState('')
   const [token, setToken] = useState('')
   const [copied, setCopied] = useState('')
 
+  const [editingId, setEditingId] = useState(null)
+  const [editLabel, setEditLabel] = useState('')
+  const [editPhone, setEditPhone] = useState('')
+  const [editToken, setEditToken] = useState('')
+
   const channelLabel = channel === 'ivr' ? 'IVR' : 'WhatsApp'
-  const defaultUrl = `${window.location.origin}/api/integrations/${channel}/webhook`
+  const resolveUrl = (h) => {
+    if (h.webhook_url && !h.webhook_url.includes('127.0.0.1') && !h.webhook_url.includes('localhost')) {
+      return h.webhook_url
+    }
+    return `${window.location.origin}/api/integrations/${channel}/webhook/${h.webhook_id}`
+  }
 
   const load = useCallback(() => {
     api.webhooks(projectId || 'none')
@@ -27,12 +38,44 @@ export default function WebhookManager({ projectId, channel = 'whatsapp' }) {
     try {
       await api.createWebhook({
         label: label.trim(),
+        phone_number: phone.trim() || '',
         project_id: projectId || null,
         api_token: token.trim() || null,
       })
       setLabel('')
+      setPhone('')
       setToken('')
       setAdding(false)
+      load()
+    } catch (err) { setError(err.message) }
+  }
+
+  const startEdit = (h) => {
+    setEditingId(h.webhook_id)
+    setEditLabel(h.label || '')
+    setEditPhone(h.phone_number || '')
+    setEditToken('')
+  }
+
+  const cancelEdit = () => {
+    setEditingId(null)
+    setEditLabel('')
+    setEditPhone('')
+    setEditToken('')
+  }
+
+  const saveEdit = async (h) => {
+    setError('')
+    try {
+      const payload = {
+        label: editLabel.trim(),
+        phone_number: editPhone.trim(),
+      }
+      if (editToken.trim()) {
+        payload.api_token = editToken.trim()
+      }
+      await api.updateWebhook(h.webhook_id, payload)
+      setEditingId(null)
       load()
     } catch (err) { setError(err.message) }
   }
@@ -75,19 +118,26 @@ export default function WebhookManager({ projectId, channel = 'whatsapp' }) {
         <form onSubmit={create} style={{ marginBottom: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <input
             className="input"
-            placeholder="Label (e.g. Picky Assist #2)"
+            placeholder="Label (e.g. Account #2)"
             value={label}
             onChange={(e) => setLabel(e.target.value)}
             required
-            style={{ flex: '1 1 180px' }}
+            style={{ flex: '1 1 140px' }}
           />
           <input
             className="input"
-            placeholder="API token (optional)"
+            placeholder="Phone number (e.g. 9XXXXXXXX1)"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            style={{ flex: '1 1 160px' }}
+          />
+          <input
+            className="input"
+            placeholder="API token"
             value={token}
             onChange={(e) => setToken(e.target.value)}
             type="password"
-            style={{ flex: '1 1 180px' }}
+            style={{ flex: '1 1 160px' }}
           />
           <button className="btn btn--sm" type="submit">Create</button>
         </form>
@@ -96,74 +146,120 @@ export default function WebhookManager({ projectId, channel = 'whatsapp' }) {
       <table className="data">
         <thead>
           <tr>
-            <th>Label</th><th>URL</th><th>Token</th><th>Status</th><th />
+            <th>Label</th><th>Phone Number</th><th>URL</th><th>Token</th><th>Status</th><th />
           </tr>
         </thead>
         <tbody>
-          {/* The default webhook — always present, not deletable */}
-          <tr>
-            <td><strong>Default</strong></td>
-            <td>
-              <code className="tiny" style={{ wordBreak: 'break-all' }}>
-                {defaultUrl}
-              </code>
-              <button
-                className="btn btn--quiet btn--sm"
-                style={{ marginLeft: 4 }}
-                onClick={() => copy(defaultUrl)}
-              >
-                {copied === defaultUrl ? 'Copied' : 'Copy'}
-              </button>
-            </td>
-            <td><span className="tiny muted">from Settings</span></td>
-            <td><span className="tag tag--add">On</span></td>
-            <td />
-          </tr>
-
-          {hooks.map((h) => (
-            <tr key={h.webhook_id}>
-              <td>{h.label}</td>
-              <td>
-                <code className="tiny" style={{ wordBreak: 'break-all' }}>
-                  {h.webhook_url}
-                </code>
-                <button
-                  className="btn btn--quiet btn--sm"
-                  style={{ marginLeft: 4 }}
-                  onClick={() => copy(h.webhook_url)}
-                >
-                  {copied === h.webhook_url ? 'Copied' : 'Copy'}
-                </button>
-              </td>
-              <td>
-                {h.token_set
-                  ? <code>…{h.token_hint}</code>
-                  : <span className="tiny muted">from Settings</span>}
-              </td>
-              <td>
-                <span className={`tag ${h.enabled ? 'tag--add' : ''}`}>
-                  {h.enabled ? 'On' : 'Off'}
-                </span>
-              </td>
-              <td className="cat__actions">
-                <button className="btn btn--quiet btn--sm" onClick={() => toggle(h)}>
-                  {h.enabled ? 'Disable' : 'Enable'}
-                </button>
-                <button className="btn btn--quiet btn--sm" onClick={() => remove(h)}>
-                  Delete
-                </button>
+          {hooks.length === 0 && (
+            <tr>
+              <td colSpan={6} className="muted tiny" style={{ textAlign: 'center', padding: '16px' }}>
+                No webhooks configured yet. Click <strong>+ New webhook</strong> above to add one.
               </td>
             </tr>
-          ))}
+          )}
+
+          {hooks.map((h) => {
+            const url = resolveUrl(h)
+            const isEditing = editingId === h.webhook_id
+
+            if (isEditing) {
+              return (
+                <tr key={h.webhook_id} style={{ background: 'var(--surface-sunken, #f8fafc)' }}>
+                  <td>
+                    <input
+                      className="input"
+                      value={editLabel}
+                      onChange={(e) => setEditLabel(e.target.value)}
+                      placeholder="Label"
+                      style={{ width: '100%' }}
+                    />
+                  </td>
+                  <td>
+                    <input
+                      className="input"
+                      value={editPhone}
+                      onChange={(e) => setEditPhone(e.target.value)}
+                      placeholder="Phone number"
+                      style={{ width: '100%' }}
+                    />
+                  </td>
+                  <td>
+                    <code className="tiny" style={{ wordBreak: 'break-all' }}>{url}</code>
+                  </td>
+                  <td>
+                    <input
+                      className="input"
+                      type="password"
+                      value={editToken}
+                      onChange={(e) => setEditToken(e.target.value)}
+                      placeholder="New token (optional)"
+                      style={{ width: '100%' }}
+                    />
+                  </td>
+                  <td>
+                    <span className={`tag ${h.enabled ? 'tag--add' : ''}`}>
+                      {h.enabled ? 'On' : 'Off'}
+                    </span>
+                  </td>
+                  <td className="cat__actions">
+                    <button className="btn btn--sm" onClick={() => saveEdit(h)}>Save</button>
+                    <button className="btn btn--quiet btn--sm" onClick={cancelEdit}>Cancel</button>
+                  </td>
+                </tr>
+              )
+            }
+
+            return (
+              <tr key={h.webhook_id}>
+                <td><strong>{h.label}</strong></td>
+                <td>
+                  {h.phone_number
+                    ? <code style={{ fontWeight: 600 }}>{h.phone_number}</code>
+                    : <span className="tiny muted">Any / Unset</span>}
+                </td>
+                <td>
+                  <code className="tiny" style={{ wordBreak: 'break-all' }}>
+                    {url}
+                  </code>
+                  <button
+                    className="btn btn--quiet btn--sm"
+                    style={{ marginLeft: 4 }}
+                    onClick={() => copy(url)}
+                  >
+                    {copied === url ? 'Copied' : 'Copy'}
+                  </button>
+                </td>
+                <td>
+                  {h.token_set
+                    ? <code>…{h.token_hint}</code>
+                    : <span className="tiny muted">from Settings</span>}
+                </td>
+                <td>
+                  <span className={`tag ${h.enabled ? 'tag--add' : ''}`}>
+                    {h.enabled ? 'On' : 'Off'}
+                  </span>
+                </td>
+                <td className="cat__actions">
+                  <button className="btn btn--quiet btn--sm" onClick={() => startEdit(h)}>
+                    Edit
+                  </button>
+                  <button className="btn btn--quiet btn--sm" onClick={() => toggle(h)}>
+                    {h.enabled ? 'Disable' : 'Enable'}
+                  </button>
+                  <button className="btn btn--quiet btn--sm" onClick={() => remove(h)}>
+                    Delete
+                  </button>
+                </td>
+              </tr>
+            )
+          })}
         </tbody>
       </table>
 
       <p className="tiny muted" style={{ marginTop: 8 }}>
-        The Default webhook is your current Picky Assist endpoint — always active,
-        using the token from Settings above. Additional webhooks get their own URL
-        and optional token; without one they inherit from Settings. All webhooks
-        work identically.
+        Each webhook endpoint binds to a WhatsApp Business number. Forms assigned to that number will be isolated strictly to that webhook.
       </p>
     </div>
   )
 }
+

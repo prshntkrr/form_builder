@@ -353,7 +353,13 @@ async def _handle_webhook(request: Request, background: BackgroundTasks,
 
     message = _read(body)
     if not message["identity"] or (not message["text"] and not message["media_url"]):
-        return {"status": "ok"}
+        return {"status": "ok", "message-out": "", "delay": 0}
+
+    if webhook_id and not message.get("receiver"):
+        from app.modules.forms import webhook_service
+        phone = webhook_service.phone_for(webhook_id)
+        if phone:
+            message["receiver"] = phone
 
     logger.info("WhatsApp in from %s on %s (app %s, %d chars, media: %s, webhook: %s)",
                 _masked(message["identity"]), _masked(message["receiver"]),
@@ -378,7 +384,7 @@ async def _handle_webhook(request: Request, background: BackgroundTasks,
                              message["application"], project_id,
                              webhook_id=webhook_id)
 
-    return {"status": "ok"}
+    return {"status": "ok", "message-out": "", "delay": 0}
 
 
 @router.post("/webhook")
@@ -395,7 +401,7 @@ async def webhook_by_id(webhook_id: str, request: Request,
 
     hook = webhook_service.get_webhook(webhook_id)
     if not hook or not hook.get("enabled", True):
-        return {"status": "ok"}
+        return {"status": "ok", "message-out": "", "delay": 0}
 
     return await _handle_webhook(request, background, webhook_id=webhook_id)
 
@@ -430,8 +436,8 @@ def _scope_of(identity: str, receiver: str = "",
             logger.exception("Could not read project for webhook %s", webhook_id)
 
     try:
-        session = whatsapp_session.live(identity) \
-            or whatsapp_session.recently_finished(identity)
+        session = whatsapp_session.live(identity, receiver=receiver) \
+            or whatsapp_session.recently_finished(identity, receiver=receiver)
         if session and session.get("project_id"):
             return session["project_id"]
     except Exception:
@@ -439,7 +445,19 @@ def _scope_of(identity: str, receiver: str = "",
                          _masked(identity))
 
     try:
-        return routing.project_for_receiver(receiver)
+        project = routing.project_for_receiver(receiver)
+        if project:
+            return project
     except Exception:
         logger.exception("Could not tell whose number %s is", _masked(receiver))
-        return None
+
+    # Fallback: resolve from the first active enabled WhatsApp route
+    try:
+        routes = routing.list_routes(channel="whatsapp")
+        for r in routes:
+            if r.get("enabled") and r.get("project_id"):
+                return r["project_id"]
+    except Exception:
+        pass
+
+    return None

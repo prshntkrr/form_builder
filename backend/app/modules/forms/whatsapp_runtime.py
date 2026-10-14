@@ -444,7 +444,7 @@ def reply(identity: str, receiver: str, text: str,
         return None
 
     word = _word(text)
-    session = sessions.live(identity)
+    session = sessions.live(identity, receiver=receiver)
 
     if word in CANCEL_WORDS:
         if session:
@@ -468,7 +468,7 @@ def reply(identity: str, receiver: str, text: str,
     # A reply that arrives just after the last one completed a survey: a
     # provider retrying the delivery it never heard back from, not a new answer.
     if word and word not in MENU_WORDS:
-        finished = sessions.recently_finished(identity)
+        finished = sessions.recently_finished(identity, receiver=receiver)
         if finished and finished["status"] == sessions.COMPLETED:
             return None
 
@@ -522,38 +522,12 @@ def _begin(identity: str, receiver: str, caller: Dict[str, Any],
 
 
 def _menu(caller: Dict[str, Any], receiver: str) -> Dict[str, Any]:
-    """What this account can start, when the keyword meant nothing.
-
-    Built from `routing.offered`, which runs the same resolution and the same
-    `may_fill_form` as a keyword — so the menu can never list something a
-    keyword would refuse, and an account with nothing assigned sees the same
-    sentence an unlinked number sees.
-    """
-    try:
-        offers = routing.offered("whatsapp", caller, receiver=receiver)
-    except routing.RoutingError:
-        offers = []
-
-    if not offers:
-        return say(UNAVAILABLE)
-
-    # lines = ["*Available surveys*", ""]
-    # lines += [f"{i}. {o['form_title']} — send *{o['route_key']}*"
-    #           for i, o in enumerate(offers, 1)]
-    # lines += ["", "_Tap an option below or send the keyword._"]
-
-    # if len(offers) <= caps.MAX_BUTTONS:
-    #     choices = [(str(o["form_title"])[:20], o["route_key"]) for o in offers]
-    #     return say("\n".join(lines), interaction=caps.BUTTONS, choices=choices, title="Available surveys")
-    # elif len(offers) <= caps.MAX_LIST_ROWS:
-    #     choices = [(str(o["form_title"])[:24], o["route_key"]) for o in offers]
-    #     return say("\n".join(lines), interaction=caps.LIST, choices=choices, title="Available surveys")
-
-    # return say("\n".join(lines))
+    """Greeting prompt when an unrecognised word or greeting (Hi/Hello/Menu) is sent."""
     return say(
-    "*Welcome to E-Agrology!*\n\n"
-    "To get started, simply type the *keyword* of the form you want to fill out.\n\n"
-    "We’ll guide you through the form step by step.")
+        "*Welcome to E-Agrology!*\n\n"
+        "To get started, simply type the *keyword* of the form you want to fill out.\n\n"
+        "We’ll guide you through the form step by step."
+    )
 
 
 def _offered_languages(form_json: Dict[str, Any]) -> List[Tuple[str, str]]:

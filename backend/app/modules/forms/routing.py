@@ -497,19 +497,13 @@ def _on_this_number(routes: List[Dict[str, Any]],
                     receiver: Optional[str]) -> List[Dict[str, Any]]:
     """The routes a message arriving on this number could have meant.
 
-    A route with no number answers wherever it arrives, which is every route
-    configured before numbers existed. A route with one answers only there —
-    two projects can use the same keyword on their own lines without either
-    reaching the other's form.
-
-    Resolution, not authorization: which form the keyword *means*. Whether the
-    person may fill it in is still `may_fill_form`, afterwards and separately.
+    When receiver is specified, strictly isolate to routes assigned to this
+    number, so each WhatsApp Business number only triggers forms assigned to it.
     """
     if not receiver:
         return routes
     return [r for r in routes
-            if not (r.get("receiver_number") or "")
-            or same_number(r["receiver_number"], receiver)]
+            if same_number(r.get("receiver_number"), receiver)]
 
 
 def _matching(channel: str, key_norm: str,

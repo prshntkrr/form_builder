@@ -411,7 +411,18 @@ def save_sarvam_settings(req: WhatsAppSettingsRequest,
 # --------------------------------------------------------------------------- #
 # webhook management
 # --------------------------------------------------------------------------- #
-def _base_url(request) -> str:
+def _base_url(request: Request) -> str:
+    from app.core.config import settings
+
+    if settings.public_url:
+        return settings.public_url.rstrip("/")
+
+    # Check reverse proxy headers (e.g. Nginx, Traefik, Cloudflare)
+    proto = request.headers.get("x-forwarded-proto") or request.url.scheme
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host")
+    if host:
+        return f"{proto}://{host}".rstrip("/")
+
     return str(request.base_url).rstrip("/")
 
 
@@ -436,6 +447,7 @@ def create_webhook(
     try:
         return webhook_service.create_webhook(
             label=req.label, channel="whatsapp",
+            phone_number=req.phone_number or "",
             project_id=project_id,
             api_token=req.api_token or "",
             created_by=auth_service.display_name(user),
@@ -455,6 +467,7 @@ def update_webhook(
         return webhook_service.update_webhook(
             webhook_id,
             label=req.label,
+            phone_number=req.phone_number,
             enabled=req.enabled,
             api_token=req.api_token,
             base_url=_base_url(request))

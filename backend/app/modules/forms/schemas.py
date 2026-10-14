@@ -241,6 +241,7 @@ class WhatsAppSettingsRequest(BaseModel):
 class WebhookRequest(BaseModel):
     """Create or update a webhook endpoint."""
     label: Optional[str] = None
+    phone_number: Optional[str] = None
     project_id: Optional[str] = None
     enabled: Optional[bool] = None
     api_token: Optional[str] = None

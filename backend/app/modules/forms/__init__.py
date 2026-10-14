@@ -36,5 +36,7 @@ MODULE = Module(
         bootstrap.ensure_route_receiver_number,
         bootstrap.ensure_session_language,
         bootstrap.ensure_webhook_config,
+        bootstrap.ensure_webhook_phone_number,
+        bootstrap.ensure_whatsapp_session_receiver_index,
     ],
 )

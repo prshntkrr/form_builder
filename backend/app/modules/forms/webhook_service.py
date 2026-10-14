@@ -44,6 +44,7 @@ def _shown(row: Dict[str, Any], base_url: str = "") -> Dict[str, Any]:
     return {
         "webhook_id": row["webhook_id"],
         "label": row.get("label") or "",
+        "phone_number": row.get("phone_number") or "",
         "channel": row.get("channel") or "whatsapp",
         "project_id": row.get("project_id"),
         "enabled": row.get("enabled", True),
@@ -82,6 +83,7 @@ def get_webhook(webhook_id: str, base_url: str = "") -> Optional[Dict[str, Any]]
 
 
 def create_webhook(*, label: str, channel: str = "whatsapp",
+                   phone_number: str = "",
                    project_id: Optional[str] = None,
                    api_token: str = "",
                    created_by: str = "",
@@ -106,20 +108,21 @@ def create_webhook(*, label: str, channel: str = "whatsapp",
     with transaction() as cur:
         cur.execute(
             "INSERT INTO webhook_config "
-            "(webhook_id, label, channel, project_id, api_token, token_hint, created_by) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING *",
-            (webhook_id, label, channel, project_id,
+            "(webhook_id, label, phone_number, channel, project_id, api_token, token_hint, created_by) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING *",
+            (webhook_id, label, (phone_number or "").strip(), channel, project_id,
              sealed_token, token_hint, created_by),
         )
         row = _row_to_dict(cur.fetchone())
 
-    logger.info("Created webhook %s (%s) for %s by %s",
-                webhook_id, label, project_id or "system", created_by)
+    logger.info("Created webhook %s (%s, %s) for %s by %s",
+                webhook_id, label, phone_number or "any", project_id or "system", created_by)
     return _shown(row, base_url)
 
 
 def update_webhook(webhook_id: str, *,
                    label: Optional[str] = None,
+                   phone_number: Optional[str] = None,
                    enabled: Optional[bool] = None,
                    api_token: Optional[str] = None,
                    base_url: str = "") -> Dict[str, Any]:
@@ -132,6 +135,10 @@ def update_webhook(webhook_id: str, *,
             raise WebhookError("A webhook needs a label.")
         assignments.append("label = %s")
         values.append(label)
+
+    if phone_number is not None:
+        assignments.append("phone_number = %s")
+        values.append(phone_number.strip())
 
     if enabled is not None:
         assignments.append("enabled = %s")
@@ -207,3 +214,15 @@ def project_for(webhook_id: str) -> Optional[str]:
         )
         row = cur.fetchone()
     return row["project_id"] if row else None
+
+
+def phone_for(webhook_id: str) -> str:
+    """The phone number bound to this webhook endpoint, or ''."""
+    with transaction() as cur:
+        cur.execute(
+            "SELECT phone_number FROM webhook_config WHERE webhook_id = %s",
+            (webhook_id,),
+        )
+        row = cur.fetchone()
+    return (row["phone_number"] or "") if row else ""
+
