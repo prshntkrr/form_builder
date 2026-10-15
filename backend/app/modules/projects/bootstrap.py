@@ -180,7 +180,7 @@ def ensure_project_roles() -> bool:
             cur.execute(
                 """
                 INSERT INTO app_role (role_id, name, label, description, is_system, created_by)
-                VALUES (%s, %s, %s, %s, TRUE, 'setup')
+                VALUES (%s, %s, %s, %s, FALSE, 'setup')
                 """,
                 (role_id, name, spec["label"], spec["description"]),
             )

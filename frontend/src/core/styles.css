@@ -922,6 +922,11 @@ table.data td { max-width: 240px; overflow: hidden; text-overflow: ellipsis; whi
 }
 .tag--add { background: var(--accent-wash); color: var(--accent-deep); }
 .tag--del { background: var(--rose-wash); color: var(--rose); }
+.tag--admin { background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; font-weight: 550; }
+.tag--standard { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; font-weight: 550; }
+.tag--subrole { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; font-weight: 500; }
+.roles-group-title { font-size: 16px; font-weight: 650; margin: 28px 0 6px 0; color: var(--ink); display: flex; align-items: center; gap: 8px; }
+.roles-group-desc { font-size: 13px; color: var(--ink-3); margin-bottom: 14px; }
 
 .diff__version {
   display: flex; align-items: center; gap: 10px;

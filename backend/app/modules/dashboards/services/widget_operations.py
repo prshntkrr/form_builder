@@ -87,6 +87,8 @@ def apply_widget_operation(
         layout = dict(placed.get("layout") or {})
         layout["x"] = 0
         layout["y"] = _below_everything(specification)
+        layout.setdefault("w", 4)
+        layout.setdefault("h", 4)
         placed["layout"] = layout
 
         return specification.model_copy(

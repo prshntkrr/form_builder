@@ -65,7 +65,7 @@ class DashboardIntent(BaseModel):
 
 
 class DashboardAIResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
     intent: DashboardIntent
     dashboard: DashboardSpecification
@@ -1312,6 +1312,31 @@ def _lift_widget_configs(raw: Any) -> Any:
     for widget in dashboard.get("widgets") or []:
         if not isinstance(widget, dict):
             continue
+
+        # Ensure layout is present and valid
+        layout = widget.get("layout")
+        if not isinstance(layout, dict):
+            widget["layout"] = {"x": 0, "y": 0, "w": 4, "h": 4}
+        else:
+            if layout.get("x") is None or not isinstance(layout.get("x"), int) or layout.get("x") < 0:
+                layout["x"] = 0
+            if layout.get("y") is None or not isinstance(layout.get("y"), int) or layout.get("y") < 0:
+                layout["y"] = 0
+            if layout.get("w") is None or not isinstance(layout.get("w"), int) or layout.get("w") < 1:
+                layout["w"] = 4
+            if layout.get("h") is None or not isinstance(layout.get("h"), int) or layout.get("h") < 1:
+                layout["h"] = 4
+
+        # Ensure id is present
+        if not widget.get("id"):
+            widget["id"] = "widget_ai_1"
+
+        # Ensure data_source_id is present
+        if not widget.get("data_source_id"):
+            sources = dashboard.get("data_sources") or []
+            widget["data_source_id"] = (
+                sources[0].get("id") if sources and isinstance(sources[0], dict) and sources[0].get("id") else "source_1"
+            )
 
         binding = widget.get("data_binding")
 

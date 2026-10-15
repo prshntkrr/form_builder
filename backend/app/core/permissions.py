@@ -83,19 +83,6 @@ CORE_ROLES: Dict[str, Dict[str, object]] = {
         "locked": [USERS_MANAGE, ROLES_MANAGE],
         "everything": True,          # admin holds whatever exists, module or not
     },
-    # Kept because installations run on it: it builds forms and reads the
-    # standards, and taking that away from the accounts already holding it would
-    # be a surprise rather than a migration. It is **not offered** for a new
-    # assignment — see role_migration.NOT_OFFERED — so the Users page shows the
-    # two roles above and nothing else.
-    "editor": {
-        "label": "Editor (legacy)",
-        "description": "Builds forms and reads the standards. Superseded by a "
-                       "project role; kept for accounts already using it.",
-        "permissions": [],
-        "system": True,
-        "locked": [],
-    },
     "standard": {
         "label": "Standard User",
         "description": "Signs in, and does whatever the projects they belong to "

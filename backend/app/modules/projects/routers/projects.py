@@ -126,19 +126,17 @@ def project_roles(user: Dict[str, Any] = Depends(current_user)):
         cur.execute(
             """
             SELECT r.role_id, r.name, r.label, r.description,
-                   ARRAY_AGG(rp.permission ORDER BY rp.permission) AS permissions
+                   ARRAY_REMOVE(ARRAY_AGG(rp.permission ORDER BY rp.permission), NULL) AS permissions
             FROM   app_role r
-            JOIN   role_permission rp ON rp.role_id = r.role_id
+            LEFT JOIN role_permission rp ON rp.role_id = r.role_id
             GROUP  BY r.role_id, r.name, r.label, r.description
             ORDER  BY r.label
             """
         )
         roles = [dict(row) for row in cur.fetchall()]
 
-    # Only roles that mean nothing outside a project. The administrator holds
-    # every permission there is, project ones included, and belongs on the
-    # Users page rather than in a membership dropdown.
-    return {"roles": [r for r in roles if catalogue.is_project_role(r["permissions"])]}
+    # Only roles that mean nothing outside a project.
+    return {"roles": [r for r in roles if catalogue.is_project_role(r, role_name=r.get("name"))]}
 
 
 @router.get("/{project_id}")

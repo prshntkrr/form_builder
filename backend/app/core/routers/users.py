@@ -16,18 +16,17 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/users", tags=["users"])
 
 
+SYSTEM_ROLES = {"admin", "standard"}
+
+
 @router.get("/roles")
 def assignable_roles(user: Dict[str, Any] = Depends(needs(USERS_MANAGE))):
     """The roles that can be written on an **account**.
 
-    System roles only. A role that carries project permissions is something
-    somebody is *inside one project*, held through membership — writing it on an
-    account meant nothing, and reading it as though it did is what made
-    "Project manager" look like a kind of administrator. Those are offered by
-    `GET /api/projects/roles` instead, where they belong.
-
-    Derived rather than listed, so a role an administrator invents with only
-    system permissions is offered here without a code change.
+    System roles only (Standard User and System Administrator).
+    Sub-roles like Project Manager, Surveyor, and Reviewer are project-scoped
+    roles held through project membership, and are offered on
+    `GET /api/projects/roles` instead.
     """
     from app.core import role_service
 
@@ -40,22 +39,17 @@ def assignable_roles(user: Dict[str, Any] = Depends(needs(USERS_MANAGE))):
             "permission_count": len(r["permissions"]),
         }
         for r in role_service.list_roles()
-        if not _is_project_role(r["permissions"]) and r["name"] not in NOT_OFFERED
+        if r["name"] in SYSTEM_ROLES
     ]
 
 
-def _is_project_role(held) -> bool:
-    """Whether a role belongs to the project catalogue instead of this one.
-
-    The same predicate `GET /api/projects/roles` uses, so a role is offered on
-    exactly one of the two and never on both.
-    """
+def _is_project_role(held, role_name: str = None) -> bool:
+    """Whether a role belongs to the project catalogue instead of this one."""
     try:
         from app.modules.projects import permissions as projects
     except Exception:
-        # The projects module is switched off, so every role is a system role.
         return False
-    return projects.is_project_role(held)
+    return projects.is_project_role(held, role_name=role_name)
 
 
 @router.get("/voice-enrolment")
@@ -83,6 +77,16 @@ def voice_enrolment(user: Dict[str, Any] = Depends(needs(USERS_MANAGE))):
 
 @router.get("")
 def index(user: Dict[str, Any] = Depends(needs(USERS_MANAGE))):
+    from app.core import sso_client
+    if sso_client.is_sso_enabled():
+        try:
+            sso_users = sso_client.fetch_sso_users()
+            if sso_users:
+                with auth_service.transaction() as cur:
+                    for su in sso_users:
+                        auth_service._sync_sso_user(cur, su)
+        except Exception as err:
+            logger.warning("Could not sync SSO users during index: %s", err)
     return auth_service.list_users()
 
 

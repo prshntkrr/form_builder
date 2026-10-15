@@ -60,6 +60,12 @@ class Settings(BaseSettings):
     # of relying on the log. Never enable this where users are real.
     auth_expose_reset_link: bool = False
 
+    # Central SSO Service
+    sso_enabled: bool = True
+    sso_api_url: str = "http://localhost:8005"
+    sso_app_id: str = "eagrology"
+    sso_api_key: str = "eagrology-api-secret-key-2026"
+
     # How closely a voice must match the enrolled voiceprint to sign in, as a
     # cosine similarity from -1 to 1.
     #

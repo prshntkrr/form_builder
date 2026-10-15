@@ -124,32 +124,38 @@ SYSTEM_WIDE = {PROJECTS_VIEW_ALL, PROJECTS_MANAGE}
 PROJECT_SCOPED = {p.key for p in CATALOGUE} - SYSTEM_WIDE
 
 
-def is_project_role(held) -> bool:
-    """Whether a role belongs on the project side.
+SYSTEM_ROLE_NAMES = {"admin", "standard", "editor"}
 
-    Two conditions, and both are needed:
 
-    * it holds at least one genuinely project-scoped permission (a `project.*`
-      one), and
-    * everything it holds is either project-scoped or `shared` — a permission
-      another module marks as usable inside a project, dashboards being the
-      first.
+def is_project_role(held, role_name: str = None) -> bool:
+    """Whether a role belongs on the project side (is a project sub-role).
 
-    The anchor is what keeps the two sides apart. A role holding *only* shared
-    permissions — say a dashboards-only account role — is not a project role;
-    it has no standing inside a project on its own. And the administrator, who
-    holds every permission there is, holds account-only ones too, so it stays a
-    system role. Adding "See dashboards" to a Reviewer no longer knocks it off
-    the project side, which is the whole point of `shared`.
-
-    Used by both `GET /api/projects/roles` and `GET /api/users/roles`, so a role
-    is offered on exactly one of them.
+    Core system roles ('admin', 'standard') belong strictly to the account level.
+    All other roles (built-in subroles 'project_manager', 'surveyor', 'reviewer',
+    and any custom subroles created by administrators like 'field_advisor')
+    belong on the project side and can be allocated to members within projects.
     """
+    if isinstance(held, dict):
+        role_name = held.get("name") or held.get("role") or role_name
+        held = held.get("permissions") or []
+
+    if role_name:
+        if str(role_name).lower().strip() in SYSTEM_ROLE_NAMES:
+            return False
+        return True
+
     from app.core import permissions as core
 
     held = set(held or [])
-    if not held:
+    admin_system_perms = {
+        core.USERS_MANAGE,
+        core.USERS_DELETE,
+        core.ROLES_MANAGE,
+        PROJECTS_VIEW_ALL,
+        PROJECTS_MANAGE,
+    }
+    if held and (admin_system_perms & held):
         return False
 
-    allowed = PROJECT_SCOPED | set(core.SHARED)
-    return bool(held & PROJECT_SCOPED) and held <= allowed
+    return True
+

@@ -117,11 +117,11 @@ class DashboardDataRequest(BaseModel):
 class WidgetLayout(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    x: int = Field(ge=0)
-    y: int = Field(ge=0)
+    x: int = Field(default=0, ge=0)
+    y: int = Field(default=0, ge=0)
 
-    w: int = Field(ge=1, le=12)
-    h: int = Field(ge=1)
+    w: int = Field(default=4, ge=1, le=12)
+    h: int = Field(default=4, ge=1)
 
 
 # ---------------------------------------------------------------------------
@@ -252,7 +252,9 @@ class DashboardWidget(BaseModel):
 
     data_binding: DashboardDataBinding
 
-    layout: WidgetLayout
+    layout: WidgetLayout = Field(
+        default_factory=WidgetLayout
+    )
 
     presentation: Optional[WidgetPresentation] = None
 
@@ -286,7 +288,7 @@ class DashboardLayout(BaseModel):
 # ---------------------------------------------------------------------------
 
 class DashboardInfo(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="allow")
 
     name: Optional[str] = None
 
@@ -295,6 +297,7 @@ class DashboardInfo(BaseModel):
     # Colours for every widget that has not chosen its own, so "make this
     # dashboard green" is one decision rather than one per chart.
     palette: Optional[List[str]] = None
+    palette_name: Optional[str] = None
     series_color: Optional[str] = Field(default=None, min_length=1)
 
 
@@ -334,9 +337,11 @@ class FilterDependency(BaseModel):
 
 
 class DashboardSpecification(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="allow")
 
     schema_version: Literal[1] = 1
+
+    project_id: Optional[str] = None
 
     dashboard: DashboardInfo
 

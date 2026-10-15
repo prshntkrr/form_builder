@@ -58,7 +58,9 @@ def _row(cur, role_id: str) -> Optional[Dict[str, Any]]:
                    ARRAY[]::varchar[]
                ) AS permissions,
                (SELECT COUNT(*) FROM app_user u
-                 WHERE u.role_id = r.role_id AND u.is_active) AS user_count
+                 WHERE u.role_id = r.role_id AND u.is_active) AS user_count,
+               (SELECT COUNT(*) FROM project_member pm
+                 WHERE pm.role_id = r.role_id) AS member_count
         FROM app_role r WHERE r.role_id = %s
         """,
         (role_id,),
@@ -68,16 +70,21 @@ def _row(cur, role_id: str) -> Optional[Dict[str, Any]]:
 
 
 def _public(row: Dict[str, Any]) -> Dict[str, Any]:
+    from app.modules.projects.permissions import is_project_role
     built_in = permissions.BUILT_IN.get(row["name"], {})
+    is_proj = is_project_role(row.get("permissions") or [], role_name=row.get("name"))
+    is_core_system = row.get("name") in ("admin", "standard")
     return {
         "role_id": row["role_id"],
         "name": row["name"],
         "label": row["label"],
         "description": row.get("description") or "",
-        "is_system": bool(row.get("is_system")),
+        "is_system": is_core_system,
+        "is_subrole": is_proj,
         "permissions": permissions.clean(list(row.get("permissions") or [])),
         "locked_permissions": list(built_in.get("locked") or []),
         "user_count": int(row.get("user_count") or 0),
+        "member_count": int(row.get("member_count") or 0),
         "created_by": row.get("created_by"),
     }
 
@@ -93,7 +100,9 @@ def list_roles() -> List[Dict[str, Any]]:
                        ARRAY[]::varchar[]
                    ) AS permissions,
                    (SELECT COUNT(*) FROM app_user u
-                     WHERE u.role_id = r.role_id AND u.is_active) AS user_count
+                     WHERE u.role_id = r.role_id AND u.is_active) AS user_count,
+                   (SELECT COUNT(*) FROM project_member pm
+                     WHERE pm.role_id = r.role_id) AS member_count
             FROM app_role r
             ORDER BY r.is_system DESC, r.label
             """
@@ -263,37 +272,50 @@ def delete_role(role_id: str, reassign_to: Optional[str] = None) -> Dict[str, An
         existing = _row(cur, role_id)
         if not existing:
             raise RoleNotFound(f"No role {role_id}")
-        if existing["is_system"]:
-            raise RoleError(f"'{existing['label']}' is a built-in role and cannot be deleted")
+        if existing["name"] in ("admin", "standard"):
+            raise RoleError(f"'{existing['label']}' is a fixed system role and cannot be deleted")
 
         cur.execute(
             "SELECT COUNT(*) AS n FROM app_user WHERE role_id = %s", (role_id,))
         holders = int(cur.fetchone()["n"])
 
-        if holders and not reassign_to:
+        cur.execute(
+            "SELECT COUNT(*) AS n FROM project_member WHERE role_id = %s", (role_id,))
+        pm_holders = int(cur.fetchone()["n"])
+
+        total_holders = holders + pm_holders
+        if total_holders and not reassign_to:
             raise RoleError(
-                f"{holders} account(s) still have this role — choose a role to move them to"
+                f"{total_holders} account(s) or project member(s) still hold this role — choose a role to move them to"
             )
 
-        if holders:
+        if total_holders:
             target = _row(cur, reassign_to)
             if not target:
                 raise RoleNotFound(f"No role {reassign_to}")
-            cur.execute(
-                "UPDATE app_user SET role_id = %s, updated_on = CURRENT_TIMESTAMP "
-                "WHERE role_id = %s",
-                (reassign_to, role_id),
-            )
-            cur.execute(
-                "DELETE FROM user_session WHERE user_id IN "
-                "(SELECT user_id FROM app_user WHERE role_id = %s)",
-                (reassign_to,),
-            )
+            if holders:
+                cur.execute(
+                    "UPDATE app_user SET role_id = %s, updated_on = CURRENT_TIMESTAMP "
+                    "WHERE role_id = %s",
+                    (reassign_to, role_id),
+                )
+                cur.execute(
+                    "DELETE FROM user_session WHERE user_id IN "
+                    "(SELECT user_id FROM app_user WHERE role_id = %s)",
+                    (reassign_to,),
+                )
+            if pm_holders:
+                cur.execute(
+                    "UPDATE project_member SET role_id = %s "
+                    "WHERE role_id = %s",
+                    (reassign_to, role_id),
+                )
 
+        cur.execute("DELETE FROM role_permission WHERE role_id = %s", (role_id,))
         cur.execute("DELETE FROM app_role WHERE role_id = %s", (role_id,))
 
-    logger.info("Deleted role '%s' (%d account(s) reassigned)", existing["name"], holders)
-    return {"role_id": role_id, "deleted": True, "reassigned": holders}
+    logger.info("Deleted role '%s' (%d account(s)/member(s) reassigned)", existing["name"], total_holders)
+    return {"role_id": role_id, "deleted": True, "reassigned": total_holders}
 
 
 def ensure_built_in(created_by: str = "setup") -> List[str]:

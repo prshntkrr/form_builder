@@ -595,8 +595,108 @@ def forget_voice(user_id: str) -> Dict[str, Any]:
 # --------------------------------------------------------------------------- #
 # sessions
 # --------------------------------------------------------------------------- #
+def _sync_sso_user(cur, sso_user: Dict[str, Any]) -> str:
+    """Upsert a user from SSO into e-Agrology, preserving local platform roles and project subroles."""
+    global_role = (sso_user.get("global_role") or sso_user.get("role") or "standard").strip().lower()
+    sso_id = sso_user.get("user_id")
+    email = sso_user.get("email")
+    username = sso_user.get("username")
+    phone = sso_user.get("phone")
+    full_name = sso_user.get("full_name") or username or email or "SSO User"
+    is_active = bool(sso_user.get("is_active", True))
+
+    # Check if user already exists
+    cur.execute(
+        """
+        SELECT user_id, role_id FROM app_user
+        WHERE user_id = %s OR (email IS NOT NULL AND email = %s) OR (username IS NOT NULL AND username = %s)
+        LIMIT 1;
+        """,
+        (sso_id, email, username),
+    )
+    existing = cur.fetchone()
+
+    # Resolve the role_id in app_role
+    role_name = "admin" if global_role == "admin" else "standard"
+    cur.execute("SELECT role_id FROM app_role WHERE name = %s LIMIT 1;", (role_name,))
+    role_row = cur.fetchone()
+    resolved_role_id = role_row["role_id"] if role_row else ("ROL00001" if role_name == "admin" else "ROL00007")
+
+    if existing:
+        target_id = existing["user_id"]
+        # If user ID in local DB differs from SSO, align it to SSO ID (cascades to project_member, sessions, etc.)
+        if sso_id and target_id != sso_id:
+            cur.execute("UPDATE app_user SET user_id = %s WHERE user_id = %s;", (sso_id, target_id))
+            target_id = sso_id
+
+        # If user is admin in SSO, elevate to admin locally; otherwise preserve local role or default to standard
+        local_role = resolved_role_id if global_role == "admin" else (existing["role_id"] or resolved_role_id)
+        cur.execute(
+            """
+            UPDATE app_user SET
+                email = COALESCE(%s, email),
+                username = COALESCE(%s, username),
+                phone = COALESCE(%s, phone),
+                full_name = %s,
+                role_id = %s,
+                is_active = %s,
+                updated_on = CURRENT_TIMESTAMP
+            WHERE user_id = %s;
+            """,
+            (email, username, phone, full_name, local_role, is_active, target_id),
+        )
+    else:
+        target_id = sso_id or _next_user_id(cur)
+        local_role = resolved_role_id
+        cur.execute(
+            """
+            INSERT INTO app_user
+                (user_id, email, username, phone, full_name, role_id, password_hash, is_active, created_by)
+            VALUES (%s, %s, %s, %s, %s, %s, '!SSO_MANAGED!', %s, 'sso');
+            """,
+            (target_id, email, username, phone, full_name, local_role, is_active),
+        )
+
+    return target_id
+
+
 def login(email: str, password: str, user_agent: Optional[str] = None) -> Dict[str, Any]:
-    """Exchange a password for a session token."""
+    """Exchange a password for a session token, delegating to SSO when enabled."""
+    from app.core import sso_client
+    if sso_client.is_sso_enabled():
+        success, sso_data, err_msg = sso_client.login(email, password)
+        if success and sso_data:
+            sso_user = sso_data["user"]
+            now = datetime.utcnow()
+            with transaction() as cur:
+                local_user_id = _sync_sso_user(cur, sso_user)
+                token, token_hash = new_token()
+                expires = now + timedelta(hours=settings.session_hours)
+                cur.execute(
+                    """
+                    INSERT INTO user_session (token_hash, user_id, expires_on, user_agent)
+                    VALUES (%s, %s, %s, %s)
+                    """,
+                    (token_hash, local_user_id, expires, (user_agent or "")[:200] or None),
+                )
+                cur.execute(
+                    "UPDATE app_user SET failed_logins = 0, locked_until = NULL, "
+                    "last_login_on = CURRENT_TIMESTAMP WHERE user_id = %s",
+                    (local_user_id,),
+                )
+                user_dict = _public(_read_user(cur, user_id=local_user_id))
+            logger.info("SSO user %s (%s) signed in successfully", local_user_id, sso_user.get("email"))
+            return {
+                "token": token,
+                "expires_on": expires,
+                "user": user_dict,
+                "sso_token": sso_data.get("token"),
+            }
+        elif err_msg and "unreachable" not in err_msg.lower():
+            raise AuthError(err_msg)
+        else:
+            logger.warning("SSO unreachable (%s), falling back to local credentials", err_msg)
+
     return _sign_in(email, user_agent, lambda cur, user: _password_matches(
         cur, user, password))
 

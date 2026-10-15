@@ -11,7 +11,10 @@ which is the same code path a real answer takes.
 """
 import pytest
 
-from app.modules.dashboards.schemas import DashboardSpecification
+from app.modules.dashboards.schemas import (
+    DashboardSpecification,
+    WidgetOperationRequest,
+)
 from app.modules.dashboards.services.dashboard_llm import (
     LLMError,
     read_widget_operation,
@@ -396,3 +399,101 @@ class TestWidgetIds:
 
     def test_and_two_are_never_the_same(self):
         assert len({new_widget_id() for _ in range(200)}) == 200
+
+
+class TestMetadataAndRepairTolerance:
+    def test_widget_operation_request_accepts_dashboard_with_project_id_and_palette(self):
+        payload = {
+            "table_name": "rice_tabular",
+            "prompt": "add a card with total farmers",
+            "mode": "add",
+            "widget_id": None,
+            "dashboard": {
+                "schema_version": 1,
+                "project_id": "PRJ00001",
+                "_live_source": {"type": "postgresql"},
+                "dashboard": {
+                    "name": "Rice",
+                    "palette_name": "warm",
+                    "palette": ["#111111", "#222222"],
+                },
+                "data_sources": [
+                    {"id": "source_1", "name": "rice_tabular", "type": "postgresql_tabular"}
+                ],
+                "widgets": [],
+                "layout": {"type": "grid", "columns": 12, "row_height": 64},
+                "filter_fields": [],
+                "filter_dependencies": [],
+            },
+        }
+
+        req = WidgetOperationRequest.model_validate(payload)
+        assert req.dashboard.project_id == "PRJ00001"
+        assert req.dashboard.dashboard.palette_name == "warm"
+
+    def test_read_widget_operation_repairs_missing_layout(self):
+        raw = {
+            "intent": {
+                "requested_fields": ["id"],
+                "requested_visualizations": ["kpi"],
+                "visualizations_specified": True,
+            },
+            "dashboard": {
+                "dashboard": {"name": "Test"},
+                "data_sources": [
+                    {"id": "source_1", "name": "rice_tabular", "type": "postgresql_tabular"}
+                ],
+                "widgets": [{
+                    "id": "w1",
+                    "type": "kpi",
+                    "title": "Total Farmers",
+                    "data_source_id": "source_1",
+                    "data_binding": {
+                        "dimensions": [],
+                        "measures": [{"field": "id", "aggregation": "COUNT"}],
+                        "filters": [],
+                    },
+                    # layout intentionally omitted
+                }],
+            },
+        }
+
+        op, widget_data = read_widget_operation(raw, FIELDS, "add")
+        assert op == "add_widget"
+        assert widget_data["layout"]["w"] == 4
+        assert widget_data["layout"]["h"] == 4
+
+    def test_read_widget_operation_repairs_partial_layout(self):
+        raw = {
+            "intent": {
+                "requested_fields": ["id"],
+                "requested_visualizations": ["kpi"],
+                "visualizations_specified": True,
+            },
+            "dashboard": {
+                "dashboard": {"name": "Test"},
+                "data_sources": [
+                    {"id": "source_1", "name": "rice_tabular", "type": "postgresql_tabular"}
+                ],
+                "widgets": [{
+                    "id": "w1",
+                    "type": "kpi",
+                    "title": "Total Farmers",
+                    "data_source_id": "source_1",
+                    "data_binding": {
+                        "dimensions": [],
+                        "measures": [{"field": "id", "aggregation": "COUNT"}],
+                        "filters": [],
+                    },
+                    "layout": {"w": 6},  # missing x, y, h
+                }],
+            },
+        }
+
+        op, widget_data = read_widget_operation(raw, FIELDS, "add")
+        assert op == "add_widget"
+        assert widget_data["layout"]["x"] == 0
+        assert widget_data["layout"]["y"] == 0
+        assert widget_data["layout"]["w"] == 6
+        assert widget_data["layout"]["h"] == 4
+

@@ -1,225 +1,79 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import { api } from '../api.js'
 import { useAuth } from '../auth.jsx'
-import PasswordField from '../PasswordField.jsx'
-import VoiceEnrolment from '../VoiceEnrolment.jsx'
 
 const when = (value) =>
   value ? new Date(value).toLocaleString(undefined, {
     day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
   }) : 'never'
 
-function AddPerson({ roles, onAdded, onClose }) {
-  const [form, setForm] = useState({
-    email: '', username: '', phone: '', full_name: '', password: '', role: roles[0]?.role_id || '',
-  })
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-  // Whether to go on to voice enrolment once the account exists. Not part of
-  // the form: enrolment needs a user_id, and the person has to be here to speak.
-  const [withVoice, setWithVoice] = useState(false)
-
-  const set = (key) => (e) => setForm({ ...form, [key]: e.target.value })
-
-  // Any one of the three names the account; the server enforces the same rule.
-  // Checked here too so the answer is immediate rather than a round trip.
-  const named = [form.email, form.username, form.phone].some((v) => v.trim())
-
-  const submit = async (e) => {
-    e.preventDefault()
-    if (!named) {
-      setError('Give an email address, a username or a phone number — '
-               + 'whichever they will sign in with.')
-      return
-    }
-    setBusy(true)
-    setError('')
-    try {
-      onAdded(await api.createUser(form), withVoice)
-    } catch (err) {
-      setError(err.message)
-      setBusy(false)
-    }
-  }
-
-  return (
-    <div className="sheet" onMouseDown={onClose}>
-      <form className="sheet__panel" onMouseDown={(e) => e.stopPropagation()} onSubmit={submit}>
-        <div className="sheet__head">
-          <div>
-            <h2>Add someone</h2>
-            <p className="lede tiny">
-              They sign in with their password and any one of the three below —
-              give at least one. Without an email address there is nowhere to
-              send a password reset, so theirs has to be set for them.
-            </p>
-          </div>
-          <button type="button" className="iconbtn" onClick={onClose} aria-label="Close">✕</button>
-        </div>
-
-        <div className="sheet__body">
-          {error && <div className="note note--bad" style={{ marginBottom: 14 }}>{error}</div>}
-
-          <div className="frow__grid" style={{ paddingRight: 0 }}>
-            <label className="col">
-              <span className="minilabel">Email <span className="faint">— optional</span></span>
-              <input className="control" type="email" autoFocus
-                     value={form.email} onChange={set('email')} />
-            </label>
-            <label className="col">
-              <span className="minilabel">Full name</span>
-              <input className="control" value={form.full_name} onChange={set('full_name')} />
-            </label>
-          </div>
-
-          <div className="frow__grid" style={{ paddingRight: 0, marginTop: 14 }}>
-            <label className="col">
-              <span className="minilabel">Username <span className="faint">— optional</span></span>
-              <input className="control" value={form.username} onChange={set('username')}
-                     autoComplete="off" placeholder="asha.devi" />
-              <span className="tiny muted">
-                Letters, digits, dots, dashes or underscores. No “@”, and not
-                all digits — those read as an email and a phone number.
-              </span>
-            </label>
-            <label className="col">
-              <span className="minilabel">Phone <span className="faint">— optional</span></span>
-              <input className="control" type="tel" value={form.phone} onChange={set('phone')}
-                     autoComplete="off" placeholder="+91 98765 43210" />
-              <span className="tiny muted">
-                With the country code, so the same number is one number however
-                it is written.
-              </span>
-            </label>
-          </div>
-
-          <div className="frow__grid" style={{ paddingRight: 0, marginTop: 14 }}>
-            <label className="col">
-              <span className="minilabel">Temporary password</span>
-              <PasswordField required minLength={8} autoComplete="new-password"
-                             value={form.password} onChange={set('password')}
-                             placeholder="at least 8 characters" />
-            </label>
-            <label className="col">
-              <span className="minilabel">Role</span>
-              <select className="control" value={form.role} onChange={set('role')}>
-                {roles.map((r) => <option key={r.role_id} value={r.role_id}>{r.label}</option>)}
-              </select>
-            </label>
-          </div>
-
-          <p className="tiny muted" style={{ marginTop: 12 }}>
-            {roles.find((r) => r.role_id === form.role)?.description}
-          </p>
-
-          <label className="row" style={{ marginTop: 14, gap: 10, alignItems: 'flex-start' }}>
-            <input type="checkbox" checked={withVoice}
-                   onChange={(e) => setWithVoice(e.target.checked)} />
-            <span className="tiny">
-              <b>Set up voice sign-in as well.</b> Recording follows once the
-              account exists, so they need to be here to speak. It can also be
-              done later from the <b>Voice</b> button beside them.
-            </span>
-          </label>
-        </div>
-
-        <div className="sheet__foot">
-          <span className="spacer" />
-          <button className="btn btn--primary" type="submit" disabled={busy}>
-            {busy && <span className="spin" />}
-            Add them
-          </button>
-        </div>
-      </form>
-    </div>
-  )
-}
-
+/**
+ * Users Directory:
+ * Fetched and synced from Central SSO.
+ * Roles and credentials are managed centrally in SSO; here we display
+ * the synchronized list and each user's assigned platform role.
+ */
 export default function Users() {
-  const { user: me, can } = useAuth()
+  const { user: me } = useAuth()
   const [people, setPeople] = useState(null)
-  const [roles, setRoles] = useState([])
-  // The account a confirmation is open for. Deleting is not something to do by
-  // clicking once next to Deactivate.
-  const [removing, setRemoving] = useState(null)
-  const [adding, setAdding] = useState(false)
-  // The account whose voice enrolment is open. Enrolment needs a user_id, so it
-  // belongs on an account that exists rather than inside the Add someone form —
-  // which is also why adding somebody offers it straight afterwards.
-  const [enrolling, setEnrolling] = useState(null)
   const [error, setError] = useState('')
-  const [notice, setNotice] = useState(null)
 
   const load = useCallback(() => {
-    api.listUsers().then(setPeople).catch((e) => setError(e.message))
+    setError('')
+    api.listUsers()
+      .then(setPeople)
+      .catch((e) => setError(e.message))
   }, [])
 
   useEffect(() => {
     load()
-    api.listRoles().then(setRoles).catch(() => setRoles([]))
   }, [load])
-
-  const act = async (fn) => {
-    setError('')
-    try {
-      await fn()
-      load()
-    } catch (e) {
-      setError(e.message)
-    }
-  }
-
-  const changeRole = (person, role) =>
-    act(() => api.updateUser(person.user_id, { role }))
-
-  const setActive = (person, is_active) =>
-    act(() => api.updateUser(person.user_id, { is_active }))
-
-  const unlock = (person) => act(() => api.updateUser(person.user_id, { unlock: true }))
-
-  const sendReset = (person) =>
-    act(async () => {
-      const result = await api.userResetLink(person.user_id)
-      setNotice(result.reset_link
-        ? { email: result.email, link: result.reset_link }
-        : { email: result.email })
-    })
 
   return (
     <main className="main">
       <div className="page-head">
         <div>
           <h1>Users</h1>
-          <p className="lede">Who can sign in, and which role each of them holds.</p>
+          <p className="lede">
+            User identity and system roles are managed centrally in Central SSO.
+          </p>
         </div>
-        <button className="btn btn--primary" onClick={() => setAdding(true)}>Add someone</button>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <button className="btn btn--quiet" onClick={load} title="Refresh from SSO">
+            ↻ Sync from SSO
+          </button>
+          <a
+            href={import.meta.env.VITE_SSO_URL || "http://localhost:8005"}
+            target="_blank"
+            rel="noreferrer"
+            className="btn btn--primary"
+            style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+          >
+            <span>Manage Users in SSO ↗</span>
+          </a>
+        </div>
       </div>
 
       {error && <div className="note note--bad" style={{ marginBottom: 14 }}>{error}</div>}
 
-      {notice && (
-        <div className="note note--good" style={{ marginBottom: 14 }}>
-          <strong>Reset link issued for {notice.email}</strong>
-          {notice.link ? (
-            <>
-              <span className="tiny">No mail server is configured, so send it yourself:</span>
-              <code className="tiny" style={{ overflowWrap: 'anywhere' }}>{notice.link}</code>
-            </>
-          ) : (
-            <span className="tiny">It has been emailed to them. The link expires in an hour.</span>
-          )}
+      {!people && (
+        <div className="stack-list">
+          {[0, 1, 2, 3].map((i) => <div key={i} className="skeleton" style={{ height: 72 }} />)}
         </div>
       )}
 
-      {!people && (
-        <div className="stack-list">
-          {[0, 1, 2].map((i) => <div key={i} className="skeleton" style={{ height: 72 }} />)}
+      {people && people.length === 0 && (
+        <div className="item muted" style={{ padding: '24px', textAlign: 'center' }}>
+          No users found in SSO directory. Use the SSO portal to add users.
         </div>
       )}
 
       <div className="stack-list">
         {people?.map((person) => {
           const isMe = person.user_id === me?.user_id
+          const isAdmin = person.role === 'admin'
+          const roleLabel = person.role_label || (isAdmin ? 'System Administrator' : 'Standard User')
+
           return (
             <div className="item" key={person.user_id}>
               <div className="item__body">
@@ -228,164 +82,32 @@ export default function Users() {
                   {person.full_name || person.email}
                   {isMe && <span className="tag">you</span>}
                   {person.locked && <span className="tag tag--del">locked out</span>}
-                  {person.voice_enrolled && <span className="tag">voice</span>}
                   {!person.is_active && <span className="tag">deactivated</span>}
                 </div>
-                <div className="item__sub">{person.email}</div>
+                <div className="item__sub">
+                  {person.email}
+                  {person.username && <span className="tiny muted" style={{ marginLeft: 8 }}>@{person.username}</span>}
+                  {person.phone && <span className="tiny muted" style={{ marginLeft: 8 }}>{person.phone}</span>}
+                </div>
                 <div className="item__meta">
                   <span>last signed in {when(person.last_login_on)}</span>
-                  {person.created_by && (
-                    <>
-                      <span className="sep">·</span>
-                      <span>added by {person.created_by}</span>
-                    </>
-                  )}
+                  <span className="sep">·</span>
+                  <span>{person.created_by ? `added by ${person.created_by}` : 'synced via SSO'}</span>
                 </div>
               </div>
 
-              <select
-                className="frow__type"
-                value={person.role_id || ''}
-                disabled={isMe}
-                title={isMe ? 'You cannot change your own role' : 'Change their role'}
-                onChange={(e) => changeRole(person, e.target.value)}
-              >
-                {roles.map((r) => (
-                  <option key={r.role_id} value={r.role_id}>{r.label}</option>
-                ))}
-              </select>
-
-              <div className="item__acts">
-                <button className="btn btn--sm btn--quiet" onClick={() => sendReset(person)}>
-                  Reset link
-                </button>
-                <button className="btn btn--sm btn--quiet" onClick={() => setEnrolling(person)}>
-                  {person.voice_enrolled ? 'Voice ✓' : 'Voice'}
-                </button>
-                {person.locked && (
-                  <button className="btn btn--sm btn--quiet" onClick={() => unlock(person)}>
-                    Unlock
-                  </button>
-                )}
-                {person.is_active ? (
-                  <button className="btn btn--sm btn--quiet btn--danger" disabled={isMe}
-                          onClick={() => setActive(person, false)}>
-                    Deactivate
-                  </button>
-                ) : (
-                  <button className="btn btn--sm btn--quiet" onClick={() => setActive(person, true)}>
-                    Reactivate
-                  </button>
-                )}
-                {/* Only for an account that may actually remove one — and never
-                    for yourself, which the backend refuses anyway. */}
-                {can.delete_users && !isMe && (
-                  <button className="btn btn--sm btn--quiet btn--danger"
-                          onClick={() => setRemoving(person)}>
-                    Delete
-                  </button>
-                )}
+              <div className="item__acts" style={{ alignItems: 'center' }}>
+                <span
+                  className={`tag ${isAdmin ? 'tag--admin' : 'tag--standard'}`}
+                  style={{ fontSize: '12.5px', padding: '3px 12px' }}
+                >
+                  {roleLabel}
+                </span>
               </div>
             </div>
           )
         })}
       </div>
-
-      {removing && (
-        <ConfirmDelete
-          person={removing}
-          onClose={() => setRemoving(null)}
-          onDeleted={() => { setRemoving(null); load() }}
-        />
-      )}
-
-      {adding && (
-        <AddPerson
-          roles={roles}
-          onClose={() => setAdding(false)}
-          onAdded={(created, withVoice) => {
-            setAdding(false)
-            load()
-            // Enrolment needs the account to exist, so it follows the create
-            // rather than living inside that form — and only if it was asked
-            // for, because the person has to be in the room to record.
-            if (withVoice) setEnrolling(created)
-          }}
-        />
-      )}
-
-      {enrolling && (
-        <VoiceEnrolment
-          person={enrolling}
-          onClose={() => setEnrolling(null)}
-          onDone={() => { setEnrolling(null); load() }}
-        />
-      )}
     </main>
-  )
-}
-
-
-/**
- * Removing an account for good.
- *
- * Deliberately a confirmation rather than a second red button beside
- * Deactivate: one of these can be undone and the other cannot, and they should
- * not look alike. It says plainly what goes and what stays, because the answer
- * is the thing somebody is actually deciding about.
- */
-function ConfirmDelete({ person, onClose, onDeleted }) {
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-
-  const remove = async () => {
-    setBusy(true)
-    setError('')
-    try {
-      await api.deleteUser(person.user_id)
-      onDeleted()
-    } catch (e) {
-      // The backend refuses the last way in, and an account deleting itself.
-      setError(e.message)
-      setBusy(false)
-    }
-  }
-
-  return (
-    <div className="sheet" onMouseDown={onClose}>
-      <div className="sheet__panel" role="dialog" aria-modal="true"
-           onMouseDown={(e) => e.stopPropagation()}>
-        <div className="sheet__head">
-          <h2>Delete this user?</h2>
-          <p className="muted">{person.full_name || person.email}</p>
-        </div>
-
-        <div className="sheet__body">
-          {error && <div className="note note--bad">{error}</div>}
-
-          <p>
-            This permanently removes the account, its sessions and its project
-            memberships.
-          </p>
-          <p className="tiny muted">
-            What they collected stays. Forms they built and answers they submitted
-            keep their name on them, so the record still reads correctly
-            afterwards.
-          </p>
-          <p className="tiny muted">
-            To stop somebody signing in without removing anything, use
-            <b> Deactivate</b> instead — that can be undone.
-          </p>
-        </div>
-
-        <div className="sheet__foot">
-          <button className="btn btn--quiet" onClick={onClose}>Cancel</button>
-          <button className="btn btn--primary btn--danger" onClick={remove} disabled={busy}>
-            {busy && <span className="spin" />}
-            Delete user
-          </button>
-        </div>
-      </div>
-    </div>
   )
 }

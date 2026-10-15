@@ -61,10 +61,9 @@ function RoleSheet({ catalogue, role, roles, onClose, onSaved }) {
       <div className="sheet__panel" onMouseDown={(e) => e.stopPropagation()}>
         <div className="sheet__head">
           <div>
-            <h2>{editing ? `Edit ${role.label}` : 'Create a role'}</h2>
+            <h2>{editing ? `Edit ${role.label}` : 'Create a Sub-Role'}</h2>
             <p className="lede tiny">
-              A role is a name and a set of permissions. Everyone holding it is signed
-              out when you save, so a change takes effect at once.
+              A project sub-role carries permissions scoped for team members inside projects.
             </p>
           </div>
           <button className="iconbtn" onClick={onClose} aria-label="Close">✕</button>
@@ -75,15 +74,15 @@ function RoleSheet({ catalogue, role, roles, onClose, onSaved }) {
 
           <div className="frow__grid" style={{ paddingRight: 0 }}>
             <label className="col">
-              <span className="minilabel">Name</span>
+              <span className="minilabel">Sub-Role Name</span>
               <input className="control" value={label} autoFocus
-                     placeholder="Supervisor"
+                     placeholder="e.g. Field Supervisor"
                      onChange={(e) => setLabel(e.target.value)} />
             </label>
             <label className="col">
               <span className="minilabel">What is it for?</span>
               <input className="control" value={description}
-                     placeholder="Reads everything, changes nothing"
+                     placeholder="Reviews submissions, fills forms"
                      onChange={(e) => setDescription(e.target.value)} />
             </label>
           </div>
@@ -105,15 +104,15 @@ function RoleSheet({ catalogue, role, roles, onClose, onSaved }) {
         </div>
 
         <div className="sheet__foot">
-          {editing && role.user_count > 0 && (
+          {editing && (role.member_count > 0 || role.user_count > 0) && (
             <span className="tiny muted">
-              {role.user_count} account{role.user_count === 1 ? '' : 's'} hold this role
+              {(role.member_count || 0) + (role.user_count || 0)} assignment(s) hold this role
             </span>
           )}
           <span className="spacer" />
           <button className="btn btn--primary" onClick={save} disabled={busy || !label.trim()}>
             {busy && <span className="spin" />}
-            {editing ? 'Save changes' : 'Create role'}
+            {editing ? 'Save changes' : 'Create sub-role'}
           </button>
         </div>
       </div>
@@ -139,17 +138,22 @@ export default function Roles() {
 
   const remove = async (role) => {
     let reassignTo
-    if (role.user_count > 0) {
-      const others = roles.filter((r) => r.role_id !== role.role_id)
+    const holders = (role.member_count || 0) + (role.user_count || 0)
+    if (holders > 0) {
+      const others = (roles || []).filter((r) => r.role_id !== role.role_id && !r.is_system)
+      if (others.length === 0) {
+        window.alert(`Cannot delete "${role.label}": ${holders} project member(s) hold this sub-role, and there are no other sub-roles to reassign them to.`)
+        return
+      }
       const names = others.map((r, i) => `${i + 1}. ${r.label}`).join('\n')
       const pick = window.prompt(
-        `${role.user_count} account(s) hold "${role.label}".\n\n` +
-        `Move them to which role?\n\n${names}\n\nEnter a number:`,
+        `${holders} project member(s) currently hold the "${role.label}" sub-role.\n\n` +
+        `Reassign them to which sub-role?\n\n${names}\n\nEnter a number:`,
       )
       const chosen = others[Number(pick) - 1]
       if (!chosen) return
       reassignTo = chosen.role_id
-    } else if (!window.confirm(`Delete the "${role.label}" role?`)) {
+    } else if (!window.confirm(`Are you sure you want to delete the "${role.label}" sub-role?`)) {
       return
     }
 
@@ -161,16 +165,30 @@ export default function Roles() {
     }
   }
 
+  const systemRoles = roles?.filter((r) => r.is_system) || []
+  const subRoles = roles?.filter((r) => !r.is_system) || []
+
   return (
     <main className="main">
       <div className="page-head">
         <div>
-          <h1>Roles</h1>
+          <h1>Roles & Sub-Roles</h1>
           <p className="lede">
-            What each kind of account may do. Create as many as you need.
+            System roles govern platform-wide access, while Sub-roles are assigned to members per project.
           </p>
         </div>
-        <button className="btn btn--primary" onClick={() => setSheet({})}>Create role</button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <a
+            href={import.meta.env.VITE_SSO_URL || "http://localhost:8005"}
+            target="_blank"
+            rel="noreferrer"
+            className="btn btn--quiet"
+            style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+          >
+            <span>SSO Directory & Roles ↗</span>
+          </a>
+          <button className="btn btn--primary" onClick={() => setSheet({})}>Create sub-role</button>
+        </div>
       </div>
 
       {error && <div className="note note--bad" style={{ marginBottom: 14 }}>{error}</div>}
@@ -181,13 +199,24 @@ export default function Roles() {
         </div>
       )}
 
+      {/* 1. System Roles */}
+      <div className="roles-group-title">
+        <span>System Roles</span>
+        <span className="tag">Platform-Wide</span>
+      </div>
+      <p className="roles-group-desc">
+        Fixed system roles managed centrally in SSO. They determine overall platform access: Standard User or System Administrator.
+      </p>
+
       <div className="stack-list">
-        {roles?.map((role) => (
+        {systemRoles.map((role) => (
           <div className="item" key={role.role_id}>
             <div className="item__body">
               <div className="item__title">
                 {role.label}
-                {role.is_system && <span className="tag">built in</span>}
+                <span className={`tag ${role.name === 'admin' ? 'tag--admin' : 'tag--standard'}`}>
+                  fixed system role
+                </span>
               </div>
               {role.description && <div className="item__sub">{role.description}</div>}
               <div className="item__meta">
@@ -203,14 +232,57 @@ export default function Roles() {
               <button className="btn btn--sm btn--quiet" onClick={() => setSheet({ role })}>
                 Permissions
               </button>
-              {!role.is_system && (
-                <button className="btn btn--sm btn--quiet btn--danger" onClick={() => remove(role)}>
-                  Delete
-                </button>
-              )}
             </div>
           </div>
         ))}
+      </div>
+
+      {/* 2. Sub-Roles */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 36, marginBottom: 6 }}>
+        <div className="roles-group-title" style={{ margin: 0 }}>
+          <span>Sub-Roles</span>
+          <span className="tag tag--subrole">Project Scoped</span>
+        </div>
+        <button className="btn btn--sm btn--primary" onClick={() => setSheet({})}>
+          + Create sub-role
+        </button>
+      </div>
+      <p className="roles-group-desc">
+        Project-based roles (e.g. Project Manager, Field Surveyor, Reviewer). You can create new sub-roles or delete unused ones.
+      </p>
+
+      <div className="stack-list">
+        {subRoles.length === 0 ? (
+          <div className="item muted tiny">No sub-roles configured.</div>
+        ) : (
+          subRoles.map((role) => (
+            <div className="item" key={role.role_id}>
+              <div className="item__body">
+                <div className="item__title">
+                  {role.label}
+                  <span className="tag tag--subrole">sub-role</span>
+                </div>
+                {role.description && <div className="item__sub">{role.description}</div>}
+                <div className="item__meta">
+                  <span>{role.permissions.length} permissions</span>
+                  <span className="sep">·</span>
+                  <span>{role.member_count ?? 0} project member{(role.member_count ?? 0) === 1 ? '' : 's'}</span>
+                  <span className="sep">·</span>
+                  <code className="tiny">{role.name}</code>
+                </div>
+              </div>
+
+              <div className="item__acts">
+                <button className="btn btn--sm btn--quiet" onClick={() => setSheet({ role })}>
+                  Permissions
+                </button>
+                <button className="btn btn--sm btn--quiet btn--danger" onClick={() => remove(role)}>
+                  Delete
+                </button>
+              </div>
+            </div>
+          ))
+        )}
       </div>
 
       {sheet && (

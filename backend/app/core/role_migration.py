@@ -45,7 +45,7 @@ RENAMED = ("field", "standard", "Standard User",
 
 # The row that became `standard` on an installation where both ended up
 # existing. Removed once empty; there is nothing to keep about a duplicate.
-RETIRED = ("field",)
+RETIRED = ("field", "editor")
 
 # System roles an installation may still be using, but which the Users page no
 # longer offers for a *new* assignment. `editor` is a real system role — it
@@ -107,8 +107,11 @@ def grant_system_forms_to_existing_builders() -> None:
         cur.execute(
             """
             INSERT INTO role_permission (role_id, permission)
-            SELECT role_id, 'forms.system.view' FROM role_permission
-            WHERE  permission = 'forms.view'
+            SELECT rp.role_id, 'forms.system.view'
+            FROM   role_permission rp
+            JOIN   app_role r ON r.role_id = rp.role_id
+            WHERE  rp.permission = 'forms.view'
+              AND  r.name IN ('admin', 'editor')
             ON CONFLICT DO NOTHING
             """
         )
