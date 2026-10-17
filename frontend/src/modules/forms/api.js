@@ -262,7 +262,7 @@ export const api = {
   // as the questions — a WhatsApp form and the way to reach it are stored
   // together or not at all. Absent leaves routing alone, which is every form
   // that is not answered on WhatsApp.
-  createForm: (formJson, createdBy, status = 'Active', projectId, whatsapp) =>
+  createForm: (formJson, createdBy, status = 'Active', projectId, whatsapp, ivr) =>
     request('/forms', {
       method: 'POST',
       body: JSON.stringify({
@@ -271,13 +271,14 @@ export const api = {
         form_status: status,
         project_id: projectId || null,
         whatsapp: whatsapp || null,
+        ivr: ivr || null,
       }),
     }),
 
   // `renames` is old field key -> new one. The server moves the stored answers
   // with them, so responses collected before the rename keep matching the
   // definition — which is why a rename cannot be sent twice.
-  updateForm: (formId, formJson, updatedBy, renames, whatsapp) =>
+  updateForm: (formId, formJson, updatedBy, renames, whatsapp, ivr) =>
     request(`/forms/${formId}`, {
       method: 'PUT',
       body: JSON.stringify({
@@ -285,6 +286,7 @@ export const api = {
         updated_by: updatedBy,
         renames: renames && Object.keys(renames).length ? renames : null,
         whatsapp: whatsapp || null,
+        ivr: ivr || null,
       }),
     }),
 
@@ -420,6 +422,12 @@ export const api = {
     request(`/mcdc/forms/${formId}/whatsapp-route`,
             { method: 'PUT', body: JSON.stringify(route) }),
 
+  ivrRoute: (formId) => request(`/mcdc/forms/${formId}/ivr-route`),
+
+  saveIvrRoute: (formId, route) =>
+    request(`/mcdc/forms/${formId}/ivr-route`,
+            { method: 'PUT', body: JSON.stringify(route) }),
+
   // How the channel is operated here: the timeout, and whether a token is set.
   // The token itself is never returned — only `token_set` and its last four
   // characters, which is all the screen shows.
@@ -443,6 +451,21 @@ export const api = {
   saveSarvamSettings: (project, settings) =>
     request(`/mcdc/sarvam/settings${project ? `?project=${project}` : ''}`,
             { method: 'PUT', body: JSON.stringify(settings) }),
+
+  indevSettings: (project) =>
+    request(`/mcdc/indev/settings${project ? `?project=${project}` : ''}`),
+
+  saveIndevSettings: (project, settings) =>
+    request(`/mcdc/indev/settings${project ? `?project=${project}` : ''}`,
+            { method: 'PUT', body: JSON.stringify(settings) }),
+
+  publishToIndev: (formId, did) =>
+    request('/mcdc/ivr/publish-to-indev',
+            { method: 'POST', body: JSON.stringify({ form_id: formId, did }) }),
+
+  syncIndevResponses: (did, number) =>
+    request('/mcdc/ivr/sync-indev-responses',
+            { method: 'POST', body: JSON.stringify({ did, number }) }),
 
   webhooks: (project) =>
     request(`/mcdc/whatsapp/webhooks${project ? `?project=${project}` : ''}`)

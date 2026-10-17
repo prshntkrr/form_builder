@@ -24,11 +24,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from app.core import auth_service
 from app.core.deps import current_user, needs
-from app.modules.forms import channel_settings, routing, webhook_service
+from app.modules.forms import channel_settings, indev_service, routing, webhook_service
 from app.modules.forms.permissions import MCDC_INTEGRATE, MCDC_MANAGE, RECORDS_VIEW
 from app.modules.forms.schemas import (
-    IdentityRequest, RouteRequest, WebhookRequest,
-    WhatsAppRouteRequest, WhatsAppSettingsRequest,
+    IdentityRequest, IndevPublishRequest, IndevSettingsRequest, IndevSyncRequest,
+    IVRRouteRequest, RouteRequest, WebhookRequest, WhatsAppRouteRequest, WhatsAppSettingsRequest,
 )
 
 logger = logging.getLogger(__name__)
@@ -287,6 +287,56 @@ def save_form_whatsapp_route(form_id: str, req: WhatsAppRouteRequest,
         raise HTTPException(status_code=400, detail=str(exc))
 
 
+@router.get("/forms/{form_id}/ivr-route")
+def form_ivr_route(form_id: str,
+                   user: Dict[str, Any] = Depends(needs(MCDC_MANAGE))):
+    """How this form is reached on IVR (DID and menu option), or nothing if it is not."""
+    route = routing.route_for_form(form_id, "ivr")
+    if route is None:
+        return {"route": None}
+
+    _project_reachable(user, route["project_id"])
+    return {"route": route}
+
+
+@router.put("/forms/{form_id}/ivr-route")
+def save_form_ivr_route(form_id: str, req: IVRRouteRequest,
+                        user: Dict[str, Any] = Depends(needs(MCDC_MANAGE))):
+    """Give this form its IVR DID and menu option, or change them."""
+    project_id = _project_of(form_id)
+    _project_reachable(user, project_id)
+
+    published = _is_published(form_id)
+    enabled = published if req.enabled is None else (req.enabled and published)
+
+    did_clean = indev_service.clean_did(req.receiver_number) if req.receiver_number else ""
+    menu_opt = str(req.menu_option or "1").strip() or "1"
+
+    existing = routing.route_for_form(form_id, "ivr")
+    try:
+        if existing is None:
+            res = routing.create_route(
+                "ivr", menu_opt, form_id, project_id=project_id,
+                enabled=enabled, receiver_number=did_clean,
+                created_by=auth_service.display_name(user))
+        else:
+            _project_reachable(user, existing["project_id"])
+            res = routing.update_route(
+                existing["route_id"], channel="ivr", route_key=menu_opt,
+                form_id=form_id, project_id=project_id, enabled=enabled,
+                receiver_number=did_clean)
+
+        if published and did_clean:
+            try:
+                indev_service.publish_to_indev(form_id, did_clean, project_id=project_id)
+            except Exception as exc:
+                logger.warning("Could not auto-publish IVR route to Indev: %s", exc)
+
+        return res
+    except routing.RoutingError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
 def _project_of(form_id: str) -> Optional[str]:
     """Which project owns this form, or None for a system form.
 
@@ -404,6 +454,90 @@ def save_sarvam_settings(req: WhatsAppSettingsRequest,
             session_timeout_seconds=req.session_timeout_seconds,
             api_token=req.api_token,
             updated_by=auth_service.display_name(user))
+    except channel_settings.SettingsError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+# --------------------------------------------------------------------------- #
+# Indev IVR publishing, sync, and settings
+# --------------------------------------------------------------------------- #
+@router.post("/ivr/publish-to-indev")
+def publish_form_to_indev(
+    req: IndevPublishRequest,
+    request: Request,
+    user: Dict[str, Any] = Depends(needs(MCDC_MANAGE)),
+):
+    """Publish a form to Indev's Inbound Voice Survey line (DID)."""
+    project_id = _project_of(req.form_id)
+    _project_reachable(user, project_id)
+    try:
+        return indev_service.publish_to_indev(
+            form_id=req.form_id,
+            did=req.did,
+            project_id=project_id,
+            base_url=_base_url(request),
+        )
+    except indev_service.IndevError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/ivr/sync-indev-responses")
+def sync_indev_responses(
+    req: IndevSyncRequest,
+    project: Optional[str] = Query(None),
+    user: Dict[str, Any] = Depends(needs(MCDC_MANAGE)),
+):
+    """Pull call responses from Indev API as backup / auditing."""
+    project_id = None if project in (None, "", "none") else project
+    _project_reachable(user, project_id)
+    try:
+        return indev_service.sync_indev_responses(
+            did=req.did,
+            number=req.number,
+            project_id=project_id,
+        )
+    except indev_service.IndevError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.get("/indev/settings")
+def indev_settings(
+    project: Optional[str] = Query(None),
+    user: Dict[str, Any] = Depends(needs(MCDC_MANAGE)),
+):
+    """Encrypted Indev IVR settings (API key and webhook secret)."""
+    project_id = None if project in (None, "", "none") else project
+    _project_reachable(user, project_id)
+    api_key_shown = channel_settings.shown("indev", project_id)
+    secret_shown = channel_settings.shown("indev_secret", project_id)
+    return {
+        "project_id": project_id,
+        "api_key_set": api_key_shown["token_set"],
+        "api_key_hint": api_key_shown["token_hint"],
+        "api_key_inherited": api_key_shown["token_inherited"],
+        "webhook_secret_set": secret_shown["token_set"],
+        "webhook_secret_hint": secret_shown["token_hint"],
+        "webhook_secret_inherited": secret_shown["token_inherited"],
+        "secrets_available": api_key_shown["secrets_available"],
+    }
+
+
+@router.put("/indev/settings")
+def save_indev_settings(
+    req: IndevSettingsRequest,
+    project: Optional[str] = Query(None),
+    user: Dict[str, Any] = Depends(needs(MCDC_MANAGE)),
+):
+    """Save/rotate Indev API key or webhook secret (sealed with AES-256)."""
+    project_id = None if project in (None, "", "none") else project
+    _project_reachable(user, project_id)
+    display_name = auth_service.display_name(user)
+    try:
+        if req.api_token is not None:
+            channel_settings.save("indev", project_id, api_token=req.api_token, updated_by=display_name)
+        if req.webhook_secret is not None:
+            channel_settings.save("indev_secret", project_id, api_token=req.webhook_secret, updated_by=display_name)
+        return indev_settings(project=project, user=user)
     except channel_settings.SettingsError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 

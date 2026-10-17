@@ -38,5 +38,6 @@ MODULE = Module(
         bootstrap.ensure_webhook_config,
         bootstrap.ensure_webhook_phone_number,
         bootstrap.ensure_whatsapp_session_receiver_index,
+        bootstrap.ensure_channel_settings_channel_constraint,
     ],
 )

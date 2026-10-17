@@ -342,3 +342,91 @@ def store_media_bytes(
     )
     return finish_upload(row_info["media_id"], file_size=len(data))
 
+
+def archive_indev_audio(
+    project_id: Optional[str],
+    form_id: str,
+    survey_id: str,
+    recording_url: Optional[str],
+    answers: Optional[List[Dict[str, Any]]] = None,
+    seq_map: Optional[Dict[str, str]] = None,
+) -> List[Dict[str, Any]]:
+    """Download call audio recordings from Indev and permanently archive into AWS S3.
+
+    Indev's signed recording URLs expire after ~7 days. This function is invoked
+    as a background task (FastAPI BackgroundTasks) after the webhook returns HTTP 200,
+    so S3 uploading never delays the webhook response to Indev.
+
+    Archives:
+    1. Full call audio (recording_url -> field_name='__full_call_recording__').
+    2. Individual question audio recordings if present (audio_url -> field_name).
+    """
+    if not settings.aws_s3_bucket:
+        logger.warning(
+            "AWS_S3_BUCKET not configured; skipping Indev IVR audio archival for survey %s",
+            survey_id,
+        )
+        return []
+
+    import httpx
+
+    archived = []
+    # 1. Archive full call recording
+    if recording_url and str(recording_url).strip().startswith("http"):
+        try:
+            with httpx.Client(timeout=60.0, follow_redirects=True) as client:
+                resp = client.get(recording_url)
+                if resp.status_code == 200 and resp.content:
+                    fname = f"call_{survey_id}.wav"
+                    saved = store_media_bytes(
+                        project_id=project_id,
+                        form_id=form_id,
+                        survey_id=survey_id,
+                        field_name="__full_call_recording__",
+                        media_type="audio",
+                        filename=fname,
+                        content_type="audio/wav",
+                        data=resp.content,
+                        created_by="indev:ivr",
+                    )
+                    archived.append(saved)
+                    logger.info("Archived full call audio for survey %s -> %s", survey_id, saved.get("media_id"))
+                else:
+                    logger.warning("Could not download Indev recording_url: HTTP %s", resp.status_code)
+        except Exception:
+            logger.exception("Failed to archive full call recording from %s", recording_url)
+
+    # 2. Archive per-question audio if present
+    seq_map = seq_map or {}
+    for item in (answers or []):
+        audio_url = item.get("audio_url")
+        if not audio_url or not str(audio_url).strip().startswith("http"):
+            continue
+
+        seq = str(item.get("seq", ""))
+        field_name = seq_map.get(seq) or f"question_{seq}"
+        try:
+            with httpx.Client(timeout=60.0, follow_redirects=True) as client:
+                resp = client.get(audio_url)
+                if resp.status_code == 200 and resp.content:
+                    fname = f"{field_name}_{survey_id}.wav"
+                    saved = store_media_bytes(
+                        project_id=project_id,
+                        form_id=form_id,
+                        survey_id=survey_id,
+                        field_name=field_name,
+                        media_type="audio",
+                        filename=fname,
+                        content_type="audio/wav",
+                        data=resp.content,
+                        created_by="indev:ivr",
+                    )
+                    archived.append(saved)
+                    logger.info("Archived question audio for %s (survey %s) -> %s", field_name, survey_id, saved.get("media_id"))
+                else:
+                    logger.warning("Could not download Indev question audio_url: HTTP %s", resp.status_code)
+        except Exception:
+            logger.exception("Failed to archive question audio from %s", audio_url)
+
+    return archived
+

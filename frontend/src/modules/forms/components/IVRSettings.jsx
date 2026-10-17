@@ -76,6 +76,7 @@ function KeySection({ label, hint, shown, onSave, busy }) {
 export default function IVRSettings({ projectId }) {
   const [ivr, setIvr] = useState(null)
   const [sarvam, setSarvam] = useState(null)
+  const [indev, setIndev] = useState(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [saved, setSaved] = useState(false)
@@ -87,7 +88,8 @@ export default function IVRSettings({ projectId }) {
     Promise.all([
       api.ivrSettings(scope),
       api.sarvamSettings(scope),
-    ]).then(([i, s]) => { setIvr(i); setSarvam(s) })
+      api.indevSettings(scope),
+    ]).then(([i, s, d]) => { setIvr(i); setSarvam(s); setIndev(d) })
       .catch((e) => setError(e.message))
   }, [scope])
 
@@ -109,7 +111,25 @@ export default function IVRSettings({ projectId }) {
     finally { setBusy(false) }
   }
 
-  if (!ivr || !sarvam) {
+  const saveIndevKey = async (token) => {
+    setBusy(true); setError(''); setSaved(false)
+    try {
+      setIndev(await api.saveIndevSettings(scope, { api_token: token }))
+      setSaved(true)
+    } catch (e) { setError(e.message) }
+    finally { setBusy(false) }
+  }
+
+  const saveIndevSecret = async (secret) => {
+    setBusy(true); setError(''); setSaved(false)
+    try {
+      setIndev(await api.saveIndevSettings(scope, { webhook_secret: secret }))
+      setSaved(true)
+    } catch (e) { setError(e.message) }
+    finally { setBusy(false) }
+  }
+
+  if (!ivr || !sarvam || !indev) {
     return <div className="skeleton" style={{ height: 120, marginTop: 10 }} />
   }
 
@@ -161,6 +181,30 @@ export default function IVRSettings({ projectId }) {
         hint="Used for speech-to-text transcription of voice answers. Stored encrypted."
         shown={sarvam}
         onSave={saveSarvam}
+        busy={busy}
+      />
+
+      <KeySection
+        label="Indev Survey API Key (X-Api-Key)"
+        hint="Used to publish surveys and pull responses from Indev Consultancy IVR. Stored encrypted."
+        shown={{
+          token_set: indev.api_key_set,
+          token_hint: indev.api_key_hint,
+          token_inherited: indev.api_key_inherited,
+        }}
+        onSave={saveIndevKey}
+        busy={busy}
+      />
+
+      <KeySection
+        label="Indev Webhook Secret (X-Webhook-Secret)"
+        hint="Secret sent by Indev to authenticate incoming call completion webhooks. Stored encrypted."
+        shown={{
+          token_set: indev.webhook_secret_set,
+          token_hint: indev.webhook_secret_hint,
+          token_inherited: indev.webhook_secret_inherited,
+        }}
+        onSave={saveIndevSecret}
         busy={busy}
       />
 

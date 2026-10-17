@@ -107,6 +107,14 @@ class Settings(BaseSettings):
     mcdc_api_key: str = ""
     mcdc_timeout: int = 20
 
+    # Indev Consultancy Inbound Voice Survey (IVR) API.
+    # Base URL for survey publishing and response syncing.
+    indev_base_url: str = "https://ivrs2.indevconsultancy.in/survey/api"
+    # System-level fallback API Key and Webhook Secret (can also be configured per-project via UI).
+    indev_api_key: str = ""
+    indev_webhook_secret: str = ""
+    indev_timeout: int = 90
+
     # The boundary channel traffic crosses: the MCDC routes, the published
     # configuration, and submissions. Not a proxy — see app/core/gateway.py.
     mcdc_gateway_enabled: bool = True
