@@ -287,7 +287,20 @@ def upsert_form_route(cur, *, channel: str, form_id: str,
         (form_id, channel),
     )
     found = cur.fetchone()
-    route_id = found["route_id"] if found else None
+    # For IVR, each DID phone line exclusively belongs to one active survey at a time.
+    # Enabling this form on this DID line automatically turns off any other forms on the same line.
+    if channel == "ivr" and enabled and number:
+        cur.execute(
+            """
+            UPDATE channel_form_route
+               SET enabled = FALSE, updated_on = CURRENT_TIMESTAMP
+             WHERE channel = 'ivr'
+               AND receiver_number = %s
+               AND (%s::int IS NULL OR route_id <> %s)
+               AND enabled
+            """,
+            (number, route_id, route_id),
+        )
 
     if _clashes_on(cur, channel, key_norm, project_id, enabled, number,
                    ignoring=route_id):
@@ -341,6 +354,19 @@ def create_route(channel: str, route_key: str, form_id: str,
     if enabled:
         _usable_form(form_id, project_id)
 
+    if channel == "ivr" and enabled and number:
+        with transaction() as cur:
+            cur.execute(
+                """
+                UPDATE channel_form_route
+                   SET enabled = FALSE, updated_on = CURRENT_TIMESTAMP
+                 WHERE channel = 'ivr'
+                   AND receiver_number = %s
+                   AND enabled
+                """,
+                (number,),
+            )
+
     if _clashes(channel, key_norm, project_id, enabled, number):
         raise RoutingError(
             f"'{key}' already points somewhere on {channel} here. Change that "
@@ -387,6 +413,20 @@ def update_route(route_id: int, **changes: Any) -> Dict[str, Any]:
     # different lifecycles and one is not the other's switch.
     if enabled:
         _usable_form(form_id, project_id)
+
+    if channel == "ivr" and enabled and number:
+        with transaction() as cur:
+            cur.execute(
+                """
+                UPDATE channel_form_route
+                   SET enabled = FALSE, updated_on = CURRENT_TIMESTAMP
+                 WHERE channel = 'ivr'
+                   AND receiver_number = %s
+                   AND route_id <> %s
+                   AND enabled
+                """,
+                (number, route_id),
+            )
 
     if _clashes(channel, key_norm, project_id, enabled, number, ignoring=route_id):
         raise RoutingError(

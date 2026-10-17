@@ -147,17 +147,72 @@ def detail(form_id: str, survey_id: str, user: Dict[str, Any] = Depends(current_
     state = submission_workflow.status_of(form_id, survey_id)
     form_json = form["form_json"] or {}
 
+    submitted_by = row["created_by"] or state.get("submitted_by") or ""
+    is_ivr = str(submitted_by).startswith("ivr:")
+
+    # Audio recordings archived in AWS S3 (strictly for IVR calls)
+    call_recording_url: Optional[str] = None
+    question_audio_map: Dict[str, str] = {}
+    audio_recordings = []
+
+    if is_ivr:
+        from app.modules.forms import media_service
+
+        with transaction() as cur:
+            cur.execute(
+                """
+                SELECT media_id, original_filename, s3_key, media_type
+                FROM   form_media
+                WHERE  form_id = %s AND survey_id = %s AND media_type = 'audio'
+                ORDER  BY created_on ASC
+                """,
+                (form_id, survey_id),
+            )
+            media_records = [dict(r) for r in cur.fetchall()]
+
+        for med in media_records:
+            try:
+                p_url = media_service.presign_download(med["s3_key"], med["original_filename"])
+                fname = med["original_filename"] or ""
+                is_call = "call_" in fname or "full" in fname
+                audio_recordings.append({
+                    "media_id": med["media_id"],
+                    "filename": fname,
+                    "is_full_call": is_call,
+                    "url": p_url,
+                })
+                if is_call and not call_recording_url:
+                    call_recording_url = p_url
+                else:
+                    base_fname = fname.replace(f"_{survey_id}.wav", "").replace(".wav", "")
+                    question_audio_map[base_fname] = p_url
+            except Exception:
+                logger.exception("Could not presign audio download for media %s", med.get("media_id"))
+
+        if not call_recording_url and audio_recordings:
+            call_recording_url = audio_recordings[0]["url"]
+
+    answers = submission_service.answers_for(form_json, row["form_data"])
+    if is_ivr:
+        for ans in answers:
+            q_name = ans.get("name")
+            if q_name in question_audio_map:
+                ans["audio_url"] = question_audio_map[q_name]
+
     return {
         "submission_id": survey_id,
         "form_id": form_id,
         "form_name": form["form_title"],
         "project_id": context["project_id"],
-        "submitted_by": row["created_by"] or state["submitted_by"],
+        "submitted_by": submitted_by,
         "submitted_at": row["created_on"],
         "form_version": row["form_version"],
         "status": state["status"],
         "rejection_reason": state["rejection_reason"],
-        "answers": submission_service.answers_for(form_json, row["form_data"]),
+        "is_ivr": is_ivr,
+        "answers": answers,
+        "call_recording_url": call_recording_url,
+        "audio_recordings": audio_recordings,
         # There is no event log — `submission_review` keeps the current state
         # only — so this is what is actually known about how it got here, not an
         # invented history.
@@ -319,8 +374,27 @@ def project_submissions(
             })
 
     rows.sort(key=lambda r: r["created_on"] or "", reverse=True)
+    selected_rows = rows[:limit]
+
+    # Identify which submissions have call audio recordings in S3 (strictly for IVR calls)
+    # Check both form_id and survey_id to prevent collision with other forms
+    audio_pairs = set()
+    if selected_rows:
+        with transaction() as cur:
+            cur.execute(
+                "SELECT DISTINCT form_id, survey_id FROM form_media "
+                "WHERE media_type = 'audio'"
+            )
+            audio_pairs = {(r["form_id"], r["survey_id"]) for r in cur.fetchall()}
+
+    for r in selected_rows:
+        is_ivr = str(r.get("created_by") or "").startswith("ivr:")
+        r["is_ivr"] = is_ivr
+        # Listen & Review and audio badge are strictly for IVR forms/calls
+        r["has_audio"] = is_ivr and ((r["form_id"], r["survey_id"]) in audio_pairs or is_ivr)
+
     return {
-        "submissions": rows[:limit],
+        "submissions": selected_rows,
         "everything": everything,
         # What was actually applied, so a screen can tell "nothing here" from
         # "nothing matches what you chose".

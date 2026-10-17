@@ -455,6 +455,7 @@ def create(req: CreateFormRequest, user: Dict[str, Any] = Depends(_could_build_s
             status=req.form_status,
             project_id=req.project_id,
             whatsapp=req.whatsapp.model_dump() if req.whatsapp else None,
+            ivr=req.ivr.model_dump() if req.ivr else None,
         )
     except routing.RoutingError as exc:
         # The keyword is taken. Nothing was written — the form rolled back with
@@ -588,6 +589,7 @@ def update(form_id: str, req: UpdateFormRequest,
             status=req.form_status,
             renames=req.renames,
             whatsapp=req.whatsapp.model_dump() if req.whatsapp else None,
+            ivr=req.ivr.model_dump() if req.ivr else None,
         )
     except routing.RoutingError as exc:
         # The keyword is taken. The edit rolled back with it, so the form is

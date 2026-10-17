@@ -304,12 +304,23 @@ class WhatsAppConfig(BaseModel):
     fields: Dict[str, WhatsAppFieldConfig] = Field(default_factory=dict)
 
 
+class IVRConfig(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    welcome: Optional[str] = ""
+    thank_you: Optional[str] = ""
+    language: Optional[str] = "hi-IN"
+    did: Optional[str] = ""
+    seq_map: Dict[str, str] = Field(default_factory=dict)
+
+
 class ChannelPresentation(BaseModel):
     """`channel_config`: what each channel adds on top of the questions."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="allow")
 
     whatsapp: Optional[WhatsAppConfig] = None
+    ivr: Optional[IVRConfig] = None
 
 
 class FormConfig(_Config):

@@ -184,8 +184,23 @@ export default function FormRecords() {
                 {data.rows.map((row) => (
                   <React.Fragment key={row.survey_id}>
                     <tr>
-                      <td className="muted">{when(row.created_on)}</td>
-                      <td className="muted">{row.created_by || '—'}</td>
+                      <td className="muted">
+                        <div>{row.created_by || '—'}</div>
+                        {(row.media || {})['__full_call_recording__'] && (
+                          <div style={{ marginTop: 4 }}>
+                            {row.media['__full_call_recording__'].map((m) => (
+                              <RecordCell
+                                key={m.media_id}
+                                column={{ type: 'audio', label: 'Call Recording' }}
+                                value={m.media_id}
+                                media={[m]}
+                                formId={formId}
+                                surveyId={row.survey_id}
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </td>
                       {data.columns.map((c) => (
                         <td key={c.name} title={String((row.form_data || {})[c.name] ?? '')}>
                           <RecordCell

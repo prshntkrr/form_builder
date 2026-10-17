@@ -514,6 +514,41 @@ def _route_in_transaction(cur, form_id: str, project_id: Optional[str],
     )
 
 
+def _ivr_route_in_transaction(cur, form_id: str, project_id: Optional[str],
+                              status: str, ivr: Optional[Dict[str, Any]],
+                              created_by: str) -> Optional[Dict[str, Any]]:
+    """Write the form's IVR DID and menu option beside the form, in its transaction.
+
+    `ivr` is `{"did": …, "menu_option": …}` as the builder sends it, or
+    None for a form that is not configuring one. A blank DID is skipped.
+    """
+    if not ivr:
+        return None
+
+    did = str(ivr.get("did") or "").strip()
+    if not did:
+        return None
+
+    menu_option = str(ivr.get("menu_option") or "1").strip() or "1"
+
+    from app.modules.forms import indev_service, routing
+
+    did_clean = indev_service.clean_did(did)
+    if not did_clean:
+        return None
+
+    return routing.upsert_form_route(
+        cur,
+        channel="ivr",
+        form_id=form_id,
+        project_id=project_id,
+        route_key=menu_option,
+        receiver_number=did_clean,
+        enabled=status == "Active",
+        created_by=created_by,
+    )
+
+
 def create_form(
     form_json: Dict[str, Any],
     created_by: Optional[str] = None,
@@ -522,12 +557,12 @@ def create_form(
     status: str = "Active",
     project_id: Optional[str] = None,
     whatsapp: Optional[Dict[str, Any]] = None,
+    ivr: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Persist a new form, open version 1, and provision its data table.
 
-    `whatsapp` is the number and keyword that reach it, written into
-    `channel_form_route` in the same transaction — so a WhatsApp form and the
-    way somebody reaches it are stored together or not at all.
+    `whatsapp` and `ivr` are the channel routing parameters (keyword or DID line)
+    written into `channel_form_route` in the same transaction.
     """
     if status not in FORM_STATUSES:
         raise FormServiceError(f"Unknown status '{status}'")
@@ -581,14 +616,26 @@ def create_form(
             (form_id, 1, Json(definition)),
         )
 
-        # The keyword that reaches it, in the same transaction as the form. The
+        # The keyword/route that reaches it, in the same transaction as the form. The
         # project comes from the request rather than the row: `set_form_project`
         # runs after this, so the row does not know yet.
         route = _route_in_transaction(cur, form_id, project_id, status,
                                       whatsapp, author)
+        ivr_route = _ivr_route_in_transaction(cur, form_id, project_id, status,
+                                              ivr, author)
 
         table_report = sync_table(cur, definition)
         tabular_report = tabular_service.sync(cur, definition)
+
+    # If published and an IVR route with DID is set, sync to Indev telephony platform
+    if ivr_route and status == "Active":
+        did_clean = ivr_route.get("receiver_number")
+        if did_clean:
+            try:
+                from app.modules.forms import indev_service
+                indev_service.publish_to_indev(form_id, did_clean, project_id=project_id)
+            except Exception as exc:
+                logger.warning("Could not auto-publish IVR form %s to Indev: %s", form_id, exc)
 
     logger.info(
         "Created form %s -> %s + %s",
@@ -601,6 +648,8 @@ def create_form(
     result["tabular"] = tabular_report
     if route:
         result["whatsapp_route"] = route
+    if ivr_route:
+        result["ivr_route"] = ivr_route
     return result
 
 
@@ -644,6 +693,7 @@ def update_form(
     status: Optional[str] = None,
     renames: Optional[Dict[str, str]] = None,
     whatsapp: Optional[Dict[str, Any]] = None,
+    ivr: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Save a new revision.
 
@@ -651,9 +701,7 @@ def update_form(
     `renames` maps old key -> new key and the stored answers are moved with them
     so existing responses keep matching the definition.
 
-    `whatsapp` is the number and keyword that reach it, written in this same
-    transaction — so an edit that changes the keyword either stores both the
-    questions and the keyword, or neither.
+    `whatsapp` and `ivr` are the channel routes written in this same transaction.
     """
     definition = normalize_form(form_json)
 
@@ -763,6 +811,10 @@ def update_form(
             cur, form_id, row.get("project_id"),
             status or row.get("form_status") or "Active",
             whatsapp, definition["updated_by"])
+        ivr_route = _ivr_route_in_transaction(
+            cur, form_id, row.get("project_id"),
+            status or row.get("form_status") or "Active",
+            ivr, definition["updated_by"])
 
         table_report = sync_table(cur, definition)
 
@@ -776,6 +828,16 @@ def update_form(
         if tabular_report["created"] or tabular_report["added"] or tabular_report["retyped"]:
             tabular_report.update(tabular_service.rebuild(cur, definition, form_id))
 
+    effective_status = status or row.get("form_status") or "Active"
+    if ivr_route and effective_status == "Active":
+        did_clean = ivr_route.get("receiver_number")
+        if did_clean:
+            try:
+                from app.modules.forms import indev_service
+                indev_service.publish_to_indev(form_id, did_clean, project_id=row.get("project_id"))
+            except Exception as exc:
+                logger.warning("Could not auto-publish IVR form %s to Indev: %s", form_id, exc)
+
     logger.info("Updated form %s to version %s", form_id, version_no)
     result = _row_to_form(row, version=version_no)
     result["table"] = table_report
@@ -783,6 +845,8 @@ def update_form(
     result["renamed"] = moved
     if route:
         result["whatsapp_route"] = route
+    if ivr_route:
+        result["ivr_route"] = ivr_route
     return result
 
 
@@ -836,12 +900,23 @@ def _follow_status_on_channels(form_id: str, status: str) -> None:
     """
     from app.modules.forms import routing
 
-    try:
-        moved = routing.set_enabled_for_form(form_id, status == "Active")
-    except Exception:
-        logger.exception("Could not follow %s's status onto its routes", form_id)
-        return
+    for ch in ("whatsapp", "ivr"):
+        try:
+            moved = routing.set_enabled_for_form(form_id, status == "Active", channel=ch)
+            if moved:
+                logger.info("%s %d %s route(s) for %s",
+                            "Enabled" if status == "Active" else "Disabled", moved, ch, form_id)
+        except Exception:
+            logger.exception("Could not follow %s's status onto its %s routes", form_id, ch)
 
-    if moved:
-        logger.info("%s %d route(s) for %s",
-                    "Enabled" if status == "Active" else "Disabled", moved, form_id)
+    if status == "Active":
+        try:
+            ivr_route = routing.route_for_form(form_id, channel="ivr")
+            if ivr_route and ivr_route.get("receiver_number"):
+                from app.modules.forms import indev_service
+                indev_service.publish_to_indev(
+                    form_id, ivr_route["receiver_number"],
+                    project_id=ivr_route.get("project_id"),
+                )
+        except Exception:
+            logger.exception("Could not sync IVR publication to Indev for %s", form_id)
