@@ -1,13 +1,17 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import { api } from '../api.js'
 
-function PermissionPicker({ catalogue, chosen, onToggle, disabled, locked = [] }) {
+function PermissionPicker({ catalogue, chosen, onToggle, disabled, locked = [], projectOnly }) {
   const held = new Set(chosen)
   const fixed = new Set(locked)
 
+  const filtered = projectOnly
+    ? catalogue.filter((g) => g.group.toLowerCase() !== 'administration')
+    : catalogue
+
   return (
     <div className="perms">
-      {catalogue.map((group) => (
+      {filtered.map((group) => (
         <div className="perms__group" key={group.group}>
           <div className="minilabel">{group.group}</div>
           {group.permissions.map((p) => (
@@ -31,7 +35,7 @@ function PermissionPicker({ catalogue, chosen, onToggle, disabled, locked = [] }
   )
 }
 
-function RoleSheet({ catalogue, role, roles, onClose, onSaved }) {
+function RoleSheet({ catalogue, role, roles, onClose, onSaved, projectOnly }) {
   const editing = Boolean(role)
   const [label, setLabel] = useState(role?.label || '')
   const [description, setDescription] = useState(role?.description || '')
@@ -61,10 +65,11 @@ function RoleSheet({ catalogue, role, roles, onClose, onSaved }) {
       <div className="sheet__panel" onMouseDown={(e) => e.stopPropagation()}>
         <div className="sheet__head">
           <div>
-            <h2>{editing ? `Edit ${role.label}` : 'Create a role'}</h2>
+            <h2>{editing ? `Edit ${role.label}` : 'Create Project Role'}</h2>
             <p className="lede tiny">
-              A role is a name and a set of permissions. Everyone holding it is signed
-              out when you save, so a change takes effect at once.
+              {editing
+                ? 'A role is a name and a set of permissions. Everyone holding it is signed out when you save, so a change takes effect at once.'
+                : 'Project roles define what a member can do inside a project. Choose the permissions this role should have.'}
             </p>
           </div>
           <button className="iconbtn" onClick={onClose} aria-label="Close">✕</button>
@@ -100,6 +105,7 @@ function RoleSheet({ catalogue, role, roles, onClose, onSaved }) {
               locked={role?.locked_permissions}
               onToggle={toggle}
               disabled={busy}
+              projectOnly={projectOnly && !editing}
             />
           </div>
         </div>
@@ -121,11 +127,10 @@ function RoleSheet({ catalogue, role, roles, onClose, onSaved }) {
   )
 }
 
-/** Roles, and what each one may do. */
 export default function Roles() {
   const [roles, setRoles] = useState(null)
   const [catalogue, setCatalogue] = useState([])
-  const [sheet, setSheet] = useState(null)   // { role } | {} for a new one
+  const [sheet, setSheet] = useState(null)
   const [error, setError] = useState('')
 
   const load = useCallback(() => {
@@ -136,6 +141,9 @@ export default function Roles() {
     load()
     api.permissionCatalogue().then(setCatalogue).catch(() => setCatalogue([]))
   }, [load])
+
+  const systemRoles = roles?.filter((r) => r.is_system) || []
+  const projectRoles = roles?.filter((r) => !r.is_system) || []
 
   const remove = async (role) => {
     let reassignTo
@@ -167,10 +175,10 @@ export default function Roles() {
         <div>
           <h1>Roles</h1>
           <p className="lede">
-            What each kind of account may do. Create as many as you need.
+            System roles are fixed. Create project roles to control what members can do inside a project.
           </p>
         </div>
-        <button className="btn btn--primary" onClick={() => setSheet({})}>Create role</button>
+        <button className="btn btn--primary" onClick={() => setSheet({})}>Create Project Role</button>
       </div>
 
       {error && <div className="note note--bad" style={{ marginBottom: 14 }}>{error}</div>}
@@ -181,37 +189,81 @@ export default function Roles() {
         </div>
       )}
 
-      <div className="stack-list">
-        {roles?.map((role) => (
-          <div className="item" key={role.role_id}>
-            <div className="item__body">
-              <div className="item__title">
-                {role.label}
-                {role.is_system && <span className="tag">built in</span>}
-              </div>
-              {role.description && <div className="item__sub">{role.description}</div>}
-              <div className="item__meta">
-                <span>{role.permissions.length} permissions</span>
-                <span className="sep">·</span>
-                <span>{role.user_count} account{role.user_count === 1 ? '' : 's'}</span>
-                <span className="sep">·</span>
-                <code className="tiny">{role.name}</code>
-              </div>
+      {roles && (
+        <>
+          <div style={{ marginBottom: 24 }}>
+            <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 10, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.5, fontSize: 12 }}>
+              System Roles
+            </h2>
+            <p style={{ fontSize: 13, color: '#9ca3af', marginBottom: 12 }}>
+              These roles are fixed and cannot be created or deleted. Administrator has full access, Standard User relies on project membership.
+            </p>
+            <div className="stack-list">
+              {systemRoles.map((role) => (
+                <div className="item" key={role.role_id}>
+                  <div className="item__body">
+                    <div className="item__title">
+                      {role.label}
+                      <span className="tag">system</span>
+                    </div>
+                    {role.description && <div className="item__sub">{role.description}</div>}
+                    <div className="item__meta">
+                      <span>{role.permissions.length} permissions</span>
+                      <span className="sep">·</span>
+                      <span>{role.user_count} account{role.user_count === 1 ? '' : 's'}</span>
+                    </div>
+                  </div>
+                  <div className="item__acts">
+                    <button className="btn btn--sm btn--quiet" onClick={() => setSheet({ role })}>
+                      Permissions
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
+          </div>
 
-            <div className="item__acts">
-              <button className="btn btn--sm btn--quiet" onClick={() => setSheet({ role })}>
-                Permissions
-              </button>
-              {!role.is_system && (
-                <button className="btn btn--sm btn--quiet btn--danger" onClick={() => remove(role)}>
-                  Delete
-                </button>
+          <div>
+            <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 10, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.5, fontSize: 12 }}>
+              Project Roles
+            </h2>
+            <p style={{ fontSize: 13, color: '#9ca3af', marginBottom: 12 }}>
+              These roles define what a member can do inside a project. You can create, edit, and delete project roles.
+            </p>
+            <div className="stack-list">
+              {projectRoles.map((role) => (
+                <div className="item" key={role.role_id}>
+                  <div className="item__body">
+                    <div className="item__title">
+                      {role.label}
+                      <span className="tag" style={{ background: '#dcfce7', color: '#166534' }}>project</span>
+                    </div>
+                    {role.description && <div className="item__sub">{role.description}</div>}
+                    <div className="item__meta">
+                      <span>{role.permissions.length} permissions</span>
+                      <span className="sep">·</span>
+                      <span>{role.user_count} account{role.user_count === 1 ? '' : 's'}</span>
+                      <span className="sep">·</span>
+                      <code className="tiny">{role.name}</code>
+                    </div>
+                  </div>
+                  <div className="item__acts">
+                    <button className="btn btn--sm btn--quiet" onClick={() => setSheet({ role })}>
+                      Permissions
+                    </button>
+                    <button className="btn btn--sm btn--quiet btn--danger" onClick={() => remove(role)}>
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {projectRoles.length === 0 && (
+                <p style={{ color: '#9ca3af', fontSize: 13, padding: '12px 0' }}>No project roles yet.</p>
               )}
             </div>
           </div>
-        ))}
-      </div>
+        </>
+      )}
 
       {sheet && (
         <RoleSheet
@@ -220,6 +272,7 @@ export default function Roles() {
           roles={roles || []}
           onClose={() => setSheet(null)}
           onSaved={() => { setSheet(null); load() }}
+          projectOnly
         />
       )}
     </main>

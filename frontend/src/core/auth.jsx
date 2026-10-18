@@ -34,7 +34,28 @@ export function AuthProvider({ children }) {
   }, [])
 
   // Restore a session on load, and confirm it is still good.
+  // Also pick up an SSO token from the URL fragment (#sso_token=...).
   useEffect(() => {
+    const hash = window.location.hash
+    const ssoMatch = hash.match(/sso_token=([^&]+)/)
+    if (ssoMatch) {
+      const ssoToken = ssoMatch[1]
+      const projMatch = hash.match(/sso_project_id=([^&]+)/)
+      const projNameMatch = hash.match(/sso_project_name=([^&]*)/)
+      window.location.hash = ''
+      if (projMatch) {
+        try {
+          localStorage.setItem('ea_active_project', projMatch[1])
+          localStorage.setItem('ea_sso_project_name', decodeURIComponent(projNameMatch?.[1] || ''))
+        } catch {}
+        window.dispatchEvent(new Event('ea_active_project_changed'))
+      }
+      begin({ token: ssoToken })
+        .catch(() => { forget(); setExpired(true) })
+        .finally(() => setChecking(false))
+      return
+    }
+
     const token = localStorage.getItem(TOKEN_KEY)
     if (!token) {
       setChecking(false)

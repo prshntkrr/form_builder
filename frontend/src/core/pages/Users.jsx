@@ -142,7 +142,6 @@ export default function Users() {
   // The account a confirmation is open for. Deleting is not something to do by
   // clicking once next to Deactivate.
   const [removing, setRemoving] = useState(null)
-  const [adding, setAdding] = useState(false)
   // The account whose voice enrolment is open. Enrolment needs a user_id, so it
   // belongs on an account that exists rather than inside the Add someone form —
   // which is also why adding somebody offers it straight afterwards.
@@ -192,7 +191,9 @@ export default function Users() {
           <h1>Users</h1>
           <p className="lede">Who can sign in, and which role each of them holds.</p>
         </div>
-        <button className="btn btn--primary" onClick={() => setAdding(true)}>Add someone</button>
+        <span className="lede" style={{ fontSize: 12, color: '#6b7280' }}>
+          Users are managed in the REV platform
+        </span>
       </div>
 
       {error && <div className="note note--bad" style={{ marginBottom: 14 }}>{error}</div>}
@@ -296,21 +297,6 @@ export default function Users() {
           person={removing}
           onClose={() => setRemoving(null)}
           onDeleted={() => { setRemoving(null); load() }}
-        />
-      )}
-
-      {adding && (
-        <AddPerson
-          roles={roles}
-          onClose={() => setAdding(false)}
-          onAdded={(created, withVoice) => {
-            setAdding(false)
-            load()
-            // Enrolment needs the account to exist, so it follows the create
-            // rather than living inside that form — and only if it was asked
-            // for, because the person has to be in the room to record.
-            if (withVoice) setEnrolling(created)
-          }}
         />
       )}
 

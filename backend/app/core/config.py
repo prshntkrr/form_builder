@@ -93,6 +93,17 @@ class Settings(BaseSettings):
     s3_url_seconds: int = 900
     media_max_mb: int = 25
 
+    # SSO — shared secret with the REV platform for HMAC token validation.
+    # Empty means SSO is not available.
+    sso_secret: str = ""
+
+    # REV platform database (read-only access for user/project lookups)
+    rev_db_host: str = "localhost"
+    rev_db_port: int = 5432
+    rev_db_name: str = "rev_platform"
+    rev_db_user: str = "postgres"
+    rev_db_password: str = "postgres"
+
     # How deep a parent/child chain of forms may go. Farmer -> Plot -> Crop
     # season is three; this is a cost ceiling, not a safety one — walking a
     # chain costs one query per level, and cycles are caught by the walk

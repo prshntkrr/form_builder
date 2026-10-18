@@ -7,8 +7,9 @@ people adding two modules never touch the same line.
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.core import registry
 from app.core.bootstrap import (
@@ -21,10 +22,10 @@ from app.core.bootstrap import (
     run_module_migrations,
 )
 from app.core.config import settings
-from app.core.database import close_pool, init_pool, ping, transaction
+from app.core.database import close_pool, init_pool, init_rev_pool, ping, transaction
 from app.core.gateway import GatewayMiddleware
 from app.core.deps import current_user
-from app.core.routers import auth, roles, users
+from app.core.routers import auth, rev_users, roles, sso, users
 
 logging.basicConfig(
     level=logging.INFO,
@@ -37,6 +38,10 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     try:
         init_pool()
+        try:
+            init_rev_pool()
+        except Exception as exc:
+            logger.warning("REV database pool not available: %s", exc)
         ensure_base_tables()      # core schema, then every module's
         ensure_user_identifiers()  # username / phone, on databases predating them
         ensure_voice_enrolment()   # the voiceprint columns, likewise
@@ -56,6 +61,19 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+class IframeHeadersMiddleware(BaseHTTPMiddleware):
+    """Allow the REV platform to embed this app in an iframe."""
+    async def dispatch(self, request: Request, call_next):
+        response: Response = await call_next(request)
+        response.headers["Content-Security-Policy"] = (
+            "frame-ancestors http://localhost:5173 http://127.0.0.1:5173 http://localhost:5174 http://127.0.0.1:5174"
+        )
+        if "X-Frame-Options" in response.headers:
+            del response.headers["X-Frame-Options"]
+        return response
+
+app.add_middleware(IframeHeadersMiddleware)
+
 # The boundary channel traffic crosses, in front of the routes it reaches.
 # Added before CORS so that CORS wraps it: a browser must still be told about a
 # 429 or a 413, and a response the browser will not read is not a refusal
@@ -72,9 +90,11 @@ app.add_middleware(
 )
 
 # Core: signing in, accounts, roles.
+app.include_router(sso.router)
 app.include_router(auth.router)
 app.include_router(roles.router)
 app.include_router(users.router)
+app.include_router(rev_users.router)
 
 # Everything else arrives from app/modules/*/ via its manifest.
 for module_router in registry.routers():

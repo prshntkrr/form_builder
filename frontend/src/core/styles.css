@@ -96,11 +96,21 @@ a:hover { text-decoration: underline; }
 .app--collapsed .topbar__brand { display: flex; }
 
 .side {
-  width: 280px; flex: none;
+  width: var(--side-width, 280px); flex: none;
   display: flex; flex-direction: column;
   background: #1e3a2f; border-right: none;
   position: sticky; top: 0; height: 100vh;
   color: #fff;
+  min-width: 200px; max-width: 400px;
+  overflow-y: auto;
+}
+.side__resize {
+  position: absolute; top: 0; right: -3px; width: 6px; height: 100%;
+  cursor: col-resize; z-index: 20;
+  background: transparent; transition: background 0.15s;
+}
+.side__resize:hover, .side__resize.dragging {
+  background: rgba(47,107,69,0.5);
 }
 
 .side__top { padding: 16px 16px 12px; }

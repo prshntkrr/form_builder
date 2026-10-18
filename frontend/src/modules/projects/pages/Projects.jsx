@@ -34,13 +34,7 @@ export default function Projects() {
             in another.
           </p>
         </div>
-        {mayCreate && (
-          <div className="row">
-            <button className="btn btn--primary" onClick={() => setMaking(true)}>
-              Create project
-            </button>
-          </div>
-        )}
+        <span className="tiny muted">Projects are managed in the REV platform</span>
       </div>
 
       {error && <div className="note note--bad">Unable to load your projects. {error}</div>}

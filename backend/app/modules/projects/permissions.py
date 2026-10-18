@@ -151,5 +151,4 @@ def is_project_role(held) -> bool:
     if not held:
         return False
 
-    allowed = PROJECT_SCOPED | set(core.SHARED)
-    return bool(held & PROJECT_SCOPED) and held <= allowed
+    return bool(held & PROJECT_SCOPED)

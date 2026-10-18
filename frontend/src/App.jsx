@@ -198,9 +198,6 @@ function Shell() {
             e-Agrology
           </Link>
           <span className="grow" />
-          <ThemeButton />
-          <AdminMenu />
-          <TopbarAccount />
         </div>
         <Outlet />
       </div>

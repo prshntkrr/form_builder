@@ -271,6 +271,12 @@ def add_member(project_id: str, user_id: str, role_id: str,
             (project_id, user_id, role_id, _text(added_by)),
         )
 
+    try:
+        from app.core.rev_sync import sync_member_added
+        sync_member_added(project_id, user_id)
+    except Exception:
+        pass
+
     return {"project_id": project_id, "user_id": user_id, "role_id": role_id}
 
 
@@ -399,10 +405,25 @@ def remove_member(project_id: str, member_id: int, acting_user_id: str = "") -> 
     with transaction() as cur:
         _guard_member_change(cur, project_id, member_id, acting_user_id, removing=True)
         cur.execute(
+            "SELECT user_id FROM project_member WHERE project_id = %s AND member_id = %s",
+            (project_id, member_id),
+        )
+        row = cur.fetchone()
+        removed_user_id = row["user_id"] if row else None
+        cur.execute(
             "DELETE FROM project_member WHERE project_id = %s AND member_id = %s",
             (project_id, member_id),
         )
-        return cur.rowcount > 0
+        removed = cur.rowcount > 0
+
+    if removed and removed_user_id:
+        try:
+            from app.core.rev_sync import sync_member_removed
+            sync_member_removed(project_id, removed_user_id)
+        except Exception:
+            pass
+
+    return removed
 
 
 # --------------------------------------------------------------------------- #

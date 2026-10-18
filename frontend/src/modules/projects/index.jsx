@@ -5,7 +5,6 @@ import Forms from './pages/Forms.jsx'
 import Projects from './pages/Projects.jsx'
 import ProjectSettings from './pages/ProjectSettings.jsx'
 import Review from './pages/Review.jsx'
-import ProjectSelector from './components/ProjectSelector.jsx'
 import { useProject, useProjects } from './active.js'
 import './styles.css'
 
@@ -34,8 +33,6 @@ function ProjectsNav({ onNavigate }) {
 
   return (
     <>
-      <ProjectSelector />
-
       {!system && projectId && (
         <div className="side__label">Project</div>
       )}

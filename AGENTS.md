@@ -25,10 +25,10 @@ catalogue to add a feature, you are working against the design.
 ```bash
 # backend  (venv already exists at backend/.venv)
 cd backend
-.venv/Scripts/python.exe -m uvicorn app.main:app --reload --port 8000
+.venv/Scripts/python.exe -m uvicorn app.main:app --reload --port 8080
 
 # frontend
-cd frontend && npm run dev            # proxies /api to :8000
+cd frontend && npm run dev            # proxies /api to :8080
 
 # tests — 207 of them, most need Postgres and skip without it
 cd backend && .venv/Scripts/python.exe -m pytest
@@ -314,9 +314,9 @@ and its `forms` row. Copy the `cleanup` helper in `test_standard_forms_endpoint.
 
 ## Local gotchas that cost real time
 
-- **Two uvicorn processes on :8000.** One bound to `127.0.0.1` and one to
+- **Two uvicorn processes on :8080.** One bound to `127.0.0.1` and one to
   `0.0.0.0` coexist on Windows, and the specific bind wins for localhost. Symptom
-  is a 404 for an endpoint that exists. `netstat -ano | findstr :8000` — two
+  is a 404 for an endpoint that exists. `netstat -ano | findstr :8080` — two
   LISTENING lines means this. `taskkill /PID <pid> /F`; `pkill` does not reliably
   kill native Windows processes.
 - **`--reload` watches `.py`, not `.json`.** Editing library JSON needs a restart.

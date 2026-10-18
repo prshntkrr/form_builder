@@ -137,7 +137,7 @@ source venv/bin/activate          # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
 cp .env.example .env              # then edit it
-python -m uvicorn app.main:app --reload --port 8000
+python -m uvicorn app.main:app --reload --port 8080
 ```
 
 On first run the admin password is generated and printed to the log unless `ADMIN_PASSWORD` is
@@ -164,11 +164,11 @@ Node 20+.
 ```bash
 cd frontend
 npm install
-npm run dev        # http://localhost:5173, proxying /api to port 8000
+npm run dev        # http://localhost:5174, proxying /api to port 8080
 npm run build      # production bundle into dist/
 ```
 
-Set `API_PORT` if the backend is not on 8000.
+Set `API_PORT` if the backend is not on 8080.
 
 ## Environment variables
 
@@ -624,10 +624,10 @@ MEDIA_MAX_MB=25               # largest single object
 
 With the backend running, FastAPI serves interactive documentation:
 
-- `http://localhost:8000/docs` — Swagger UI
-- `http://localhost:8000/redoc` — ReDoc
-- `http://localhost:8000/openapi.json` — the schema
-- `http://localhost:8000/api/health` — reachability, and which tables are missing
+- `http://localhost:8080/docs` — Swagger UI
+- `http://localhost:8080/redoc` — ReDoc
+- `http://localhost:8080/openapi.json` — the schema
+- `http://localhost:8080/api/health` — reachability, and which tables are missing
 
 **[EXTERNAL_DB_IMPORT.md](EXTERNAL_DB_IMPORT.md)** is the external-database
 import: connect to another PostgreSQL or MySQL database, preview a table, and
