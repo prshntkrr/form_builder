@@ -137,10 +137,13 @@ export default function IVRBuilder({
             className="control"
             rows={2}
             maxLength={1024}
-            placeholder="Thank you for your responses. Goodbye."
+            placeholder="Leave empty for immediate clean hang-up (no closing audio)"
             value={config.completion_message || ''}
             onChange={(e) => onChange(setMessage(form, 'completion_message', e.target.value))}
           />
+          <span className="tiny muted">
+            Spoken when the questionnaire finishes. Leave empty for immediate clean hang-up (zero closing audio).
+          </span>
         </label>
 
         <Compatibility fields={order} blocked={blocked} />
@@ -331,7 +334,18 @@ export function CallPreview({ form, order, config }) {
   )
 }
 
+const ALLOTTED_DIDS = [
+  '1205236308',
+  '1205236334',
+  '1205236335',
+  '1205236336',
+  '1205236337',
+  '1205236338',
+  '1205236339',
+]
+
 function IVRRouteFields({ route, onRoute, existingDids = [] }) {
+  const combinedDids = Array.from(new Set([...ALLOTTED_DIDS, ...(existingDids || [])]))
   return (
     <section className="wa__route" style={{ borderLeftColor: '#0284c7' }} aria-label="IVR telephone routing">
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
@@ -353,13 +367,11 @@ function IVRRouteFields({ route, onRoute, existingDids = [] }) {
             value={route?.receiver_number || ''}
             onChange={(e) => onRoute({ receiver_number: e.target.value, menu_option: '1' })}
           />
-          {existingDids && existingDids.length > 0 && (
-            <datalist id="ivr-known-dids">
-              {existingDids.map((d) => (
-                <option key={d} value={d} />
-              ))}
-            </datalist>
-          )}
+          <datalist id="ivr-known-dids">
+            {combinedDids.map((d) => (
+              <option key={d} value={d} label={ALLOTTED_DIDS.includes(d) ? `${d} (Allotted Line)` : d} />
+            ))}
+          </datalist>
           <span className="tiny muted">
             The telephone number (DID) callers dial to answer this survey. Each DID line connects directly to one active survey.
           </span>

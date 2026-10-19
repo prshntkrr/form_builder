@@ -287,6 +287,8 @@ def upsert_form_route(cur, *, channel: str, form_id: str,
         (form_id, channel),
     )
     found = cur.fetchone()
+    route_id = found["route_id"] if found else None
+
     # For IVR, each DID phone line exclusively belongs to one active survey at a time.
     # Enabling this form on this DID line automatically turns off any other forms on the same line.
     if channel == "ivr" and enabled and number:

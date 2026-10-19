@@ -112,9 +112,15 @@ export default function IVRRoutes() {
       })
 
       // Sync Indev telephony in background without blocking or delaying the UI
-      if (nextEnabled && currentDid) {
-        api.publishToIndev(form.form_id, currentDid)
-          .catch((indevErr) => console.warn('Could not auto-sync Indev on toggle:', indevErr))
+      if (currentDid) {
+        if (nextEnabled) {
+          api.publishToIndev(form.form_id, currentDid)
+            .then(() => api.setIndevStatus(currentDid, true, projectId))
+            .catch((indevErr) => console.warn('Could not auto-sync Indev on toggle ON:', indevErr))
+        } else {
+          api.setIndevStatus(currentDid, false, projectId)
+            .catch((indevErr) => console.warn('Could not auto-sync Indev on toggle OFF:', indevErr))
+        }
       }
     } catch (e) {
       setError(e.message)
@@ -367,6 +373,7 @@ export default function IVRRoutes() {
                         <div className="row" style={{ gap: 4, alignItems: 'center' }}>
                           <input
                             type="text"
+                            list="ivr-allotted-dids"
                             className="control control--sm"
                             style={{ width: 140 }}
                             placeholder="e.g. 1205236308"
@@ -378,6 +385,15 @@ export default function IVRRoutes() {
                               if (e.key === 'Escape') cancelEditDid()
                             }}
                           />
+                          <datalist id="ivr-allotted-dids">
+                            <option value="1205236308" label="1205236308 (Allotted Line 1)" />
+                            <option value="1205236334" label="1205236334 (Allotted Line 2)" />
+                            <option value="1205236335" label="1205236335 (Allotted Line 3)" />
+                            <option value="1205236336" label="1205236336 (Allotted Line 4)" />
+                            <option value="1205236337" label="1205236337 (Allotted Line 5)" />
+                            <option value="1205236338" label="1205236338 (Allotted Line 6)" />
+                            <option value="1205236339" label="1205236339 (Allotted Line 7)" />
+                          </datalist>
                           <button
                             className="btn btn--primary btn--sm"
                             onClick={() => saveDid(form, route)}

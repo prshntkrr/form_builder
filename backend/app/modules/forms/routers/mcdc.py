@@ -27,7 +27,7 @@ from app.core.deps import current_user, needs
 from app.modules.forms import channel_settings, indev_service, routing, webhook_service
 from app.modules.forms.permissions import MCDC_INTEGRATE, MCDC_MANAGE, RECORDS_VIEW
 from app.modules.forms.schemas import (
-    IdentityRequest, IndevPublishRequest, IndevSettingsRequest, IndevSyncRequest,
+    IdentityRequest, IndevPublishRequest, IndevSettingsRequest, IndevStatusRequest, IndevSyncRequest,
     IVRRouteRequest, RouteRequest, WebhookRequest, WhatsAppRouteRequest, WhatsAppSettingsRequest,
 )
 
@@ -494,6 +494,25 @@ def sync_indev_responses(
         return indev_service.sync_indev_responses(
             did=req.did,
             number=req.number,
+            project_id=project_id,
+        )
+    except indev_service.IndevError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/ivr/indev-status")
+def set_indev_status_endpoint(
+    req: IndevStatusRequest,
+    user: Dict[str, Any] = Depends(needs(MCDC_MANAGE)),
+):
+    """Update survey status (ON/OFF) on Indev DID line."""
+    project_id = req.project_id
+    if project_id:
+        _project_reachable(user, project_id)
+    try:
+        return indev_service.set_survey_status(
+            did=req.did,
+            active=req.active,
             project_id=project_id,
         )
     except indev_service.IndevError as exc:

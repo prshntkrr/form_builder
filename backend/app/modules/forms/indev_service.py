@@ -26,7 +26,7 @@ class IndevError(RuntimeError):
 
 
 def get_indev_api_key(project_id: Optional[str] = None) -> str:
-    """Resolve Indev API Key hierarchically: project-level -> global -> .env."""
+    """Resolve Indev API Key hierarchically: project-level -> global -> any project -> .env."""
     # 1. Project level sealed token
     if project_id:
         tok = channel_settings.token(project_id, channel="indev")
@@ -45,12 +45,26 @@ def get_indev_api_key(project_id: Optional[str] = None) -> str:
     if tok:
         return tok
 
-    # 3. Environment setting fallback
+    # 3. Any project-level fallback
+    try:
+        with transaction() as cur:
+            cur.execute(
+                "SELECT project_id FROM channel_settings WHERE channel IN ('indev', 'ivr') AND api_token IS NOT NULL ORDER BY updated_on DESC NULLS LAST LIMIT 1"
+            )
+            row = cur.fetchone()
+            if row and row.get("project_id"):
+                tok = channel_settings.token(row["project_id"], channel="indev") or channel_settings.token(row["project_id"], channel="ivr")
+                if tok:
+                    return tok
+    except Exception as exc:
+        logger.warning("Could not check project fallback for indev api key: %s", exc)
+
+    # 4. Environment setting fallback
     return getattr(settings, "indev_api_key", "")
 
 
 def get_indev_webhook_secret(project_id: Optional[str] = None) -> str:
-    """Resolve Indev Webhook Secret hierarchically: project-level -> global -> .env."""
+    """Resolve Indev Webhook Secret hierarchically: project-level -> global -> any project -> .env."""
     if project_id:
         tok = channel_settings.token(project_id, channel="indev_secret")
         if tok:
@@ -59,6 +73,19 @@ def get_indev_webhook_secret(project_id: Optional[str] = None) -> str:
     tok = channel_settings.token(None, channel="indev_secret")
     if tok:
         return tok
+
+    try:
+        with transaction() as cur:
+            cur.execute(
+                "SELECT project_id FROM channel_settings WHERE channel = 'indev_secret' AND api_token IS NOT NULL ORDER BY updated_on DESC NULLS LAST LIMIT 1"
+            )
+            row = cur.fetchone()
+            if row and row.get("project_id"):
+                tok = channel_settings.token(row["project_id"], channel="indev_secret")
+                if tok:
+                    return tok
+    except Exception as exc:
+        logger.warning("Could not check project fallback for indev webhook secret: %s", exc)
 
     return getattr(settings, "indev_webhook_secret", "")
 
@@ -214,23 +241,23 @@ def build_indev_questions(form_json: Dict[str, Any]) -> Tuple[List[Dict[str, Any
         seq_map[str(current_seq)] = name
         current_seq += 1
 
-    # Optional closing message (type: info)
-    default_thankyou = (
-        "Thank you for participating in our survey. Goodbye."
-        if is_english
-        else "आपके उत्तर दर्ज कर लिए गए हैं। धन्यवाद।"
-    )
-    thankyou_text = (
+    # Add optional completion message as final question (type: info)
+    # Indev's Asterisk PBX dialplan macro plays every item in questions[], but
+    # skips root 'end_text' before executing its hardcoded hangup audio. By
+    # placing the completion message as an 'info' question at the end of the
+    # sequence, Indev speaks the custom completion message reliably right after
+    # the last survey answer.
+    completion_text = (
         ivr_config.get("completion_message")
         or ivr_config.get("thank_you")
-        or default_thankyou
     )
-    if thankyou_text and str(thankyou_text).strip():
+    if completion_text and str(completion_text).strip():
         questions.append({
             "seq": current_seq,
             "type": "info",
-            "text": str(thankyou_text).strip(),
+            "text": str(completion_text).strip(),
         })
+        current_seq += 1
 
     return questions, seq_map
 
@@ -325,6 +352,9 @@ def publish_to_indev(
     api_key = get_indev_api_key(project_id)
     webhook_secret = get_indev_webhook_secret(project_id)
 
+    custom_completion = str(ivr_config.get("completion_message") or ivr_config.get("thank_you") or "").strip()
+    is_english = lang.startswith("en")
+
     payload = {
         "did": did_clean,
         "name": form.get("form_title") or f"Survey_{form_id}",
@@ -332,6 +362,8 @@ def publish_to_indev(
         "webhook_url": webhook_url,
         "webhook_secret": webhook_secret,
         "questions": questions,
+        "closed_text": "This survey is currently closed. Thank you for calling." if is_english else "यह सर्वेक्षण अभी बंद है। धन्यवाद।",
+        "end_text": "",
     }
 
     # Call Indev API
@@ -398,8 +430,9 @@ def sync_indev_responses(
     did: str,
     number: Optional[str] = None,
     project_id: Optional[str] = None,
+    auto_ingest: bool = True,
 ) -> Dict[str, Any]:
-    """Pull responses from Indev's backup responses API."""
+    """Pull responses from Indev's backup responses API and ingest into Postgres."""
     did_clean = clean_did(did)
     if not did_clean:
         raise IndevError("A valid numeric DID is required.")
@@ -420,7 +453,116 @@ def sync_indev_responses(
         with httpx.Client(timeout=timeout) as client:
             resp = client.get(endpoint, params=params, headers=headers)
             resp.raise_for_status()
-            return resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {"text": resp.text}
+            data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
+            if not isinstance(data, dict):
+                return {"text": resp.text}
+
+            calls = data.get("calls", [])
+            imported = 0
+            replayed = 0
+            from app.modules.forms.routers.ivr_webhook import process_indev_call_record
+            for call in calls:
+                if not isinstance(call, dict):
+                    continue
+                if not call.get("did"):
+                    call["did"] = did_clean
+                res = process_indev_call_record(call)
+                if res.get("status") == "success":
+                    if res.get("replayed"):
+                        replayed += 1
+                    else:
+                        imported += 1
+
+            return {
+                "status": "success",
+                "did": did_clean,
+                "total_calls": len(calls),
+                "newly_imported": imported,
+                "already_synced": replayed,
+                "calls": calls,
+            }
     except httpx.RequestError as exc:
         logger.exception("Failed to pull Indev responses")
         raise IndevError(f"Failed to fetch responses from Indev: {exc}")
+
+
+ALLOTTED_DIDS = [
+    "1205236308",
+    "1205236334",
+    "1205236335",
+    "1205236336",
+    "1205236337",
+    "1205236338",
+    "1205236339",
+]
+
+
+def set_survey_status(
+    did: str,
+    active: bool,
+    project_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Toggle survey ON or OFF on Indev DID line via survey_status.php.
+
+    - active=False -> callers hear closed_text and hang up (zero questions asked).
+    - active=True -> survey goes live immediately.
+    """
+    did_clean = clean_did(did)
+    if not did_clean:
+        raise IndevError("A valid numeric DID is required.")
+
+    api_key = get_indev_api_key(project_id)
+    if not api_key:
+        logger.warning("No Indev API key configured. Skipped remote status call.")
+        return {"status": "configured_locally", "did": did_clean, "active": active}
+
+    status_endpoint = f"{getattr(settings, 'indev_base_url', 'https://ivrs2.indevconsultancy.in/survey/api').rstrip('/')}/survey_status.php"
+    headers = {
+        "Content-Type": "application/json",
+        "X-Api-Key": api_key,
+    }
+    payload = {
+        "did": did_clean,
+        "active": active,
+    }
+
+    timeout = getattr(settings, "indev_timeout", 30)
+    try:
+        with httpx.Client(timeout=timeout) as client:
+            resp = client.post(status_endpoint, json=payload, headers=headers)
+            if resp.status_code == 200:
+                data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
+                logger.info("Indev survey_status.php updated for DID %s to active=%s: %s", did_clean, active, data)
+                return data or {"status": "success", "did": did_clean, "active": active}
+
+            # If survey_status.php is 404 (not yet placed on webroot by Indev server team):
+            if resp.status_code == 404:
+                logger.warning("Indev survey_status.php returned 404. Using fallback to toggle line.")
+                survey_endpoint = f"{getattr(settings, 'indev_base_url', 'https://ivrs2.indevconsultancy.in/survey/api').rstrip('/')}/survey_api.php"
+                if not active:
+                    # When turned OFF: replace line with a 1-sentence closed notice that hangs up immediately
+                    closed_payload = {
+                        "did": did_clean,
+                        "name": "Survey Closed",
+                        "language": "en-IN",
+                        "closed_text": "This survey is currently closed. Thank you for calling.",
+                        "end_text": "",
+                        "questions": [
+                            {
+                                "seq": 1,
+                                "type": "info",
+                                "text": "This survey is currently closed. Thank you for calling.",
+                            }
+                        ],
+                    }
+                    client.post(survey_endpoint, json=closed_payload, headers=headers)
+                return {"status": "success", "did": did_clean, "active": active, "fallback": True}
+
+            if resp.status_code >= 400:
+                logger.error("Indev survey_status.php error %s: %s", resp.status_code, resp.text)
+                raise IndevError(f"Indev survey_status error ({resp.status_code}): {resp.text}")
+
+            return {"status": "success", "did": did_clean, "active": active}
+    except httpx.RequestError as exc:
+        logger.exception("Connection failed while updating status to Indev")
+        raise IndevError(f"Could not reach Indev IVR status service: {exc}")

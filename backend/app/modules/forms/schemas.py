@@ -271,6 +271,13 @@ class IndevSettingsRequest(BaseModel):
     webhook_secret: Optional[str] = None
 
 
+class IndevStatusRequest(BaseModel):
+    """Toggle survey ON or OFF on Indev DID line."""
+    did: str
+    active: bool
+    project_id: Optional[str] = None
+
+
 class WebhookRequest(BaseModel):
     """Create or update a webhook endpoint."""
     label: Optional[str] = None
