@@ -463,6 +463,10 @@ export const api = {
     request('/mcdc/ivr/publish-to-indev',
             { method: 'POST', body: JSON.stringify({ form_id: formId, did }) }),
 
+  setIndevStatus: (did, active, project) =>
+    request('/mcdc/ivr/indev-status',
+            { method: 'POST', body: JSON.stringify({ did, active, project_id: project || null }) }),
+
   syncIndevResponses: (did, number) =>
     request('/mcdc/ivr/sync-indev-responses',
             { method: 'POST', body: JSON.stringify({ did, number }) }),

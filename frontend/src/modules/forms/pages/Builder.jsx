@@ -729,6 +729,13 @@ export default function Builder() {
       setStatus(result.form_status)
       setCheck(null)
       setForm(prep(payload, true))
+
+      // If an IVR form with an assigned DID is saved, auto-publish definition and completion text to Indev
+      const currentDid = ivrRoute.receiver_number?.trim() || payload?.channel_config?.ivr?.did
+      if (formChannel(form) === 'ivr' && currentDid) {
+        api.publishToIndev(formId || draftId, currentDid)
+          .catch((err) => console.warn('Could not auto-sync Indev on form save:', err))
+      }
     })
 
   /** Publish a draft, or put a live form back into draft. */

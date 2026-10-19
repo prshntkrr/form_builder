@@ -93,6 +93,7 @@ ROUTES: Tuple[Tuple[str, str], ...] = (
     ("GET", r"/api/mcdc/indev/settings"),
     ("PUT", r"/api/mcdc/indev/settings"),
     ("POST", r"/api/mcdc/ivr/publish-to-indev"),
+    ("POST", r"/api/mcdc/ivr/indev-status"),
     ("POST", r"/api/mcdc/ivr/sync-indev-responses"),
     # Webhook management: multiple inbound endpoints per channel.
     ("GET", r"/api/mcdc/whatsapp/webhooks"),

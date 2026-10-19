@@ -170,7 +170,7 @@ export default function IVRSettings({ projectId }) {
 
       <KeySection
         label="Telephony provider API key"
-        hint="Supports any provider (Twilio, Exotel, Knowlarity, etc). Stored encrypted."
+        hint="Supports any provider. Stored encrypted."
         shown={ivr}
         onSave={(t) => saveIvr({ api_token: t })}
         busy={busy}
@@ -185,8 +185,8 @@ export default function IVRSettings({ projectId }) {
       />
 
       <KeySection
-        label="Indev Survey API Key (X-Api-Key)"
-        hint="Used to publish surveys and pull responses from Indev Consultancy IVR. Stored encrypted."
+        label="Survey API Key (X-Api-Key)"
+        hint="Used to publish surveys and pull responses from survey service provider. Stored encrypted."
         shown={{
           token_set: indev.api_key_set,
           token_hint: indev.api_key_hint,
@@ -197,8 +197,8 @@ export default function IVRSettings({ projectId }) {
       />
 
       <KeySection
-        label="Indev Webhook Secret (X-Webhook-Secret)"
-        hint="Secret sent by Indev to authenticate incoming call completion webhooks. Stored encrypted."
+        label="Webhook Secret (X-Webhook-Secret)"
+        hint="Secret sent by survey service provider to authenticate incoming call completion webhooks. Stored encrypted."
         shown={{
           token_set: indev.webhook_secret_set,
           token_hint: indev.webhook_secret_hint,

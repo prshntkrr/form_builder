@@ -6,6 +6,7 @@ whether this account may make it from where the submission currently is. There
 is deliberately no `PATCH /submissions/{id}/status`.
 """
 import logging
+import time
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -266,6 +267,29 @@ def reject(form_id: str, survey_id: str, req: RejectRequest,
 # --------------------------------------------------------------------------- #
 queue_router = APIRouter(prefix="/api/projects", tags=["submission review"])
 
+_LAST_INDEV_SYNC: Dict[str, float] = {}
+
+
+def _maybe_sync_indev_for_project(project_id: str) -> None:
+    """Auto-sync completed calls from Indev's backup API so new submissions appear in Review immediately."""
+    now = time.time()
+    try:
+        from app.modules.forms import indev_service, routing
+        routes = routing.list_routes(channel="ivr", project_id=project_id)
+        for r in routes:
+            if not r.get("enabled"):
+                continue
+            did = indev_service.clean_did(r.get("receiver_number"))
+            if not did:
+                continue
+            # Sync at most once every 10 seconds per DID so frequent UI polling doesn't spam Indev
+            if now - _LAST_INDEV_SYNC.get(did, 0) < 10.0:
+                continue
+            _LAST_INDEV_SYNC[did] = now
+            indev_service.sync_indev_responses(did, project_id=project_id, auto_ingest=True)
+    except Exception as exc:
+        logger.warning("Could not auto-sync Indev responses for project %s: %s", project_id, exc)
+
 
 @queue_router.get("/{project_id}/submissions")
 def project_submissions(
@@ -301,6 +325,9 @@ def project_submissions(
     # `submissions.view_all` — that would empty the review queue.
     everything = scope == access.SCOPE_ALL
     author = auth_service.display_name(user)
+
+    # Pull any newly completed calls from Indev's backup responses API so they appear in Review instantly
+    _maybe_sync_indev_for_project(project_id)
 
     with transaction() as cur:
         # The form filter is a WHERE on *this project's* forms. That is the whole
