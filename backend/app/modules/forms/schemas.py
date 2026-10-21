@@ -42,6 +42,12 @@ class WhatsAppRouting(BaseModel):
     keyword: str = ""
 
 
+class IVRRouting(BaseModel):
+    """How an IVR form is reached on telephone lines: DID number and optional menu digit."""
+    did: str = ""
+    menu_option: str = "1"
+
+
 class CreateFormRequest(BaseModel):
     form_json: Dict[str, Any]
     created_by: Optional[str] = None
@@ -55,6 +61,7 @@ class CreateFormRequest(BaseModel):
     # Optional, and only meaningful for a form built for WhatsApp. Absent means
     # "leave routing alone", which is every caller written before this.
     whatsapp: Optional[WhatsAppRouting] = None
+    ivr: Optional[IVRRouting] = None
 
 
 class UpdateFormRequest(BaseModel):
@@ -65,6 +72,7 @@ class UpdateFormRequest(BaseModel):
     # are moved with them so existing responses keep matching the definition.
     renames: Optional[Dict[str, str]] = None
     whatsapp: Optional[WhatsAppRouting] = None
+    ivr: Optional[IVRRouting] = None
 
 
 class RevalidateRequest(BaseModel):
@@ -227,6 +235,13 @@ class WhatsAppRouteRequest(BaseModel):
     enabled: Optional[bool] = None
 
 
+class IVRRouteRequest(BaseModel):
+    """One form's IVR route, as the Form Builder configures it."""
+    receiver_number: str = ""
+    menu_option: str = "1"
+    enabled: Optional[bool] = None
+
+
 class WhatsAppSettingsRequest(BaseModel):
     """How the WhatsApp channel is operated in one project.
 
@@ -236,6 +251,31 @@ class WhatsAppSettingsRequest(BaseModel):
     """
     session_timeout_seconds: Optional[int] = None
     api_token: Optional[str] = None
+
+
+class IndevPublishRequest(BaseModel):
+    """Publish a form survey definition to Indev IVR line."""
+    form_id: str
+    did: str
+
+
+class IndevSyncRequest(BaseModel):
+    """Pull call responses from Indev API."""
+    did: str
+    number: Optional[str] = None
+
+
+class IndevSettingsRequest(BaseModel):
+    """Encrypted Indev IVR provider credentials."""
+    api_token: Optional[str] = None
+    webhook_secret: Optional[str] = None
+
+
+class IndevStatusRequest(BaseModel):
+    """Toggle survey ON or OFF on Indev DID line."""
+    did: str
+    active: bool
+    project_id: Optional[str] = None
 
 
 class WebhookRequest(BaseModel):

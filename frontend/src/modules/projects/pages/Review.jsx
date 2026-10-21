@@ -46,8 +46,18 @@ export default function Review() {
 }
 
 function Queue() {
-  const { active, projects } = useProjects()
+  const { active, projects, choose } = useProjects()
   const { can, state } = useProject(active?.project_id)
+
+  // Submissions review is strictly a project feature. If the user navigates
+  // here while in system context (or before selecting a project), auto-select
+  // the first available project.
+  useEffect(() => {
+    if (!active && projects && projects.length > 0) {
+      choose(projects[0].project_id)
+    }
+  }, [active, projects, choose])
+
 
   const [rows, setRows] = useState(null)
   const [status, setStatus] = useState('')
@@ -79,6 +89,19 @@ function Queue() {
     setRejecting(null)
     setViewing(null)
     load()
+  }, [projectId, status, formId])
+
+  // Periodic polling every 12s so newly submitted IVR calls appear live without page reload
+  useEffect(() => {
+    if (!projectId) return
+    const interval = setInterval(() => {
+      api.projectSubmissions(projectId, {
+        status: status || undefined,
+        form_id: formId || undefined,
+      }).then(({ submissions }) => setRows(submissions))
+        .catch(() => {})
+    }, 12000)
+    return () => clearInterval(interval)
   }, [projectId, status, formId])
 
   // The forms to filter by: this project's own, from the project's own
@@ -132,7 +155,7 @@ function Queue() {
               : ' — the submissions you have made.'}
           </p>
         </div>
-        <div className="row">
+        <div className="row" style={{ alignItems: 'center' }}>
           <select className="control control--sm" value={formId}
                   onChange={(e) => setFormId(e.target.value)} aria-label="Form">
             <option value="">All forms</option>
@@ -146,13 +169,29 @@ function Queue() {
             <option value="">Every status</option>
             {STATES.map((s) => <option key={s} value={s}>{WORDING[s]}</option>)}
           </select>
+
+          <button className="btn btn--quiet btn--sm" onClick={load} title="Refresh submissions">
+            🔄 Refresh
+          </button>
         </div>
       </div>
 
       {error && <div className="note note--bad">{error}</div>}
 
-      {state === 'loading' && <div className="skeleton" style={{ height: 40 }} />}
-      {rows === null && <div className="skeleton" style={{ height: 140 }} />}
+      {!projectId && projects?.length > 0 && (
+        <div className="note note--info">
+          Please select a project to view its submissions:
+          <div className="row" style={{ marginTop: 8 }}>
+            {projects.map((p) => (
+              <button key={p.project_id} className="btn btn--primary btn--sm" onClick={() => choose(p.project_id)}>
+                Switch to {p.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {projectId && state === 'loading' && <div className="skeleton" style={{ height: 40 }} />}
+      {projectId && rows === null && <div className="skeleton" style={{ height: 140 }} />}
 
       {/* An empty queue and a failed request are different things, and the
           error above says which. This only speaks when the request worked. */}
@@ -190,7 +229,24 @@ function Queue() {
                       </button>
                       <div className="tiny muted"><code>{row.survey_id}</code></div>
                     </td>
-                    <td>{row.created_by || '—'}</td>
+                    <td>
+                      {row.created_by || '—'}
+                      {(row.is_ivr || String(row.created_by || '').startsWith('ivr:')) && row.has_audio && (
+                        <span style={{
+                          display: 'inline-block',
+                          marginLeft: 6,
+                          fontSize: '0.72rem',
+                          fontWeight: 500,
+                          padding: '1px 6px',
+                          borderRadius: '10px',
+                          background: '#e0e7ff',
+                          color: '#3730a3',
+                          border: '1px solid #c7d2fe',
+                        }} title="Includes recorded IVR call audio">
+                          📞 Audio
+                        </span>
+                      )}
+                    </td>
                     <td className="tiny muted">
                       {row.created_on ? String(row.created_on).slice(0, 10) : '—'}
                     </td>
@@ -206,7 +262,7 @@ function Queue() {
                           the submission is in. */}
                       <button className="btn btn--quiet btn--sm"
                               onClick={() => setViewing(row)}>
-                        View submission
+                        {(row.is_ivr || String(row.created_by || '').startsWith('ivr:')) && row.has_audio ? '▶ Listen & Review' : 'View submission'}
                       </button>
 
                       {/* Explicit moves, never a status to set. Which ones show
@@ -391,6 +447,40 @@ export function SubmissionDetail({ row, onClose, onMoved, mayReview }) {
 
           {detail && (
             <>
+              {Boolean(detail.is_ivr || String(detail.submitted_by || '').startsWith('ivr:')) && detail.call_recording_url && (
+                <div className="audio-player-card">
+                  <div className="audio-player-card__head">
+                    <div className="audio-player-card__title">
+                      <span style={{ fontSize: '1.25rem' }}>📞</span>
+                      <div>
+                        <strong style={{ fontSize: '0.95rem' }}>Call Recording</strong>
+                        <div className="tiny muted">
+                          Archived from telephone DID · {detail.submitted_by}
+                        </div>
+                      </div>
+                    </div>
+                    <a
+                      href={detail.call_recording_url}
+                      download={`call_${detail.submission_id}.wav`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="btn btn--quiet btn--sm"
+                      title="Download .wav recording"
+                    >
+                      ⬇ Download audio
+                    </a>
+                  </div>
+                  <audio
+                    controls
+                    preload="metadata"
+                    src={detail.call_recording_url}
+                    className="audio-player-card__player"
+                  >
+                    Your browser does not support the audio element.
+                  </audio>
+                </div>
+              )}
+
               <dl className="answers">
                 {sectioned(detail.answers).map((group) => (
                   <React.Fragment key={group.title || '_all'}>
@@ -400,9 +490,20 @@ export function SubmissionDetail({ row, onClose, onMoved, mayReview }) {
                     {group.answers.map((a) => (
                       <div className="answers__row" key={a.name}>
                         <dt>{a.label}</dt>
-                        <dd>{a.answered
-                          ? <Answer answer={a} />
-                          : <span className="faint">Not answered</span>}</dd>
+                        <dd>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+                            <div>
+                              {a.answered
+                                ? <Answer answer={a} />
+                                : <span className="faint">Not answered</span>}
+                            </div>
+                            {a.audio_url && (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <audio controls preload="none" src={a.audio_url} className="mini-audio-player" />
+                              </div>
+                            )}
+                          </div>
+                        </dd>
                       </div>
                     ))}
                   </React.Fragment>

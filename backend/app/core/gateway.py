@@ -80,6 +80,8 @@ ROUTES: Tuple[Tuple[str, str], ...] = (
     # how the Form Builder's WhatsApp section reads and writes it.
     ("GET", rf"/api/mcdc/forms/{FORM_ID}/whatsapp-route"),
     ("PUT", rf"/api/mcdc/forms/{FORM_ID}/whatsapp-route"),
+    ("GET", rf"/api/mcdc/forms/{FORM_ID}/ivr-route"),
+    ("PUT", rf"/api/mcdc/forms/{FORM_ID}/ivr-route"),
     # How the channel is operated: the session timeout and the sealed token.
     # Administration too, and behind `mcdc.manage` like the rest of it.
     ("GET", r"/api/mcdc/whatsapp/settings"),
@@ -88,6 +90,11 @@ ROUTES: Tuple[Tuple[str, str], ...] = (
     ("PUT", r"/api/mcdc/ivr/settings"),
     ("GET", r"/api/mcdc/sarvam/settings"),
     ("PUT", r"/api/mcdc/sarvam/settings"),
+    ("GET", r"/api/mcdc/indev/settings"),
+    ("PUT", r"/api/mcdc/indev/settings"),
+    ("POST", r"/api/mcdc/ivr/publish-to-indev"),
+    ("POST", r"/api/mcdc/ivr/indev-status"),
+    ("POST", r"/api/mcdc/ivr/sync-indev-responses"),
     # Webhook management: multiple inbound endpoints per channel.
     ("GET", r"/api/mcdc/whatsapp/webhooks"),
     ("POST", r"/api/mcdc/whatsapp/webhooks"),

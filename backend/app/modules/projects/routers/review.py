@@ -6,6 +6,7 @@ whether this account may make it from where the submission currently is. There
 is deliberately no `PATCH /submissions/{id}/status`.
 """
 import logging
+import time
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -147,17 +148,72 @@ def detail(form_id: str, survey_id: str, user: Dict[str, Any] = Depends(current_
     state = submission_workflow.status_of(form_id, survey_id)
     form_json = form["form_json"] or {}
 
+    submitted_by = row["created_by"] or state.get("submitted_by") or ""
+    is_ivr = str(submitted_by).startswith("ivr:")
+
+    # Audio recordings archived in AWS S3 (strictly for IVR calls)
+    call_recording_url: Optional[str] = None
+    question_audio_map: Dict[str, str] = {}
+    audio_recordings = []
+
+    if is_ivr:
+        from app.modules.forms import media_service
+
+        with transaction() as cur:
+            cur.execute(
+                """
+                SELECT media_id, original_filename, s3_key, media_type
+                FROM   form_media
+                WHERE  form_id = %s AND survey_id = %s AND media_type = 'audio'
+                ORDER  BY created_on ASC
+                """,
+                (form_id, survey_id),
+            )
+            media_records = [dict(r) for r in cur.fetchall()]
+
+        for med in media_records:
+            try:
+                p_url = media_service.presign_download(med["s3_key"], med["original_filename"])
+                fname = med["original_filename"] or ""
+                is_call = "call_" in fname or "full" in fname
+                audio_recordings.append({
+                    "media_id": med["media_id"],
+                    "filename": fname,
+                    "is_full_call": is_call,
+                    "url": p_url,
+                })
+                if is_call and not call_recording_url:
+                    call_recording_url = p_url
+                else:
+                    base_fname = fname.replace(f"_{survey_id}.wav", "").replace(".wav", "")
+                    question_audio_map[base_fname] = p_url
+            except Exception:
+                logger.exception("Could not presign audio download for media %s", med.get("media_id"))
+
+        if not call_recording_url and audio_recordings:
+            call_recording_url = audio_recordings[0]["url"]
+
+    answers = submission_service.answers_for(form_json, row["form_data"])
+    if is_ivr:
+        for ans in answers:
+            q_name = ans.get("name")
+            if q_name in question_audio_map:
+                ans["audio_url"] = question_audio_map[q_name]
+
     return {
         "submission_id": survey_id,
         "form_id": form_id,
         "form_name": form["form_title"],
         "project_id": context["project_id"],
-        "submitted_by": row["created_by"] or state["submitted_by"],
+        "submitted_by": submitted_by,
         "submitted_at": row["created_on"],
         "form_version": row["form_version"],
         "status": state["status"],
         "rejection_reason": state["rejection_reason"],
-        "answers": submission_service.answers_for(form_json, row["form_data"]),
+        "is_ivr": is_ivr,
+        "answers": answers,
+        "call_recording_url": call_recording_url,
+        "audio_recordings": audio_recordings,
         # There is no event log — `submission_review` keeps the current state
         # only — so this is what is actually known about how it got here, not an
         # invented history.
@@ -211,6 +267,29 @@ def reject(form_id: str, survey_id: str, req: RejectRequest,
 # --------------------------------------------------------------------------- #
 queue_router = APIRouter(prefix="/api/projects", tags=["submission review"])
 
+_LAST_INDEV_SYNC: Dict[str, float] = {}
+
+
+def _maybe_sync_indev_for_project(project_id: str) -> None:
+    """Auto-sync completed calls from Indev's backup API so new submissions appear in Review immediately."""
+    now = time.time()
+    try:
+        from app.modules.forms import indev_service, routing
+        routes = routing.list_routes(channel="ivr", project_id=project_id)
+        for r in routes:
+            if not r.get("enabled"):
+                continue
+            did = indev_service.clean_did(r.get("receiver_number"))
+            if not did:
+                continue
+            # Sync at most once every 10 seconds per DID so frequent UI polling doesn't spam Indev
+            if now - _LAST_INDEV_SYNC.get(did, 0) < 10.0:
+                continue
+            _LAST_INDEV_SYNC[did] = now
+            indev_service.sync_indev_responses(did, project_id=project_id, auto_ingest=True)
+    except Exception as exc:
+        logger.warning("Could not auto-sync Indev responses for project %s: %s", project_id, exc)
+
 
 @queue_router.get("/{project_id}/submissions")
 def project_submissions(
@@ -246,6 +325,9 @@ def project_submissions(
     # `submissions.view_all` — that would empty the review queue.
     everything = scope == access.SCOPE_ALL
     author = auth_service.display_name(user)
+
+    # Pull any newly completed calls from Indev's backup responses API so they appear in Review instantly
+    _maybe_sync_indev_for_project(project_id)
 
     with transaction() as cur:
         # The form filter is a WHERE on *this project's* forms. That is the whole
@@ -319,8 +401,27 @@ def project_submissions(
             })
 
     rows.sort(key=lambda r: r["created_on"] or "", reverse=True)
+    selected_rows = rows[:limit]
+
+    # Identify which submissions have call audio recordings in S3 (strictly for IVR calls)
+    # Check both form_id and survey_id to prevent collision with other forms
+    audio_pairs = set()
+    if selected_rows:
+        with transaction() as cur:
+            cur.execute(
+                "SELECT DISTINCT form_id, survey_id FROM form_media "
+                "WHERE media_type = 'audio'"
+            )
+            audio_pairs = {(r["form_id"], r["survey_id"]) for r in cur.fetchall()}
+
+    for r in selected_rows:
+        is_ivr = str(r.get("created_by") or "").startswith("ivr:")
+        r["is_ivr"] = is_ivr
+        # Listen & Review and audio badge are strictly for IVR forms/calls
+        r["has_audio"] = is_ivr and ((r["form_id"], r["survey_id"]) in audio_pairs or is_ivr)
+
     return {
-        "submissions": rows[:limit],
+        "submissions": selected_rows,
         "everything": everything,
         # What was actually applied, so a screen can tell "nothing here" from
         # "nothing matches what you chose".

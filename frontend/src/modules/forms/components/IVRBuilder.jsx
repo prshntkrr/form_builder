@@ -14,7 +14,9 @@ import {
  * recordings. Dropdown/radio options are read aloud as a numbered menu
  * ("Press 1 for Rice, Press 2 for Wheat").
  */
-export default function IVRBuilder({ form, chosen, onSelect, onChange, onAdd }) {
+export default function IVRBuilder({
+  form, chosen, onSelect, onChange, onAdd, route, onRoute, existingDids,
+}) {
   const config = configOf(form)
   const byName = Object.fromEntries((form.fields || []).map((f) => [f.name, f]))
   const order = conversationOrder(form).map((name) => byName[name]).filter(Boolean)
@@ -24,6 +26,14 @@ export default function IVRBuilder({ form, chosen, onSelect, onChange, onAdd }) 
     <div className="wa">
       <div className="wa__build">
         <h2 className="wa__title">IVR call script</h2>
+
+        {route && (
+          <IVRRouteFields
+            route={route}
+            onRoute={onRoute}
+            existingDids={existingDids}
+          />
+        )}
 
         <label className="wa__message">
           <span className="minilabel">1. Welcome</span>
@@ -39,7 +49,19 @@ export default function IVRBuilder({ form, chosen, onSelect, onChange, onAdd }) 
         </label>
 
         <div className="row" style={{ gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
-          <label style={{ flex: '1 1 120px' }}>
+          <label style={{ flex: '1 1 160px' }}>
+            <span className="minilabel">Survey language</span>
+            <select
+              className="control control--sm"
+              value={config.language || 'auto'}
+              onChange={(e) => onChange(setMessage(form, 'language', e.target.value))}
+            >
+              <option value="auto">Auto-detect (English / Hindi)</option>
+              <option value="en-IN">English (India)</option>
+              <option value="hi-IN">हिन्दी (Hindi)</option>
+            </select>
+          </label>
+          <label style={{ flex: '1 1 100px' }}>
             <span className="minilabel">Max retries</span>
             <input
               className="control control--sm"
@@ -50,7 +72,7 @@ export default function IVRBuilder({ form, chosen, onSelect, onChange, onAdd }) 
               onChange={(e) => onChange(setMessage(form, 'max_retries', Number(e.target.value)))}
             />
           </label>
-          <label style={{ flex: '1 1 120px' }}>
+          <label style={{ flex: '1 1 110px' }}>
             <span className="minilabel">Input timeout (sec)</span>
             <input
               className="control control--sm"
@@ -115,10 +137,13 @@ export default function IVRBuilder({ form, chosen, onSelect, onChange, onAdd }) 
             className="control"
             rows={2}
             maxLength={1024}
-            placeholder="Thank you for your responses. Goodbye."
+            placeholder="Leave empty for immediate clean hang-up (no closing audio)"
             value={config.completion_message || ''}
             onChange={(e) => onChange(setMessage(form, 'completion_message', e.target.value))}
           />
+          <span className="tiny muted">
+            Spoken when the questionnaire finishes. Leave empty for immediate clean hang-up (zero closing audio).
+          </span>
         </label>
 
         <Compatibility fields={order} blocked={blocked} />
@@ -217,13 +242,43 @@ const optionLabels = (field) => (field.type === 'boolean'
   ? ['Yes', 'No']
   : (field.options || []).map((o) => (typeof o === 'object' ? (o.label || o.value) : o)))
 
+const detectLanguage = (form, config) => {
+  const explicit = (config?.language || '').toLowerCase()
+  if (explicit && explicit !== 'auto') return explicit
+  const texts = [
+    config?.welcome_message,
+    config?.completion_message,
+    ...(form?.fields || []).map((f) => f.label || f.name),
+  ].filter(Boolean).join(' ')
+  const hindiMatches = texts.match(/[\u0900-\u097F]/g) || []
+  const latinMatches = texts.match(/[A-Za-z]/g) || []
+  return hindiMatches.length > latinMatches.length ? 'hi-IN' : 'en-IN'
+}
+
 /** A picture of the call. Nothing is dialled. */
 export function CallPreview({ form, order, config }) {
   const asked = order.filter((f) => ivrInteractions(f).length)
+  const lang = detectLanguage(form, config)
+  const isHindi = lang.startsWith('hi')
 
   return (
     <aside className="wa__phone" aria-label="IVR preview">
-      <div className="wa__phonehead">IVR Call · preview</div>
+      <div className="wa__phonehead" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span>IVR Call · preview</span>
+        <span
+          className="tag tag--sm"
+          style={{
+            fontSize: '0.68rem',
+            padding: '2px 6px',
+            borderRadius: 4,
+            background: isHindi ? 'rgba(255, 152, 0, 0.15)' : 'rgba(33, 150, 243, 0.15)',
+            color: isHindi ? '#b76e00' : '#1565c0',
+            fontWeight: 600,
+          }}
+        >
+          {isHindi ? 'हिन्दी (hi-IN)' : 'English (en-IN)'}
+        </span>
+      </div>
       <div className="wa__chat">
         {config.welcome_message && (
           <div className="wa__bubble">
@@ -240,17 +295,27 @@ export function CallPreview({ form, order, config }) {
               <span className="tiny muted">[TTS]</span> {prompt}
               {way === 'menu' && (
                 <ol className="wa__rows">
-                  {labels.map((l, i) => <li key={l}>Press {i + 1} for {l}</li>)}
+                  {labels.map((l, i) => (
+                    <li key={l}>
+                      {isHindi ? `${l} के लिए ${i + 1} दबाएँ` : `Press ${i + 1} for ${l}`}
+                    </li>
+                  ))}
                 </ol>
               )}
               {way === 'ivr_boolean' && (
-                <div className="tiny wa__hint">Press 1 for Yes, Press 2 for No</div>
+                <div className="tiny wa__hint">
+                  {isHindi ? 'हाँ के लिए 1, नहीं के लिए 2 दबाएँ' : 'Press 1 for Yes, Press 2 for No'}
+                </div>
               )}
               {way === 'dtmf' && (
-                <div className="tiny wa__hint">Enter digits on the keypad</div>
+                <div className="tiny wa__hint">
+                  {isHindi ? 'कीपैड पर अंक दर्ज करें' : 'Enter digits on the keypad'}
+                </div>
               )}
               {way === 'voice' && (
-                <div className="tiny wa__hint">Speak your answer after the tone</div>
+                <div className="tiny wa__hint">
+                  {isHindi ? 'टोन के बाद अपना उत्तर बोलें' : 'Speak your answer after the tone'}
+                </div>
               )}
             </div>
           )
@@ -268,3 +333,51 @@ export function CallPreview({ form, order, config }) {
     </aside>
   )
 }
+
+const ALLOTTED_DIDS = [
+  '1205236308',
+  '1205236334',
+  '1205236335',
+  '1205236336',
+  '1205236337',
+  '1205236338',
+  '1205236339',
+]
+
+function IVRRouteFields({ route, onRoute, existingDids = [] }) {
+  const combinedDids = Array.from(new Set([...ALLOTTED_DIDS, ...(existingDids || [])]))
+  return (
+    <section className="wa__route" style={{ borderLeftColor: '#0284c7' }} aria-label="IVR telephone routing">
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
+        <span className="minilabel" style={{ fontWeight: 600, color: '#0369a1' }}>IVR Telephone Line &amp; Routing</span>
+        <span className="badge badge--sm" style={{ background: '#e0f2fe', color: '#0369a1', fontSize: 11, padding: '2px 8px', borderRadius: 4 }}>
+          Inbound Voice Line
+        </span>
+      </div>
+
+      <div className="row" style={{ gap: 12, marginBottom: 4 }}>
+        <label className="wa__routefield" style={{ flex: '1 1 100%' }}>
+          <span className="tiny" style={{ fontWeight: 500 }}>DID / Phone Number</span>
+          <input
+            className="control control--sm"
+            inputMode="tel"
+            maxLength={32}
+            list="ivr-known-dids"
+            placeholder="e.g. 1205236308 or +91..."
+            value={route?.receiver_number || ''}
+            onChange={(e) => onRoute({ receiver_number: e.target.value, menu_option: '1' })}
+          />
+          <datalist id="ivr-known-dids">
+            {combinedDids.map((d) => (
+              <option key={d} value={d} label={ALLOTTED_DIDS.includes(d) ? `${d} (Allotted Line)` : d} />
+            ))}
+          </datalist>
+          <span className="tiny muted">
+            The telephone number (DID) callers dial to answer this survey. Each DID line connects directly to one active survey.
+          </span>
+        </label>
+      </div>
+    </section>
+  )
+}
+

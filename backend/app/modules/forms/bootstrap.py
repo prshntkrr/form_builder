@@ -679,3 +679,39 @@ def ensure_session_language() -> bool:
 
     logger.info("whatsapp_session gained its language column")
     return True
+
+
+def ensure_channel_settings_channel_constraint() -> bool:
+    """Allow 'sarvam', 'indev', 'indev_secret' in channel_settings table.
+
+    The original schema had `CHECK (channel IN ('whatsapp', 'ivr'))`.
+    Dropping that constraint allows other provider tokens (Sarvam STT, Indev IVR API key, Indev Webhook Secret)
+    to be stored encrypted under their respective names without failing constraints.
+    """
+    from psycopg2 import sql
+
+    with transaction() as cur:
+        if not table_exists(cur, "channel_settings"):
+            return False
+
+        cur.execute(
+            """
+            SELECT conname FROM pg_constraint
+            WHERE conrelid = (SELECT oid FROM pg_class WHERE relname = 'channel_settings'
+                              AND relnamespace = (SELECT oid FROM pg_namespace WHERE nspname = %s))
+              AND contype = 'c' AND conname LIKE '%%channel%%'
+            """,
+            (settings.db_schema,),
+        )
+        rows = cur.fetchall()
+        for r in rows:
+            conname = r["conname"]
+            cur.execute(
+                sql.SQL("ALTER TABLE {}.channel_settings DROP CONSTRAINT IF EXISTS {}").format(
+                    sql.Identifier(settings.db_schema),
+                    sql.Identifier(conname),
+                )
+            )
+
+    logger.info("channel_settings channel check constraint relaxed")
+    return True

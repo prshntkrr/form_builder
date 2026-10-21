@@ -207,6 +207,11 @@ export default function Builder() {
      alongside it. Editing it in either place changes the same row. */
   const [waRoute, setWaRoute] = useState({ receiver_number: '', keyword: '' })
 
+  /* How this form is reached on IVR: the DID / phone number and menu option key.
+     Saved alongside the form in channel_form_route and synced to Indev. */
+  const [ivrRoute, setIvrRoute] = useState({ receiver_number: '', menu_option: '1' })
+  const [knownDids, setKnownDids] = useState([])
+
   // A draft kept in this browser, offered when the builder opens on work that
   // never reached the server. See draftRecovery.js.
   const [recovered, setRecovered] = useState(null)
@@ -238,6 +243,7 @@ export default function Builder() {
     setAutoSavedId(null)
     setAutoSaved(null)
     setWaRoute({ receiver_number: '', keyword: '' })
+    setIvrRoute({ receiver_number: '', menu_option: '1' })
 
     if (!formId) {
       // A copy of a saved form, made for another channel ("Copy as …").
@@ -275,6 +281,13 @@ export default function Builder() {
         setForm(prep(f.form_json, true))
         setResponses(f.submission_count || 0)
         setStatus(f.form_status)
+        const cfgDid = f.form_json?.channel_config?.ivr?.did
+        if (cfgDid) {
+          setIvrRoute((curr) => ({
+            ...curr,
+            receiver_number: curr.receiver_number || cfgDid,
+          }))
+        }
       })
       .catch((e) => setError(e.message))
       .finally(() => setBusy(null))
@@ -288,7 +301,27 @@ export default function Builder() {
         keyword: route.route_key || '',
       }))
       .catch(() => {})
+
+    api.ivrRoute(formId)
+      .then(({ route }) => route && setIvrRoute((curr) => ({
+        receiver_number: route.receiver_number || curr.receiver_number || '',
+        menu_option: route.route_key || '1',
+      })))
+      .catch(() => {})
   }, [formId])
+
+  useEffect(() => {
+    api.routes(buildingIn || 'none')
+      .then((s) => {
+        const dids = Array.from(new Set(
+          (s.routes || [])
+            .filter((r) => r.channel === 'ivr' && r.receiver_number)
+            .map((r) => r.receiver_number)
+        ))
+        setKnownDids(dids)
+      })
+      .catch(() => {})
+  }, [buildingIn])
 
   /* Write the draft down every minute, and again on the way out.
      Only while it is a draft: a live form's questions are already on the
@@ -320,7 +353,7 @@ export default function Builder() {
         const renames = {}
         for (const f of form.fields) if (f._orig && f._orig !== f.name) renames[f._orig] = f.name
 
-        await api.updateForm(draftId, payload, undefined, renames, whatsappRouting())
+        await api.updateForm(draftId, payload, undefined, renames, whatsappRouting(), ivrRouting())
 
         /* The renames have happened, so the next autosave must not send them
            again — `_orig` would then name a column that no longer exists.
@@ -334,7 +367,7 @@ export default function Builder() {
         }
       } else {
         const made = await api.createForm(payload, undefined, 'Draft', buildingIn,
-                                          whatsappRouting())
+                                          whatsappRouting(), ivrRouting())
         setAutoSavedId(made.form_id)
         setStatus('Draft')
         formsChanged()
@@ -644,6 +677,14 @@ export default function Builder() {
     }
   }
 
+  const ivrRouting = () => {
+    if (formChannel(form) !== 'ivr' || !ivrRoute.receiver_number.trim()) return undefined
+    return {
+      did: ivrRoute.receiver_number.trim(),
+      menu_option: (ivrRoute.menu_option || '1').trim() || '1',
+    }
+  }
+
   const save = (saveAs = 'Active') =>
     run('save', async () => {
       if (!namedOnPurpose()) return
@@ -656,8 +697,8 @@ export default function Builder() {
          and creating it again would leave two. Publishing one autosave made is
          an update plus a status change, because the row already exists. */
       const result = draftId
-        ? await api.updateForm(draftId, payload, undefined, renames, whatsappRouting())
-        : await api.createForm(payload, undefined, saveAs, buildingIn, whatsappRouting())
+        ? await api.updateForm(draftId, payload, undefined, renames, whatsappRouting(), ivrRouting())
+        : await api.createForm(payload, undefined, saveAs, buildingIn, whatsappRouting(), ivrRouting())
 
       if (draftId && !editing && saveAs !== 'Draft') {
         await api.setStatus(draftId, saveAs)
@@ -688,6 +729,13 @@ export default function Builder() {
       setStatus(result.form_status)
       setCheck(null)
       setForm(prep(payload, true))
+
+      // If an IVR form with an assigned DID is saved, auto-publish definition and completion text to Indev
+      const currentDid = ivrRoute.receiver_number?.trim() || payload?.channel_config?.ivr?.did
+      if (formChannel(form) === 'ivr' && currentDid) {
+        api.publishToIndev(formId || draftId, currentDid)
+          .catch((err) => console.warn('Could not auto-sync Indev on form save:', err))
+      }
     })
 
   /** Publish a draft, or put a live form back into draft. */
@@ -1259,7 +1307,10 @@ export default function Builder() {
                   chosen={chosen}
                   onSelect={setChosen}
                   onChange={setForm}
-                  onAdd={() => addField()}
+                  onAdd={add}
+                  route={ivrRoute}
+                  onRoute={(patch) => setIvrRoute({ ...ivrRoute, ...patch })}
+                  existingDids={knownDids}
                 />
               )}
 
