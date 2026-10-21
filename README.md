@@ -1,6 +1,6 @@
 # e-Agrology
 
-A platform for building agricultural data-collection forms and running them across projects.
+A    platform for building agricultural data-collection forms and running them across projects.
 
 Forms are described once, as JSON, and everything else follows from that description: the
 Postgres table that holds the answers, the screens that draw the form, the rules that check a
