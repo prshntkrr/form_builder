@@ -52,6 +52,16 @@ export async function request(path, options = {}) {
       message = `Nothing is serving ${path}. The API may be stopped, not proxied, or running older code — check it is running and restart it.`
     } else if (typeof detail === 'string') {
       message = detail
+    } else if (Array.isArray(detail)) {
+      message = detail
+        .map((issue) => {
+          const location = Array.isArray(issue?.loc)
+            ? issue.loc.filter((part) => part !== 'body').join('.')
+            : ''
+          return [location, issue?.msg].filter(Boolean).join(': ')
+        })
+        .filter(Boolean)
+        .join('; ') || res.statusText || 'Request failed'
     } else if (detail?.errors) {
       message = 'Please fix the highlighted fields'
     } else {

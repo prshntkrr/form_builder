@@ -44,6 +44,11 @@ class PromptRefused(LLMError):
 #: describing anything.
 MIN_PROMPT = 12
 
+#: Keep prompts brief enough to fit inside a single generation request without
+#: wasting a large token budget on a long description that the model does not
+#: need to absorb.
+MAX_PROMPT = 30000
+
 #: How many word-like things a description has to have. One word names a topic;
 #: it takes a couple to say what is wanted.
 MIN_WORDS = 2
@@ -80,6 +85,11 @@ def check_prompt(prompt: str) -> str:
         raise PromptRefused(
             "That is too short to build a form from. Say what the form is for "
             "and what it should collect — a sentence is enough.")
+
+    if len(text) > MAX_PROMPT:
+        raise PromptRefused(
+            f"That prompt is too long for a form. Keep it to {MAX_PROMPT} "
+            "characters or fewer and describe the form in a single sentence.")
 
     # Words, rather than a single token repeated or one long identifier.
     words = [w for w in re.findall(r"[^\W\d_]+", text, flags=re.UNICODE) if len(w) > 1]
@@ -205,6 +215,26 @@ submissions are already stored under, and renaming one orphans that data. Keep u
 byte-for-byte identical. Only add, remove, reorder, or edit what the request actually asks for."""
 
 
+def _usage_from_response(response: Any) -> Optional[Dict[str, Any]]:
+    """Return OpenAI's token accounting in a UI-friendly shape when present."""
+    usage = getattr(response, "usage", None)
+    if usage is None:
+        return None
+
+    prompt_tokens = getattr(usage, "prompt_tokens", None)
+    completion_tokens = getattr(usage, "completion_tokens", None)
+    total_tokens = getattr(usage, "total_tokens", None)
+    if prompt_tokens is None and completion_tokens is None and total_tokens is None:
+        return None
+
+    return {
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "total_tokens": total_tokens,
+        "model": getattr(response, "model", None),
+    }
+
+
 def _chat(messages: list, temperature: float = 0.3) -> Dict[str, Any]:
     client = get_client()
     try:
@@ -228,14 +258,19 @@ def _chat(messages: list, temperature: float = 0.3) -> Dict[str, Any]:
         content = content.split("\n", 1)[1] if "\n" in content else content
 
     try:
-        return json.loads(content)
+        payload = json.loads(content)
     except json.JSONDecodeError as exc:
         logger.error("Unparseable model output: %s", content[:500])
         raise LLMError("The model did not return valid JSON. Try again.") from exc
 
+    usage = _usage_from_response(response)
+    if usage is not None:
+        payload["usage"] = usage
+    return payload
+
 
 def generate_form(prompt: str, language: Optional[str] = None) -> Dict[str, Any]:
-    """Prompt -> raw form definition."""
+    """Prompt -> raw form definition plus token usage."""
     # Refused here rather than sent: the model does not decline a meaningless
     # request, it invents something plausible for it. See `check_prompt`.
     prompt = check_prompt(prompt)
@@ -244,20 +279,22 @@ def generate_form(prompt: str, language: Optional[str] = None) -> Dict[str, Any]
     if language:
         user_content += f"\n\nWrite all labels and help text in: {language}"
 
-    return _chat(
+    payload = _chat(
         [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_content},
         ]
     )
+    usage = payload.pop("usage", None)
+    return {"form_json": payload, "usage": usage}
 
 
 def refine_form(current_form: Dict[str, Any], instruction: str) -> Dict[str, Any]:
-    """Existing definition + instruction -> revised definition."""
+    """Existing definition + instruction -> revised definition plus token usage."""
     if not instruction or not instruction.strip():
         raise LLMError("Describe the change you want.")
 
-    return _chat(
+    payload = _chat(
         [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "system", "content": REFINE_PROMPT},
@@ -271,6 +308,8 @@ def refine_form(current_form: Dict[str, Any], instruction: str) -> Dict[str, Any
         ],
         temperature=0.2,
     )
+    usage = payload.pop("usage", None)
+    return {"form_json": payload, "usage": usage}
 
 
 TRANSLATE_PROMPT = """You translate the wording of a data-collection form.

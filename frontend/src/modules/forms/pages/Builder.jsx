@@ -166,6 +166,8 @@ export default function Builder() {
 
   const [prompt, setPrompt] = useState('')
   const [ask, setAsk] = useState('')
+  const [generationUsage, setGenerationUsage] = useState(null)
+  const [refineUsage, setRefineUsage] = useState(null)
   // Which language's wording the questions are being edited in.
   const [wording, setWording] = useState(null)
   // Whether the translations sheet is open over the builder.
@@ -231,6 +233,8 @@ export default function Builder() {
   useEffect(() => {
     setPrompt('')
     setAsk('')
+    setGenerationUsage(null)
+    setRefineUsage(null)
     setForm(null)
     setResponses(0)
     setSaved(null)
@@ -532,7 +536,16 @@ export default function Builder() {
   const blockers = (needsDescription) => [
     needsDescription && !prompt.trim() && 'Describe the form you need.',
     needsDescription && prompt.trim() && prompt.trim().length < 5 && 'Describe the form in a little more detail.',
+    needsDescription && prompt.trim().length > MAX_PROMPT_CHARS && `Keep the description under ${MAX_PROMPT_CHARS} characters.`,
   ].filter(Boolean)
+
+  const formatUsage = (usage) => {
+    if (!usage) return null
+    const promptTokens = Number(usage.prompt_tokens || 0)
+    const completionTokens = Number(usage.completion_tokens || 0)
+    const totalTokens = Number(usage.total_tokens || promptTokens + completionTokens)
+    return `LLM usage: ${promptTokens.toLocaleString()} input • ${completionTokens.toLocaleString()} output • ${totalTokens.toLocaleString()} total tokens`
+  }
 
   /* Everything a draft accumulates while it is worked on, cleared when it is
      replaced by another one.
@@ -563,10 +576,15 @@ export default function Builder() {
 
   const create = () =>
     run('make', async () => {
+      setGenerationUsage(null)
+      setRefineUsage(null)
       const res = await api.generate(prompt)
+      setGenerationUsage(res.usage || null)
       clearDraft()
       setForm(prep({ ...res.form_json, channel: newChannel }))
     })
+
+  const MAX_PROMPT_CHARS = 30000
 
   /** A form with no questions yet, built by hand — no prompt, no model. */
   const startBlank = () => {
@@ -601,7 +619,10 @@ export default function Builder() {
 
   const revise = () =>
     run('revise', async () => {
+      setGenerationUsage(null)
+      setRefineUsage(null)
       const res = await api.refine(untag(form), ask)
+      setRefineUsage(res.usage || null)
       const before = new Map((form.fields || []).map((f) => [f.name, f._orig]))
       setForm(prep({
         ...res.form_json,
@@ -1101,8 +1122,19 @@ export default function Builder() {
             className="control"
             placeholder="Describe it the way you'd explain it to a colleague — a soil sampling form for kharif plots, with pH, NPK and a photo…"
             value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
+            onChange={(e) => {
+              setPrompt(e.target.value.slice(0, MAX_PROMPT_CHARS))
+              setGenerationUsage(null)
+              setError('')
+            }}
+            maxLength={MAX_PROMPT_CHARS}
           />
+          {error && !form && (
+            <p className="note note--bad" role="alert" style={{ marginTop: 12 }}>{error}</p>
+          )}
+          {generationUsage && (
+            <p className="tiny muted" style={{ marginTop: 8 }}>{formatUsage(generationUsage)}</p>
+          )}
           {(() => {
             const why = blockers(true)
             if (!why.length || busy === 'make') return null
@@ -1362,7 +1394,10 @@ export default function Builder() {
                       className="control"
                       placeholder="Ask for a change — add a photo field, make the phone number required…"
                       value={ask}
-                      onChange={(e) => setAsk(e.target.value)}
+                      onChange={(e) => {
+                        setAsk(e.target.value)
+                        setRefineUsage(null)
+                      }}
                       onKeyDown={(e) => e.key === 'Enter' && ask.trim().length > 2 && revise()}
                     />
                     <button className="btn" onClick={revise} disabled={busy === 'revise' || ask.trim().length < 3}>
@@ -1373,6 +1408,11 @@ export default function Builder() {
                       Library
                     </button>
                   </div>
+                  {refineUsage && (
+                    <p className="tiny muted" style={{ margin: '-12px 0 16px' }}>
+                      {formatUsage(refineUsage)}
+                    </p>
+                  )}
 
                     <div className="rows">
                     {(() => {

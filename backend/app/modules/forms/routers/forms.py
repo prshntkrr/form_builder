@@ -297,6 +297,7 @@ def generate(req: GenerateRequest, user: Dict[str, Any] = Depends(_could_build_s
     """Prompt -> a complete, normalized form definition (not yet saved)."""
     try:
         raw = llm.generate_form(req.prompt, req.language)
+        form_json = raw["form_json"]
 
         # One pass over the draft before anyone sees it: standard enrichment,
         # which says what each field is and what it is called. Nobody has to ask
@@ -309,7 +310,7 @@ def generate(req: GenerateRequest, user: Dict[str, Any] = Depends(_could_build_s
         # Crop and feature choices are the application's data, not the model's
         # guess. Done before enrichment so a rewired field is matched in its
         # final shape.
-        dynamic = _dynamic_options(normalize_form(raw))
+        dynamic = _dynamic_options(normalize_form(form_json))
         enriched = _enrich(dynamic["form_json"], req.prompt)
 
         return {
@@ -320,6 +321,7 @@ def generate(req: GenerateRequest, user: Dict[str, Any] = Depends(_could_build_s
             "crop_ontology_id": enriched.get("crop_ontology_id"),
             "dynamic_options": dynamic["dynamic"],
             "prompt": req.prompt,
+            "usage": raw.get("usage"),
         }
     except llm.PromptRefused as exc:
         # The prompt, not the service: 422 and a message worth reading.
@@ -336,7 +338,11 @@ def refine(req: RefineRequest, user: Dict[str, Any] = Depends(_could_build_somew
     """Existing definition + instruction -> revised definition (not yet saved)."""
     try:
         raw = llm.refine_form(req.form_json, req.instruction)
-        return {"form_json": normalize_form(raw), "prompt": req.instruction}
+        return {
+            "form_json": normalize_form(raw["form_json"]),
+            "prompt": req.instruction,
+            "usage": raw.get("usage"),
+        }
     except llm.LLMError as exc:
         raise HTTPException(status_code=502, detail=str(exc))
     except FormSchemaError as exc:
