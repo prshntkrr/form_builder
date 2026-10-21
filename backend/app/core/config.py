@@ -45,10 +45,10 @@ class Settings(BaseSettings):
     disabled_modules: str = ""
 
     # App
-    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+    cors_origins: str = "http://localhost:5174,http://127.0.0.1:5174,http://13.235.198.26:5174,http://localhost:5173,http://13.235.198.26:5173"
     default_user: str = "system"
     # Where the frontend is served from — used to build password reset links.
-    app_url: str = "http://localhost:5173"
+    app_url: str = "http://13.235.198.26:5173"
     # Public URL of the backend (e.g. https://eagrology-revamp.indevconsultancy.in), used to build webhook URLs
     public_url: str = ""
 
