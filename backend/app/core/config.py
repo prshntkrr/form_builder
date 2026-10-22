@@ -49,6 +49,8 @@ class Settings(BaseSettings):
     default_user: str = "system"
     # Where the frontend is served from — used to build password reset links.
     app_url: str = "http://172.31.42.85:8027"
+    # CSP frame-ancestors: which origins may embed this app in an iframe.
+    frame_ancestors: str = "http://localhost:5173 http://127.0.0.1:5173 http://localhost:5174 http://127.0.0.1:5174 http://localhost:8019 http://127.0.0.1:8019"
     # Public URL of the backend (e.g. https://eagrology-revamp.indevconsultancy.in), used to build webhook URLs
     public_url: str = ""
 

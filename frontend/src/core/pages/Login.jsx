@@ -247,3 +247,4 @@ function LockIcon() {
     </svg>
   )
 }
+
