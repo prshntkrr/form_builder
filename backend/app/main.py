@@ -66,7 +66,7 @@ class IframeHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         response: Response = await call_next(request)
         response.headers["Content-Security-Policy"] = (
-            "frame-ancestors http://localhost:5173 http://127.0.0.1:5173 http://localhost:5174 http://127.0.0.1:5174"
+            "frame-ancestors https://sso-login.agrotutor.co http://localhost:5173 http://127.0.0.1:5173 http://localhost:5174 http://127.0.0.1:5174"
         )
         if "X-Frame-Options" in response.headers:
             del response.headers["X-Frame-Options"]
