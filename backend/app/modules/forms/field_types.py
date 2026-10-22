@@ -47,9 +47,12 @@ def _to_decimal(value: Any) -> Optional[Decimal]:
     if _blank(value):
         return None
     try:
-        return Decimal(str(value).strip())
+        number = Decimal(str(value).strip())
     except (TypeError, InvalidOperation):
         raise FieldValueError(f"'{value}' is not a number")
+    if not number.is_finite():
+        raise FieldValueError(f"'{value}' is not a finite number")
+    return number
 
 
 def _to_bool(value: Any) -> Optional[bool]:
@@ -72,10 +75,14 @@ def _to_date(value: Any) -> Optional[date]:
         return value.date()
     if isinstance(value, date):
         return value
+    text = str(value).strip()
     try:
-        return date.fromisoformat(str(value).strip()[:10])
+        return date.fromisoformat(text)
     except ValueError:
-        raise FieldValueError(f"'{value}' is not a date (expected YYYY-MM-DD)")
+        try:
+            return datetime.fromisoformat(text.replace("Z", "+00:00")).date()
+        except ValueError:
+            raise FieldValueError(f"'{value}' is not a date (expected YYYY-MM-DD)")
 
 
 def _to_datetime(value: Any) -> Optional[datetime]:
@@ -276,6 +283,46 @@ def normalize_type(raw: Any) -> str:
 
 def get_type(name: str) -> FieldType:
     return FIELD_TYPES.get(normalize_type(name), FIELD_TYPES[DEFAULT_TYPE])
+
+
+def _normalize_nested(value: Any) -> Any:
+    """Trim nested text and preserve actual JSON values, including false and zero."""
+    if isinstance(value, str):
+        return value.strip() or None
+    if isinstance(value, (list, dict)) and not value:
+        return None
+    if isinstance(value, list):
+        return [_normalize_nested(item) for item in value]
+    if isinstance(value, dict):
+        return {
+            key: normalized
+            for key, item in value.items()
+            if (normalized := _normalize_nested(item)) is not None
+        }
+    return value
+
+
+def normalize_submission_value(field_type: str, value: Any) -> Any:
+    """Normalize missing input before validation, without collapsing valid falsy values.
+
+    Blank strings are missing for every type; surrounding whitespace is removed
+    from text. Nested field values are copied and normalized without changing
+    their JSON types.
+    """
+    spec = get_type(field_type)
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value.strip() or None
+    if isinstance(value, (list, tuple, dict)) and not value:
+        return None
+    if spec.json_type.startswith("array") or spec.json_type.startswith("object"):
+        normalized = _normalize_nested(value)
+        if spec.multi and isinstance(normalized, list):
+            normalized = [item for item in normalized if item is not None]
+            return normalized or None
+        return normalized
+    return value
 
 
 def coerce_value(field_type: str, value: Any) -> Any:
