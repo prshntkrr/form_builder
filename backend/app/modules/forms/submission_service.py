@@ -7,6 +7,7 @@ import csv
 import io
 import logging
 import re
+import unicodedata
 from typing import Any, Dict, Optional, Tuple
 
 from psycopg2 import sql
@@ -14,7 +15,13 @@ from psycopg2.extras import Json
 
 from app.core.config import settings
 from app.core.database import transaction
-from app.modules.forms.field_types import FieldValueError, coerce_value, get_type, json_safe
+from app.modules.forms.field_types import (
+    FieldValueError,
+    coerce_value,
+    get_type,
+    json_safe,
+    normalize_submission_value,
+)
 from app.modules.forms.form_schema import (
     LOCATION_COLUMN, PARENT_COLUMN, field_name,
 )
@@ -41,8 +48,50 @@ class SubmissionConflict(ValueError):
 # --------------------------------------------------------------------------- #
 # validation
 # --------------------------------------------------------------------------- #
+_UNICODE_TO_ASCII = str.maketrans({
+    "‘": "'", "’": "'",   # smart single quotes
+    "“": '"', "”": '"',   # smart double quotes
+    "–": "-", "—": "-",   # en/em dash
+    "…": "...",                 # ellipsis
+    " ": " ",                   # non-breaking space
+    "​": "",                    # zero-width space
+    "«": '"', "»": '"',   # guillemets
+    "′": "'", "″": '"',   # prime / double prime
+    "°": " deg",               # degree sign
+    "×": "x",                  # multiplication sign
+    "•": "-",                   # bullet
+})
+
+_CONTROL_RE = re.compile(r"[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]")
+
+
+def _ascii_clean(value: str) -> str:
+    """Normalize a string to ASCII-safe for ETL pipelines.
+
+    Replaces common Unicode punctuation with ASCII equivalents, transliterates
+    accented characters (é→e, ñ→n), and strips control characters.
+    """
+    value = value.translate(_UNICODE_TO_ASCII)
+    value = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode("ascii")
+    value = _CONTROL_RE.sub("", value)
+    return value
+
+
+def _ascii_clean_value(value):
+    """Apply ASCII cleaning to strings, recursively into lists."""
+    if isinstance(value, str) and value != "NA":
+        return _ascii_clean(value)
+    if isinstance(value, list):
+        return [_ascii_clean_value(v) for v in value]
+    return value
+
+
 def _is_empty(value: Any) -> bool:
-    return value is None or value == "" or value == [] or value == {}
+    return (
+        value is None
+        or (isinstance(value, str) and not value.strip())
+        or (isinstance(value, (list, tuple, dict)) and not value)
+    )
 
 
 def _measure(spec, raw: Any, value: Any) -> Tuple[Optional[str], str]:
@@ -153,6 +202,7 @@ def _check_field(
     name = field_name(field)
     label = field.get("label") or name
     spec = get_type(field.get("type") or "text")
+    raw = normalize_submission_value(field.get("type") or "text", raw)
 
     if not_applicable:
         # The form did not ask this. An answer to it is refused rather than
@@ -252,10 +302,22 @@ def validate_field(
     if field is None:
         raise KeyError(f"This form has no question '{name}'")
 
-    so_far = {**(answers or {}), name: value}
+    fields_by_name = {
+        field_name(field): field for field in form_json.get("fields") or []
+        if field_name(field)
+    }
+    so_far = {
+        key: normalize_submission_value(
+            fields_by_name[key].get("type") or "text"
+            if key in fields_by_name else "text",
+            answer,
+        )
+        for key, answer in (answers or {}).items()
+    }
+    so_far[name] = normalize_submission_value(field.get("type") or "text", value)
     not_applicable = name in set(conditions.hidden(form_json, so_far)["fields"])
 
-    stored, error = _check_field(field, value, so_far, language, not_applicable)
+    stored, error = _check_field(field, so_far[name], so_far, language, not_applicable)
     if error:
         raise ValidationFailed({name: error})
     if stored is _NOT_STORED:   # never without an error; kept for the type checker
@@ -290,21 +352,32 @@ def validate_payload(
     # the person filled the form in.
     form_json = translations.translate_form(form_json, language)
 
+    normalized_payload = dict(payload)
+    for field in form_json.get("fields") or []:
+        name = field_name(field)
+        if name and name in normalized_payload:
+            normalized_payload[name] = normalize_submission_value(
+                field.get("type") or "text", normalized_payload[name])
+
     # Which questions this answer set does not apply to. Worked out here rather
     # than trusted from the client, because a request can be sent without ever
     # opening the form — the same rules the renderer used, evaluated again on
     # arrival. Reading the payload, not `clean`: a condition is about what the
     # person answered, and every answer arrives together.
-    not_applicable = set(conditions.hidden(form_json, payload)["fields"])
+    not_applicable = set(conditions.hidden(form_json, normalized_payload)["fields"])
 
     for field in form_json.get("fields") or []:
         name = field_name(field)
         if not name:
             continue
         stored, error = _check_field(
-            field, payload.get(name), payload, language, name in not_applicable)
+            field, normalized_payload.get(name), normalized_payload, language,
+            name in not_applicable)
         if stored is not _NOT_STORED:
-            clean[name] = stored
+            if stored is None:
+                clean[name] = "NA" if get_type(field.get("type") or "text").json_type == "string" else None
+            else:
+                clean[name] = stored
         if error:
             errors[name] = error
 
@@ -324,6 +397,10 @@ def validate_payload(
 
     if errors:
         raise ValidationFailed(errors)
+
+    # ASCII-normalize string values for ETL-friendly storage.
+    clean = {k: _ascii_clean_value(v) for k, v in clean.items()}
+
     return clean
 
 

@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 
 
 class GenerateRequest(BaseModel):
-    prompt: str = Field(..., min_length=3, max_length=5000)
+    prompt: str = Field(..., min_length=3, max_length=30000)
     language: Optional[str] = None
 
 

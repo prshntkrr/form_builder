@@ -37,4 +37,14 @@ describe('a 404 nobody explained', () => {
 
     await expect(request('/forms/99')).rejects.toThrow('Form not found')
   })
+
+  test('validation errors keep FastAPI field details', async () => {
+    reply(422, JSON.stringify({
+      detail: [{ loc: ['body', 'prompt'], msg: 'String should have at most 5000 characters' }],
+    }))
+
+    await expect(request('/forms/generate')).rejects.toThrow(
+      'prompt: String should have at most 5000 characters',
+    )
+  })
 })

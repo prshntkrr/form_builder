@@ -64,6 +64,7 @@ async function open(path) {
 
 beforeEach(() => {
   calls.length = 0
+  answers.generate = async () => { calls.push('generate'); return { form_json: saved.form_json } }
   window.confirm = vi.fn(() => true)
 })
 
@@ -88,6 +89,51 @@ describe('starting a form without a prompt', () => {
 
     expect(screen.getByRole('button', { name: 'Create form' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Start blank' }).disabled).toBe(false)
+  })
+
+  test('shows the server rejection when prompt generation fails', async () => {
+    const user = userEvent.setup()
+    answers.generate = async () => {
+      throw new Error('That prompt is too long for a form. Keep it to 30000 characters or fewer.')
+    }
+    await open('/builder')
+
+    await user.type(
+      screen.getByPlaceholderText(/Describe it the way you'd explain it/),
+      'Create a farmer registration form',
+    )
+    await user.click(screen.getByRole('button', { name: 'Create form' }))
+
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain(
+      'That prompt is too long for a form. Keep it to 30000 characters or fewer.',
+    )
+  })
+
+  test('shows only the latest operation usage without shrinking the revise input', async () => {
+    const user = userEvent.setup()
+    answers.generate = async () => ({
+      form_json: saved.form_json,
+      usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+    })
+    answers.refine = async () => ({
+      form_json: saved.form_json,
+      usage: { prompt_tokens: 20, completion_tokens: 7, total_tokens: 27 },
+    })
+    await open('/builder')
+
+    await user.type(
+      screen.getByPlaceholderText(/Describe it the way you'd explain it/),
+      'Create a farmer registration form',
+    )
+    await user.click(screen.getByRole('button', { name: 'Create form' }))
+    await user.type(screen.getByPlaceholderText(/Ask for a change/), 'Add an age question')
+    await user.click(screen.getByRole('button', { name: 'Revise' }))
+
+    const usage = await screen.findByText(/20 input.*7 output.*27 total tokens/)
+    expect(screen.queryByText(/15 total tokens/)).toBeNull()
+    expect(usage.closest('.tweak')).toBeNull()
+    expect(screen.getAllByText(/LLM usage:/)).toHaveLength(1)
   })
 })
 
