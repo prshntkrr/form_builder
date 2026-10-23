@@ -225,7 +225,7 @@ function AddMember({ projectId, roles, onClose, onAdded }) {
     setBusy(true)
     setError('')
     try {
-      await api.addMember(projectId, { user_id: picked.user_id, role_id: roleId })
+      await api.addMember(projectId, { email: picked.email, role_id: roleId })
       onAdded()
       projectsChanged()
     } catch (e) {
@@ -274,11 +274,11 @@ function AddMember({ projectId, roles, onClose, onAdded }) {
             {listOpen && found?.length > 0 && !picked && (
               <ul className="find__list" id="find-results" role="listbox">
                 {found.slice(0, 20).map((c) => (
-                  <li key={c.user_id}>
+                  <li key={c.email}>
                     <button
                       type="button"
                       role="option"
-                      aria-selected={picked?.user_id === c.user_id}
+                      aria-selected={picked?.email === c.email}
                       className="find__hit"
                       onClick={() => {
                         setPicked(c)
@@ -286,7 +286,10 @@ function AddMember({ projectId, roles, onClose, onAdded }) {
                         setListOpen(false)
                       }}
                     >
-                      <span className="strong ellipsis">{c.full_name || c.email}</span>
+                      <span className="strong ellipsis">
+                        {c.full_name || c.email}
+                        {c.organization ? `  (${c.organization})` : ''}
+                      </span>
                       <span className="tiny muted ellipsis">{c.email}</span>
                     </button>
                   </li>

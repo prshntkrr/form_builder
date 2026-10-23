@@ -2,7 +2,6 @@ import React from 'react'
 import { NavLink } from 'react-router-dom'
 
 import Forms from './pages/Forms.jsx'
-import Projects from './pages/Projects.jsx'
 import ProjectSettings from './pages/ProjectSettings.jsx'
 import Review from './pages/Review.jsx'
 import { useProject, useProjects } from './active.js'
@@ -76,7 +75,6 @@ export default {
     // context is application state rather than a URL segment, so switching
     // project does not rewrite every link in the application.
     { path: '/forms', element: <Forms /> },
-    { path: '/projects', element: <Projects /> },
     { path: '/projects/:projectId', element: <ProjectSettings /> },
     { path: '/review', element: <Review /> },
   ],

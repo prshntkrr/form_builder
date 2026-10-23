@@ -38,7 +38,8 @@ class UpdateProjectRequest(BaseModel):
 
 
 class AddMemberRequest(BaseModel):
-    user_id: str
+    user_id: str = ""
+    email: str = ""
     role_id: str = Field(..., description="The role this account holds *in this project*")
 
 
@@ -171,9 +172,14 @@ def members(project_id: str,
 def add_member(project_id: str, req: AddMemberRequest,
                user: Dict[str, Any] = Depends(
                    access.needs_in_project(PROJECT_MEMBERS_MANAGE))):
+    uid = req.user_id
+    if not uid and req.email:
+        uid = _ensure_local_user(req.email)
+    if not uid:
+        raise HTTPException(400, "Provide user_id or email")
     try:
         return project_service.add_member(
-            project_id, req.user_id, req.role_id,
+            project_id, uid, req.role_id,
             added_by=auth_service.display_name(user))
     except (project_service.ProjectError, project_service.NotFound) as exc:
         _handle(exc)
@@ -204,41 +210,89 @@ def remove_member(project_id: str, member_id: int,
     return {"member_id": member_id, "removed": True}
 
 
+def _ensure_local_user(email: str) -> str:
+    """Find or create a local app_user for a REV user by email."""
+    import secrets
+    from app.core.database import transaction
+
+    with transaction() as cur:
+        cur.execute("SELECT user_id FROM app_user WHERE email = %s", (email,))
+        row = cur.fetchone()
+        if row:
+            return row["user_id"]
+
+    random_pw = secrets.token_urlsafe(32) + "A1!"
+    user = auth_service.create_user(
+        email=email, password=random_pw,
+        role=auth_service.ROLE_STANDARD, created_by="rev",
+    )
+    return user["user_id"]
+
+
 @router.get("/{project_id}/candidates")
 def candidates(
     project_id: str,
     q: Optional[str] = None,
     user: Dict[str, Any] = Depends(access.needs_in_project(PROJECT_MEMBERS_MANAGE)),
 ):
-    """Accounts that could be added to this project.
+    """REV users with e-agrology access who are not already in this project."""
+    import json as _json
+    from app.core.database import rev_fetch_all, transaction
 
-    Somebody has to be nameable before they can be added, and listing accounts
-    is otherwise `users.manage` — which a project manager has no reason to hold.
-    So the list is gated on managing *this project's* members instead, and
-    carries only what is needed to pick a person.
+    wanted = (q or "").strip().lower()
 
-    Already-members are left out: adding one twice is refused anyway, and
-    offering it is offering a mistake.
-    """
-    from app.core.database import transaction
+    rev_users = rev_fetch_all(
+        """
+        SELECT u.id, u.email, u.full_name, u.organization, u.platform_access
+        FROM users u
+        JOIN roles r ON u.role_id = r.id
+        WHERE u.is_active = true
+        """
+    )
 
-    wanted = f"%{(q or '').strip().lower()}%"
+    eligible = []
+    for r in rev_users:
+        access_list = r.get("platform_access") or "[]"
+        if isinstance(access_list, str):
+            try:
+                access_list = _json.loads(access_list)
+            except (ValueError, TypeError):
+                access_list = []
+        if "e-agrology" not in access_list:
+            continue
+        name = (r.get("full_name") or "").lower()
+        email = (r.get("email") or "").lower()
+        org = (r.get("organization") or "").lower()
+        if wanted and wanted not in name and wanted not in email and wanted not in org:
+            continue
+        eligible.append(r)
+
+    if not eligible:
+        return {"candidates": []}
+
+    emails = [r["email"] for r in eligible]
 
     with transaction() as cur:
         cur.execute(
             """
-            SELECT u.user_id, u.email, u.full_name
-            FROM   app_user u
-            WHERE  u.is_active
-              AND  NOT EXISTS (SELECT 1 FROM project_member m
-                               WHERE m.project_id = %s AND m.user_id = u.user_id)
-              AND  (%s = '%%%%' OR lower(u.email) LIKE %s OR lower(u.full_name) LIKE %s)
-            ORDER  BY u.full_name, u.email
-            LIMIT  50
+            SELECT u.email FROM app_user u
+            JOIN project_member m ON m.user_id = u.user_id
+            WHERE m.project_id = %s AND u.email = ANY(%s)
             """,
-            (project_id, wanted, wanted, wanted),
+            (project_id, emails),
         )
-        return {"candidates": [dict(row) for row in cur.fetchall()]}
+        already = {row["email"] for row in cur.fetchall()}
+
+    result = []
+    for r in eligible:
+        if r["email"] in already:
+            continue
+        result.append({
+            "email": r["email"],
+            "full_name": r.get("full_name"),
+            "organization": r.get("organization"),
+        })
+    return {"candidates": result[:50]}
 
 
 # --------------------------------------------------------------------------- #

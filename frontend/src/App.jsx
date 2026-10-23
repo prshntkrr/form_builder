@@ -99,7 +99,6 @@ function AdminMenu() {
 
   const items = [
     { to: '/routing', label: 'Channel routing', show: can.manage_routing },
-    { to: '/projects', label: 'Projects', show: true },
     { to: '/roles', label: 'Roles', show: can.manage_roles },
     { to: '/users', label: 'Users', show: can.manage_users },
   ].filter((i) => i.show)
