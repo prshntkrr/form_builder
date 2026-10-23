@@ -60,6 +60,8 @@ export const api = {
   // everything. Removing one is not, and is its own call and its own permission.
   deleteUser: (userId) => request(`/users/${userId}`, { method: 'DELETE' }),
 
+  listRevUsers: () => request('/rev/users'),
+
   userResetLink: (userId) => request(`/users/${userId}/reset-link`, { method: 'POST' }),
 
   // --- voice sign-in ---

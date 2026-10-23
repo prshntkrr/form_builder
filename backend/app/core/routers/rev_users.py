@@ -21,7 +21,8 @@ def list_rev_users(_user=Depends(current_user)):
     rows = rev_fetch_all(
         """
         SELECT u.id, u.email, u.full_name, u.organization, u.is_active,
-               u.platform_access
+               u.platform_access, u.last_login,
+               r.name AS role_name, r.label AS role_label
         FROM users u
         JOIN roles r ON u.role_id = r.id
         WHERE u.is_active = true
@@ -41,5 +42,8 @@ def list_rev_users(_user=Depends(current_user)):
                 "email": r["email"],
                 "full_name": r["full_name"],
                 "organization": r.get("organization"),
+                "role": r.get("role_name", "standard"),
+                "role_label": r.get("role_label", "Standard User"),
+                "last_login": r["last_login"].isoformat() if r.get("last_login") else None,
             })
     return {"users": result}
