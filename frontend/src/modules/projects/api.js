@@ -78,8 +78,8 @@ export const api = {
   // may read. Sent as query parameters so the narrowing happens in SQL, before
   // the row limit — filtering a page of fifty in the browser would show ten of
   // sixty matching rows and call it the answer.
-  projectSubmissions: (projectId, { status, limit, formId } = {}) =>
-    request(`/projects/${projectId}/submissions${q({ status, limit, form_id: formId })}`),
+  projectSubmissions: (projectId, { status, limit, formId, channel } = {}) =>
+    request(`/projects/${projectId}/submissions${q({ status, limit, form_id: formId, channel })}`),
 
   submissionStatus: (formId, surveyId) => request(`/submissions/${formId}/${surveyId}`),
 

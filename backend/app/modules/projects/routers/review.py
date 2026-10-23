@@ -296,7 +296,8 @@ def project_submissions(
     project_id: str,
     status: Optional[str] = Query(None, description="Only submissions in this state"),
     form_id: Optional[str] = Query(None, description="Only submissions of this form"),
-    limit: int = Query(50, ge=1, le=500),
+    channel: Optional[str] = Query(None, description="Only submissions of this channel"),
+    limit: int = Query(300, ge=1, le=1000),
     user: Dict[str, Any] = Depends(current_user),
 ):
     """Every submission in the project this account may read.
@@ -340,6 +341,14 @@ def project_submissions(
             (project_id, form_id) if form_id else (project_id,),
         )
         forms = [dict(row) for row in cur.fetchall()]
+
+    try:
+        from app.modules.forms.channels import form_channel
+    except Exception:
+        form_channel = None
+
+    if channel and form_channel is not None:
+        forms = [f for f in forms if form_channel(f.get("form_json")) == channel]
 
     rows = []
     for form in forms:
@@ -392,6 +401,7 @@ def project_submissions(
             rows.append({
                 "form_id": form["form_id"],
                 "form_title": form["form_title"],
+                "channel": form_channel(form.get("form_json")) if form_channel else "web_mobile",
                 "survey_id": row["survey_id"],
                 "created_on": row["created_on"],
                 "created_by": row["created_by"],
@@ -425,5 +435,5 @@ def project_submissions(
         "everything": everything,
         # What was actually applied, so a screen can tell "nothing here" from
         # "nothing matches what you chose".
-        "filters": {"form_id": form_id or None, "status": status or None},
+        "filters": {"form_id": form_id or None, "status": status or None, "channel": channel or None},
     }
