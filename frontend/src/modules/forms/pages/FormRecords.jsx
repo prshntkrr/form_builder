@@ -184,6 +184,9 @@ export default function FormRecords() {
                 {data.rows.map((row) => (
                   <React.Fragment key={row.survey_id}>
                     <tr>
+                      <td className="tiny muted">
+                        {when(row.created_on)}
+                      </td>
                       <td className="muted">
                         <div>{row.created_by || '—'}</div>
                         {(row.media || {})['__full_call_recording__'] && (
