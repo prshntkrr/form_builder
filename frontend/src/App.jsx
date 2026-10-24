@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import Sidebar from './core/Sidebar.jsx'
 import { initials, useAuth } from './core/auth.jsx'
@@ -70,26 +70,26 @@ function NotFound() {
   )
 }
 
-function ThemeButton() {
-  const [theme, setTheme] = useState(() => {
-    try { return localStorage.getItem('theme') || 'system' } catch { return 'system' }
-  })
-  const next = () => {
-    const order = ['light', 'system', 'dark']
-    const n = order[(order.indexOf(theme) + 1) % order.length]
-    setTheme(n)
-    const root = document.documentElement
-    if (n === 'system') root.removeAttribute('data-theme')
-    else root.setAttribute('data-theme', n)
-    try { localStorage.setItem('theme', n) } catch {}
-  }
-  const icon = theme === 'dark' ? '🌙' : theme === 'light' ? '☀️' : '💻'
-  const label = theme === 'dark' ? 'Dark' : theme === 'light' ? 'Light' : 'Auto'
-  return (
-    <button className="topbar__btn" onClick={next} title={`Theme: ${label}`}>
-      {icon}
-    </button>
-  )
+function applyTheme(t) {
+  const root = document.documentElement
+  if (t === 'system') root.removeAttribute('data-theme')
+  else root.setAttribute('data-theme', t)
+}
+
+function useParentTheme() {
+  useEffect(() => {
+    let inIframe = false
+    try { inIframe = window.self !== window.top } catch { inIframe = true }
+    if (!inIframe) return
+
+    const handler = (e) => {
+      if (e.data?.type !== 'rev-theme') return
+      applyTheme(e.data.theme)
+    }
+    window.addEventListener('message', handler)
+    try { window.parent.postMessage({ type: 'rev-theme-request' }, '*') } catch {}
+    return () => window.removeEventListener('message', handler)
+  }, [])
 }
 
 function AdminMenu() {
@@ -215,6 +215,7 @@ export default function App() {
   // Only the modules this deployment is running — one switched off in
   // backend/.env contributes no routes, so its URLs 404 here exactly as they do
   // on the server.
+  useParentTheme()
   const { modules } = useAuth()
 
   // Grouped so that one <Require> guards each capability, rather than one per

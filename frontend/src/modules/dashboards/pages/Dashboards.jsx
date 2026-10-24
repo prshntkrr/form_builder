@@ -5130,8 +5130,11 @@ export default function Dashboards() {
             <section
               ref={dashboardRef}
               className="card card--pad dash__dashboard"
+              data-theme="light"
               style={{
                 marginTop: 16,
+                background: '#ffffff',
+                color: '#1a1c1a',
               }}
             >
               {/* Dashboard header */}
