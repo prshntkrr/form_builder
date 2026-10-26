@@ -28,17 +28,10 @@ function ChannelBadge({ channel }) {
   if (norm === 'ivr') {
     return (
       <span style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: '4px',
-        padding: '2px 8px',
-        fontSize: '11.5px',
-        fontWeight: 600,
-        borderRadius: '12px',
-        background: '#e0e7ff',
-        color: '#3730a3',
-        border: '1px solid #c7d2fe',
-        whiteSpace: 'nowrap',
+        display: 'inline-flex', alignItems: 'center', gap: '4px',
+        padding: '2px 8px', fontSize: '11.5px', fontWeight: 600,
+        borderRadius: '12px', background: '#e0e7ff', color: '#3730a3',
+        border: '1px solid #c7d2fe', whiteSpace: 'nowrap',
       }}>
         📞 IVR
       </span>
@@ -47,17 +40,10 @@ function ChannelBadge({ channel }) {
   if (norm === 'whatsapp') {
     return (
       <span style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: '4px',
-        padding: '2px 8px',
-        fontSize: '11.5px',
-        fontWeight: 600,
-        borderRadius: '12px',
-        background: '#dcfce7',
-        color: '#166534',
-        border: '1px solid #bbf7d0',
-        whiteSpace: 'nowrap',
+        display: 'inline-flex', alignItems: 'center', gap: '4px',
+        padding: '2px 8px', fontSize: '11.5px', fontWeight: 600,
+        borderRadius: '12px', background: '#dcfce7', color: '#166534',
+        border: '1px solid #bbf7d0', whiteSpace: 'nowrap',
       }}>
         💬 Whatsapp
       </span>
@@ -65,17 +51,10 @@ function ChannelBadge({ channel }) {
   }
   return (
     <span style={{
-      display: 'inline-flex',
-      alignItems: 'center',
-      gap: '4px',
-      padding: '2px 8px',
-      fontSize: '11.5px',
-      fontWeight: 600,
-      borderRadius: '12px',
-      background: '#f1f5f9',
-      color: '#334155',
-      border: '1px solid #cbd5e1',
-      whiteSpace: 'nowrap',
+      display: 'inline-flex', alignItems: 'center', gap: '4px',
+      padding: '2px 8px', fontSize: '11.5px', fontWeight: 600,
+      borderRadius: '12px', background: '#f1f5f9', color: '#334155',
+      border: '1px solid #cbd5e1', whiteSpace: 'nowrap',
     }}>
       🌐 Web/Mobile
     </span>
@@ -100,8 +79,6 @@ const WORDING = {
  */
 export default function Review() {
   const { activeId } = useProjects()
-  // Remounted per project: a rejection typed for one project's submission must
-  // not survive a switch to another.
   return <Queue key={activeId || 'none'} />
 }
 
@@ -117,63 +94,15 @@ function Queue() {
     }
   }, [active, projects, choose])
 
-<<<<<<< HEAD
-  const [rows, setRows] = useState(null)
-  const [status, setStatus] = useState('')
-  const [channelFilter, setChannelFilter] = useState('')
-  const [selectedFormId, setSelectedFormId] = useState('')
-=======
->>>>>>> de62464 (fix platform hierarchy and form config)
   const [forms, setForms] = useState([])
   const [error, setError] = useState('')
-  // Which form is open for record viewing; null = show form listing
+  const [channelFilter, setChannelFilter] = useState('')
   const [activeForm, setActiveForm] = useState(null)
+  const [counts, setCounts] = useState({})
 
   const projectId = active?.project_id
+  const mayReview = can(REVIEW)
 
-<<<<<<< HEAD
-  const load = () => {
-    if (!projectId) return
-    setError('')
-    api.projectSubmissions(projectId, {
-      status: status || undefined,
-      formId: selectedFormId || undefined,
-      channel: selectedFormId ? undefined : (channelFilter || undefined),
-      limit: 300,
-    })
-      .then(({ submissions }) => setRows(submissions))
-      .catch((e) => { setRows([]); setError(e.message) })
-  }
-
-  // Reset selected form when switching project
-  useEffect(() => {
-    setSelectedFormId('')
-  }, [projectId])
-
-  useEffect(() => {
-    setRows(null)
-    setRejecting(null)
-    setViewing(null)
-    load()
-  }, [projectId, status, selectedFormId, channelFilter])
-
-  // Periodic polling every 12s so newly submitted IVR calls appear live without page reload
-  useEffect(() => {
-    if (!projectId) return
-    const interval = setInterval(() => {
-      api.projectSubmissions(projectId, {
-        status: status || undefined,
-        form_id: selectedFormId || undefined,
-        channel: selectedFormId ? undefined : (channelFilter || undefined),
-        limit: 300,
-      }).then(({ submissions }) => setRows(submissions))
-        .catch(() => {})
-    }, 12000)
-    return () => clearInterval(interval)
-  }, [projectId, status, selectedFormId, channelFilter])
-
-=======
->>>>>>> de62464 (fix platform hierarchy and form config)
   useEffect(() => {
     if (!projectId) return
     api.projectForms(projectId)
@@ -182,10 +111,8 @@ function Queue() {
   }, [projectId])
 
   // Load submission counts per form for the listing
-  const [counts, setCounts] = useState({})
   useEffect(() => {
     if (!projectId || !forms.length) return
-    // Fetch a lightweight count per form
     Promise.all(forms.map((f) =>
       api.projectSubmissions(projectId, { formId: f.form_id, limit: 1 })
         .then((r) => [f.form_id, r.total ?? r.submissions?.length ?? 0])
@@ -193,94 +120,13 @@ function Queue() {
     )).then((pairs) => setCounts(Object.fromEntries(pairs)))
   }, [projectId, forms])
 
-<<<<<<< HEAD
-  const move = async (row, work) => {
-    const key = `${row.form_id}/${row.survey_id}`
-    setBusy(key)
-    setError('')
-    try {
-      await work()
-      load()
-    } catch (e) {
-      setError(e.message)
-    } finally {
-      setBusy('')
-    }
-  }
-=======
-  const mayReview = can(REVIEW)
->>>>>>> de62464 (fix platform hierarchy and form config)
-
-  // Compute form groups for Page 1
-  const formGroups = useMemo(() => {
-    if (!rows) return []
-    const map = new Map()
-
-    for (const r of rows) {
-      if (!map.has(r.form_id)) {
-        const formMeta = forms.find((f) => f.form_id === r.form_id) || {}
-        const parentMeta = formMeta.parent_form_id
-          ? forms.find((f) => f.form_id === formMeta.parent_form_id)
-          : null
-        map.set(r.form_id, {
-          form_id: r.form_id,
-          form_title: r.form_title || formMeta.form_title || 'Untitled form',
-          channel: r.channel || formMeta.channel || 'web_mobile',
-          parent_title: parentMeta ? parentMeta.form_title : null,
-          submissions: [],
-          latest_date: r.created_on,
-        })
-      }
-      const group = map.get(r.form_id)
-      group.submissions.push(r)
-      if (r.created_on && (!group.latest_date || new Date(r.created_on) > new Date(group.latest_date))) {
-        group.latest_date = r.created_on
-      }
-    }
-
-    let list = Array.from(map.values())
-    if (channelFilter) {
-      list = list.filter((g) => g.channel === channelFilter)
-    }
-
-    list.sort((a, b) => {
-      const ta = a.latest_date ? new Date(a.latest_date).getTime() : 0
-      const tb = b.latest_date ? new Date(b.latest_date).getTime() : 0
-      return tb - ta
+  const filteredForms = useMemo(() => {
+    if (!channelFilter) return forms
+    return forms.filter((f) => {
+      const ch = (f.form_json?.channel || 'web_mobile').toLowerCase()
+      return ch === channelFilter
     })
-
-    return list
-  }, [rows, forms, channelFilter])
-
-  // Metadata for Page 2
-  const selectedFormMeta = useMemo(() => {
-    if (!selectedFormId) return null
-    const formMeta = forms.find((f) => f.form_id === selectedFormId)
-    if (formMeta) return formMeta
-    const fromRows = rows?.find((r) => r.form_id === selectedFormId)
-    if (fromRows) {
-      return {
-        form_id: fromRows.form_id,
-        form_title: fromRows.form_title,
-        channel: fromRows.channel,
-      }
-    }
-    return { form_id: selectedFormId, form_title: 'Form Submissions', channel: 'web_mobile' }
-  }, [selectedFormId, forms, rows])
-
-  const selectedSubmissions = useMemo(() => {
-    if (!selectedFormId || !rows) return []
-    return rows.filter((r) => r.form_id === selectedFormId)
-  }, [selectedFormId, rows])
-
-  if (projects && projects.length === 0) {
-    return (
-      <main className="main">
-        <h1>Submission review</h1>
-        <p className="muted">You are not a member of any project yet.</p>
-      </main>
-    )
-  }
+  }, [forms, channelFilter])
 
   if (activeForm) {
     return (
@@ -296,40 +142,6 @@ function Queue() {
 
   return (
     <main className="main">
-<<<<<<< HEAD
-      {!selectedFormId ? (
-        /* ══════════════════════════════════════════════════════════════════
-           PAGE 1: FORMS LIST (One entry per form with category and total count)
-           ══════════════════════════════════════════════════════════════════ */
-        <>
-          <div className="page-head">
-            <div>
-              <h1>Submission review</h1>
-              <p className="lede">
-                {active ? active.name : 'Choose a project'}
-                {mayReview
-                  ? ' — forms with submissions in this project.'
-                  : ' — forms you have submitted responses to.'}
-              </p>
-            </div>
-            <div className="row" style={{ alignItems: 'center' }}>
-              <select className="control control--sm" value={channelFilter}
-                      onChange={(e) => setChannelFilter(e.target.value)} aria-label="Category">
-                <option value="">All Forms</option>
-                <option value="ivr">IVR</option>
-                <option value="whatsapp">Whatsapp</option>
-                <option value="web_mobile">Web/Mobile</option>
-              </select>
-
-              <select className="control control--sm" value={status}
-                      onChange={(e) => setStatus(e.target.value)} aria-label="Status">
-                <option value="">Every status</option>
-                {STATES.map((s) => <option key={s} value={s}>{WORDING[s]}</option>)}
-              </select>
-
-              <button className="btn btn--quiet btn--sm" onClick={load} title="Refresh submissions">
-                🔄 Refresh
-=======
       <div className="page-head">
         <div>
           <h1>Submission review</h1>
@@ -339,6 +151,15 @@ function Queue() {
               ? ' — select a form to review its submissions.'
               : ' — select a form to see your submissions.'}
           </p>
+        </div>
+        <div className="row" style={{ alignItems: 'center' }}>
+          <select className="control control--sm" value={channelFilter}
+                  onChange={(e) => setChannelFilter(e.target.value)} aria-label="Category">
+            <option value="">All channels</option>
+            <option value="ivr">IVR</option>
+            <option value="whatsapp">WhatsApp</option>
+            <option value="web_mobile">Web/Mobile</option>
+          </select>
         </div>
       </div>
 
@@ -352,236 +173,9 @@ function Queue() {
               <button key={p.project_id} className="btn btn--primary btn--sm"
                       onClick={() => choose(p.project_id)}>
                 Switch to {p.name}
->>>>>>> de62464 (fix platform hierarchy and form config)
               </button>
-            </div>
+            ))}
           </div>
-<<<<<<< HEAD
-
-          {error && <div className="note note--bad">{error}</div>}
-
-          {!projectId && projects?.length > 0 && (
-            <div className="note note--info">
-              Please select a project to view its submissions:
-              <div className="row" style={{ marginTop: 8 }}>
-                {projects.map((p) => (
-                  <button key={p.project_id} className="btn btn--primary btn--sm" onClick={() => choose(p.project_id)}>
-                    Switch to {p.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {projectId && state === 'loading' && <div className="skeleton" style={{ height: 40 }} />}
-          {projectId && rows === null && <div className="skeleton" style={{ height: 140 }} />}
-
-          {rows !== null && formGroups.length === 0 && !error && (
-            <p className="muted" style={{ padding: '24px 0' }}>
-              {status || channelFilter
-                ? 'No submissions match the selected filters.'
-                : mayReview
-                  ? 'No submissions are currently available in this project.'
-                  : 'You have not submitted anything in this project yet.'}
-            </p>
-          )}
-
-          {formGroups.length > 0 && (
-            <div className="tablebox">
-              <table className="data">
-                <thead>
-                  <tr>
-                    <th>Form Name</th>
-                    <th>Category</th>
-                    <th>Total Submissions</th>
-                    <th>Latest Submission</th>
-                    <th style={{ textAlign: 'right' }}>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {formGroups.map((group) => {
-                    const pending = group.submissions.filter((s) => s.status === 'submitted' || s.status === 'under_review').length
-                    return (
-                      <tr key={group.form_id} style={{ cursor: 'pointer' }}
-                          onClick={() => setSelectedFormId(group.form_id)}>
-                        <td>
-                          <button className="linky" style={{ fontWeight: 600, fontSize: '14.5px' }}
-                                  onClick={(e) => { e.stopPropagation(); setSelectedFormId(group.form_id) }}>
-                            {group.form_title}
-                          </button>
-                          {group.parent_title && (
-                            <div className="tiny muted">child of {group.parent_title}</div>
-                          )}
-                        </td>
-                        <td>
-                          <ChannelBadge channel={group.channel} />
-                        </td>
-                        <td>
-                          <span className="pill" style={{ fontWeight: 600, background: '#f1f5f9', color: '#1e293b' }}>
-                            {group.submissions.length} {group.submissions.length === 1 ? 'submission' : 'submissions'}
-                          </span>
-                          {pending > 0 && (
-                            <span className="pill pill--submitted" style={{ marginLeft: 6, fontSize: '11px' }}>
-                              {pending} to review
-                            </span>
-                          )}
-                        </td>
-                        <td className="tiny muted">
-                          {when(group.latest_date)}
-                        </td>
-                        <td style={{ textAlign: 'right' }}>
-                          <button className="btn btn--quiet btn--sm"
-                                  onClick={(e) => { e.stopPropagation(); setSelectedFormId(group.form_id) }}>
-                            View Submissions &rarr;
-                          </button>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </>
-      ) : (
-        /* ══════════════════════════════════════════════════════════════════
-           PAGE 2: SUBMISSIONS PAGE FOR SELECTED FORM
-           ══════════════════════════════════════════════════════════════════ */
-        <>
-          <div style={{ marginBottom: 16 }}>
-            <button className="btn btn--quiet btn--sm"
-                    onClick={() => setSelectedFormId('')}
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 550 }}>
-              &larr; Back to all forms
-            </button>
-          </div>
-
-          <div className="page-head">
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                <h1 style={{ margin: 0 }}>{selectedFormMeta?.form_title || 'Form Submissions'}</h1>
-                <ChannelBadge channel={selectedFormMeta?.channel} />
-              </div>
-              <p className="lede" style={{ marginTop: 6 }}>
-                {active ? active.name : ''} &mdash; showing {selectedSubmissions.length}{' '}
-                {selectedSubmissions.length === 1 ? 'submission' : 'submissions'} for this form.
-              </p>
-            </div>
-            <div className="row" style={{ alignItems: 'center' }}>
-              <select className="control control--sm" value={status}
-                      onChange={(e) => setStatus(e.target.value)} aria-label="Status">
-                <option value="">Every status</option>
-                {STATES.map((s) => <option key={s} value={s}>{WORDING[s]}</option>)}
-              </select>
-
-              <button className="btn btn--quiet btn--sm" onClick={load} title="Refresh submissions">
-                🔄 Refresh
-              </button>
-            </div>
-          </div>
-
-          {error && <div className="note note--bad">{error}</div>}
-
-          {projectId && rows === null && <div className="skeleton" style={{ height: 140 }} />}
-
-          {selectedSubmissions.length === 0 && rows !== null && !error && (
-            <p className="muted" style={{ padding: '24px 0' }}>
-              {status
-                ? 'No submissions match this status filter.'
-                : 'No submissions found for this form.'}
-            </p>
-          )}
-
-          {selectedSubmissions.length > 0 && (
-            <div className="tablebox">
-              <table className="data">
-                <thead>
-                  <tr>
-                    <th>Survey ID</th>
-                    <th>Submitted by</th>
-                    <th>When</th>
-                    <th>Status</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {selectedSubmissions.map((row) => {
-                    const key = `${row.form_id}/${row.survey_id}`
-                    const working = busy === key
-                    return (
-                      <tr key={key}>
-                        <td>
-                          <button className="linky" onClick={() => setViewing(row)}>
-                            <b><code>{row.survey_id}</code></b>
-                          </button>
-                        </td>
-                        <td>
-                          {row.created_by || '—'}
-                          {(row.is_ivr || String(row.created_by || '').startsWith('ivr:')) && row.has_audio && (
-                            <span style={{
-                              display: 'inline-block',
-                              marginLeft: 6,
-                              fontSize: '0.72rem',
-                              fontWeight: 500,
-                              padding: '1px 6px',
-                              borderRadius: '10px',
-                              background: '#e0e7ff',
-                              color: '#3730a3',
-                              border: '1px solid #c7d2fe',
-                            }} title="Includes recorded IVR call audio">
-                              📞 Audio
-                            </span>
-                          )}
-                        </td>
-                        <td className="tiny muted">
-                          {when(row.created_on)}
-                        </td>
-                        <td>
-                          <span className={`pill pill--${row.status}`}>{WORDING[row.status]}</span>
-                          {row.rejection_reason && (
-                            <div className="tiny muted">{row.rejection_reason}</div>
-                          )}
-                        </td>
-                        <td className="cat__actions">
-                          <button className="btn btn--quiet btn--sm"
-                                  onClick={() => setViewing(row)}>
-                            {(row.is_ivr || String(row.created_by || '').startsWith('ivr:')) && row.has_audio ? '▶ Listen & Review' : 'View submission'}
-                          </button>
-
-                          {mayReview && row.status === 'submitted' && (
-                            <button className="btn btn--quiet btn--sm" disabled={working}
-                                    onClick={() => move(row,
-                                      () => api.startReview(row.form_id, row.survey_id))}>
-                              Start review
-                            </button>
-                          )}
-                          {mayReview && ['submitted', 'under_review'].includes(row.status) && (
-                            <>
-                              <button className="btn btn--sm" disabled={working}
-                                      onClick={() => move(row,
-                                        () => api.approve(row.form_id, row.survey_id))}>
-                                Approve
-                              </button>
-                              <button className="btn btn--quiet btn--sm" disabled={working}
-                                      onClick={() => setRejecting(row)}>
-                                Reject
-                              </button>
-                            </>
-                          )}
-                          {!mayReview && row.status === 'rejected' && (
-                            <button className="btn btn--quiet btn--sm" disabled={working}
-                                    onClick={() => move(row,
-                                      () => api.resubmit(row.form_id, row.survey_id))}>
-                              Submit again
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-=======
         </div>
       )}
 
@@ -593,14 +187,17 @@ function Queue() {
         <p className="muted">No forms in this project.</p>
       )}
 
-      {forms.length > 0 && (
+      {filteredForms.length > 0 && (
         <div className="review__form-list">
-          {forms.map((f) => (
+          {filteredForms.map((f) => (
             <div key={f.form_id} className="review__form-card"
                  onClick={() => setActiveForm(f)}>
-              <div>
-                <strong>{label(f, forms)}</strong>
-                <div className="tiny muted">{f.form_id}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div>
+                  <strong>{label(f, forms)}</strong>
+                  <div className="tiny muted">{f.form_id}</div>
+                </div>
+                <ChannelBadge channel={f.form_json?.channel} />
               </div>
               <span className="review__form-count">
                 {counts[f.form_id] ?? '...'} records
@@ -608,6 +205,12 @@ function Queue() {
             </div>
           ))}
         </div>
+      )}
+
+      {filteredForms.length === 0 && forms.length > 0 && channelFilter && (
+        <p className="muted" style={{ padding: '24px 0' }}>
+          No forms match the selected channel filter.
+        </p>
       )}
     </main>
   )
@@ -640,8 +243,22 @@ function FormRecordQueue({ projectId, form, forms, mayReview, onBack }) {
 
   useEffect(() => { setRows(null); load() }, [projectId, form.form_id, status, perPage, page])
 
-  // Reset page when filters change
   useEffect(() => { setPage(0) }, [status, perPage])
+
+  // Periodic polling every 12s so newly submitted IVR calls appear live
+  useEffect(() => {
+    if (!projectId) return
+    const interval = setInterval(() => {
+      api.projectSubmissions(projectId, {
+        formId: form.form_id,
+        status: status || undefined,
+        limit: perPage,
+        offset: page * perPage,
+      }).then((r) => { setRows(r.submissions); setTotal(r.total ?? r.submissions?.length ?? 0) })
+        .catch(() => {})
+    }, 12000)
+    return () => clearInterval(interval)
+  }, [projectId, form.form_id, status, perPage, page])
 
   const totalPages = Math.max(1, Math.ceil(total / perPage))
 
@@ -700,8 +317,11 @@ function FormRecordQueue({ projectId, form, forms, mayReview, onBack }) {
     <main className="main">
       <div className="page-head">
         <div>
-          <button className="btn btn--quiet btn--sm" onClick={onBack}>← Back to forms</button>
-          <h1>{label(form, forms)}</h1>
+          <button className="btn btn--quiet btn--sm" onClick={onBack}>&larr; Back to forms</button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4 }}>
+            <h1 style={{ margin: 0 }}>{label(form, forms)}</h1>
+            <ChannelBadge channel={form.form_json?.channel} />
+          </div>
           <p className="lede">{total} record{total === 1 ? '' : 's'}</p>
         </div>
         <div className="row" style={{ alignItems: 'center', gap: 8 }}>
@@ -859,7 +479,6 @@ function FormRecordQueue({ projectId, form, forms, mayReview, onBack }) {
               </span>
               <button className="btn btn--quiet btn--sm" disabled={page >= totalPages - 1}
                       onClick={() => setPage(page + 1)}>Next</button>
->>>>>>> de62464 (fix platform hierarchy and form config)
             </div>
           )}
         </>
@@ -1027,7 +646,7 @@ export function SubmissionDetail({ row, onClose, onMoved, mayReview }) {
                       className="btn btn--quiet btn--sm"
                       title="Download .wav recording"
                     >
-                      ⬇ Download audio
+                      Download audio
                     </a>
                   </div>
                   <audio
@@ -1133,7 +752,7 @@ function sectioned(answers) {
     if (!bucket) {
       bucket = { title, answers: [] }
       byTitle.set(title, bucket)
-      groups.push(bucket)          // the first answer decides where a section sits
+      groups.push(bucket)
     }
     bucket.answers.push(answer)
   }
@@ -1143,9 +762,6 @@ function sectioned(answers) {
 
 /**
  * One stored value, written the way it was asked.
- *
- * Text, deliberately — no inputs anywhere on this page. Nothing here can send
- * an answer back, and the endpoint behind it only reads.
  */
 function Answer({ answer }) {
   const { type, value } = answer
@@ -1173,8 +789,6 @@ function Answer({ answer }) {
 
   const text = String(value)
 
-  // A file or a signature is stored as a reference to what was uploaded. It is
-  // shown, never linked out to something this page would have to fetch.
   if (type === 'file' || type === 'signature') {
     return <code className="tiny">{text}</code>
   }
