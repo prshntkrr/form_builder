@@ -296,8 +296,13 @@ def project_submissions(
     project_id: str,
     status: Optional[str] = Query(None, description="Only submissions in this state"),
     form_id: Optional[str] = Query(None, description="Only submissions of this form"),
+<<<<<<< HEAD
     channel: Optional[str] = Query(None, description="Only submissions of this channel"),
     limit: int = Query(300, ge=1, le=1000),
+=======
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+>>>>>>> de62464 (fix platform hierarchy and form config)
     user: Dict[str, Any] = Depends(current_user),
 ):
     """Every submission in the project this account may read.
@@ -411,7 +416,8 @@ def project_submissions(
             })
 
     rows.sort(key=lambda r: r["created_on"] or "", reverse=True)
-    selected_rows = rows[:limit]
+    total = len(rows)
+    selected_rows = rows[offset:offset + limit]
 
     # Identify which submissions have call audio recordings in S3 (strictly for IVR calls)
     # Check both form_id and survey_id to prevent collision with other forms
@@ -432,8 +438,15 @@ def project_submissions(
 
     return {
         "submissions": selected_rows,
+        "total": total,
+        "limit": limit,
+        "offset": offset,
         "everything": everything,
+<<<<<<< HEAD
         # What was actually applied, so a screen can tell "nothing here" from
         # "nothing matches what you chose".
         "filters": {"form_id": form_id or None, "status": status or None, "channel": channel or None},
+=======
+        "filters": {"form_id": form_id or None, "status": status or None},
+>>>>>>> de62464 (fix platform hierarchy and form config)
     }

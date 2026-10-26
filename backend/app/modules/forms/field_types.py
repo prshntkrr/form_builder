@@ -195,6 +195,7 @@ class FieldType:
     # for anything people describe by its digit count — a 12-digit ID, a 10-digit
     # mobile number — so separators and spacing don't eat into the limit.
     counts_digits: bool = False
+    display_only: bool = False
     aliases: List[str] = dc_field(default_factory=list)
 
 
@@ -210,7 +211,9 @@ _TYPES: List[FieldType] = [
     FieldType("number", _to_int, "number", "INTEGER",
               counts_digits=True, aliases=["integer", "int"]),
     FieldType("decimal", _to_decimal, "number", "NUMERIC(18,4)", counts_digits=True,
-              aliases=["float", "double", "currency", "money"]),
+              aliases=["float", "double"]),
+    FieldType("currency", _to_decimal, "number", "NUMERIC(18,4)", counts_digits=True,
+              aliases=["money", "amount"]),
     FieldType("rating", _to_int, "number", "INTEGER",
               counts_digits=True, aliases=["scale", "stars"]),
     FieldType("date", _to_date, "string (YYYY-MM-DD)", "DATE"),
@@ -246,6 +249,8 @@ _TYPES: List[FieldType] = [
     # kept had to change to hold one.
     FieldType("polygon", _to_ring, "array [[lng, lat], ...]", "TEXT",
               aliases=["boundary", "area", "geopolygon", "geofence"]),
+    FieldType("label", lambda v: None, "none", "—", display_only=True),
+    FieldType("banner", lambda v: None, "none", "—", display_only=True),
 ]
 
 FIELD_TYPES: Dict[str, FieldType] = {t.name: t for t in _TYPES}

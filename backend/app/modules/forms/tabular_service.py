@@ -80,7 +80,7 @@ def _field_columns(form_json: Dict[str, Any]) -> List[Tuple[str, str]]:
     envelope — `form_schema` already keeps those names clear."""
     cols = []
     for f in form_json.get("fields") or []:
-        if f["name"] not in ENVELOPE_NAMES:
+        if f["name"] not in ENVELOPE_NAMES and f.get("type") not in ("label", "banner"):
             cols.append((column_for(f["name"]), pg_type_for(f["type"])))
             if f.get("type") == "polygon":
                 cols.append((column_for(f"{f['name']}_area"), "DOUBLE PRECISION"))

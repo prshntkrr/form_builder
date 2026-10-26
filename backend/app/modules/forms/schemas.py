@@ -73,6 +73,9 @@ class UpdateFormRequest(BaseModel):
     renames: Optional[Dict[str, str]] = None
     whatsapp: Optional[WhatsAppRouting] = None
     ivr: Optional[IVRRouting] = None
+    version_tag: Optional[str] = None
+    version_label: Optional[str] = None
+    version_description: Optional[str] = None
 
 
 class RevalidateRequest(BaseModel):

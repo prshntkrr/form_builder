@@ -105,6 +105,8 @@ export default function Review() {
   return <Queue key={activeId || 'none'} />
 }
 
+const PER_PAGE_OPTIONS = [10, 25, 50, 100]
+
 function Queue() {
   const { active, projects, choose } = useProjects()
   const { can, state } = useProject(active?.project_id)
@@ -115,18 +117,21 @@ function Queue() {
     }
   }, [active, projects, choose])
 
+<<<<<<< HEAD
   const [rows, setRows] = useState(null)
   const [status, setStatus] = useState('')
   const [channelFilter, setChannelFilter] = useState('')
   const [selectedFormId, setSelectedFormId] = useState('')
+=======
+>>>>>>> de62464 (fix platform hierarchy and form config)
   const [forms, setForms] = useState([])
   const [error, setError] = useState('')
-  const [rejecting, setRejecting] = useState(null)
-  const [viewing, setViewing] = useState(null)
-  const [busy, setBusy] = useState('')
+  // Which form is open for record viewing; null = show form listing
+  const [activeForm, setActiveForm] = useState(null)
 
   const projectId = active?.project_id
 
+<<<<<<< HEAD
   const load = () => {
     if (!projectId) return
     setError('')
@@ -167,6 +172,8 @@ function Queue() {
     return () => clearInterval(interval)
   }, [projectId, status, selectedFormId, channelFilter])
 
+=======
+>>>>>>> de62464 (fix platform hierarchy and form config)
   useEffect(() => {
     if (!projectId) return
     api.projectForms(projectId)
@@ -174,8 +181,19 @@ function Queue() {
       .catch(() => setForms([]))
   }, [projectId])
 
-  const mayReview = can(REVIEW)
+  // Load submission counts per form for the listing
+  const [counts, setCounts] = useState({})
+  useEffect(() => {
+    if (!projectId || !forms.length) return
+    // Fetch a lightweight count per form
+    Promise.all(forms.map((f) =>
+      api.projectSubmissions(projectId, { formId: f.form_id, limit: 1 })
+        .then((r) => [f.form_id, r.total ?? r.submissions?.length ?? 0])
+        .catch(() => [f.form_id, 0])
+    )).then((pairs) => setCounts(Object.fromEntries(pairs)))
+  }, [projectId, forms])
 
+<<<<<<< HEAD
   const move = async (row, work) => {
     const key = `${row.form_id}/${row.survey_id}`
     setBusy(key)
@@ -189,6 +207,9 @@ function Queue() {
       setBusy('')
     }
   }
+=======
+  const mayReview = can(REVIEW)
+>>>>>>> de62464 (fix platform hierarchy and form config)
 
   // Compute form groups for Page 1
   const formGroups = useMemo(() => {
@@ -261,8 +282,21 @@ function Queue() {
     )
   }
 
+  if (activeForm) {
+    return (
+      <FormRecordQueue
+        projectId={projectId}
+        form={activeForm}
+        forms={forms}
+        mayReview={mayReview}
+        onBack={() => setActiveForm(null)}
+      />
+    )
+  }
+
   return (
     <main className="main">
+<<<<<<< HEAD
       {!selectedFormId ? (
         /* ══════════════════════════════════════════════════════════════════
            PAGE 1: FORMS LIST (One entry per form with category and total count)
@@ -295,9 +329,34 @@ function Queue() {
 
               <button className="btn btn--quiet btn--sm" onClick={load} title="Refresh submissions">
                 🔄 Refresh
+=======
+      <div className="page-head">
+        <div>
+          <h1>Submission review</h1>
+          <p className="lede">
+            {active ? active.name : 'Choose a project'}
+            {mayReview
+              ? ' — select a form to review its submissions.'
+              : ' — select a form to see your submissions.'}
+          </p>
+        </div>
+      </div>
+
+      {error && <div className="note note--bad">{error}</div>}
+
+      {!projectId && projects?.length > 0 && (
+        <div className="note note--info">
+          Please select a project to view its submissions:
+          <div className="row" style={{ marginTop: 8 }}>
+            {projects.map((p) => (
+              <button key={p.project_id} className="btn btn--primary btn--sm"
+                      onClick={() => choose(p.project_id)}>
+                Switch to {p.name}
+>>>>>>> de62464 (fix platform hierarchy and form config)
               </button>
             </div>
           </div>
+<<<<<<< HEAD
 
           {error && <div className="note note--bad">{error}</div>}
 
@@ -522,6 +581,285 @@ function Queue() {
                   })}
                 </tbody>
               </table>
+=======
+        </div>
+      )}
+
+      {projectId && !forms.length && state === 'loading' && (
+        <div className="skeleton" style={{ height: 140 }} />
+      )}
+
+      {projectId && forms.length === 0 && state !== 'loading' && (
+        <p className="muted">No forms in this project.</p>
+      )}
+
+      {forms.length > 0 && (
+        <div className="review__form-list">
+          {forms.map((f) => (
+            <div key={f.form_id} className="review__form-card"
+                 onClick={() => setActiveForm(f)}>
+              <div>
+                <strong>{label(f, forms)}</strong>
+                <div className="tiny muted">{f.form_id}</div>
+              </div>
+              <span className="review__form-count">
+                {counts[f.form_id] ?? '...'} records
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </main>
+  )
+}
+
+function FormRecordQueue({ projectId, form, forms, mayReview, onBack }) {
+  const [rows, setRows] = useState(null)
+  const [total, setTotal] = useState(0)
+  const [status, setStatus] = useState('')
+  const [perPage, setPerPage] = useState(25)
+  const [page, setPage] = useState(0)
+  const [error, setError] = useState('')
+  const [rejecting, setRejecting] = useState(null)
+  const [viewing, setViewing] = useState(null)
+  const [busy, setBusy] = useState('')
+  const [selected, setSelected] = useState(new Set())
+
+  const load = () => {
+    if (!projectId) return
+    setError('')
+    api.projectSubmissions(projectId, {
+      formId: form.form_id,
+      status: status || undefined,
+      limit: perPage,
+      offset: page * perPage,
+    })
+      .then((r) => { setRows(r.submissions); setTotal(r.total ?? r.submissions?.length ?? 0) })
+      .catch((e) => { setRows([]); setError(e.message) })
+  }
+
+  useEffect(() => { setRows(null); load() }, [projectId, form.form_id, status, perPage, page])
+
+  // Reset page when filters change
+  useEffect(() => { setPage(0) }, [status, perPage])
+
+  const totalPages = Math.max(1, Math.ceil(total / perPage))
+
+  const move = async (row, work) => {
+    const key = `${row.form_id}/${row.survey_id}`
+    setBusy(key)
+    setError('')
+    try {
+      await work()
+      load()
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setBusy('')
+    }
+  }
+
+  const approvable = (row) =>
+    mayReview && ['submitted', 'under_review'].includes(row.status)
+
+  const toggleRow = (key) => setSelected((prev) => {
+    const next = new Set(prev)
+    next.has(key) ? next.delete(key) : next.add(key)
+    return next
+  })
+
+  const toggleAll = () => {
+    if (!rows) return
+    const keys = rows.filter(approvable).map((r) => `${r.form_id}/${r.survey_id}`)
+    const allSelected = keys.length > 0 && keys.every((k) => selected.has(k))
+    setSelected((prev) => {
+      const next = new Set(prev)
+      keys.forEach((k) => allSelected ? next.delete(k) : next.add(k))
+      return next
+    })
+  }
+
+  const approveSelected = async () => {
+    setBusy('bulk')
+    setError('')
+    try {
+      for (const key of selected) {
+        const [fid, sid] = key.split('/')
+        await api.approve(fid, sid)
+      }
+      setSelected(new Set())
+      load()
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setBusy('')
+    }
+  }
+
+  return (
+    <main className="main">
+      <div className="page-head">
+        <div>
+          <button className="btn btn--quiet btn--sm" onClick={onBack}>← Back to forms</button>
+          <h1>{label(form, forms)}</h1>
+          <p className="lede">{total} record{total === 1 ? '' : 's'}</p>
+        </div>
+        <div className="row" style={{ alignItems: 'center', gap: 8 }}>
+          <select className="control control--sm" value={status}
+                  onChange={(e) => setStatus(e.target.value)} aria-label="Status">
+            <option value="">Every status</option>
+            {STATES.map((s) => <option key={s} value={s}>{WORDING[s]}</option>)}
+          </select>
+
+          <select className="control control--sm" value={perPage}
+                  onChange={(e) => setPerPage(Number(e.target.value))} aria-label="Per page">
+            {PER_PAGE_OPTIONS.map((n) => (
+              <option key={n} value={n}>{n} per page</option>
+            ))}
+          </select>
+
+          <button className="btn btn--quiet btn--sm" onClick={load} title="Refresh">
+            Refresh
+          </button>
+        </div>
+      </div>
+
+      {error && <div className="note note--bad">{error}</div>}
+
+      {mayReview && selected.size > 0 && (
+        <div className="review__bulk">
+          <span>{selected.size} selected</span>
+          <button className="btn btn--primary btn--sm" onClick={approveSelected}
+                  disabled={busy === 'bulk'}>
+            {busy === 'bulk' && <span className="spin" />}
+            Approve selected
+          </button>
+          <button className="btn btn--quiet btn--sm" onClick={() => setSelected(new Set())}>
+            Clear selection
+          </button>
+        </div>
+      )}
+
+      {rows === null && <div className="skeleton" style={{ height: 140 }} />}
+
+      {rows?.length === 0 && !error && (
+        <p className="muted">
+          {status ? 'No submissions match the selected filter.' : 'No submissions yet.'}
+        </p>
+      )}
+
+      {rows?.length > 0 && (
+        <>
+          <div className="tablebox">
+            <table className="data">
+              <thead>
+                <tr>
+                  {mayReview && (
+                    <th style={{width:30}}>
+                      <input type="checkbox"
+                        checked={rows.filter(approvable).length > 0
+                          && rows.filter(approvable).every((r) => selected.has(`${r.form_id}/${r.survey_id}`))}
+                        onChange={toggleAll} />
+                    </th>
+                  )}
+                  <th>Submission</th>
+                  <th>Submitted by</th>
+                  <th>When</th>
+                  <th>Status</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row) => {
+                  const key = `${row.form_id}/${row.survey_id}`
+                  const working = busy === key
+                  const canApprove = approvable(row)
+                  return (
+                    <tr key={key}>
+                      {mayReview && (
+                        <td>
+                          {canApprove && (
+                            <input type="checkbox" checked={selected.has(key)}
+                              onChange={() => toggleRow(key)} />
+                          )}
+                        </td>
+                      )}
+                      <td>
+                        <button className="linky" onClick={() => setViewing(row)}>
+                          <code className="tiny">{row.survey_id}</code>
+                        </button>
+                      </td>
+                      <td>
+                        {row.created_by || '—'}
+                        {(row.is_ivr || String(row.created_by || '').startsWith('ivr:')) && row.has_audio && (
+                          <span style={{
+                            display: 'inline-block', marginLeft: 6, fontSize: '0.72rem',
+                            fontWeight: 500, padding: '1px 6px', borderRadius: '10px',
+                            background: '#e0e7ff', color: '#3730a3', border: '1px solid #c7d2fe',
+                          }} title="Includes recorded IVR call audio">
+                            Audio
+                          </span>
+                        )}
+                      </td>
+                      <td className="tiny muted">
+                        {row.created_on ? String(row.created_on).slice(0, 10) : '—'}
+                      </td>
+                      <td>
+                        <span className={`pill pill--${row.status}`}>{WORDING[row.status]}</span>
+                        {row.rejection_reason && (
+                          <div className="tiny muted">{row.rejection_reason}</div>
+                        )}
+                      </td>
+                      <td className="cat__actions">
+                        <button className="btn btn--quiet btn--sm"
+                                onClick={() => setViewing(row)}>
+                          {(row.is_ivr || String(row.created_by || '').startsWith('ivr:')) && row.has_audio ? 'Listen' : 'View'}
+                        </button>
+                        {mayReview && row.status === 'submitted' && (
+                          <button className="btn btn--quiet btn--sm" disabled={working}
+                                  onClick={() => move(row,
+                                    () => api.startReview(row.form_id, row.survey_id))}>
+                            Start review
+                          </button>
+                        )}
+                        {canApprove && (
+                          <>
+                            <button className="btn btn--sm" disabled={working}
+                                    onClick={() => move(row,
+                                      () => api.approve(row.form_id, row.survey_id))}>
+                              Approve
+                            </button>
+                            <button className="btn btn--quiet btn--sm" disabled={working}
+                                    onClick={() => setRejecting(row)}>
+                              Reject
+                            </button>
+                          </>
+                        )}
+                        {!mayReview && row.status === 'rejected' && (
+                          <button className="btn btn--quiet btn--sm" disabled={working}
+                                  onClick={() => move(row,
+                                    () => api.resubmit(row.form_id, row.survey_id))}>
+                            Submit again
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {totalPages > 1 && (
+            <div className="review__pager">
+              <button className="btn btn--quiet btn--sm" disabled={page === 0}
+                      onClick={() => setPage(page - 1)}>Previous</button>
+              <span className="tiny">
+                Page {page + 1} of {totalPages}
+              </span>
+              <button className="btn btn--quiet btn--sm" disabled={page >= totalPages - 1}
+                      onClick={() => setPage(page + 1)}>Next</button>
+>>>>>>> de62464 (fix platform hierarchy and form config)
             </div>
           )}
         </>

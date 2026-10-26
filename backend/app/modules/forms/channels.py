@@ -82,8 +82,8 @@ PUBLISHABLE = (WEB_MOBILE, WHATSAPP, IVR)
 
 _PROFILES: Dict[str, Dict[str, bool]] = {
     WEB_MOBILE: {WEB: True, MOBILE: True, WHATSAPP: False, IVR: False},
-    WHATSAPP: {WEB: False, MOBILE: False, WHATSAPP: True, IVR: False},
-    IVR: {WEB: False, MOBILE: False, WHATSAPP: False, IVR: True},
+    WHATSAPP: {WEB: True, MOBILE: True, WHATSAPP: True, IVR: False},
+    IVR: {WEB: True, MOBILE: True, WHATSAPP: True, IVR: True},
 }
 
 

@@ -715,3 +715,43 @@ def ensure_channel_settings_channel_constraint() -> bool:
 
     logger.info("channel_settings channel check constraint relaxed")
     return True
+
+
+def ensure_version_metadata() -> bool:
+    """Add version_label and version_description to form_version."""
+    with transaction() as cur:
+        if not table_exists(cur, "form_version"):
+            return False
+        cur.execute("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_name = 'form_version' AND column_name = 'version_label'
+        """)
+        if cur.fetchone():
+            return False
+        cur.execute("""
+            ALTER TABLE form_version
+            ADD COLUMN version_label VARCHAR(100),
+            ADD COLUMN version_description TEXT,
+            ADD COLUMN saved_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        """)
+    logger.info("Added version_label, version_description, saved_at to form_version")
+    return True
+
+
+def ensure_version_tag() -> bool:
+    """Add version_tag (user-defined version number like '2.1') to form_version."""
+    with transaction() as cur:
+        if not table_exists(cur, "form_version"):
+            return False
+        cur.execute("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_name = 'form_version' AND column_name = 'version_tag'
+        """)
+        if cur.fetchone():
+            return False
+        cur.execute("""
+            ALTER TABLE form_version
+            ADD COLUMN version_tag VARCHAR(20)
+        """)
+    logger.info("Added version_tag to form_version")
+    return True

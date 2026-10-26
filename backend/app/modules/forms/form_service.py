@@ -270,7 +270,8 @@ def _known_form_ids(cur) -> List[str]:
 def _raw_versions(cur, form_id: str) -> List[Dict[str, Any]]:
     cur.execute(
         """
-        SELECT version_id, form_id, version_no, form_json
+        SELECT version_id, form_id, version_no, form_json,
+               version_tag, version_label, version_description, saved_at
         FROM form_version WHERE form_id = %s ORDER BY version_no DESC
         """,
         (form_id,),
@@ -442,6 +443,10 @@ def get_versions(form_id: str, include_json: bool = False) -> List[Dict[str, Any
             "field_count": len(fj.get("fields") or []),
             "saved_by": fj.get("updated_by") or fj.get("created_by"),
             "renamed_from": fj.get("renamed_from") or None,
+            "version_tag": r.get("version_tag"),
+            "version_label": r.get("version_label"),
+            "version_description": r.get("version_description"),
+            "saved_at": r.get("saved_at").isoformat() if r.get("saved_at") else None,
         }
         if include_json:
             entry["form_json"] = fj
@@ -694,6 +699,9 @@ def update_form(
     renames: Optional[Dict[str, str]] = None,
     whatsapp: Optional[Dict[str, Any]] = None,
     ivr: Optional[Dict[str, Any]] = None,
+    version_tag: Optional[str] = None,
+    version_label: Optional[str] = None,
+    version_description: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Save a new revision.
 
@@ -791,16 +799,20 @@ def update_form(
 
         if replacing:
             cur.execute(
-                "UPDATE form_version SET form_json = %s "
+                "UPDATE form_version SET form_json = %s, version_tag = %s,"
+                " version_label = %s, version_description = %s,"
+                " saved_at = CURRENT_TIMESTAMP"
                 " WHERE form_id = %s AND version_no = %s",
-                (Json(definition), form_id, version_no),
+                (Json(definition), version_tag, version_label,
+                 version_description, form_id, version_no),
             )
-        # An UPDATE that matched nothing still has to leave a version behind —
-        # a form whose row is missing for any reason gets one rather than none.
         if not replacing or cur.rowcount == 0:
             cur.execute(
-                "INSERT INTO form_version (form_id, version_no, form_json) VALUES (%s, %s, %s)",
-                (form_id, version_no, Json(definition)),
+                "INSERT INTO form_version (form_id, version_no, form_json,"
+                " version_tag, version_label, version_description, saved_at)"
+                " VALUES (%s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)",
+                (form_id, version_no, Json(definition),
+                 version_tag, version_label, version_description),
             )
 
         # The keyword that reaches it, beside the questions it asks. The project

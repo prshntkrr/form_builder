@@ -13,6 +13,12 @@
 }
 .trial__ok { margin-top: 14px; }
 .trial__ok .json { margin-top: 10px; }
+.trial__tabs { display: flex; gap: 6px; margin-top: 10px; }
+.trial__table { width: 100%; margin-top: 10px; border-collapse: collapse; font-size: 13px; }
+.trial__table th,
+.trial__table td { padding: 6px 10px; border: 1px solid var(--line); text-align: left; }
+.trial__table th { background: var(--bg-raised); font-weight: 600; }
+.trial__key { font-family: var(--mono); font-size: 12px; white-space: nowrap; }
 
 /* Translating a form: rows are what the form says, columns are the languages. */
 .i18n__add { padding: 4px 8px; font-size: 13px; }
@@ -418,6 +424,42 @@
 .media__preview {
   max-width: 220px; max-height: 160px; border-radius: var(--r-sm);
   border: 1px solid var(--line);
+}
+.media__files { display: flex; flex-direction: column; gap: 4px; }
+.media__file {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 8px; background: var(--accent-wash, #f8f7f4);
+  border-radius: var(--r-sm); border: 1px solid var(--line);
+}
+.media__thumb { width: 36px; height: 36px; object-fit: cover; border-radius: var(--r-sm); }
+.media__rm {
+  flex: none; width: 20px; height: 20px; border: none; background: none;
+  font-size: 16px; cursor: pointer; color: var(--ink-3); line-height: 1;
+}
+.media__rm:hover { color: var(--danger, #c33); }
+
+.currency-input { display: flex; align-items: center; gap: 0; }
+.currency-input__sym {
+  flex: none; padding: 6px 10px; background: var(--accent-wash, #f5f4f0);
+  border: 1px solid var(--line); border-right: none; border-radius: var(--r-sm) 0 0 var(--r-sm);
+  font-size: 14px; font-weight: 600; color: var(--ink-2); line-height: 1.4;
+}
+.currency-input .control { border-radius: 0 var(--r-sm) var(--r-sm) 0; }
+
+.field__ro { font-size: 12px; color: var(--ink-3); font-weight: 400; }
+.control--readonly { opacity: .7; cursor: not-allowed; background: var(--accent-wash, #f5f4f0); }
+
+/* Label field — display-only text block */
+.field--label { padding: 8px 0; }
+.field__label-title { font-size: 15px; font-weight: 600; color: var(--ink); margin-bottom: 4px; }
+.field__label-text { font-size: 14px; color: var(--ink-2); line-height: 1.6; white-space: pre-wrap; }
+
+/* Banner field — display-only image */
+.field--banner { padding: 4px 0; }
+.field__banner-img { width: 100%; max-height: 300px; object-fit: cover; border-radius: var(--r); }
+.field__banner-empty {
+  padding: 32px; text-align: center; border: 2px dashed var(--line-2);
+  border-radius: var(--r); color: var(--ink-3); font-size: 13px;
 }
 
 .loc__row { display: flex; align-items: center; gap: 10px; font-size: 13.5px; }
@@ -846,3 +888,57 @@
   background: var(--wash, #f4f5f3); border-radius: 8px;
 }
 .poly__nomap p { margin: 0; max-width: 46ch; }
+
+/* ── script editor ─────────────────────────────────────────────────────────── */
+.script-editor { display: flex; flex-direction: column; gap: 8px; }
+
+.script-editor__header {
+  display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+}
+.script-editor__title { font-weight: 600; font-size: 15px; }
+
+.script-editor__body {
+  display: flex;
+  border: 1px solid var(--line); border-radius: var(--r);
+  background: var(--bg-code, #1e1e1e);
+  min-height: 400px; max-height: 70vh;
+  overflow: hidden;
+}
+
+.script-editor__gutter {
+  flex-shrink: 0; width: 48px; overflow: hidden;
+  padding: 12px 0; text-align: right;
+  background: var(--bg-gutter, #252526);
+  color: var(--fg-gutter, #858585);
+  font: 13px/20px 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  user-select: none;
+}
+.script-editor__line-no { padding-right: 12px; height: 20px; }
+
+.script-editor__code {
+  flex: 1; resize: none; border: none; outline: none;
+  padding: 12px; margin: 0;
+  background: transparent;
+  color: var(--fg-code, #d4d4d4);
+  font: 13px/20px 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  tab-size: 2; white-space: pre; overflow: auto;
+}
+.script-editor__code::placeholder {
+  color: var(--fg-gutter, #858585);
+}
+
+.script-editor__help { margin-top: 4px; }
+.script-editor__ref {
+  padding: 12px 0; font-size: 13px;
+}
+.script-editor__ref h4 { margin: 12px 0 4px; font-size: 13px; }
+.script-editor__ref dl { margin: 0; }
+.script-editor__ref dt { font-weight: 600; margin-top: 6px; }
+.script-editor__ref dd { margin: 2px 0 0 16px; color: var(--muted); }
+.script-editor__ref pre {
+  background: var(--bg-code, #1e1e1e);
+  color: var(--fg-code, #d4d4d4);
+  padding: 12px; border-radius: var(--r);
+  font-size: 12px; line-height: 18px;
+  overflow-x: auto;
+}

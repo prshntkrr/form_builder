@@ -50,7 +50,7 @@ export function clampWidth(raw) {
  * The plain (undesigned) renderer follows the same list, so a form looks the
  * same either side of being laid out.
  */
-export const FULL_WIDTH = new Set(['textarea', 'multiselect', 'radio', 'location'])
+export const FULL_WIDTH = new Set(['textarea', 'multiselect', 'radio', 'location', 'label', 'banner'])
 
 /** How wide one question starts out, before anybody arranges the page. */
 export function defaultWidth(field) {

@@ -3,10 +3,40 @@ import { isUsableRing } from './PolygonMap.jsx'
 import PolygonSheet from './PolygonSheet.jsx'
 import React, { useState } from 'react'
 
+const CURRENCY_SYMBOLS = {
+  USD: '$', EUR: '€', GBP: '£', INR: '₹', JPY: '¥', CNY: '¥',
+  MXN: '$', BRL: 'R$', KES: 'KSh', NGN: '₦', ZAR: 'R', EGP: 'E£',
+  AUD: 'A$', CAD: 'C$', CHF: 'CHF', SEK: 'kr', NOK: 'kr', DKK: 'kr',
+  PLN: 'zł', TRY: '₺', RUB: '₽', KRW: '₩', THB: '฿', PHP: '₱',
+  IDR: 'Rp', MYR: 'RM', VND: '₫', BDT: '৳', PKR: '₨', LKR: 'Rs',
+  NPR: 'Rs', MMK: 'K', ETB: 'Br', TZS: 'TSh', UGX: 'USh', GHS: 'GH₵',
+  XOF: 'CFA', XAF: 'FCFA', COP: '$', PEN: 'S/', ARS: '$', CLP: '$',
+}
+
+export const CURRENCIES = [
+  ['USD', 'US Dollar ($)'], ['EUR', 'Euro (€)'], ['GBP', 'British Pound (£)'],
+  ['INR', 'Indian Rupee (₹)'], ['JPY', 'Japanese Yen (¥)'], ['CNY', 'Chinese Yuan (¥)'],
+  ['MXN', 'Mexican Peso ($)'], ['BRL', 'Brazilian Real (R$)'],
+  ['KES', 'Kenyan Shilling (KSh)'], ['NGN', 'Nigerian Naira (₦)'],
+  ['ZAR', 'South African Rand (R)'], ['EGP', 'Egyptian Pound (E£)'],
+  ['AUD', 'Australian Dollar (A$)'], ['CAD', 'Canadian Dollar (C$)'],
+  ['CHF', 'Swiss Franc (CHF)'], ['SEK', 'Swedish Krona (kr)'],
+  ['TRY', 'Turkish Lira (₺)'], ['RUB', 'Russian Ruble (₽)'],
+  ['KRW', 'South Korean Won (₩)'], ['THB', 'Thai Baht (฿)'],
+  ['PHP', 'Philippine Peso (₱)'], ['IDR', 'Indonesian Rupiah (Rp)'],
+  ['BDT', 'Bangladeshi Taka (৳)'], ['PKR', 'Pakistani Rupee (₨)'],
+  ['NPR', 'Nepalese Rupee (Rs)'], ['ETB', 'Ethiopian Birr (Br)'],
+  ['TZS', 'Tanzanian Shilling (TSh)'], ['UGX', 'Ugandan Shilling (USh)'],
+  ['GHS', 'Ghanaian Cedi (GH₵)'], ['XOF', 'CFA Franc (CFA)'],
+  ['COP', 'Colombian Peso ($)'], ['PEN', 'Peruvian Sol (S/)'],
+  ['ARS', 'Argentine Peso ($)'], ['CLP', 'Chilean Peso ($)'],
+]
+
 /** One control for one field. Types match the backend registry. */
 export default function FieldInput({ field, value, onChange, error, media }) {
   const v = field.validation || {}
-  const set = (val) => onChange(field.name, val)
+  const ro = Boolean(field.read_only)
+  const set = (val) => { if (!ro) onChange(field.name, val) }
 
   /* Whether the full-screen map is open. Declared here, not in the polygon
      case: the switch below runs during render, and a hook cannot live inside
@@ -18,7 +48,9 @@ export default function FieldInput({ field, value, onChange, error, media }) {
     name: field.name,
     placeholder: field.placeholder || '',
     'aria-invalid': error ? 'true' : undefined,
-    className: `control${error ? ' control--bad' : ''}`,
+    className: `control${error ? ' control--bad' : ''}${ro ? ' control--readonly' : ''}`,
+    readOnly: ro || undefined,
+    disabled: ro || undefined,
   }
 
   const toggleIn = (option) => {
@@ -41,12 +73,16 @@ export default function FieldInput({ field, value, onChange, error, media }) {
       break
 
     case 'number':
-    case 'decimal':
+    case 'decimal': {
+      const dp = field.decimal_places
+      const decStep = field.type === 'decimal'
+        ? (dp != null ? (1 / Math.pow(10, dp)) : (v.step ?? 'any'))
+        : (v.step ?? 1)
       control = (
         <input
           {...base}
           type="number"
-          step={field.type === 'decimal' ? (v.step ?? 'any') : (v.step ?? 1)}
+          step={decStep}
           min={v.min ?? undefined}
           max={v.max ?? undefined}
           value={value ?? ''}
@@ -54,6 +90,28 @@ export default function FieldInput({ field, value, onChange, error, media }) {
         />
       )
       break
+    }
+
+    case 'currency': {
+      const sym = CURRENCY_SYMBOLS[field.currency] || field.currency || ''
+      const cdp = field.decimal_places
+      const cStep = cdp != null ? (1 / Math.pow(10, cdp)) : (v.step ?? 0.01)
+      control = (
+        <div className="currency-input">
+          {sym && <span className="currency-input__sym">{sym}</span>}
+          <input
+            {...base}
+            type="number"
+            step={cStep}
+            min={v.min ?? undefined}
+            max={v.max ?? undefined}
+            value={value ?? ''}
+            onChange={(e) => setCapped(e.target.value)}
+          />
+        </div>
+      )
+      break
+    }
 
     case 'rating': {
       const max = Number(v.max ?? 5)
@@ -199,6 +257,7 @@ export default function FieldInput({ field, value, onChange, error, media }) {
             value={drawn}
             editable={editable}
             title={field.label || 'Map'}
+            showArea={field.show_area !== false}
             onSave={(ring) => { set(ring); setMapOpen(false) }}
             onClose={() => setMapOpen(false)}
           />
@@ -248,6 +307,25 @@ export default function FieldInput({ field, value, onChange, error, media }) {
       )
       break
 
+    case 'label':
+      return (
+        <div className="field field--label">
+          {field.label && <div className="field__label-title">{field.label}</div>}
+          {field.help_text && <div className="field__label-text">{field.help_text}</div>}
+        </div>
+      )
+
+    case 'banner':
+      return (
+        <div className="field field--banner">
+          {field.banner_url ? (
+            <img className="field__banner-img" src={field.banner_url} alt={field.label || ''} />
+          ) : (
+            <div className="field__banner-empty">{field.label || 'No image set'}</div>
+          )}
+        </div>
+      )
+
     case 'signature':
       control = (
         <input {...base} type="text" placeholder={field.placeholder || 'Type your name to sign'}
@@ -267,6 +345,7 @@ export default function FieldInput({ field, value, onChange, error, media }) {
       <label htmlFor={`f_${field.name}`}>
         {field.label}
         {field.required && <span className="star-req"> *</span>}
+        {ro && <span className="field__ro"> (read-only)</span>}
       </label>
       {control}
       {field.help_text && <span className="field__note">{field.help_text}</span>}

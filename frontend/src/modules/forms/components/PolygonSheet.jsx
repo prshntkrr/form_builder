@@ -1,6 +1,29 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 
 import PolygonMap from './PolygonMap.jsx'
+
+/** Geodesic area of a ring of [lng, lat] points, in square metres.
+ *  Uses the spherical excess formula — accurate enough for farm plots. */
+function ringAreaM2(ring) {
+  if (!ring || ring.length < 3) return 0
+  const RAD = Math.PI / 180
+  const R = 6371000
+  let total = 0
+  for (let i = 0; i < ring.length; i++) {
+    const [lng1, lat1] = ring[i]
+    const [lng2, lat2] = ring[(i + 1) % ring.length]
+    total += (lng2 - lng1) * RAD * (2 + Math.sin(lat1 * RAD) + Math.sin(lat2 * RAD))
+  }
+  return Math.abs(total * R * R / 2)
+}
+
+function formatArea(m2) {
+  const ha = m2 / 10000
+  const acres = ha * 2.47105
+  if (ha < 0.01) return `${Math.round(m2)} m²`
+  if (ha < 100) return `${ha.toFixed(2)} ha (${acres.toFixed(2)} acres)`
+  return `${ha.toFixed(1)} ha (${acres.toFixed(1)} acres)`
+}
 
 /**
  * A boundary, given the whole window.
@@ -48,10 +71,12 @@ export default function PolygonSheet({
   onSave,
   onClose,
   title = 'Select map area',
+  showArea = true,
 }) {
   const saved = Array.isArray(value) ? value : []
 
   const [draft, setDraft] = useState(saved)
+  const area = useMemo(() => ringAreaM2(draft), [draft])
 
   /* Opening starts from what is saved, so the sheet shows the existing
      boundary rather than an empty map — and a second opening does not inherit
@@ -100,8 +125,9 @@ export default function PolygonSheet({
 
           <span className="spacer" />
 
-          <span className="tiny muted">
+          <span className="tiny muted" style={{textAlign:'right'}}>
             {draft.length} point{draft.length === 1 ? '' : 's'}
+            {showArea && area > 0 && <><br/><strong>{formatArea(area)}</strong></>}
           </span>
         </div>
 

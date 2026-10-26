@@ -82,10 +82,14 @@ export default function VersionDiff({
   const numbers = versions.map((v) => v.version_no).sort((a, b) => a - b)
   const latest = numbers[numbers.length - 1]
   const live = liveVersion ?? latest
+  const vLabel = (n) => {
+    const v = versions.find((x) => x.version_no === n)
+    return v?.version_tag ? `Version ${v.version_tag}` : `Version ${n}`
+  }
   const pick = (value, onPick) => (
     <select className="frow__type" value={value ?? ''} onChange={(e) => onPick(Number(e.target.value))}>
       {numbers.map((n) => (
-        <option key={n} value={n}>Version {n}</option>
+        <option key={n} value={n}>{vLabel(n)}</option>
       ))}
     </select>
   )
@@ -124,7 +128,7 @@ export default function VersionDiff({
                 disabled={v.version_no === numbers[0]}
                 title={v.version_no === numbers[0] ? 'The first version' : 'Show what this version changed'}
               >
-                Version {v.version_no}
+                {v.version_tag ? `Version ${v.version_tag}` : `Version ${v.version_no}`}
               </button>
 
               {isLive && (
@@ -138,7 +142,11 @@ export default function VersionDiff({
                 {v.field_count} questions
                 {v.saved_by && <> <span className="sep">·</span> {v.saved_by}</>}
                 {v.renamed_from && <> <span className="sep">·</span> renamed {Object.keys(v.renamed_from).length}</>}
+                {v.version_label && <> <span className="sep">·</span> {v.version_label}</>}
               </span>
+              {v.version_description && (
+                <span className="tiny muted" style={{display:'block',marginTop:2}}>{v.version_description}</span>
+              )}
 
               <span className="spacer" />
 

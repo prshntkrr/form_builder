@@ -596,6 +596,9 @@ def update(form_id: str, req: UpdateFormRequest,
             renames=req.renames,
             whatsapp=req.whatsapp.model_dump() if req.whatsapp else None,
             ivr=req.ivr.model_dump() if req.ivr else None,
+            version_tag=getattr(req, 'version_tag', None),
+            version_label=getattr(req, 'version_label', None),
+            version_description=getattr(req, 'version_description', None),
         )
     except routing.RoutingError as exc:
         # The keyword is taken. The edit rolled back with it, so the form is

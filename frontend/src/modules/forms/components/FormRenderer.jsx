@@ -6,6 +6,7 @@ import { defaultLanguage, languageChoices, translateForm } from '../translate.js
 import { hidden } from '../conditions.js'
 import { FULL_WIDTH, resolveLayout } from '../formLayout.js'
 import { useDynamicOptions } from '../dynamicOptions.js'
+import { useFormScript } from '../useFormScript.js'
 
 /**
  * The form's questions, in the order the builder shows them.
@@ -87,6 +88,18 @@ export default function FormRenderer({
 
   const languages = languageChoices(formJson, languageNames)
 
+  // Seed default values on mount — once, so typing over a default sticks.
+  const defaultsApplied = React.useRef(false)
+  useEffect(() => {
+    if (defaultsApplied.current || !formJson.fields) return
+    defaultsApplied.current = true
+    for (const f of formJson.fields) {
+      if (f.default_value != null && (values?.[f.name] == null || values?.[f.name] === '')) {
+        onChange?.(f.name, f.default_value)
+      }
+    }
+  }, [formJson.fields])
+
   // The words swap; the definition underneath does not. Values, validation
   // errors and the dynamic option sources all key off names, which never move.
   const shown = translateForm(formJson, chosen)
@@ -99,6 +112,8 @@ export default function FormRenderer({
 
   const dynamic = useDynamicOptions(shown.fields, values, chosen)
 
+  const scriptCtx = useFormScript(formJson.custom_script, values, onChange)
+
   // A form that records where it was filled in asks once, when it opens.
   const place = useLocation(formJson)
   useEffect(() => { onLocation?.(place.position) }, [place.position])
@@ -108,9 +123,13 @@ export default function FormRenderer({
     onSubmit?.()
   }
 
-  /** A field with its choices filled in, if it did not carry them. */
-  const resolve = (field) =>
-    field.options_from ? { ...field, options: dynamic[field.name] || [] } : field
+  /** A field with its choices filled in and script overrides applied. */
+  const resolve = (field) => {
+    let f = field.options_from ? { ...field, options: dynamic[field.name] || [] } : field
+    if (scriptCtx.options[field.name]) f = { ...f, options: scriptCtx.options[field.name] }
+    if (field.name in scriptCtx.required) f = { ...f, required: scriptCtx.required[field.name] }
+    return f
+  }
 
   /**
    * Answering a field clears anything that depended on it.
@@ -154,6 +173,7 @@ export default function FormRenderer({
    */
   const showing = (field) =>
     !off.fields.has(field.name) && !off.sections.has(field.section)
+    && !scriptCtx.hidden.has(field.name)
 
   /**
    * A layout section's heading, in the language being shown.

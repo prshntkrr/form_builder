@@ -25,6 +25,7 @@ import ContributeToLibrary from '../components/ContributeToLibrary.jsx'
 import Translations from '../components/Translations.jsx'
 import LibraryPicker from '../components/LibraryPicker.jsx'
 import StandardDrift from '../components/StandardDrift.jsx'
+import ScriptEditor from '../components/ScriptEditor.jsx'
 import VersionDiff from '../components/VersionDiff.jsx'
 import Responses from './Responses.jsx'
 
@@ -191,9 +192,11 @@ export default function Builder() {
   // Draft or Active, as the server last told us. Kept apart from `saved`,
   // which only exists for a moment after a save.
   const [status, setStatus] = useState(null)
+  const [versionDialog, setVersionDialog] = useState(null) // { label, description, resolve }
   const [check, setCheck] = useState(null)
   const [trial, setTrial] = useState({})
   const [trialResult, setTrialResult] = useState(null)
+  const [trialView, setTrialView] = useState('form')
   const [picker, setPicker] = useState(null)   // 'start' | 'borrow'
   const [contributing, setContributing] = useState(false)
   // The one channel a new form is being built for. Chosen on the draft, once
@@ -201,7 +204,7 @@ export default function Builder() {
   // comes from the form. Nothing is picked for them: `null` until they choose,
   // so a form is never saved on a channel nobody chose. A copy arrives with its
   // channel.
-  const [newChannel, setNewChannel] = useState(location.state?.channel || null)
+  const [newChannel, setNewChannel] = useState(location.state?.channel || 'web_mobile')
 
   /* How this form is reached on WhatsApp: the number and the keyword.
      Not part of the form — it is the `channel_form_route` row the project's
@@ -706,6 +709,10 @@ export default function Builder() {
     }
   }
 
+  const askVersionMeta = () => new Promise((resolve) => {
+    setVersionDialog({ tag: '', label: '', description: '', resolve })
+  })
+
   const save = (saveAs = 'Active') =>
     run('save', async () => {
       if (!namedOnPurpose()) return
@@ -714,11 +721,15 @@ export default function Builder() {
 
       const payload = untag(form)
 
-      /* `draftId`, not `formId`: autosave may already have created this form,
-         and creating it again would leave two. Publishing one autosave made is
-         an update plus a status change, because the row already exists. */
+      // Ask for version info when saving a published form (not drafts, not new forms)
+      let versionMeta = null
+      if (editing && status === 'Active') {
+        versionMeta = await askVersionMeta()
+        if (versionMeta === null) return // cancelled
+      }
+
       const result = draftId
-        ? await api.updateForm(draftId, payload, undefined, renames, whatsappRouting(), ivrRouting())
+        ? await api.updateForm(draftId, payload, undefined, renames, whatsappRouting(), ivrRouting(), versionMeta)
         : await api.createForm(payload, undefined, saveAs, buildingIn, whatsappRouting(), ivrRouting())
 
       if (draftId && !editing && saveAs !== 'Draft') {
@@ -1062,10 +1073,10 @@ export default function Builder() {
   // Layout is a Web / Mobile idea: any other channel's builder answers /design.
   const pane = channel !== 'web_mobile' && view === 'design' ? 'questions' : view
   const tabs = channel === 'whatsapp'
-    ? [['questions', 'WhatsApp'], ['preview', 'Chat preview'], ['json', 'JSON']]
+    ? [['questions', 'WhatsApp'], ['preview', 'Chat preview'], ['script', 'Script'], ['json', 'JSON']]
     : channel === 'ivr'
-      ? [['questions', 'IVR'], ['preview', 'Call preview'], ['json', 'JSON']]
-      : [['questions', 'Questions'], ['design', 'Design'], ['preview', 'Preview'], ['json', 'JSON']]
+      ? [['questions', 'IVR'], ['preview', 'Call preview'], ['script', 'Script'], ['json', 'JSON']]
+      : [['questions', 'Questions'], ['design', 'Design'], ['preview', 'Preview'], ['script', 'Script'], ['json', 'JSON']]
 
   const workspace = Boolean(form) && (pane === 'questions' || pane === 'design')
   const chosenIndex = form ? form.fields.findIndex((f) => f.name === chosen) : -1
@@ -1292,7 +1303,7 @@ export default function Builder() {
             {/* A saved form — published or not — can be previewed while it is
                 being edited, exactly as a new one can. For a saved form the tab
                 is the page's address, so the sidebar and the tab agree. */}
-            {(!editing || ['questions', 'design', 'preview', 'json'].includes(section)) && (
+            {(!editing || ['questions', 'design', 'preview', 'script', 'json'].includes(section)) && (
               <div className="tabbar">
                 <div className="tabs">
                   {tabs.map(([id, name]) => (
@@ -1662,7 +1673,27 @@ export default function Builder() {
                       <div className="alert alert--good">
                         Every answer passed. This is what would be stored:
                       </div>
-                      <pre className="json">{JSON.stringify(trialResult.form_data, null, 2)}</pre>
+                      <div className="trial__tabs">
+                        <button className={`btn btn--sm${trialView !== 'json' ? ' btn--primary' : ''}`}
+                          onClick={() => setTrialView('form')}>Form</button>
+                        <button className={`btn btn--sm${trialView === 'json' ? ' btn--primary' : ''}`}
+                          onClick={() => setTrialView('json')}>JSON</button>
+                      </div>
+                      {trialView === 'json' ? (
+                        <pre className="json">{JSON.stringify(trialResult.form_data, null, 2)}</pre>
+                      ) : (
+                        <table className="trial__table">
+                          <thead><tr><th>Field</th><th>Value</th></tr></thead>
+                          <tbody>
+                            {Object.entries(trialResult.form_data).map(([k, v]) => (
+                              <tr key={k}>
+                                <td className="trial__key">{k}</td>
+                                <td>{typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v ?? '')}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
                     </div>
                   )}
                 </>
@@ -1688,6 +1719,13 @@ export default function Builder() {
               )}
 
               {view === 'responses' && editing && <Responses formId={formId} />}
+
+              {view === 'script' && (
+                <ScriptEditor
+                  value={form.custom_script || ''}
+                  onChange={(code) => setForm({ ...form, custom_script: code })}
+                />
+              )}
 
               {view === 'json' && <pre className="json">{JSON.stringify(untag(form), null, 2)}</pre>}
             </div>
@@ -1887,6 +1925,47 @@ export default function Builder() {
                       onClick={() => setShowTranslations(false)}>
                 Done
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {versionDialog && (
+        <div className="sheet" onMouseDown={() => { versionDialog.resolve(null); setVersionDialog(null) }}>
+          <div className="sheet__panel" role="dialog" aria-modal="true"
+               onMouseDown={e => e.stopPropagation()}>
+            <div className="sheet__head">
+              <h2>Version notes</h2>
+              <p className="muted">Describe what changed in this version.</p>
+            </div>
+            <div className="sheet__body" style={{display:'flex',flexDirection:'column',gap:12}}>
+              <label>
+                <span className="label-text">Version number</span>
+                <input className="control" maxLength={20} placeholder="e.g. 2.1"
+                  value={versionDialog.tag}
+                  onChange={e => setVersionDialog(d => ({...d, tag: e.target.value}))} />
+              </label>
+              <label>
+                <span className="label-text">Label</span>
+                <input className="control" maxLength={100} placeholder="e.g. Added GPS question"
+                  value={versionDialog.label}
+                  onChange={e => setVersionDialog(d => ({...d, label: e.target.value}))} />
+              </label>
+              <label>
+                <span className="label-text">Description</span>
+                <textarea className="control" rows={3} placeholder="Optional details…"
+                  value={versionDialog.description}
+                  onChange={e => setVersionDialog(d => ({...d, description: e.target.value}))} />
+              </label>
+            </div>
+            <div className="sheet__foot">
+              <button className="btn" onClick={() => { versionDialog.resolve(null); setVersionDialog(null) }}>Cancel</button>
+              <span className="spacer" />
+              <button className="btn" onClick={() => { versionDialog.resolve({}); setVersionDialog(null) }}>Skip</button>
+              <button className="btn btn--primary" onClick={() => {
+                versionDialog.resolve({ tag: versionDialog.tag, label: versionDialog.label, description: versionDialog.description })
+                setVersionDialog(null)
+              }}>Save</button>
             </div>
           </div>
         </div>

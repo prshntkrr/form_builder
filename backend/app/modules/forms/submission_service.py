@@ -202,6 +202,10 @@ def _check_field(
     name = field_name(field)
     label = field.get("label") or name
     spec = get_type(field.get("type") or "text")
+
+    if spec.display_only:
+        return _NOT_STORED, None
+
     raw = normalize_submission_value(field.get("type") or "text", raw)
 
     if not_applicable:

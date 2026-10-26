@@ -278,7 +278,7 @@ export const api = {
   // `renames` is old field key -> new one. The server moves the stored answers
   // with them, so responses collected before the rename keep matching the
   // definition — which is why a rename cannot be sent twice.
-  updateForm: (formId, formJson, updatedBy, renames, whatsapp, ivr) =>
+  updateForm: (formId, formJson, updatedBy, renames, whatsapp, ivr, versionMeta) =>
     request(`/forms/${formId}`, {
       method: 'PUT',
       body: JSON.stringify({
@@ -287,6 +287,9 @@ export const api = {
         renames: renames && Object.keys(renames).length ? renames : null,
         whatsapp: whatsapp || null,
         ivr: ivr || null,
+        version_tag: versionMeta?.tag || null,
+        version_label: versionMeta?.label || null,
+        version_description: versionMeta?.description || null,
       }),
     }),
 

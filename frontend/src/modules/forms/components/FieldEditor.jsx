@@ -7,9 +7,22 @@ import { api } from '../api.js'
 import CatalogueValues from './CatalogueValues.jsx'
 import { useAuth } from '../../../core/auth.jsx'
 import { MAX_FIELD_NAME, fieldConfig, fieldHidden, identifier } from '../fieldTypes.js'
+import { CURRENCIES as CURRENCIES_LIST } from './FieldInput.jsx'
 
 /* The backend's `slugify_identifier`, cap included — see fieldTypes.js. */
 const slug = identifier
+
+const RESERVED_DB_WORDS = new Set([
+  'survey_id', 'form_id', 'form_data', 'created_on', 'form_version', 'created_by',
+  'parent_survey_id',
+  'select', 'insert', 'update', 'delete', 'drop', 'alter', 'create', 'table',
+  'index', 'column', 'constraint', 'references', 'values', 'default', 'check',
+  'order', 'group', 'where', 'from', 'join', 'on', 'and', 'or', 'not', 'null',
+  'true', 'false', 'primary', 'key', 'foreign', 'unique', 'in', 'is', 'as',
+  'by', 'asc', 'desc', 'limit', 'offset', 'having', 'union', 'all', 'exists',
+  'between', 'like', 'case', 'when', 'then', 'else', 'end', 'cast', 'into',
+  'set', 'user', 'grant', 'revoke', 'trigger', 'view', 'function', 'schema',
+])
 
 /**
  * Where this question's choices come from.
@@ -397,6 +410,27 @@ export default function FieldEditor({
             </>
           )}
 
+          {(field.type === 'decimal' || field.type === 'currency') && (
+            <label className="col">
+              <span className="minilabel">Max decimal places</span>
+              <input className="control" type="number" min="0" max="10" placeholder="any"
+                     value={field.decimal_places ?? ''} onChange={(e) => patch({ decimal_places: e.target.value ? Number(e.target.value) : null })} />
+            </label>
+          )}
+
+          {field.type === 'currency' && (
+            <label className="col">
+              <span className="minilabel">Currency</span>
+              <select className="control" value={field.currency || ''}
+                      onChange={(e) => patch({ currency: e.target.value || null })}>
+                <option value="">Choose currency</option>
+                {CURRENCIES_LIST.map(([code, name]) => (
+                  <option key={code} value={code}>{name}</option>
+                ))}
+              </select>
+            </label>
+          )}
+
           {hasLength && (
             <>
               <label className="col">
@@ -421,13 +455,57 @@ export default function FieldEditor({
           )}
 
           <label className="col">
+            <span className="minilabel">Default value</span>
+            <input className="control" value={field.default_value ?? ''}
+                   placeholder="Pre-filled when form opens"
+                   onChange={(e) => patch({ default_value: e.target.value || null })} />
+          </label>
+
+          <label className="col">
             <span className="minilabel">Answer</span>
             <label className="insp__check">
               <input type="checkbox" checked={!!field.required}
                      onChange={(e) => patch({ required: e.target.checked })} />
               Required
             </label>
+            <label className="insp__check">
+              <input type="checkbox" checked={!!field.read_only}
+                     onChange={(e) => patch({ read_only: e.target.checked })} />
+              Read-only
+            </label>
+            {field.read_only && (
+              <span className="tiny muted">
+                Shown with its default value and cannot be changed by the respondent.
+              </span>
+            )}
           </label>
+
+          {(field.type === 'file' || field.type === 'image' || field.type === 'audio') && (
+            <>
+              <label className="col">
+                <span className="minilabel">Max files</span>
+                <input className="control" type="number" min="1" max="20" placeholder="1"
+                       value={field.max_files ?? ''} onChange={(e) => patch({ max_files: e.target.value ? Number(e.target.value) : null })} />
+              </label>
+              <label className="col">
+                <span className="minilabel">Max file size (MB)</span>
+                <input className="control" type="number" min="1" placeholder="No limit"
+                       value={field.max_file_size_mb ?? ''} onChange={(e) => patch({ max_file_size_mb: e.target.value ? Number(e.target.value) : null })} />
+              </label>
+              <label className="col">
+                <span className="minilabel">Accepted file types</span>
+                <input className="control"
+                       placeholder={field.type === 'image'
+                         ? '.jpg, .jpeg, .png, .webp, .heic, .gif, .bmp, .svg'
+                         : field.type === 'audio'
+                           ? '.mp3, .wav, .ogg, .webm, .m4a, .aac, .flac'
+                           : '.pdf, .doc, .docx, .xls, .xlsx, .csv, .txt, .ppt, .pptx, .zip'}
+                       value={field.accept ?? ''}
+                       onChange={(e) => patch({ accept: e.target.value || null })} />
+                <span className="tiny muted">Comma-separated extensions. Leave empty to use all formats shown above.</span>
+              </label>
+            </>
+          )}
 
           {/* Out of the form, not out of the definition: the question keeps its
               place, its column and every answer already given. Nobody is asked
@@ -451,6 +529,43 @@ export default function FieldEditor({
           </label>
         </div>
 
+        {field.type === 'label' && (
+          <div className="insp__note">
+            <p className="tiny muted">
+              A label is display-only — it shows a title and paragraph text between
+              questions. Use the <b>Label</b> field above for the heading and
+              <b>Hint</b> for the body text.
+            </p>
+          </div>
+        )}
+
+        {field.type === 'banner' && (
+          <div className="frow__grid" style={{ marginTop: 8 }}>
+            <label className="col">
+              <span className="minilabel">Image URL</span>
+              <input className="control" value={field.banner_url || ''}
+                     placeholder="https://example.com/image.jpg"
+                     onChange={(e) => patch({ banner_url: e.target.value || null })} />
+            </label>
+            <label className="col">
+              <span className="minilabel">Or upload an image</span>
+              <input type="file" accept="image/*" onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (!file) return
+                const reader = new FileReader()
+                reader.onload = () => patch({ banner_url: reader.result })
+                reader.readAsDataURL(file)
+                e.target.value = ''
+              }} />
+            </label>
+            {field.banner_url && (
+              <div className="col">
+                <img src={field.banner_url} alt="" style={{ maxWidth: '100%', maxHeight: 120, borderRadius: 4 }} />
+              </div>
+            )}
+          </div>
+        )}
+
         {/* A boundary drawn here is part of the question, and it is kept in
             the field's own `coordinates`. The backend preserves that key for
             polygon fields specifically, so it survives saving and comes back
@@ -472,6 +587,15 @@ export default function FieldEditor({
                 onChange={(e) => patch({ editable: e.target.checked })}
               />
               Let the person filling the form draw their own boundary
+            </label>
+
+            <label className="insp__check">
+              <input
+                type="checkbox"
+                checked={field.show_area !== false}
+                onChange={(e) => patch({ show_area: e.target.checked })}
+              />
+              Show calculated area on the map
             </label>
 
             <p className="tiny muted">
@@ -520,7 +644,19 @@ export default function FieldEditor({
         </div>
         )}
 
-        {tab === 'variable' && (
+        {tab === 'variable' && (() => {
+          const name = field.name || ''
+          const nameErrors = []
+          if (name && !/^[a-z]/.test(name)) nameErrors.push('Must start with a lowercase letter.')
+          if (name && /[^a-z0-9_]/.test(name)) nameErrors.push('Only lowercase a-z, 0-9 and underscores.')
+          if (name && /__/.test(name)) nameErrors.push('No consecutive underscores.')
+          if (name && /_$/.test(name)) nameErrors.push('Must not end with an underscore.')
+          if (RESERVED_DB_WORDS.has(name)) nameErrors.push(`"${name}" is a reserved database keyword.`)
+          const dup = allFields.some((f) => f.name === name && f !== field)
+          if (dup) nameErrors.push('Another question already uses this name.')
+          const nameOk = name.length > 0 && nameErrors.length === 0
+
+          return (
         <div className="frow__more">
           <p className="tiny muted">
             How this answer is named and stored. What somebody reads on the form
@@ -529,20 +665,34 @@ export default function FieldEditor({
 
           <div className="frow__grid">
             <label className="col">
-              <span className="minilabel">Variable name</span>
+              <span className="minilabel">Variable name (database column)</span>
               <input
-                className="control"
-                value={field.name}
+                className={`control${nameErrors.length ? ' control--bad' : ''}`}
+                value={name}
                 maxLength={MAX_FIELD_NAME}
-                onChange={(e) => patch({ name: slug(e.target.value) })}
+                onChange={(e) => {
+                  const raw = e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '').replace(/_{2,}/g, '_')
+                  patch({ name: raw })
+                }}
               />
-              {/* Said while it is being typed, rather than after saving: the
-                  server refuses a longer key, and this is the one property a
-                  person can hit the limit on. */}
-              <span className={`tiny${(field.name || '').length > MAX_FIELD_NAME * 0.8 ? '' : ' muted'}`}>
-                {(field.name || '').length} / {MAX_FIELD_NAME} characters
+              <span className={`tiny${name.length > MAX_FIELD_NAME * 0.8 ? '' : ' muted'}`}>
+                {name.length} / {MAX_FIELD_NAME} characters
               </span>
+              {nameErrors.map((err, i) => (
+                <span key={i} className="tiny" style={{ color: 'var(--danger, #c33)' }}>{err}</span>
+              ))}
+              {nameOk && (
+                <span className="tiny" style={{ color: 'var(--success, #396)' }}>Valid variable name</span>
+              )}
             </label>
+          </div>
+
+          <div className="variable-rules">
+            <p className="tiny muted" style={{ margin: '8px 0 4px' }}>
+              <strong>Naming rules:</strong> lowercase letters, numbers, underscores only.
+              Must start with a letter. No spaces, hyphens, or accented characters.
+              The label can be anything ("Área sembrada este año") — this is just the database key.
+            </p>
           </div>
 
           <p className="tiny muted">
@@ -610,7 +760,8 @@ export default function FieldEditor({
             </>
           )}
         </div>
-        )}
+          )
+        })()}
 
         {tab === 'standards' && (
         <div className="frow__more">
