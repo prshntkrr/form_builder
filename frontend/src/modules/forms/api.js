@@ -498,6 +498,9 @@ export const api = {
   parentOptions: (formId, search = '') =>
     request(`/forms/${formId}/parent-options${search ? `?q=${encodeURIComponent(search)}` : ''}`),
 
+  nextChild: (formId, surveyId) =>
+    request(`/forms/${formId}/records/${encodeURIComponent(surveyId)}/next-child`),
+
   childSubmissions: (formId, surveyId) =>
     request(`/forms/${formId}/records/${encodeURIComponent(surveyId)}/children`),
 

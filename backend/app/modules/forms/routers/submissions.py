@@ -425,7 +425,19 @@ def _store(form, user, *, data, language=None, location=None,
 
     # How it arrived was recorded by the submission service, in the same
     # transaction as the answers. Metadata: it changed nothing above.
-    return {**stored, "channel": channel}
+    result = {**stored, "channel": channel}
+
+    # For the cascading fill flow: if this form has children, tell the caller
+    # which child to show next.
+    try:
+        from app.modules.forms import relationships as rel
+        nxt = rel.next_child_for(user, form["form_id"], stored["survey_id"])
+        if nxt:
+            result["next_child"] = nxt
+    except Exception:
+        pass
+
+    return result
 
 
 def _answered(stored: Dict[str, Any], response: Response) -> Dict[str, Any]:
@@ -828,6 +840,17 @@ def parent_options(
         return rel.parents_for(user, form_id, search=q, limit=limit)
     except rel.RelationshipError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.get("/{form_id}/records/{survey_id}/next-child")
+def next_child(form_id: str, survey_id: str,
+               user: Dict[str, Any] = Depends(needs(RECORDS_CREATE))):
+    """The next child form that needs filling for this submission."""
+    from app.modules.forms import relationships as rel
+
+    _load(form_id, user)
+    return {"survey_id": survey_id,
+            "next_child": rel.next_child_for(user, form_id, survey_id)}
 
 
 @router.get("/{form_id}/records/{survey_id}/children")

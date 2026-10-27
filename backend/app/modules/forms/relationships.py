@@ -495,6 +495,63 @@ def children_of(user: Dict[str, Any], form_id: str,
     return out
 
 
+def next_child_for(user: Dict[str, Any], form_id: str,
+                    survey_id: str) -> Optional[Dict[str, Any]]:
+    """The first child form that has no submission yet for this parent survey.
+
+    Used by the cascading fill flow: after submitting a parent, the UI asks
+    which child form to show next. Returns None when every child already has
+    at least one submission (or there are no children).
+    """
+    from app.modules.forms import form_service
+
+    children = child_forms(form_id)
+    if not children:
+        return None
+
+    for child in children:
+        try:
+            definition = form_service.get_form(child["form_id"])
+        except Exception:
+            continue
+
+        if child.get("form_status") != "Active":
+            continue
+
+        table = (definition.get("form_json") or {}).get("table_name")
+        if not table:
+            # No table yet — form has never been submitted, so it's next.
+            return {
+                "form_id": child["form_id"],
+                "form_title": child["form_title"],
+                "has_submissions": False,
+            }
+
+        with transaction() as cur:
+            if not table_exists(cur, table) or "parent_survey_id" not in _columns(cur, table):
+                return {
+                    "form_id": child["form_id"],
+                    "form_title": child["form_title"],
+                    "has_submissions": False,
+                }
+            cur.execute(
+                sql.SQL("SELECT COUNT(*) AS n FROM {}.{} "
+                        "WHERE form_id = %s AND parent_survey_id = %s")
+                .format(sql.Identifier(settings.db_schema), sql.Identifier(table)),
+                (child["form_id"], survey_id),
+            )
+            count = int(cur.fetchone()["n"])
+
+        if count == 0:
+            return {
+                "form_id": child["form_id"],
+                "form_title": child["form_title"],
+                "has_submissions": False,
+            }
+
+    return None
+
+
 def parent_of(form_id: str, survey_id: str) -> Optional[Dict[str, Any]]:
     """Which submission this one hangs off, if any.
 

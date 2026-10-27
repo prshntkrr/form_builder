@@ -7,6 +7,7 @@ import CimmytStandard from './pages/CimmytStandard.jsx'
 import Standards from './pages/Standards.jsx'
 import FormFill from './pages/FormFill.jsx'
 import FormRecords from './pages/FormRecords.jsx'
+import RecordDetailPage from './pages/RecordDetail.jsx'
 import Library from './pages/Library.jsx'
 import LiveForms from './pages/LiveForms.jsx'
 import PublicForm from './pages/PublicForm.jsx'
@@ -61,6 +62,7 @@ export default {
     // Anyone signed in: filling forms in.
     { path: '/fill', element: <LiveForms /> },
     { path: '/f/:formId', element: <FormRecords /> },
+    { path: '/f/:formId/record/:surveyId', element: <RecordDetailPage /> },
     { path: '/f/:formId/new', element: <FormFill /> },
 
     // The builder.

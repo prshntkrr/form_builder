@@ -110,14 +110,22 @@ function Queue() {
       .catch(() => setForms([]))
   }, [projectId])
 
-  // Load submission counts per form for the listing
+  // Load submission counts per form — one call, uses backend form_counts
   useEffect(() => {
     if (!projectId || !forms.length) return
-    Promise.all(forms.map((f) =>
-      api.projectSubmissions(projectId, { formId: f.form_id, limit: 1 })
-        .then((r) => [f.form_id, r.total ?? r.submissions?.length ?? 0])
-        .catch(() => [f.form_id, 0])
-    )).then((pairs) => setCounts(Object.fromEntries(pairs)))
+    api.projectSubmissions(projectId, { limit: 1 })
+      .then((r) => {
+        if (r.form_counts) {
+          setCounts(r.form_counts)
+        } else {
+          // Fallback for older backend
+          const map = {}
+          for (const f of forms) map[f.form_id] = 0
+          for (const s of r.submissions || []) map[s.form_id] = (map[s.form_id] || 0) + 1
+          setCounts(map)
+        }
+      })
+      .catch(() => setCounts({}))
   }, [projectId, forms])
 
   const filteredForms = useMemo(() => {
