@@ -30,6 +30,10 @@ USERS_MANAGE = "users.manage"
 USERS_DELETE = "users.delete"
 ROLES_MANAGE = "roles.manage"
 
+# Permissions that only the Administrator system role may hold.
+# Project roles cannot be given these.
+ADMIN_ONLY = {USERS_MANAGE, USERS_DELETE, ROLES_MANAGE}
+
 
 @dataclass(frozen=True)
 class Permission:
@@ -82,19 +86,6 @@ CORE_ROLES: Dict[str, Dict[str, object]] = {
         "system": True,
         "locked": [USERS_MANAGE, ROLES_MANAGE],
         "everything": True,          # admin holds whatever exists, module or not
-    },
-    # Kept because installations run on it: it builds forms and reads the
-    # standards, and taking that away from the accounts already holding it would
-    # be a surprise rather than a migration. It is **not offered** for a new
-    # assignment — see role_migration.NOT_OFFERED — so the Users page shows the
-    # two roles above and nothing else.
-    "editor": {
-        "label": "Editor (legacy)",
-        "description": "Builds forms and reads the standards. Superseded by a "
-                       "project role; kept for accounts already using it.",
-        "permissions": [],
-        "system": True,
-        "locked": [],
     },
     "standard": {
         "label": "Standard User",
@@ -248,17 +239,22 @@ def capabilities(held: Sequence[str]) -> Dict[str, bool]:
     return flags
 
 
-def as_catalogue() -> List[Dict[str, object]]:
-    """For the screen that assigns them."""
+def as_catalogue(*, exclude_admin_only: bool = False) -> List[Dict[str, object]]:
+    """For the screen that assigns them.
+
+    With ``exclude_admin_only`` the three administration-only permissions are
+    left out — used when showing the picker for project roles, which may not
+    hold them.
+    """
     _ensure()
     cat = _catalogue()
-    return [
-        {
-            "group": group,
-            "permissions": [
-                {"key": p.key, "label": p.label, "detail": p.detail}
-                for p in cat if p.group == group
-            ],
-        }
-        for group in _group_order()
-    ]
+    skip = ADMIN_ONLY if exclude_admin_only else set()
+    groups = []
+    for group in _group_order():
+        perms = [
+            {"key": p.key, "label": p.label, "detail": p.detail}
+            for p in cat if p.group == group and p.key not in skip
+        ]
+        if perms:
+            groups.append({"group": group, "permissions": perms})
+    return groups

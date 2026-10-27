@@ -21,9 +21,9 @@ Three things happen, all idempotent and all safe to run at every startup:
 
 3. A duplicate `field` row with nobody left on it is removed.
 
-`editor` is left alone. It is a genuine system role, and an installation running
-on it keeps running on it — it is simply no longer offered for a new assignment.
-See NOT_OFFERED.
+`editor` is moved to Standard User, like the project-shaped roles. It was a
+genuine system role, but the simplified model has only two: Administrator and
+Standard User. Accounts on it keep their project memberships untouched.
 
 Nothing is guessed. An account that had a project-shaped system role and belongs
 to no project does not get put in one — there is no way to know which, and
@@ -45,27 +45,15 @@ RENAMED = ("field", "standard", "Standard User",
 
 # The row that became `standard` on an installation where both ended up
 # existing. Removed once empty; there is nothing to keep about a duplicate.
-RETIRED = ("field",)
+RETIRED = ("field", "editor")
 
-# System roles an installation may still be using, but which the Users page no
-# longer offers for a *new* assignment. `editor` is a real system role — it
-# builds forms and reads standards — and an installation that runs on it goes on
-# running on it. It is simply not one of the two the model is built around, and
-# offering it beside them would put the old confusion back on the screen.
+# Roles that should not sit on an *account*. Accounts holding them are moved
+# to Standard User. The roles themselves stay (project memberships carry them).
 #
-# Read by `GET /api/users/roles`. Nothing is deleted and nobody is moved: taking
-# away what an account can already do is not a migration, it is a surprise.
-NOT_OFFERED = ("editor",)
-
-# Project roles that the old Users page let somebody write on an *account*.
-# **These are the ones that were actually wrong**: a role that only means
-# anything inside a project said nothing on an account, while looking as though
-# it said a great deal.
-#
-# The accounts move to Standard User. The roles themselves stay exactly as they
-# are, because they are what project memberships carry — and every membership is
-# untouched, so what those people may do in their projects does not change.
-MISPLACED = ("project_manager", "surveyor", "reviewer")
+# `editor` was a real system role (builds forms, reads standards) but is now
+# superseded: only Administrator and Standard User are system roles. Accounts
+# on it move to Standard User; the role itself is retired once empty.
+MISPLACED = ("project_manager", "surveyor", "reviewer", "editor")
 
 
 def relabel_built_in_roles() -> None:
@@ -181,23 +169,27 @@ def migrate_system_roles() -> Dict[str, object]:
             cur.execute("UPDATE app_user SET role_id = %s WHERE role_id = %s",
                         (standard["role_id"], role["role_id"]))
 
-            # 3. A retired system role goes once nothing refers to it. A
-            #    misplaced *project* role stays: memberships carry it, and it
-            #    belongs on the project side of the split.
-            if name in MISPLACED:
+            # 3. A retired role is fully removed — accounts already moved
+            #    above, and any project memberships are reassigned to Standard
+            #    User too. A misplaced project role that is NOT retired stays:
+            #    memberships carry it, and it belongs on the project side.
+            if name in MISPLACED and name not in RETIRED:
                 continue
 
-            # Only once nothing at all refers to it — an account, or a project
-            # membership that still carries it as a project role.
+            # For retired roles: also move project memberships to Standard User
+            # so the role can be fully deleted.
+            if table_exists(cur, "project_member"):
+                cur.execute(
+                    "UPDATE project_member SET role_id = %s WHERE role_id = %s",
+                    (standard["role_id"], role["role_id"]),
+                )
+
             cur.execute("SELECT 1 FROM app_user WHERE role_id = %s", (role["role_id"],))
             in_use = cur.fetchone() is not None
 
-            if not in_use and table_exists(cur, "project_member"):
-                cur.execute("SELECT 1 FROM project_member WHERE role_id = %s",
-                            (role["role_id"],))
-                in_use = cur.fetchone() is not None
-
             if not in_use:
+                cur.execute("DELETE FROM role_permission WHERE role_id = %s",
+                            (role["role_id"],))
                 cur.execute("DELETE FROM app_role WHERE role_id = %s", (role["role_id"],))
                 removed.append(name)
 

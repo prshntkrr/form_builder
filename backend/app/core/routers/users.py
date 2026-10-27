@@ -7,7 +7,6 @@ from fastapi import APIRouter, Depends, HTTPException
 from app.core import auth_service
 from app.core.deps import needs
 from app.core.permissions import USERS_DELETE, USERS_MANAGE
-from app.core.role_migration import NOT_OFFERED
 from app.core.config import settings
 from app.core.security import WeakPassword
 from app.core.schemas import CreateUserRequest, EnrolVoiceRequest, UpdateUserRequest
@@ -20,16 +19,15 @@ router = APIRouter(prefix="/api/users", tags=["users"])
 def assignable_roles(user: Dict[str, Any] = Depends(needs(USERS_MANAGE))):
     """The roles that can be written on an **account**.
 
-    System roles only. A role that carries project permissions is something
-    somebody is *inside one project*, held through membership — writing it on an
-    account meant nothing, and reading it as though it did is what made
-    "Project manager" look like a kind of administrator. Those are offered by
-    `GET /api/projects/roles` instead, where they belong.
-
-    Derived rather than listed, so a role an administrator invents with only
-    system permissions is offered here without a code change.
+    Only the two fixed system roles: Administrator and Standard User.
+    Everything else is a project role, offered by `GET /api/projects/roles`.
     """
     from app.core import role_service
+
+    try:
+        from app.modules.projects.permissions import SYSTEM_ROLE_NAMES
+    except Exception:
+        SYSTEM_ROLE_NAMES = {"admin", "standard"}
 
     return [
         {
@@ -40,22 +38,8 @@ def assignable_roles(user: Dict[str, Any] = Depends(needs(USERS_MANAGE))):
             "permission_count": len(r["permissions"]),
         }
         for r in role_service.list_roles()
-        if not _is_project_role(r["permissions"]) and r["name"] not in NOT_OFFERED
+        if r["name"] in SYSTEM_ROLE_NAMES
     ]
-
-
-def _is_project_role(held) -> bool:
-    """Whether a role belongs to the project catalogue instead of this one.
-
-    The same predicate `GET /api/projects/roles` uses, so a role is offered on
-    exactly one of the two and never on both.
-    """
-    try:
-        from app.modules.projects import permissions as projects
-    except Exception:
-        # The projects module is switched off, so every role is a system role.
-        return False
-    return projects.is_project_role(held)
 
 
 @router.get("/voice-enrolment")

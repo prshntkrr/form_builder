@@ -112,33 +112,30 @@ def create(req: CreateProjectRequest, user: Dict[str, Any] = Depends(needs(PROJE
 def project_roles(user: Dict[str, Any] = Depends(current_user)):
     """The roles a project membership can carry.
 
-    Derived, not listed: a role qualifies by holding at least one permission
-    from the projects catalogue. So an installation that invents "Field
-    supervisor" and gives it project permissions gets it here without anybody
-    editing this file, and nothing hard-codes the three seeded names.
-
-    Names and labels only — the same catalogue `/api/auth/me` already reports.
+    Every role that is not one of the two fixed system roles (Administrator,
+    Standard User) is a project role — regardless of which permissions it holds.
     """
     from app.core.database import transaction
-    from app.modules.projects import permissions as catalogue
+    from app.modules.projects.permissions import SYSTEM_ROLE_NAMES
 
     with transaction() as cur:
         cur.execute(
             """
             SELECT r.role_id, r.name, r.label, r.description,
-                   ARRAY_AGG(rp.permission ORDER BY rp.permission) AS permissions
+                   COALESCE(
+                       (SELECT array_agg(rp.permission ORDER BY rp.permission)
+                        FROM role_permission rp WHERE rp.role_id = r.role_id),
+                       ARRAY[]::varchar[]
+                   ) AS permissions
             FROM   app_role r
-            JOIN   role_permission rp ON rp.role_id = r.role_id
-            GROUP  BY r.role_id, r.name, r.label, r.description
+            WHERE  r.name NOT IN %s
             ORDER  BY r.label
-            """
+            """,
+            (tuple(SYSTEM_ROLE_NAMES),),
         )
         roles = [dict(row) for row in cur.fetchall()]
 
-    # Only roles that mean nothing outside a project. The administrator holds
-    # every permission there is, project ones included, and belongs on the
-    # Users page rather than in a membership dropdown.
-    return {"roles": [r for r in roles if catalogue.is_project_role(r["permissions"])]}
+    return {"roles": roles}
 
 
 @router.get("/{project_id}")

@@ -71,43 +71,12 @@ CATALOGUE = [
                "Create, view, revoke and rotate data API keys for external access", GROUP),
 ]
 
-# The roles a project starts with. Held per project, so somebody can be a
-# manager here and a surveyor next door. `role_service.ensure_built_in` creates
-# them once; an admin may then change what each one holds.
-PROJECT_ROLES = {
-    "project_manager": {
-        "label": "Project manager",
-        "description": "Runs one project: its people, its forms and its submissions.",
-        "permissions": [
-            PROJECT_VIEW, PROJECT_MEMBERS_MANAGE, PROJECT_GROUPS_MANAGE,
-            FORMS_VIEW_ALL, FORMS_MANAGE, FORMS_ASSIGN, FORMS_FILL,
-            SUBMISSIONS_VIEW_ALL, SUBMISSIONS_REVIEW, SUBMISSIONS_DELETE,
-            PROJECT_API_KEYS,
-        ],
-    },
-    "surveyor": {
-        "label": "Surveyor",
-        "description": "Fills in the forms they have been given, and sees their own answers.",
-        # No view_all: a surveyor sees the forms assigned to them and the
-        # submissions they made, and nothing else.
-        "permissions": [PROJECT_VIEW, FORMS_FILL],
-    },
-    "reviewer": {
-        "label": "Reviewer",
-        "description": "Reads the project's submissions and approves or rejects them.",
-        "permissions": [
-            PROJECT_VIEW, FORMS_VIEW_ALL,
-            SUBMISSIONS_VIEW_ALL, SUBMISSIONS_REVIEW,
-        ],
-    },
-}
-
 register(
     permissions=CATALOGUE,
     groups=[GROUP],
     # Only the system-wide pair is granted on an account's own role. Everything
     # else is earned by being a member of a project.
-    grants={"editor": [PROJECTS_MANAGE]},
+    grants={},
     capabilities={
         "use_projects": PROJECT_VIEW,
         "manage_projects": PROJECTS_MANAGE,
@@ -123,33 +92,16 @@ SYSTEM_WIDE = {PROJECTS_VIEW_ALL, PROJECTS_MANAGE}
 
 PROJECT_SCOPED = {p.key for p in CATALOGUE} - SYSTEM_WIDE
 
+# The two system roles that live on accounts. Everything else is a project role.
+SYSTEM_ROLE_NAMES = {"admin", "standard"}
 
-def is_project_role(held) -> bool:
+
+def is_project_role(role_name: str, is_system: bool = False) -> bool:
     """Whether a role belongs on the project side.
 
-    Two conditions, and both are needed:
-
-    * it holds at least one genuinely project-scoped permission (a `project.*`
-      one), and
-    * everything it holds is either project-scoped or `shared` — a permission
-      another module marks as usable inside a project, dashboards being the
-      first.
-
-    The anchor is what keeps the two sides apart. A role holding *only* shared
-    permissions — say a dashboards-only account role — is not a project role;
-    it has no standing inside a project on its own. And the administrator, who
-    holds every permission there is, holds account-only ones too, so it stays a
-    system role. Adding "See dashboards" to a Reviewer no longer knocks it off
-    the project side, which is the whole point of `shared`.
-
-    Used by both `GET /api/projects/roles` and `GET /api/users/roles`, so a role
-    is offered on exactly one of them.
+    Simple rule: a role is a project role unless it is one of the two fixed
+    system roles (Administrator, Standard User). Every other role — seeded
+    project roles, custom roles — is a project role regardless of which
+    permissions it holds.
     """
-    from app.core import permissions as core
-
-    held = set(held or [])
-    if not held:
-        return False
-
-    allowed = PROJECT_SCOPED | set(core.SHARED)
-    return bool(held & PROJECT_SCOPED) and held <= allowed
+    return role_name not in SYSTEM_ROLE_NAMES

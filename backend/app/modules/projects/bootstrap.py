@@ -157,41 +157,22 @@ def ensure_standard_library_project_key() -> bool:
     return True
 
 
-def ensure_project_roles() -> bool:
-    """Create the roles a project starts with, once.
+def unsystem_project_roles() -> bool:
+    """Mark the old seeded project roles as non-system so they are editable.
 
-    They are ordinary rows in `app_role` — the same table and the same
-    permission catalogue as every other role, so there is one role system rather
-    than two. Only ever adds: an installation that has narrowed Surveyor keeps
-    its choice.
+    Previous versions seeded project_manager, surveyor and reviewer with
+    is_system=TRUE. They are project roles, not system roles, and admins
+    should be able to edit and delete them from the Roles page.
     """
-    from app.core import role_service
-    from app.modules.projects.permissions import PROJECT_ROLES
-
-    made = []
-
+    names = ("project_manager", "surveyor", "reviewer")
     with transaction() as cur:
-        for name, spec in PROJECT_ROLES.items():
-            cur.execute("SELECT role_id FROM app_role WHERE name = %s", (name,))
-            if cur.fetchone():
-                continue
-
-            role_id = role_service._next_role_id(cur)
-            cur.execute(
-                """
-                INSERT INTO app_role (role_id, name, label, description, is_system, created_by)
-                VALUES (%s, %s, %s, %s, TRUE, 'setup')
-                """,
-                (role_id, name, spec["label"], spec["description"]),
-            )
-            for permission in spec["permissions"]:
-                cur.execute(
-                    "INSERT INTO role_permission (role_id, permission) VALUES (%s, %s) "
-                    "ON CONFLICT DO NOTHING",
-                    (role_id, permission),
-                )
-            made.append(name)
-
-    if made:
-        logger.info("Created project role(s): %s", ", ".join(made))
+        if not table_exists(cur, "app_role"):
+            return False
+        cur.execute(
+            "UPDATE app_role SET is_system = FALSE "
+            "WHERE name IN %s AND is_system = TRUE",
+            (names,),
+        )
+        if cur.rowcount:
+            logger.info("Marked %d project role(s) as non-system", cur.rowcount)
     return True

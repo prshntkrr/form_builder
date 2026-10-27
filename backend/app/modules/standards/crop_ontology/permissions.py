@@ -15,6 +15,6 @@ CATALOGUE = [
 register(
     permissions=CATALOGUE,
     groups=["Crop ontology"],
-    grants={"editor": [CROP_ONTOLOGY_VIEW]},
+    grants={},
     capabilities={"use_crop_ontology": CROP_ONTOLOGY_VIEW},
 )

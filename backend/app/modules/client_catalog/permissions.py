@@ -21,9 +21,7 @@ register(
         ),
     ],
     groups=["CIMMYT Catalogue"],
-    grants={
-        "editor": [CATALOG_VIEW],
-    },
+    grants={},
     capabilities={
         "use_client_catalogs": CATALOG_VIEW,
         # What the Catalogue Builder shows read-only and what it lets somebody

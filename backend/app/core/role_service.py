@@ -175,6 +175,13 @@ def create_role(
     if unknown:
         raise RoleError(f"Unknown permission(s): {', '.join(unknown)}")
 
+    admin_only = permissions.ADMIN_ONLY & set(permission_keys or [])
+    if admin_only:
+        raise RoleError(
+            f"These permissions are reserved for the Administrator role: "
+            f"{', '.join(sorted(admin_only))}"
+        )
+
     with transaction() as cur:
         cur.execute("SELECT 1 FROM app_role WHERE name = %s", (resolved,))
         if cur.fetchone():
@@ -212,6 +219,14 @@ def update_role(
             unknown = permissions.unknown(permission_keys)
             if unknown:
                 raise RoleError(f"Unknown permission(s): {', '.join(unknown)}")
+
+            if not existing["is_system"]:
+                admin_only = permissions.ADMIN_ONLY & set(permission_keys)
+                if admin_only:
+                    raise RoleError(
+                        f"These permissions are reserved for the Administrator role: "
+                        f"{', '.join(sorted(admin_only))}"
+                    )
 
             wanted = set(permissions.clean(permission_keys))
             locked = set(permissions.BUILT_IN.get(existing["name"], {}).get("locked") or [])
@@ -268,32 +283,58 @@ def delete_role(role_id: str, reassign_to: Optional[str] = None) -> Dict[str, An
 
         cur.execute(
             "SELECT COUNT(*) AS n FROM app_user WHERE role_id = %s", (role_id,))
-        holders = int(cur.fetchone()["n"])
+        account_holders = int(cur.fetchone()["n"])
 
-        if holders and not reassign_to:
+        # Project memberships that carry this role.
+        member_holders = 0
+        try:
+            from app.core.database import table_exists
+            if table_exists(cur, "project_member"):
+                cur.execute(
+                    "SELECT COUNT(*) AS n FROM project_member WHERE role_id = %s",
+                    (role_id,),
+                )
+                member_holders = int(cur.fetchone()["n"])
+        except Exception:
+            pass
+
+        total = account_holders + member_holders
+        if total and not reassign_to:
+            parts = []
+            if account_holders:
+                parts.append(f"{account_holders} account(s)")
+            if member_holders:
+                parts.append(f"{member_holders} project membership(s)")
             raise RoleError(
-                f"{holders} account(s) still have this role — choose a role to move them to"
+                f"{' and '.join(parts)} still use this role — choose a role to move them to"
             )
 
-        if holders:
+        if total:
             target = _row(cur, reassign_to)
             if not target:
                 raise RoleNotFound(f"No role {reassign_to}")
-            cur.execute(
-                "UPDATE app_user SET role_id = %s, updated_on = CURRENT_TIMESTAMP "
-                "WHERE role_id = %s",
-                (reassign_to, role_id),
-            )
-            cur.execute(
-                "DELETE FROM user_session WHERE user_id IN "
-                "(SELECT user_id FROM app_user WHERE role_id = %s)",
-                (reassign_to,),
-            )
+            if account_holders:
+                cur.execute(
+                    "UPDATE app_user SET role_id = %s, updated_on = CURRENT_TIMESTAMP "
+                    "WHERE role_id = %s",
+                    (reassign_to, role_id),
+                )
+                cur.execute(
+                    "DELETE FROM user_session WHERE user_id IN "
+                    "(SELECT user_id FROM app_user WHERE role_id = %s)",
+                    (reassign_to,),
+                )
+            if member_holders:
+                cur.execute(
+                    "UPDATE project_member SET role_id = %s WHERE role_id = %s",
+                    (reassign_to, role_id),
+                )
 
+        cur.execute("DELETE FROM role_permission WHERE role_id = %s", (role_id,))
         cur.execute("DELETE FROM app_role WHERE role_id = %s", (role_id,))
 
-    logger.info("Deleted role '%s' (%d account(s) reassigned)", existing["name"], holders)
-    return {"role_id": role_id, "deleted": True, "reassigned": holders}
+    logger.info("Deleted role '%s' (%d holder(s) reassigned)", existing["name"], total)
+    return {"role_id": role_id, "deleted": True, "reassigned": total}
 
 
 def ensure_built_in(created_by: str = "setup") -> List[str]:

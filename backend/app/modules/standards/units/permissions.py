@@ -12,6 +12,6 @@ CATALOGUE = [
 register(
     permissions=CATALOGUE,
     groups=["Units"],
-    grants={"editor": [UNITS_VIEW], "standard": [UNITS_VIEW]},
+    grants={"standard": [UNITS_VIEW]},
     capabilities={"convert_units": UNITS_VIEW},
 )

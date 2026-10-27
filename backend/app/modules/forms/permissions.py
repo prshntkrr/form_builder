@@ -90,14 +90,6 @@ register(
     # What the built-in roles get when an installation is first seeded. Narrowing
     # a role afterwards sticks — roles are seeded once, never re-seeded.
     grants={
-        "editor": [
-            RECORDS_VIEW, RECORDS_CREATE,
-            FORMS_SYSTEM_VIEW,
-            FORMS_VIEW, FORMS_CREATE, FORMS_EDIT, FORMS_DELETE, FORMS_EXPORT,
-            MCDC_MANAGE,
-            RESPONSES_VIEW, RESPONSES_EXPORT,
-            LIBRARY_VIEW, LIBRARY_MANAGE,
-        ],
         "standard": [RECORDS_VIEW, RECORDS_CREATE],
     },
     # Flags for /api/auth/me, so the frontend can hide whole sections without

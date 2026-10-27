@@ -131,16 +131,21 @@ def me(user: Dict[str, Any] = Depends(current_user)):
 
     flags.update(_project_flags(user, flags))
 
-    # Dashboards are hybrid: a member may hold dashboard rights through a project
-    # role, which the account's own permissions cannot report. Widen each flag
-    # so the Dashboards section appears for them too. Each endpoint still checks
-    # the permission again for the project it acts on.
+    # Widen every capability flag from project memberships. A Standard User
+    # holds no account permissions, but their project role may grant forms.view,
+    # dashboards.view, standards.view etc. — the sidebar needs to show those
+    # sections. Each endpoint still checks the permission for the specific
+    # project it acts on; this only opens the navigation.
     try:
-        from app.modules.dashboards import dash_access
-        for flag, in_project in dash_access.nav_flags(user).items():
-            flags[flag] = bool(flags.get(flag)) or in_project
+        from app.modules.projects import access
+        for project_id in access.projects_for(user):
+            project_held = access.permissions_in(user, project_id)
+            project_flags = permissions.capabilities(project_held)
+            for flag, value in project_flags.items():
+                if value:
+                    flags[flag] = True
     except Exception:
-        logger.exception("Could not work out this account's dashboard navigation")
+        logger.exception("Could not widen flags from project memberships")
 
     return {
         "user": user,
