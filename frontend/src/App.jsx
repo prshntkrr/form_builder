@@ -100,7 +100,6 @@ function AdminMenu() {
   const items = [
     { to: '/routing', label: 'Channel routing', show: can.manage_routing },
     { to: '/projects', label: 'Projects', show: true },
-    { to: '/admin/projects', label: 'Projects & Forms', show: can.manage_users },
     { to: '/roles', label: 'Roles', show: can.manage_roles },
     { to: '/users', label: 'Users', show: can.manage_users },
   ].filter((i) => i.show)
@@ -273,7 +272,7 @@ export default function App() {
         <Route element={<Shell />}>
           <Route path="/users" element={<Users />} />
           <Route path="/people" element={<Navigate to="/users" replace />} />
-          <Route path="/admin/projects" element={<HomeDashboard />} />
+          <Route path="/admin/projects" element={<Navigate to="/dashboard" replace />} />
         </Route>
       </Route>
       <Route element={<Require need="manage_roles" />}>

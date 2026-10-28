@@ -45,7 +45,7 @@ RENAMED = ("field", "standard", "Standard User",
 
 # The row that became `standard` on an installation where both ended up
 # existing. Removed once empty; there is nothing to keep about a duplicate.
-RETIRED = ("field", "editor")
+RETIRED = ("field", "editor", "e_numerator")
 
 # Roles that should not sit on an *account*. Accounts holding them are moved
 # to Standard User. The roles themselves stay (project memberships carry them).
@@ -53,7 +53,7 @@ RETIRED = ("field", "editor")
 # `editor` was a real system role (builds forms, reads standards) but is now
 # superseded: only Administrator and Standard User are system roles. Accounts
 # on it move to Standard User; the role itself is retired once empty.
-MISPLACED = ("project_manager", "surveyor", "reviewer", "editor")
+MISPLACED = ("project_manager", "surveyor", "reviewer", "editor", "e_numerator")
 
 
 def relabel_built_in_roles() -> None:

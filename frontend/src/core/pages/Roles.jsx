@@ -158,11 +158,6 @@ function RoleSheet({ catalogue, role, roles, onClose, onSaved, readOnly, labelMa
 
         {!readOnly && (
           <div className="sheet__foot">
-            {editing && role.user_count > 0 && (
-              <span className="tiny muted">
-                {role.user_count} account{role.user_count === 1 ? '' : 's'} hold this role
-              </span>
-            )}
             <span className="spacer" />
             <button className="btn btn--primary" onClick={save} disabled={busy || !label.trim()}>
               {busy && <span className="spin" />}
@@ -209,8 +204,8 @@ export default function Roles() {
     if (role.user_count > 0) {
       const names = others.map((r, i) => `${i + 1}. ${r.label}`).join('\n')
       const pick = window.prompt(
-        `${role.user_count} account(s) hold "${role.label}".\n\n` +
-        `Move them to which role?\n\n${names}\n\nEnter a number:`,
+        `"${role.label}" is assigned to users.\n\n` +
+        `Move them to which role before deleting?\n\n${names}\n\nEnter a number:`,
       )
       const chosen = others[Number(pick) - 1]
       if (!chosen) return
@@ -269,8 +264,6 @@ export default function Roles() {
                     {role.description && <div className="item__sub">{role.description}</div>}
                     <div className="item__meta">
                       <span>{role.permissions.length} permission{role.permissions.length === 1 ? '' : 's'}</span>
-                      <span className="sep">·</span>
-                      <span>{role.user_count} account{role.user_count === 1 ? '' : 's'}</span>
                     </div>
                   </div>
                   <div className="item__acts">
@@ -306,8 +299,6 @@ export default function Roles() {
                       {role.description && <div className="item__sub">{role.description}</div>}
                       <div className="item__meta">
                         <span>{role.permissions.length} permission{role.permissions.length === 1 ? '' : 's'}</span>
-                        <span className="sep">·</span>
-                        <span>{role.user_count} account{role.user_count === 1 ? '' : 's'}</span>
                         <span className="sep">·</span>
                         <code className="tiny">{role.name}</code>
                       </div>
