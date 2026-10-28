@@ -309,11 +309,8 @@ def forms(project_id: str,
                f.updated_on,
                (SELECT COUNT(*) FROM form_assignment a
                 WHERE a.form_id = f.form_id) AS assignment_count,
-               -- Read from the definition where the relationship already lives.
-               -- Nothing here configures one; a screen listing forms just needs
-               -- to be able to say which are children of which.
+               f.form_json ->> 'version' AS version,
                f.form_json -> 'relationship' ->> 'parent_form_id' AS parent_form_id,
-               -- The two keys that say which channel the form is built for.
                f.form_json -> 'channel' AS channel_declared,
                f.form_json -> 'channels' AS channels_profile
         FROM   forms f

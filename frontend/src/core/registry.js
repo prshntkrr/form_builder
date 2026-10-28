@@ -145,9 +145,5 @@ export const moduleNavItems = (live, can = {}, extraItems = []) => {
  * claims a landing page for this role wins.
  */
 export const homeFor = (can, live) => {
-  for (const m of on(live)) {
-    const to = typeof m.home === 'function' ? m.home(can) : null
-    if (to) return to
-  }
-  return '/account'
+  return '/dashboard'
 }

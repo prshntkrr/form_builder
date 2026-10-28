@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from './api.js'
 import { useAuth } from './auth.jsx'
-import { moduleLists, moduleNavs } from './registry.js'
+import { homeFor, moduleLists, moduleNavs } from './registry.js'
 import SystemNav from './SystemNav.jsx'
 
 function Trouble() {
@@ -27,14 +27,14 @@ function Trouble() {
 }
 
 export default function Sidebar({ onNavigate, collapsed, onToggleCollapse }) {
-  const { modules } = useAuth()
+  const { can, modules } = useAuth()
 
   if (collapsed) return null
 
   return (
     <aside className="side">
       <div className="side__top">
-        <Link to="/dashboard" className="brand" onClick={onNavigate}>
+        <Link to={homeFor(can, modules)} className="brand" onClick={onNavigate}>
           <span className="brand__mark">e</span>
           e-Agrology
         </Link>

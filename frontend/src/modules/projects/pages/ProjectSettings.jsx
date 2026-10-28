@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import ApiKeys from '../components/ApiKeys.jsx'
 import Groups from '../components/Groups.jsx'
@@ -27,7 +27,8 @@ const TABS = [
 export default function ProjectSettings() {
   const { projectId } = useParams()
   const { project, state, error, can, reload } = useProject(projectId)
-  const [tab, setTab] = useState('overview')
+  const [searchParams] = useSearchParams()
+  const [tab, setTab] = useState(() => searchParams.get('tab') || 'overview')
 
   /* Switching project in the selector brings this page with it.
    *

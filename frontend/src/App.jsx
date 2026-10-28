@@ -5,9 +5,9 @@ import { initials, useAuth } from './core/auth.jsx'
 import ForgotPassword from './core/pages/ForgotPassword.jsx'
 import Login from './core/pages/Login.jsx'
 import ResetPassword from './core/pages/ResetPassword.jsx'
-import Dashboard from './core/pages/Dashboard.jsx'
 import Roles from './core/pages/Roles.jsx'
 import Users from './core/pages/Users.jsx'
+import HomeDashboard from './core/pages/AdminProjects.jsx'
 import { homeFor, moduleRoutes, publicModuleRoutes } from './core/registry.js'
 
 function Loading() {
@@ -100,6 +100,7 @@ function AdminMenu() {
   const items = [
     { to: '/routing', label: 'Channel routing', show: can.manage_routing },
     { to: '/projects', label: 'Projects', show: true },
+    { to: '/admin/projects', label: 'Projects & Forms', show: can.manage_users },
     { to: '/roles', label: 'Roles', show: can.manage_roles },
     { to: '/users', label: 'Users', show: can.manage_users },
   ].filter((i) => i.show)
@@ -193,7 +194,7 @@ function Shell() {
               ☰
             </button>
           )}
-          <Link to="/dashboard" className="topbar__brand">
+          <Link to="/" className="topbar__brand">
             <span className="brand__mark">e</span>
             e-Agrology
           </Link>
@@ -245,9 +246,9 @@ export default function App() {
 
       {/* Signed in, any role. */}
       <Route element={<Require />}>
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/" element={<Home />} />
         <Route element={<Shell />}>
-          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/dashboard" element={<HomeDashboard />} />
           {(byCapability[''] || []).map((r) => (
             <Route key={r.path} path={r.path} element={r.element} />
           ))}
@@ -272,6 +273,7 @@ export default function App() {
         <Route element={<Shell />}>
           <Route path="/users" element={<Users />} />
           <Route path="/people" element={<Navigate to="/users" replace />} />
+          <Route path="/admin/projects" element={<HomeDashboard />} />
         </Route>
       </Route>
       <Route element={<Require need="manage_roles" />}>
