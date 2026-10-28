@@ -13,7 +13,7 @@ export const SECTIONS = [
   ['preview', 'Preview'],
   ['json', 'JSON'],
   ['history', 'History'],
-  ['responses', 'View'],
+  ['responses', 'Data View'],
 ]
 
 /**

@@ -296,7 +296,7 @@ describe('the form list', () => {
     await user.click(screen.getByRole('button', { name: 'More pages of 05 Register' }))
 
     const menu = within(screen.getByRole('menu'))
-    for (const label of ['Questions', 'Preview', 'JSON', 'History', 'View', 'Open live form']) {
+    for (const label of ['Questions', 'Preview', 'JSON', 'History', 'Data View', 'Open live form']) {
       expect(menu.getByRole('menuitem', { name: label })).toBeTruthy()
     }
   })
@@ -316,7 +316,7 @@ describe('the form list', () => {
       .toBe('/forms/F2/json')
     expect(menu.getByRole('menuitem', { name: 'History' }).getAttribute('href'))
       .toBe('/forms/F2/history')
-    expect(menu.getByRole('menuitem', { name: 'View' }).getAttribute('href'))
+    expect(menu.getByRole('menuitem', { name: 'Data View' }).getAttribute('href'))
       .toBe('/forms/F2/responses')
     expect(menu.getByRole('menuitem', { name: 'Open live form' }).getAttribute('href'))
       .toBe('/f/F2')
