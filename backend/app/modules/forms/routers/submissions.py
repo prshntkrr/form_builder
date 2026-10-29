@@ -256,6 +256,11 @@ def render(
         )
     form_json = form["form_json"] or {}
 
+    if not (form_json.get("fields") or []):
+        raise HTTPException(
+            status_code=409,
+            detail="This form has no questions and cannot be filled in.")
+
     # A form built for WhatsApp or IVR has no web page to fill: say where it is
     # answered rather than drawing a form whose submission would be refused.
     from app.modules.forms import channels
@@ -630,7 +635,7 @@ def records(
         # Whether this account may add to this form — the same answer
         # `POST /submissions` gives, so the button and the endpoint cannot
         # disagree. A reviewer reads a project's work without collecting it.
-        "may_fill": _may_fill(form_id, user),
+        "may_fill": bool(form_json.get("fields")) and _may_fill(form_id, user),
         "total": data["total"],
         "limit": data["limit"],
         "offset": data["offset"],

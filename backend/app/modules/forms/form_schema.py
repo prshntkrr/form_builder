@@ -749,8 +749,8 @@ def normalize_form(raw: Any, fallback_title: str = "Untitled Form") -> Dict[str,
             break
 
     raw_fields = raw.get("fields") or raw.get("questions") or raw.get("elements") or []
-    if not isinstance(raw_fields, list) or not raw_fields:
-        raise FormSchemaError("Form definition must contain at least one field")
+    if not isinstance(raw_fields, list):
+        raise FormSchemaError("Form definition fields must be a list")
 
     taken: set = set()
     fields: List[Dict[str, Any]] = []
@@ -759,9 +759,6 @@ def normalize_form(raw: Any, fallback_title: str = "Untitled Form") -> Dict[str,
         if normalized:
             normalized["order"] = len(fields) + 1
             fields.append(normalized)
-
-    if not fields:
-        raise FormSchemaError("No usable fields could be read from the form definition")
 
     title = str(raw.get("title") or raw.get("form_title") or fallback_title).strip()[:200]
     sections = _normalize_sections(raw.get("sections"), fields)

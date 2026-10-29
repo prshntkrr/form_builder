@@ -352,7 +352,7 @@ class FormConfig(_Config):
     # already dropped anything it cannot evaluate.
     rules: List[Dict[str, Any]] = dc_field(default_factory=list)
     fields: List[FieldConfig] = Field(
-        min_length=1, validation_alias=AliasChoices("fields", "questions", "elements"))
+        default_factory=list, validation_alias=AliasChoices("fields", "questions", "elements"))
     # Which channels the form is open to. Optional: a form without one takes
     # the defaults in `channels.DEFAULTS`.
     channels: Optional[Dict[str, ChannelConfig]] = None
