@@ -175,8 +175,8 @@ def fillable_forms(project: Optional[str], user: Dict[str, Any],
     if not allowed:
         return []
 
-    # Only forms answered on the web or the app. A form built for WhatsApp or
-    # IVR is filled in there, not here; every legacy form is Web / Mobile.
+    # Filter to forms enabled on the requested channel. All forms have web
+    # enabled, so an unfiltered list returns every active form.
     from app.modules.forms import channels
 
     def open_here(form_json):
@@ -261,14 +261,8 @@ def render(
             status_code=409,
             detail="This form has no questions and cannot be filled in.")
 
-    # A form built for WhatsApp or IVR has no web page to fill: say where it is
-    # answered rather than drawing a form whose submission would be refused.
-    from app.modules.forms import channels
-    if not (channels.enabled(form_json, "web") or channels.enabled(form_json, "mobile")):
-        raise HTTPException(status_code=409, detail=(
-            f"This form is answered on "
-            f"{channels.FORM_CHANNEL_NAMES[channels.form_channel(form_json)]}, "
-            "not on the web."))
+    # All forms are web-fillable: web is always enabled regardless of the
+    # form's primary channel.
 
     languages = translations.form_languages(form_json)
     chosen = language if language in languages else translations.default_language(form_json)

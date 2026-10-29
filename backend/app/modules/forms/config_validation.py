@@ -742,17 +742,23 @@ def channel_is_publishable(config: FormConfig, ctx: BusinessContext) -> List[Val
 
 
 def channel_is_fixed(config: FormConfig, ctx: BusinessContext) -> List[ValidationIssue]:
-    """A form keeps the channel it was created for.
+    """A form keeps the channel it was created for, with one exception.
 
-    Its versions, its answers and its channel configuration were all made for
-    that channel; switching would leave them describing a different product. To
-    take a form to another channel, create a copy for it.
+    A web-only form may add an additional channel (upgrade from 'web' to
+    'web_mobile', 'whatsapp' or 'ivr'). Once an additional channel is set,
+    the channel is fixed.
     """
-    if ctx.updating and (config.channel or None) != (ctx.stored_channel or None):
-        return [_issue("channel", (
-            "A form's channel is chosen when it is created and cannot be changed. "
-            "Create a copy of the form for the other channel instead."))]
-    return []
+    if not ctx.updating:
+        return []
+    old = ctx.stored_channel or None
+    new = config.channel or None
+    if old == new:
+        return []
+    if old == "web" and new in ("web_mobile", "whatsapp", "ivr"):
+        return []
+    return [_issue("channel", (
+        "A form's channel cannot be changed once an additional channel is set. "
+        "Create a copy of the form for the other channel instead."))]
 
 
 def channels_can_complete_the_form(config: FormConfig, ctx: BusinessContext) -> List[ValidationIssue]:

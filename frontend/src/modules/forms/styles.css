@@ -797,15 +797,30 @@
 
 
 /* --- the one channel a form is built for --------------------------------- */
-.chanpick { border: none; margin: 12px 0; padding: 0; display: grid; gap: 6px; }
+.chanpick { border: none; margin: 8px 0; padding: 0; display: grid; gap: 4px; }
 .chanpick__opt {
-  display: flex; gap: 8px; align-items: flex-start;
-  padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer;
+  display: flex; gap: 6px; align-items: center;
+  padding: 5px 10px; border: 1px solid var(--line); border-radius: 6px;
+  cursor: pointer; font-size: 0.88rem;
 }
 .chanpick__opt.is-on { border-color: var(--accent); background: var(--accent-wash); }
-.chanpick[disabled] .chanpick__opt { cursor: default; }
-.chanpick__note { margin: 2px 0 0; }
-.chanpick__copy { display: flex; flex-wrap: wrap; gap: 6px; }
+.chanpick__opt--locked {
+  cursor: default; opacity: 0.85;
+  border-color: var(--accent); background: var(--accent-wash);
+}
+.chanpick__opt--locked input { accent-color: var(--accent); }
+.chanpick[disabled] .chanpick__opt {
+  cursor: default; opacity: 0.65;
+  padding: 4px 8px; font-size: 0.82rem;
+}
+.chanpick__additional {
+  display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; margin-top: 2px;
+  padding-top: 6px; border-top: 1px solid var(--line);
+}
+.chanpick__additional > .minilabel { grid-column: 1 / -1; }
+.chanpick__additional > .minilabel { margin-bottom: 0; font-size: 0.75rem; color: var(--muted); }
+.chanpick__note { margin: 2px 0 0; font-size: 0.78rem; }
+.chanpick__copy { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 2px; }
 /* Why a new form cannot be started yet, beside the buttons that are disabled for it. */
 .compose__why { margin: 0 0 8px; color: #8a5a00; }
 .ivr__placeholder { margin: 10px 0; }

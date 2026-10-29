@@ -72,18 +72,20 @@ NAMES: Dict[str, str] = {WEB: "Web", MOBILE: "Mobile", WHATSAPP: "WhatsApp", IVR
 # existed, and anything created through the API without naming one. It keeps
 # whatever `channels` profile it had — usually none, which is Web / Mobile — and
 # `form_channel` reads it as the one channel it is closest to.
+WEB_ONLY = "web"
 WEB_MOBILE = "web_mobile"
-FORM_CHANNELS = (WEB_MOBILE, WHATSAPP, IVR)
+FORM_CHANNELS = (WEB_ONLY, WEB_MOBILE, WHATSAPP, IVR)
 FORM_CHANNEL_NAMES: Dict[str, str] = {
-    WEB_MOBILE: "Web / Mobile", WHATSAPP: "WhatsApp", IVR: "IVR"}
+    WEB_ONLY: "Web", WEB_MOBILE: "Web / Mobile", WHATSAPP: "WhatsApp", IVR: "IVR"}
 
 #: Channels a form may be published on today.
-PUBLISHABLE = (WEB_MOBILE, WHATSAPP, IVR)
+PUBLISHABLE = (WEB_ONLY, WEB_MOBILE, WHATSAPP, IVR)
 
 _PROFILES: Dict[str, Dict[str, bool]] = {
+    WEB_ONLY: {WEB: True, MOBILE: False, WHATSAPP: False, IVR: False},
     WEB_MOBILE: {WEB: True, MOBILE: True, WHATSAPP: False, IVR: False},
-    WHATSAPP: {WEB: True, MOBILE: True, WHATSAPP: True, IVR: False},
-    IVR: {WEB: True, MOBILE: True, WHATSAPP: True, IVR: True},
+    WHATSAPP: {WEB: True, MOBILE: False, WHATSAPP: True, IVR: False},
+    IVR: {WEB: True, MOBILE: False, WHATSAPP: False, IVR: True},
 }
 
 

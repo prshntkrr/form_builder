@@ -204,7 +204,7 @@ export default function Builder() {
   // comes from the form. Nothing is picked for them: `null` until they choose,
   // so a form is never saved on a channel nobody chose. A copy arrives with its
   // channel.
-  const [newChannel, setNewChannel] = useState(location.state?.channel || 'web_mobile')
+  const [newChannel, setNewChannel] = useState(location.state?.channel || 'web')
 
   /* How this form is reached on WhatsApp: the number and the keyword.
      Not part of the form — it is the `channel_form_route` row the project's
@@ -269,7 +269,7 @@ export default function Builder() {
             // Started from the library page, before any channel was picked: the
             // library's forms are Web / Mobile forms, and the picker says so
             // (it can still be changed while this is an unsaved draft).
-            const channel = location.state?.channel || 'web_mobile'
+            const channel = location.state?.channel || 'web'
             setNewChannel(channel)
             setForm(prep({ ...res.form_json, channel }))
           })
@@ -749,7 +749,7 @@ export default function Builder() {
         // published form goes straight to the form people will fill in.
         // A form answered elsewhere (WhatsApp) has no page here to fill in, so
         // it reopens in its own builder rather than a fill page that refuses it.
-        const fillHere = formChannel(form) === 'web_mobile'
+        const fillHere = true
         navigate(
           saveAs === 'Draft' || !fillHere ? `/forms/${newId}/${saveAs === 'Draft' ? 'preview' : 'questions'}`
             : `/f/${newId}`,
@@ -1025,8 +1025,9 @@ export default function Builder() {
      that is never designed never gets one — Preview does not make one. */
   useEffect(() => {
     if (!form) return
-    // Layout belongs to Web / Mobile; another channel's form never gets one.
-    if (formChannel(form) !== 'web_mobile') return
+    // Layout belongs to web-based forms; WhatsApp/IVR never get one.
+    const ch = formChannel(form)
+    if (ch !== 'web_mobile' && ch !== 'web') return
 
     const has = Array.isArray(form.layout?.sections)
 
@@ -1068,10 +1069,11 @@ export default function Builder() {
   // draft's is the one being picked; a saved form's is its own, fixed. A
   // legacy form never picked one and is Web / Mobile, exactly as it was.
   // An unsaved draft with no channel yet is shown in the general question list.
-  const channel = form ? (editing ? formChannel(form) : (form.channel || 'web_mobile')) : newChannel
+  const channel = form ? (editing ? formChannel(form) : (form.channel || 'web')) : newChannel
   const legacy = Boolean(editing && form && !form.channel)
-  // Layout is a Web / Mobile idea: any other channel's builder answers /design.
-  const pane = channel !== 'web_mobile' && view === 'design' ? 'questions' : view
+  // Web and web_mobile use the standard builder; whatsapp/ivr use their own.
+  const isWebBuilder = channel === 'web' || channel === 'web_mobile'
+  const pane = !isWebBuilder && view === 'design' ? 'questions' : view
   const tabs = channel === 'whatsapp'
     ? [['questions', 'WhatsApp'], ['preview', 'Chat preview'], ['script', 'Script'], ['json', 'JSON']]
     : channel === 'ivr'
@@ -1232,13 +1234,7 @@ export default function Builder() {
         <>
           {!editing && (
             <div className="card card--pad draft-channel">
-              <ChannelPicker value={form.channel || null} onChange={pickChannel} required />
-              {!form.channel && (
-                <p id="save-why" className="tiny compose__why" role="status">
-                  Choose where this form will be answered before saving it.
-                  The channel cannot be changed after the form is saved.
-                </p>
-              )}
+              <ChannelPicker value={form.channel || 'web'} onChange={pickChannel} />
             </div>
           )}
           <div className="card">
@@ -1266,7 +1262,7 @@ export default function Builder() {
               <div className="editor__relationship">
                 {/* Parent records and device position are Web / Mobile ideas: a
                     WhatsApp or IVR form has no picker and no GPS to offer. */}
-                {channel === 'web_mobile' && (
+                {isWebBuilder && (
                   <>
                     <FormRelationship
                       form={form}
@@ -1279,10 +1275,15 @@ export default function Builder() {
                     />
                   </>
                 )}
-                {/* A saved form keeps its channel. Moving it is a copy. */}
+                {/* A saved form keeps its channel unless it is web-only. */}
                 {editing && (
                   <div className="rel">
-                    <ChannelPicker value={channel} readOnly legacy={legacy} />
+                    <ChannelPicker
+                      value={channel}
+                      readOnly={channel !== 'web'}
+                      legacy={legacy}
+                      onChange={(ch) => setForm({ ...form, channel: ch })}
+                    />
                     <div className="chanpick__copy">
                       {PUBLISHABLE.filter((c) => c !== channel).map((c) => (
                         <button
@@ -1373,7 +1374,7 @@ export default function Builder() {
                 />
               )}
 
-              {pane === 'questions' && channel === 'web_mobile' && (
+              {pane === 'questions' && isWebBuilder && (
                 <>
                   {(() => {
                     const languages = languageChoices(form)
@@ -1630,7 +1631,7 @@ export default function Builder() {
                 />
               )}
 
-              {pane === 'preview' && channel === 'web_mobile' && (
+              {pane === 'preview' && isWebBuilder && (
                 <>
                   <FormRenderer
                     formJson={form}
