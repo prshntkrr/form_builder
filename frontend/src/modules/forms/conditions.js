@@ -169,6 +169,23 @@ export function hidden(formJson, answers) {
 }
 
 /**
+ * Fields made required by a 'require' rule whose conditions currently hold.
+ */
+export function conditionallyRequired(formJson, answers) {
+  const rules = (formJson?.rules || []).filter(Boolean)
+  const required = new Set()
+  for (const rule of rules) {
+    if (text(rule.action).toLowerCase() !== 'require') continue
+    if (!evaluateRule(rule, answers)) continue
+    const target = rule.target || {}
+    if (text(target.type).toLowerCase() === 'field' && target.name) {
+      required.add(text(target.name))
+    }
+  }
+  return required
+}
+
+/**
  * The answers that currently apply.
  *
  * What gets submitted. Values for hidden questions stay in the page's state, so

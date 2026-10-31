@@ -6,14 +6,15 @@ import { useFormsRevision } from '../../core/events.js'
 import { api } from './api.js'
 import { api as projectApi } from '../projects/api.js'
 import { useProjects } from '../projects/active.js'
+import { useTranslation } from '../../core/language.jsx'
 
 export const SECTIONS = [
-  ['questions', 'Questions'],
-  ['design', 'Design'],
-  ['preview', 'Preview'],
-  ['json', 'JSON'],
-  ['history', 'History'],
-  ['responses', 'Data View'],
+  ['questions', 'Questions', 'label.questions'],
+  ['design', 'Design', 'label.design'],
+  ['preview', 'Preview', 'label.preview'],
+  ['json', 'JSON', 'label.json'],
+  ['history', 'History', 'label.history'],
+  ['responses', 'Data View', 'label.data.view'],
 ]
 
 /**
@@ -25,6 +26,7 @@ export const SECTIONS = [
  */
 export function FormsPanel({ onNavigate }) {
   const { can } = useAuth()
+  const { t } = useTranslation()
   const revision = useFormsRevision()
   const [sectionOpen, setSectionOpen] = useState(() => {
     try { return localStorage.getItem('ea_forms_open') !== '0' } catch { return true }
@@ -171,7 +173,7 @@ export function FormsPanel({ onNavigate }) {
         <svg className={`nav__chev${sectionOpen ? ' on' : ''}`} viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">
           <path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
-        {builder ? (system ? 'System forms' : active?.name || 'Forms') : 'Forms to fill in'}
+        {builder ? (system ? t('label.system.forms') : active?.name || t('label.forms')) : t('label.forms')}
         <NavLink to={builder ? '/forms' : '/fill'} className="side__all" onClick={(e) => { e.stopPropagation(); onNavigate?.() }}>
           All
         </NavLink>
@@ -188,7 +190,7 @@ export function FormsPanel({ onNavigate }) {
             type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search forms…"
+            placeholder={t('label.search.forms')}
             aria-label="Search forms"
           />
         </div>
@@ -276,14 +278,14 @@ export function FormsPanel({ onNavigate }) {
 
               {isExpanded && (
                 <div className="side__tree-sub" style={{ '--depth': depth + 1 }}>
-                  {SECTIONS.map(([key, label]) => (
+                  {SECTIONS.map(([key, label, labelKey]) => (
                     <NavLink
                       key={key}
                       to={`/forms/${f.form_id}/${key}`}
                       className={({ isActive }) => `side__tree-item${isActive ? ' on' : ''}`}
                       onClick={onNavigate}
                     >
-                      {label}
+                      {labelKey ? t(labelKey) : label}
                     </NavLink>
                   ))}
                   <NavLink

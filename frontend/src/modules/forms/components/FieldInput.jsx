@@ -44,7 +44,7 @@ export default function FieldInput({ field, value, onChange, error, media }) {
   const [mapOpen, setMapOpen] = useState(false)
 
   const base = {
-    id: `f_${field.name}`,
+    id: field.name,
     name: field.name,
     placeholder: field.placeholder || '',
     'aria-invalid': error ? 'true' : undefined,
@@ -342,7 +342,7 @@ export default function FieldInput({ field, value, onChange, error, media }) {
 
   return (
     <div className="field">
-      <label htmlFor={`f_${field.name}`}>
+      <label htmlFor={field.name}>
         {field.label}
         {field.required && <span className="star-req"> *</span>}
         {ro && <span className="field__ro"> (read-only)</span>}

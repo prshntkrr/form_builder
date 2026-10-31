@@ -30,7 +30,7 @@ export default function ContributeToLibrary({ formId, title, version, projectId,
         category,
         tags: tags.split(',').map((t) => t.trim()).filter(Boolean),
         summary: summary || undefined,
-        project_id: projectId || undefined,
+        project_id: null,
       })
       setAdded(result)
       onAdded?.(result)

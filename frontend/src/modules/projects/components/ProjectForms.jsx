@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
 import { api } from '../api.js'
+import { useTranslation } from '../../../core/language.jsx'
 import { FORM_CHANNEL_NAMES } from '../../forms/channelCapabilities.js'
 import { formTree, hasHierarchy } from '../../forms/formTree.js'
 
@@ -18,6 +19,7 @@ const MANAGE = 'project.forms.manage'
  */
 export default function ProjectForms({ projectId, projectName, can }) {
   const navigate = useNavigate()
+  const { t } = useTranslation()
 
   const [forms, setForms] = useState(null)
   const [everything, setEverything] = useState(false)
@@ -37,7 +39,7 @@ export default function ProjectForms({ projectId, projectName, can }) {
     <section>
       <div className="page-head">
         <div>
-          <h2>Forms</h2>
+          <h2>{t('label.forms')}</h2>
           <p className="lede">
             {everything
               ? 'Every form in this project.'
@@ -48,7 +50,7 @@ export default function ProjectForms({ projectId, projectName, can }) {
           <div className="row">
             <button className="btn btn--primary"
                     onClick={() => navigate(`/builder?project=${projectId}`)}>
-              Create form
+              {t('label.create.form')}
             </button>
           </div>
         )}
@@ -82,7 +84,7 @@ export default function ProjectForms({ projectId, projectName, can }) {
         <div className="tablebox">
           <table className="data">
             <thead>
-              <tr><th>Form</th><th>Status</th><th>Channel</th><th /></tr>
+              <tr><th>{t('label.form')}</th><th>{t('label.status')}</th><th>{t('label.channel')}</th><th /></tr>
             </thead>
             <tbody>
               {/* Arranged by which form hangs off which, not flat: a child
@@ -127,21 +129,21 @@ export default function ProjectForms({ projectId, projectName, can }) {
                   <td className="tiny">{FORM_CHANNEL_NAMES[f.channel] || FORM_CHANNEL_NAMES.web_mobile}</td>
                   <td className="cat__actions">
                     <Link className="btn btn--quiet btn--sm"
-                          to={`/forms/${f.form_id}/preview`}>Open</Link>
+                          to={`/forms/${f.form_id}/preview`}>{t('button.open')}</Link>
 
                     {f.form_status === 'Active' && (
                       <Link className="btn btn--quiet btn--sm"
-                            to={`/f/${f.form_id}`}>Fill</Link>
+                            to={`/f/${f.form_id}`}>{t('label.fill')}</Link>
                     )}
 
                     {can(MANAGE) && (
                       <Link className="btn btn--quiet btn--sm"
-                            to={`/forms/${f.form_id}/questions`}>Edit</Link>
+                            to={`/forms/${f.form_id}/questions`}>{t('label.edit')}</Link>
                     )}
 
                     {can(ASSIGN) && (
                       <button className="btn btn--quiet btn--sm" onClick={() => setAssigning(f)}>
-                        Who can fill it
+                        {t('label.who.can.fill')}
                       </button>
                     )}
                   </td>

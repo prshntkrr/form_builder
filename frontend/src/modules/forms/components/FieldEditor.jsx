@@ -44,11 +44,39 @@ function OptionSource({ field, fields, patch }) {
   const from = field.options_from
   const kind = !from ? 'form' : from.source
 
+  const [sourceProjects, setSourceProjects] = useState(null)
+  const [sourceProject, setSourceProject] = useState(from?.project_id || '')
+  const [sourceForms, setSourceForms] = useState(null)
+  const [sourceFields, setSourceFields] = useState([])
+
   // Only when a catalogue is actually in play — most forms never open this.
   useEffect(() => {
     if (kind !== 'client_catalog' || catalogues || !can.use_client_catalogs) return
     api.clientCatalogues().then((r) => setCatalogues(r.catalogs)).catch(() => setCatalogues([]))
   }, [kind, catalogues, can.use_client_catalogs])
+
+  useEffect(() => {
+    if (kind !== 'form_submissions' || sourceProjects) return
+    import('../../projects/api.js')
+      .then(({ api: pApi }) => pApi.projects())
+      .then((r) => setSourceProjects(r.projects || []))
+      .catch(() => setSourceProjects([]))
+  }, [kind, sourceProjects])
+
+  useEffect(() => {
+    if (kind !== 'form_submissions' || !sourceProject) { setSourceForms(null); return }
+    import('../../projects/api.js')
+      .then(({ api: pApi }) => pApi.projectForms(sourceProject))
+      .then((r) => setSourceForms(r.forms || []))
+      .catch(() => setSourceForms([]))
+  }, [kind, sourceProject])
+
+  useEffect(() => {
+    if (kind !== 'form_submissions' || !from?.form_id) return setSourceFields([])
+    api.getForm(from.form_id)
+      .then((r) => setSourceFields((r.form_json?.fields || []).filter((f) => f.name)))
+      .catch(() => setSourceFields([]))
+  }, [kind, from?.form_id])
 
   const choose = (next) => {
     if (next === 'form') return patch({ options_from: null })
@@ -64,7 +92,9 @@ function OptionSource({ field, fields, patch }) {
                         code_type: 'alpha_2' },
       })
     }
-    // The choices are the catalogue's, so anything written on the form goes.
+    if (next === 'form_submissions') {
+      return patch({ options: [], options_from: { source: 'form_submissions', form_id: '', value_field: '', label_field: '' } })
+    }
     patch({ options: [], options_from: { source: 'client_catalog', catalog: '' } })
   }
 
@@ -80,6 +110,7 @@ function OptionSource({ field, fields, patch }) {
         {can.use_client_catalogs && <option value="client_catalog">CIMMYT Catalogue</option>}
         {can.use_crop_ontology && <option value="crop_ontology">The crop ontologies</option>}
         <option value="data_standard">A published standard</option>
+        <option value="form_submissions">Another form's submissions</option>
       </select>
 
       {kind === 'data_standard' && (
@@ -109,6 +140,100 @@ function OptionSource({ field, fields, patch }) {
             The list comes from the Standards database, so it is the same
             everywhere and stays current. The answer stored is the code; the
             country's name is what people see.
+          </span>
+        </>
+      )}
+
+      {kind === 'form_submissions' && from && (
+        <>
+          <select
+            className="control"
+            aria-label="Source project"
+            value={sourceProject}
+            onChange={(e) => {
+              setSourceProject(e.target.value)
+              setSourceForms(null)
+              patch({ options_from: { source: 'form_submissions', form_id: '', value_field: '', label_field: '', project_id: e.target.value } })
+            }}
+          >
+            <option value="">Choose a project…</option>
+            {(sourceProjects || []).map((p) => (
+              <option key={p.project_id} value={p.project_id}>{p.name}</option>
+            ))}
+          </select>
+
+          {sourceProject && sourceForms && (
+            <select
+              className="control"
+              aria-label="Source form"
+              value={from.form_id || ''}
+              onChange={(e) => patch({ options_from: { ...from, form_id: e.target.value, value_field: '', label_field: '' } })}
+            >
+              <option value="">Choose a form…</option>
+              {sourceForms.map((f) => (
+                <option key={f.form_id} value={f.form_id}>{f.form_title}</option>
+              ))}
+            </select>
+          )}
+
+          {from.form_id && sourceFields.length > 0 && (
+            <>
+              <span className="minilabel">Value field (what gets stored)</span>
+              <select
+                className="control"
+                value={from.value_field || ''}
+                onChange={(e) => patch({ options_from: { ...from, value_field: e.target.value } })}
+              >
+                <option value="">Choose…</option>
+                {sourceFields.map((f) => (
+                  <option key={f.name} value={f.name}>{f.label || f.name}</option>
+                ))}
+              </select>
+
+              <span className="minilabel">Filter by (optional — cascading)</span>
+              <select
+                className="control"
+                value={from.filter_field || ''}
+                onChange={(e) => {
+                  const nxt = { ...from }
+                  delete nxt.filter_field
+                  delete nxt.depends_on
+                  if (e.target.value) nxt.filter_field = e.target.value
+                  patch({ options_from: nxt })
+                }}
+              >
+                <option value="">No filter</option>
+                {sourceFields.map((f) => (
+                  <option key={f.name} value={f.name}>{f.label || f.name}</option>
+                ))}
+              </select>
+
+              {from.filter_field && (
+                <>
+                  <span className="minilabel">Depends on (field on this form)</span>
+                  <select
+                    className="control"
+                    value={from.depends_on || ''}
+                    onChange={(e) => {
+                      const nxt = { ...from }
+                      delete nxt.depends_on
+                      if (e.target.value) nxt.depends_on = e.target.value
+                      patch({ options_from: nxt })
+                    }}
+                  >
+                    <option value="">Choose…</option>
+                    {(fields || []).filter((f) => f.name !== field.name).map((f) => (
+                      <option key={f.name} value={f.name}>{f.label || f.name}</option>
+                    ))}
+                  </select>
+                </>
+              )}
+            </>
+          )}
+
+          <span className="tiny muted">
+            Choices come from the submissions of another form — even from a
+            different project.
           </span>
         </>
       )}

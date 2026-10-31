@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import ProjectForms from '../components/ProjectForms.jsx'
 import SystemForms from '../components/SystemForms.jsx'
 import { useProject, useProjects } from '../active.js'
+import { useTranslation } from '../../../core/language.jsx'
 
 /**
  * The forms of whichever context the application is working in.
@@ -25,6 +26,7 @@ import { useProject, useProjects } from '../active.js'
  */
 export default function Forms() {
   const { active, system, projectId, projects } = useProjects()
+  const { t } = useTranslation()
 
   if (projects === null) {
     return (
@@ -40,7 +42,7 @@ export default function Forms() {
   if (!projectId) {
     return (
       <main className="main">
-        <h1>Forms</h1>
+        <h1>{t('label.forms')}</h1>
         <p className="muted">
           You are not a member of any project yet.{' '}
           <Link to="/projects">See your projects</Link> or switch to system forms.

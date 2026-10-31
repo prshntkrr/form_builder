@@ -3,7 +3,7 @@ import FieldInput from './FieldInput.jsx'
 import { useLocation } from '../useLocation.js'
 import { api } from '../api.js'
 import { defaultLanguage, languageChoices, translateForm } from '../translate.js'
-import { hidden } from '../conditions.js'
+import { hidden, conditionallyRequired } from '../conditions.js'
 import { FULL_WIDTH, resolveLayout } from '../formLayout.js'
 import { useDynamicOptions } from '../dynamicOptions.js'
 import { useFormScript } from '../useFormScript.js'
@@ -109,6 +109,7 @@ export default function FormRenderer({
   // reload, and nothing asked of the server. The same rules are evaluated again
   // on submission, because a request can arrive without the form.
   const off = hidden(shown, values)
+  const condRequired = conditionallyRequired(shown, values)
 
   const dynamic = useDynamicOptions(shown.fields, values, chosen)
 
@@ -128,6 +129,7 @@ export default function FormRenderer({
     let f = field.options_from ? { ...field, options: dynamic[field.name] || [] } : field
     if (scriptCtx.options[field.name]) f = { ...f, options: scriptCtx.options[field.name] }
     if (field.name in scriptCtx.required) f = { ...f, required: scriptCtx.required[field.name] }
+    if (condRequired.has(field.name)) f = { ...f, required: true }
     return f
   }
 
@@ -327,7 +329,7 @@ export default function FormRenderer({
 
           <div className="group__fields">
             {g.fields.map((field) => (
-              <div key={field.name} className={FULL_WIDTH.has(field.type) ? 'wide' : undefined}>
+              <div key={field.name} id={`display-${field.name}`} className={FULL_WIDTH.has(field.type) ? 'wide' : undefined}>
                 {input(field)}
               </div>
             ))}

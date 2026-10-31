@@ -600,9 +600,22 @@ def parent_of(form_id: str, survey_id: str) -> Optional[Dict[str, Any]]:
                 summary = _summarise(parent.get("form_json") or {},
                                      found["form_data"] or {})
 
+    parent_data = {}
+    with transaction() as cur:
+        if parent_table and table_exists(cur, parent_table):
+            cur.execute(
+                sql.SQL("SELECT form_data FROM {}.{} WHERE survey_id = %s")
+                .format(sql.Identifier(settings.db_schema), sql.Identifier(parent_table)),
+                (linked,),
+            )
+            prow = cur.fetchone()
+            if prow:
+                parent_data = prow["form_data"] or {}
+
     return {
         "form_id": parent_id,
         "form_title": parent["form_title"],
         "survey_id": linked,
         "summary": summary,
+        "form_data": parent_data,
     }

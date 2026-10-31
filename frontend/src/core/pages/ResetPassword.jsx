@@ -1,11 +1,13 @@
 import React, { useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../api.js'
+import { useTranslation } from '../language.jsx'
 import PasswordField from '../PasswordField.jsx'
 
 const MIN_LENGTH = 8
 
 export default function ResetPassword() {
+  const { t } = useTranslation()
   const [params] = useSearchParams()
   const navigate = useNavigate()
   const token = params.get('token') || ''
@@ -70,7 +72,7 @@ export default function ResetPassword() {
             {error && <div className="note note--bad">{error}</div>}
 
             <label className="col">
-              <span className="minilabel">New password</span>
+              <span className="minilabel">{t('label.new.password')}</span>
               <PasswordField className={`control${tooShort ? ' control--bad' : ''}`}
                              autoComplete="new-password" required autoFocus
                              value={password} onChange={(e) => setPassword(e.target.value)} />
@@ -78,7 +80,7 @@ export default function ResetPassword() {
             </label>
 
             <label className="col" style={{ marginTop: 12 }}>
-              <span className="minilabel">Repeat it</span>
+              <span className="minilabel">{t('label.repeat.password')}</span>
               <PasswordField className={`control${mismatch ? ' control--bad' : ''}`}
                              autoComplete="new-password" required
                              value={confirm} onChange={(e) => setConfirm(e.target.value)} />
@@ -89,7 +91,7 @@ export default function ResetPassword() {
                     disabled={busy || mismatch || tooShort || !password}
                     style={{ marginTop: 18, width: '100%', justifyContent: 'center' }}>
               {busy && <span className="spin" />}
-              Set the password
+              {t('button.change.password')}
             </button>
           </form>
         )}

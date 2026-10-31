@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { api } from '../api.js'
+import { useTranslation } from '../language.jsx'
 
 const SYSTEM_ROLE_NAMES = new Set(['admin', 'standard'])
 const HIDDEN_ROLE_NAMES = new Set(['editor'])
@@ -71,6 +72,7 @@ function PermissionList({ permissions, labelMap }) {
 }
 
 function RoleSheet({ catalogue, role, roles, onClose, onSaved, readOnly, labelMap }) {
+  const { t } = useTranslation()
   const editing = Boolean(role)
   const [label, setLabel] = useState(role?.label || '')
   const [description, setDescription] = useState(role?.description || '')
@@ -120,7 +122,7 @@ function RoleSheet({ catalogue, role, roles, onClose, onSaved, readOnly, labelMa
           {!readOnly && (
             <div className="frow__grid" style={{ paddingRight: 0 }}>
               <label className="col">
-                <span className="minilabel">Name</span>
+                <span className="minilabel">{t('label.name')}</span>
                 <input className="control" value={label} autoFocus
                        placeholder="Supervisor"
                        onChange={(e) => setLabel(e.target.value)} />
@@ -161,7 +163,7 @@ function RoleSheet({ catalogue, role, roles, onClose, onSaved, readOnly, labelMa
             <span className="spacer" />
             <button className="btn btn--primary" onClick={save} disabled={busy || !label.trim()}>
               {busy && <span className="spin" />}
-              {editing ? 'Save changes' : 'Create project role'}
+              {editing ? t('button.save') : t('label.create')}
             </button>
           </div>
         )}
@@ -171,6 +173,7 @@ function RoleSheet({ catalogue, role, roles, onClose, onSaved, readOnly, labelMa
 }
 
 export default function Roles() {
+  const { t } = useTranslation()
   const [roles, setRoles] = useState(null)
   const [catalogue, setCatalogue] = useState([])
   const [sheet, setSheet] = useState(null)
@@ -229,7 +232,7 @@ export default function Roles() {
     <main className="main">
       <div className="page-head">
         <div>
-          <h1>Roles</h1>
+          <h1>{t('label.roles')}</h1>
           <p className="lede">
             System roles are fixed. Project roles can be created and assigned to members in any project.
           </p>
@@ -310,7 +313,7 @@ export default function Roles() {
                       </button>
                       <button className="btn btn--sm btn--quiet btn--danger"
                               onClick={() => remove(role)}>
-                        Delete
+                        {t('label.delete')}
                       </button>
                     </div>
                   </div>

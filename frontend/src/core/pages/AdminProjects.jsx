@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { api as projectApi } from '../../modules/projects/api.js'
 import { api as coreApi } from '../api.js'
 import { useAuth } from '../auth.jsx'
+import { useTranslation } from '../language.jsx'
 import { formTree, hasHierarchy } from '../../modules/forms/formTree.js'
 
 function fmt(n) { return n == null ? '—' : n.toLocaleString() }
@@ -61,6 +62,7 @@ function ProgressBar({ count, total }) {
 }
 
 function ProjectCard({ project, forms, formCounts, color, expanded, onToggle, loading, canBuild, canManageMembers, canViewSettings }) {
+  const { t } = useTranslation()
   const tree = useMemo(() => formTree(forms), [forms])
   const showHierarchy = useMemo(() => hasHierarchy(forms), [forms])
   const parentIds = useMemo(() => {
@@ -90,7 +92,7 @@ function ProjectCard({ project, forms, formCounts, color, expanded, onToggle, lo
         <div className="ap-project__meta">
           <div className="ap-project__stat">
             <div className="ap-project__stat-val">{project.form_count ?? forms.length}</div>
-            <div className="ap-project__stat-lbl">Forms</div>
+            <div className="ap-project__stat-lbl">{t('label.forms')}</div>
           </div>
           <div className="ap-project__stat">
             <div className="ap-project__stat-val">{fmt(totalResponses)}</div>
@@ -119,8 +121,8 @@ function ProjectCard({ project, forms, formCounts, color, expanded, onToggle, lo
             <table className="ap-forms-table">
               <thead>
                 <tr>
-                  <th>Form</th>
-                  <th>Status</th>
+                  <th>{t('label.forms')}</th>
+                  <th>{t('label.status')}</th>
                   <th>Submissions</th>
                   <th>Last submission</th>
                   <th>Ver.</th>
@@ -157,7 +159,7 @@ function ProjectCard({ project, forms, formCounts, color, expanded, onToggle, lo
                       <td className="ap-ver-col">v{f.version || 1}</td>
                       <td>
                         <Link to={`/forms/${f.form_id}`} className="ap-btn ap-btn--sm ap-btn--ghost">
-                          Open
+                          {t('label.open')}
                         </Link>
                       </td>
                     </tr>
@@ -175,7 +177,7 @@ function ProjectCard({ project, forms, formCounts, color, expanded, onToggle, lo
                 <Link to={`/projects/${project.project_id}?tab=members`} className="ap-btn ap-btn--sm">+ Add member</Link>
               )}
               {canViewSettings && (
-                <Link to={`/projects/${project.project_id}`} className="ap-btn ap-btn--sm ap-btn--ghost">Settings</Link>
+                <Link to={`/projects/${project.project_id}`} className="ap-btn ap-btn--sm ap-btn--ghost">{t('label.setting')}</Link>
               )}
             </div>
           )}
@@ -324,6 +326,7 @@ function ActivitySidebar({ activity }) {
 
 export default function HomeDashboard() {
   const { user, can } = useAuth()
+  const { t } = useTranslation()
   const isAdmin = !!can.manage_users
   const canBuild = !!can.build_any_forms || !!can.build_forms
   const canManageMembers = isAdmin || !!can.use_projects
@@ -456,7 +459,7 @@ export default function HomeDashboard() {
 
       <div className="ap-header">
         <div>
-          <h1>{isAdmin ? 'Projects & Forms' : 'My Dashboard'}</h1>
+          <h1>{isAdmin ? t('label.proyect') : t('label.dashboard')}</h1>
           <p>{isAdmin ? 'All projects, their forms and submission activity' : 'Your projects, forms and recent activity'}</p>
         </div>
         <div className="ap-header__actions">
@@ -478,11 +481,11 @@ export default function HomeDashboard() {
       <div className="ap-stats">
         <div className="ap-stat-card">
           <div className="ap-stat-card__value">{projects.length}</div>
-          <div className="ap-stat-card__label">{isAdmin ? 'Projects' : 'My Projects'}</div>
+          <div className="ap-stat-card__label">{t('label.proyect')}</div>
         </div>
         <div className="ap-stat-card">
           <div className="ap-stat-card__value">{totalForms}</div>
-          <div className="ap-stat-card__label">{isAdmin ? 'Total Forms' : 'My Forms'}</div>
+          <div className="ap-stat-card__label">{t('label.forms')}</div>
         </div>
         <div className="ap-stat-card">
           <div className="ap-stat-card__value">{fmt(totalSubmissions)}</div>

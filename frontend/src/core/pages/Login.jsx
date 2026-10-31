@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react'
 import { Link, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../auth.jsx'
 import PasswordField from '../PasswordField.jsx'
+import { useTranslation } from '../language.jsx'
+import LanguageSwitcher from '../LanguageSwitcher.jsx'
 import { startRecording, toPcm16, supported as canRecord } from '../voiceRecorder.js'
 
 import slide1 from '../../assets/1000453125.png'
@@ -16,6 +18,7 @@ const INTERVAL = 5000 // ms between slides
 
 export default function Login() {
   const { user, signIn, signInByVoice, expired } = useAuth()
+  const { t } = useTranslation()
   const location = useLocation()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -86,17 +89,18 @@ export default function Login() {
 
       {/* Right: the sign-in panel. */}
       <section className="gate__panel">
-        {/* CIMMYT logo pinned to the top of the panel */}
-        <div className="gate__top-logo">
+        {/* Language + CIMMYT logo at the top of the panel */}
+        <div className="gate__top-logo" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <img src={cimmytLogo} alt="CIMMYT" className="gate__cimmyt" />
+          <LanguageSwitcher />
         </div>
 
         <form className="gate__card" onSubmit={submit}>
           {/* e-Agro logo centred above the form */}
           <img src={eagroLogo} alt="e-Agrology" className="gate__eagro" />
 
-          <h1>Welcome back</h1>
-          <p className="lede tiny gate__sub">Log in to your account</p>
+          <h1>{t('label.login')}</h1>
+          <p className="lede tiny gate__sub">{t('msg.have.access')}</p>
 
           {location.state?.signedOut && (
             <div className="note note--good">You have been signed out.</div>
@@ -109,7 +113,7 @@ export default function Login() {
           {error && <div className="note note--bad">{error}</div>}
 
           <label className="col" style={{ marginTop: 16 }}>
-            <span className="minilabel">Email, username or phone</span>
+            <span className="minilabel">{t('label.emal')}</span>
             <span className="field">
               <UserIcon />
               {/* `text`, not `email`: the browser's own validation refuses
@@ -154,7 +158,7 @@ export default function Login() {
           ) : (
             <>
               <label className="col" style={{ marginTop: 14 }}>
-                <span className="minilabel">Password</span>
+                <span className="minilabel">{t('label.password')}</span>
                 <span className="field">
                   <LockIcon />
                   <PasswordField className="control field__input" autoComplete="current-password"
@@ -166,12 +170,12 @@ export default function Login() {
               <label className="gate__remember">
                 <input type="checkbox" checked={remember}
                        onChange={(e) => setRemember(e.target.checked)} />
-                <span>Remember me</span>
+                <span>{t('label.rememberme')}</span>
               </label>
 
               <button className="btn btn--primary gate__submit" type="submit" disabled={busy}>
                 {busy && <span className="spin" />}
-                {busy ? 'Logging in' : 'Log in'}
+                {busy ? t('label.processing') : t('button.login')}
               </button>
 
               {/* Offered to everyone, deliberately. Showing it only for accounts
@@ -187,7 +191,7 @@ export default function Login() {
               )}
 
               <p className="tiny gate__forgot">
-                <Link to="/forgot-password">Forgot your password?</Link>
+                <Link to="/forgot-password">{t('label.recoverypassword')}</Link>
               </p>
             </>
           )}

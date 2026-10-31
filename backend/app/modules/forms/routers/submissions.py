@@ -234,6 +234,49 @@ def fillable_forms(project: Optional[str], user: Dict[str, Any],
     ]
 
 
+@router.get("/{form_id}/field-values")
+def field_values(
+    form_id: str,
+    field: str = Query(..., description="Field name whose distinct values to return"),
+    label: Optional[str] = Query(None, description="Field name to use as label"),
+    filter_field: Optional[str] = Query(None),
+    filter_value: Optional[str] = Query(None),
+    user: Dict[str, Any] = Depends(needs(RECORDS_VIEW)),
+):
+    """Distinct values from a form's submissions, for data-source dropdowns."""
+    from psycopg2 import sql as psql
+    from app.core.config import settings
+
+    _project_guard(form_id, user)
+    form = form_service.get_form(form_id)
+    table_name = (form.get("form_json") or {}).get("table_name")
+    if not table_name:
+        return []
+
+    label_field = label or field
+    with transaction() as cur:
+        from app.modules.forms.submission_service import table_exists
+        if not table_exists(cur, table_name):
+            return []
+
+        base = psql.SQL(
+            "SELECT DISTINCT form_data->>%s AS val, form_data->>%s AS lbl"
+            " FROM {}.{}"
+        ).format(psql.Identifier(settings.db_schema), psql.Identifier(table_name))
+        params = [field, label_field]
+
+        if filter_field and filter_value:
+            base += psql.SQL(" WHERE form_data->>%s = %s")
+            params += [filter_field, filter_value]
+
+        cur.execute(base + psql.SQL(" ORDER BY lbl"), params)
+        rows = cur.fetchall()
+    return [
+        {"value": r["val"], "label": r["lbl"] or r["val"]}
+        for r in rows if r["val"]
+    ]
+
+
 @router.get("/{form_id}/render")
 def render(
     form_id: str,

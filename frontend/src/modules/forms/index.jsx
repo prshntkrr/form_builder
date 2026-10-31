@@ -44,11 +44,11 @@ export default {
      `NAV_GROUPS` in core/registry.js. `requires` is the same capability flag
      as on the route behind it, so the link and the screen cannot disagree. */
   navItems: [
-    { group: 'configuration', label: 'CIMMYT standard', to: '/cimmyt',
+    { group: 'configuration', label: 'CIMMYT standard', labelKey: 'label.cimmyt.standard', to: '/cimmyt',
       requires: 'use_standards' },
-    { group: 'configuration', label: 'Catalogue', to: '/catalogues',
+    { group: 'configuration', label: 'Catalogue', labelKey: 'label.catalogue', to: '/catalogues',
       requires: 'use_client_catalogs' },
-    { group: 'configuration', label: 'Standards', to: '/standards',
+    { group: 'configuration', label: 'Standards', labelKey: 'label.standards', to: '/standards',
       requires: (can) => can.use_standards || can.use_ontology || can.use_crop_ontology },
   ],
   // /forms shows whichever context is active, so it is the right landing

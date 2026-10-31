@@ -31,21 +31,37 @@ export function FormStep({ formId, parentSurveyId, onDone }) {
     setFiles({})
     setSurvey(null)
     setUploaded({})
-    api
-      .renderForm(formId)
-      .then((res) => {
+
+    const loadForm = api.renderForm(formId)
+    const loadParent = parentSurveyId
+      ? api.formRelationship(formId).then((rel) =>
+          rel?.is_child
+            ? api.parentSubmission(formId, parentSurveyId).catch(() => null)
+            : null
+        ).catch(() => null)
+      : Promise.resolve(null)
+
+    Promise.all([loadForm, loadParent])
+      .then(([res, parentRes]) => {
         setForm(res)
         setLanguage(res.language)
+        const parentData = parentRes?.parent?.form_data || {}
+        const inherit = new Set(res.form_json?.relationship?.inherit_fields || [])
         const start = {}
         for (const f of res.form_json.fields || []) {
-          if (f.default != null) start[f.name] = f.default
-          else if (f.type === 'multiselect') start[f.name] = []
+          if (inherit.has(f.name) && f.name in parentData) {
+            start[f.name] = parentData[f.name]
+          } else if (f.default != null) {
+            start[f.name] = f.default
+          } else if (f.type === 'multiselect') {
+            start[f.name] = []
+          }
         }
         setValues(start)
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false))
-  }, [formId])
+  }, [formId, parentSurveyId])
 
   const send = async () => {
     setSending(true); setErrors({}); setError('')

@@ -9,6 +9,8 @@ import Roles from './core/pages/Roles.jsx'
 import Users from './core/pages/Users.jsx'
 import HomeDashboard from './core/pages/AdminProjects.jsx'
 import { homeFor, moduleRoutes, publicModuleRoutes } from './core/registry.js'
+import { LanguageProvider, useTranslation } from './core/language.jsx'
+import LanguageSwitcher from './core/LanguageSwitcher.jsx'
 
 function Loading() {
   return (
@@ -94,14 +96,15 @@ function ThemeButton() {
 
 function AdminMenu() {
   const { can } = useAuth()
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
 
   const items = [
     { to: '/routing', label: 'Channel routing', show: can.manage_routing },
-    { to: '/projects', label: 'Projects', show: true },
-    { to: '/roles', label: 'Roles', show: can.manage_roles },
-    { to: '/users', label: 'Users', show: can.manage_users },
+    { to: '/projects', label: t('label.proyect'), show: true },
+    { to: '/roles', label: t('label.roles'), show: can.manage_roles },
+    { to: '/users', label: t('label.users'), show: can.manage_users },
   ].filter((i) => i.show)
 
   if (!items.length) return null
@@ -136,6 +139,7 @@ function AdminMenu() {
 
 function TopbarAccount() {
   const { user, signOut } = useAuth()
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -157,8 +161,12 @@ function TopbarAccount() {
       </button>
       {open && (
         <div className="topbar__dropdown">
+          <div style={{ padding: '6px 12px', borderBottom: '1px solid var(--line)' }}>
+            <span className="tiny muted" style={{ display: 'block', marginBottom: 4 }}>Language</span>
+            <LanguageSwitcher style={{ width: '100%' }} />
+          </div>
           <button className="topbar__dropdown-item" onClick={leave} disabled={busy}>
-            {busy ? <span className="spin" /> : 'Sign out'}
+            {busy ? <span className="spin" /> : t('button.sign.out')}
           </button>
         </div>
       )}
@@ -230,6 +238,7 @@ export default function App() {
   }, {})
 
   return (
+    <LanguageProvider>
     <Routes>
       {/* Open to everyone — you cannot sign in from behind the gate. */}
       <Route path="/login" element={<Login />} />
@@ -283,5 +292,6 @@ export default function App() {
 
       <Route path="*" element={<NotFound />} />
     </Routes>
+    </LanguageProvider>
   )
 }

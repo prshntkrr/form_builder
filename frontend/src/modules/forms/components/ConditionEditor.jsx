@@ -81,6 +81,7 @@ export default function ConditionEditor({ target, fields, rules, onChange }) {
         >
           <option value="show">Show</option>
           <option value="hide">Hide</option>
+          <option value="require">Require</option>
         </select>
         <span className="tiny muted">{what} when</span>
       </div>

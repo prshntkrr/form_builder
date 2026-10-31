@@ -47,6 +47,15 @@ export const api = {
   validate: (formJson) =>
     request('/forms/validate', { method: 'POST', body: JSON.stringify({ form_json: formJson }) }),
 
+  fieldValues: (formId, field, label, filterField, filterValue) => {
+    let qs = `field=${encodeURIComponent(field)}`
+    if (label) qs += `&label=${encodeURIComponent(label)}`
+    if (filterField && filterValue) {
+      qs += `&filter_field=${encodeURIComponent(filterField)}&filter_value=${encodeURIComponent(filterValue)}`
+    }
+    return request(`/forms/${formId}/field-values?${qs}`)
+  },
+
   // --- ontology ---
   searchConcepts: (q) => request(`/ontology/search?q=${encodeURIComponent(q)}`),
 

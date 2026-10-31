@@ -3,6 +3,7 @@ import { NavLink, useLocation } from 'react-router-dom'
 
 import { CORE_NAV_ITEMS, moduleNavItems } from './registry.js'
 import { useAuth } from './auth.jsx'
+import { useTranslation } from './language.jsx'
 
 /**
  * The system navigation, in collapsible groups.
@@ -50,6 +51,7 @@ function Chevron({ open }) {
 
 export default function SystemNav({ onNavigate }) {
   const { can, modules } = useAuth()
+  const { t } = useTranslation()
   const { pathname } = useLocation()
 
   // Core's own screens are declared the same way and join the same groups.
@@ -93,7 +95,7 @@ export default function SystemNav({ onNavigate }) {
 
   return (
     <>
-      <div className="side__label">System</div>
+      <div className="side__label">{t('label.system')}</div>
       <nav className="side__links">
         {allItems.map((item) => (
           <NavLink
@@ -103,7 +105,7 @@ export default function SystemNav({ onNavigate }) {
             className={({ isActive }) => `side__form${isActive ? ' on' : ''}`}
             onClick={onNavigate}
           >
-            <span className="grow">{item.label}</span>
+            <span className="grow">{item.labelKey ? t(item.labelKey) : item.label}</span>
           </NavLink>
         ))}
       </nav>

@@ -36,6 +36,7 @@ export default function FormRelationship({ form, formId, onChange }) {
 
   const relationship = form.relationship || null
   const isChild = relationship?.type === 'child'
+  const [parentFields, setParentFields] = useState([])
 
   useEffect(() => {
     let cancelled = false
@@ -48,6 +49,13 @@ export default function FormRelationship({ form, formId, onChange }) {
       .catch((e) => { if (!cancelled) { setForms([]); setError(e.message) } })
     return () => { cancelled = true }
   }, [projectId, system])
+
+  useEffect(() => {
+    if (!relationship?.parent_form_id) return setParentFields([])
+    api.renderForm(relationship.parent_form_id)
+      .then((res) => setParentFields((res.form_json?.fields || []).filter((f) => f.name && f.label)))
+      .catch(() => setParentFields([]))
+  }, [relationship?.parent_form_id])
 
   // A form cannot be its own parent, and the backend refuses it anyway — there
   // is no reason to offer it.
@@ -65,76 +73,66 @@ export default function FormRelationship({ form, formId, onChange }) {
 
   return (
     <div className="rel">
-      <span className="minilabel">
-        Form relationship <span className="faint">— what these submissions belong to</span>
-      </span>
-
-      <label className="rel__choice">
-        <input
-          type="radio"
-          name="form-relationship"
-          value="independent"
-          checked={!isChild}
-          onChange={() => choose('independent')}
-        />
-        <span>
-          <b>Parent form</b>
-          <span className="tiny muted">
-            {' '}— its submissions stand on their own, and other forms can hang
-            off them.
-          </span>
-        </span>
-      </label>
-
-      <label className="rel__choice">
-        <input
-          type="radio"
-          name="form-relationship"
-          value="child"
-          checked={isChild}
-          onChange={() => choose('child')}
-        />
-        <span>
-          <b>Child form</b>
-          <span className="tiny muted">
-            {' '}— every submission belongs to one submission of another form.
-          </span>
-        </span>
-      </label>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <span className="minilabel" style={{ margin: 0, whiteSpace: 'nowrap' }}>Form relationship</span>
+        <label className="rel__choice" style={{ margin: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          <input type="radio" name="form-relationship" value="independent"
+            checked={!isChild} onChange={() => choose('independent')} />
+          <span><b>Parent</b></span>
+        </label>
+        <label className="rel__choice" style={{ margin: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          <input type="radio" name="form-relationship" value="child"
+            checked={isChild} onChange={() => choose('child')} />
+          <span><b>Child</b></span>
+        </label>
+      </div>
 
       {isChild && (
-        <label className="cat__field rel__parent">
-          {/* Not "Parent form": that is now the name of the choice above, and
-              two different things under one name is how somebody picks the
-              wrong one. This asks which form it hangs off. */}
-          <span className="minilabel">Which form is the parent</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+          <span className="tiny muted" style={{ whiteSpace: 'nowrap' }}>Parent</span>
           <select
             className="control"
             aria-label="Which form is the parent"
+            style={{ flex: '1 1 180px', minWidth: 0 }}
             value={relationship?.parent_form_id || ''}
             onChange={(e) => onChange({
               relationship: { type: 'child', parent_form_id: e.target.value },
             })}
           >
-            <option value="">Select parent form…</option>
+            <option value="">Select parent…</option>
             {offered.map((f) => (
-              <option key={f.form_id} value={f.form_id}>
-                {f.form_title}
-              </option>
+              <option key={f.form_id} value={f.form_id}>{f.form_title}</option>
             ))}
           </select>
 
-          {forms && offered.length === 0 && (
-            <span className="tiny muted">
-              There is no other form here to be the parent.
-            </span>
+          {relationship?.parent_form_id && parentFields.length > 0 && (
+            <>
+              <span className="tiny muted" style={{ whiteSpace: 'nowrap' }}>Auto-fill</span>
+              <select
+                className="control"
+                multiple
+                size={1}
+                style={{ flex: '1 1 140px', minWidth: 0, height: 28, fontSize: 12, padding: '2px 6px' }}
+                value={relationship.inherit_fields || []}
+                onChange={(e) => {
+                  const selected = Array.from(e.target.selectedOptions, (o) => o.value)
+                  onChange({ relationship: { ...relationship, inherit_fields: selected } })
+                }}
+              >
+                {parentFields.map((pf) => (
+                  <option key={pf.name} value={pf.name}>{pf.label}</option>
+                ))}
+              </select>
+              <span className="tiny muted" style={{ whiteSpace: 'nowrap' }}>
+                {(relationship.inherit_fields || []).length || 0} picked
+              </span>
+            </>
           )}
 
-          <span className="tiny muted">
-            Answering this form will start from a submission of the parent, and
-            each answer records which one. The parent's answers are not copied.
-          </span>
-        </label>
+          {forms && offered.length === 0 && (
+            <span className="tiny muted">No other forms available.</span>
+          )}
+        </div>
       )}
 
       {error && <p className="tiny" style={{ color: 'var(--rose)' }}>{error}</p>}

@@ -1,8 +1,10 @@
 import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api.js'
+import { useTranslation } from '../language.jsx'
 
 export default function ForgotPassword() {
+  const { t } = useTranslation()
   const [email, setEmail] = useState('')
   const [sent, setSent] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -62,7 +64,7 @@ export default function ForgotPassword() {
             {error && <div className="note note--bad">{error}</div>}
 
             <label className="col">
-              <span className="minilabel">Email</span>
+              <span className="minilabel">{t('label.emal')}</span>
               <input className="control" type="email" required autoFocus
                      value={email} onChange={(e) => setEmail(e.target.value)} />
             </label>
@@ -74,7 +76,7 @@ export default function ForgotPassword() {
             </button>
 
             <p className="tiny" style={{ marginTop: 16, textAlign: 'center' }}>
-              <Link to="/login">Back to sign in</Link>
+              <Link to="/login">{t('label.login')}</Link>
             </p>
           </form>
         )}

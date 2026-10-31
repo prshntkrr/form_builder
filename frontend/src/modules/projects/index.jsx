@@ -1,5 +1,6 @@
 import React from 'react'
 import { NavLink } from 'react-router-dom'
+import { useTranslation } from '../../core/language.jsx'
 
 import Forms from './pages/Forms.jsx'
 import Projects from './pages/Projects.jsx'
@@ -24,6 +25,7 @@ import './styles.css'
 function ProjectsNav({ onNavigate }) {
   const { active, system, projectId } = useProjects()
   const { can } = useProject(projectId)
+  const { t } = useTranslation()
 
   const link = (to, label) => (
     <NavLink to={to} onClick={onNavigate}
@@ -37,23 +39,23 @@ function ProjectsNav({ onNavigate }) {
       <ProjectSelector />
 
       {!system && projectId && (
-        <div className="side__label">Project</div>
+        <div className="side__label">{t('label.proyect')}</div>
       )}
 
       {!system && projectId && (
         <nav className="side__links">
-          {link('/forms', 'Forms')}
-          {link('/library', 'Standard forms')}
-          {link('/dashboards', 'Dashboards')}
-          {link('/review', can('project.submissions.review') ? 'Review' : 'My submissions')}
+          {link('/forms', t('label.forms'))}
+          {link('/library', t('label.standard.forms'))}
+          {link('/dashboards', t('label.dashboards'))}
+          {link('/review', can('project.submissions.review') ? t('label.review') : t('label.my.submissions'))}
           {(can('project.members.manage') || can('project.groups.manage')) &&
-            link(`/projects/${projectId}`, 'Project settings')}
+            link(`/projects/${projectId}`, t('label.project.settings'))}
         </nav>
       )}
 
       {system && (
         <nav className="side__links">
-          {link('/forms', 'System forms')}
+          {link('/forms', t('label.system.forms'))}
         </nav>
       )}
 

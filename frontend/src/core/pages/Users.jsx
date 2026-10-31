@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import { api } from '../api.js'
 import { useAuth } from '../auth.jsx'
+import { useTranslation } from '../language.jsx'
 import PasswordField from '../PasswordField.jsx'
 import VoiceEnrolment from '../VoiceEnrolment.jsx'
 
@@ -10,6 +11,7 @@ const when = (value) =>
   }) : 'never'
 
 function AddPerson({ roles, onAdded, onClose }) {
+  const { t } = useTranslation()
   const [form, setForm] = useState({
     email: '', username: '', phone: '', full_name: '', password: '', role: roles[0]?.role_id || '',
   })
@@ -62,7 +64,7 @@ function AddPerson({ roles, onAdded, onClose }) {
 
           <div className="frow__grid" style={{ paddingRight: 0 }}>
             <label className="col">
-              <span className="minilabel">Email <span className="faint">— optional</span></span>
+              <span className="minilabel">{t('label.emal')} <span className="faint">— optional</span></span>
               <input className="control" type="email" autoFocus
                      value={form.email} onChange={set('email')} />
             </label>
@@ -101,7 +103,7 @@ function AddPerson({ roles, onAdded, onClose }) {
                              placeholder="at least 8 characters" />
             </label>
             <label className="col">
-              <span className="minilabel">Role</span>
+              <span className="minilabel">{t('label.rol')}</span>
               <select className="control" value={form.role} onChange={set('role')}>
                 {roles.map((r) => <option key={r.role_id} value={r.role_id}>{r.label}</option>)}
               </select>
@@ -137,6 +139,7 @@ function AddPerson({ roles, onAdded, onClose }) {
 
 export default function Users() {
   const { user: me, can } = useAuth()
+  const { t } = useTranslation()
   const [people, setPeople] = useState(null)
   const [roles, setRoles] = useState([])
   // The account a confirmation is open for. Deleting is not something to do by
@@ -189,7 +192,7 @@ export default function Users() {
     <main className="main">
       <div className="page-head">
         <div>
-          <h1>Users</h1>
+          <h1>{t('label.users')}</h1>
           <p className="lede">Who can sign in, and which role each of them holds.</p>
         </div>
         <button className="btn btn--primary" onClick={() => setAdding(true)}>Add someone</button>
@@ -282,7 +285,7 @@ export default function Users() {
                 {can.delete_users && !isMe && (
                   <button className="btn btn--sm btn--quiet btn--danger"
                           onClick={() => setRemoving(person)}>
-                    Delete
+                    {t('label.delete')}
                   </button>
                 )}
               </div>
@@ -335,6 +338,7 @@ export default function Users() {
  * is the thing somebody is actually deciding about.
  */
 function ConfirmDelete({ person, onClose, onDeleted }) {
+  const { t } = useTranslation()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
@@ -379,7 +383,7 @@ function ConfirmDelete({ person, onClose, onDeleted }) {
         </div>
 
         <div className="sheet__foot">
-          <button className="btn btn--quiet" onClick={onClose}>Cancel</button>
+          <button className="btn btn--quiet" onClick={onClose}>{t('label.cancel')}</button>
           <button className="btn btn--primary btn--danger" onClick={remove} disabled={busy}>
             {busy && <span className="spin" />}
             Delete user
