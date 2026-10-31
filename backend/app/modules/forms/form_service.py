@@ -878,6 +878,18 @@ def set_status(form_id: str, status: str) -> Dict[str, Any]:
                 from app.modules.forms.config_validation import validate_publishable
                 validate_publishable(found["form_json"])
 
+                rel = found["form_json"].get("relationship")
+                if rel and rel.get("type") == "child" and rel.get("parent_form_id"):
+                    cur.execute(
+                        "SELECT form_status FROM forms WHERE form_id = %s",
+                        (rel["parent_form_id"],),
+                    )
+                    parent = cur.fetchone()
+                    if not parent or parent["form_status"] != "Active":
+                        raise FormServiceError(
+                            "Cannot publish: the parent form must be published first"
+                        )
+
         cur.execute(
             """
             UPDATE forms SET form_status = %s, updated_on = CURRENT_TIMESTAMP

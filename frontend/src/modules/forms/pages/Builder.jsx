@@ -501,9 +501,15 @@ export default function Builder() {
     setRecovered(false)
   }
 
+  const [popup, setPopup] = useState(null)
+
   const run = async (kind, fn) => {
     setBusy(kind); setError(''); setSaved(null)
-    try { await fn() } catch (e) { setError(explain(e)) } finally { setBusy(null) }
+    try { await fn() } catch (e) {
+      const msg = explain(e)
+      if (kind === 'publish' || kind === 'save') setPopup(msg)
+      else setError(msg)
+    } finally { setBusy(null) }
   }
 
   /**
@@ -1968,6 +1974,17 @@ export default function Builder() {
                 setVersionDialog(null)
               }}>Save</button>
             </div>
+          </div>
+        </div>
+      )}
+      {popup && (
+        <div className="sheet" onMouseDown={() => setPopup(null)}>
+          <div className="sheet__panel" role="alertdialog" aria-modal="true"
+               onMouseDown={(e) => e.stopPropagation()}
+               style={{ maxWidth: 420, textAlign: 'center', padding: 32 }}>
+            <div style={{ fontSize: 36, marginBottom: 12 }}>⚠️</div>
+            <p style={{ fontSize: 15, fontWeight: 500, marginBottom: 20 }}>{popup}</p>
+            <button className="btn btn--primary" onClick={() => setPopup(null)}>OK</button>
           </div>
         </div>
       )}
