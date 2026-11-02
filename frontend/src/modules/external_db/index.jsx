@@ -15,7 +15,7 @@ export default {
   order: 30,
   navItems: [
     { group: 'data', label: 'External database import', labelKey: 'label.external.database', to: '/external-import',
-      requires: 'import_external_db' },
+      requires: 'import_external_db', icon: 'database' },
   ],
   home: () => null,
   routes: [

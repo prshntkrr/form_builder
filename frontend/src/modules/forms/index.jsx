@@ -1,6 +1,5 @@
 import React from 'react'
 import { Navigate, useParams } from 'react-router-dom'
-import { FormsPanel } from './Nav.jsx'
 import Builder from './pages/Builder.jsx'
 import Catalogues from './pages/Catalogues.jsx'
 import CimmytStandard from './pages/CimmytStandard.jsx'
@@ -38,18 +37,24 @@ export default {
   name: 'forms',
   label: 'Forms',
   order: 10,
-  List: FormsPanel,
+  /* The forms tree is rendered inside the active project's folder in the
+     projects tree (projects/index.jsx imports FormsPanel), so it is no longer a
+     standalone sidebar List. FormsPanel is still exported for that use. */
   /* Where this module's links sit in the system navigation. Core assembles the
      groups, because a group holds links from more than one module — see
      `NAV_GROUPS` in core/registry.js. `requires` is the same capability flag
      as on the route behind it, so the link and the screen cannot disagree. */
   navItems: [
+    { group: 'configuration', label: 'Standard Forms', labelKey: 'label.standard.forms', to: '/library',
+      requires: 'build_forms', icon: 'library' },
     { group: 'configuration', label: 'CIMMYT standard', labelKey: 'label.cimmyt.standard', to: '/cimmyt',
-      requires: 'use_standards' },
+      requires: 'use_standards', icon: 'cimmyt' },
     { group: 'configuration', label: 'Catalogue', labelKey: 'label.catalogue', to: '/catalogues',
-      requires: 'use_client_catalogs' },
+      requires: 'use_client_catalogs', icon: 'catalogue' },
     { group: 'configuration', label: 'Standards', labelKey: 'label.standards', to: '/standards',
-      requires: (can) => can.use_standards || can.use_ontology || can.use_crop_ontology },
+      requires: (can) => can.use_standards || can.use_ontology || can.use_crop_ontology, icon: 'standards' },
+    { group: 'administration', label: 'Channel routing', labelKey: 'label.routing', to: '/routing',
+      requires: 'manage_routing', icon: 'routing', order: 800 },
   ],
   // /forms shows whichever context is active, so it is the right landing
   // place for a project member as much as for a builder.

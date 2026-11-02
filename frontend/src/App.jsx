@@ -1,7 +1,7 @@
-import React, { useRef, useState } from 'react'
-import { Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import React, { useState } from 'react'
+import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom'
 import Sidebar from './core/Sidebar.jsx'
-import { initials, useAuth } from './core/auth.jsx'
+import { useAuth } from './core/auth.jsx'
 import ForgotPassword from './core/pages/ForgotPassword.jsx'
 import Login from './core/pages/Login.jsx'
 import ResetPassword from './core/pages/ResetPassword.jsx'
@@ -9,8 +9,7 @@ import Roles from './core/pages/Roles.jsx'
 import Users from './core/pages/Users.jsx'
 import HomeDashboard from './core/pages/AdminProjects.jsx'
 import { homeFor, moduleRoutes, publicModuleRoutes } from './core/registry.js'
-import { LanguageProvider, useTranslation } from './core/language.jsx'
-import LanguageSwitcher from './core/LanguageSwitcher.jsx'
+import { LanguageProvider } from './core/language.jsx'
 
 function Loading() {
   return (
@@ -72,108 +71,6 @@ function NotFound() {
   )
 }
 
-function ThemeButton() {
-  const [theme, setTheme] = useState(() => {
-    try { return localStorage.getItem('theme') || 'system' } catch { return 'system' }
-  })
-  const next = () => {
-    const order = ['light', 'system', 'dark']
-    const n = order[(order.indexOf(theme) + 1) % order.length]
-    setTheme(n)
-    const root = document.documentElement
-    if (n === 'system') root.removeAttribute('data-theme')
-    else root.setAttribute('data-theme', n)
-    try { localStorage.setItem('theme', n) } catch {}
-  }
-  const icon = theme === 'dark' ? '🌙' : theme === 'light' ? '☀️' : '💻'
-  const label = theme === 'dark' ? 'Dark' : theme === 'light' ? 'Light' : 'Auto'
-  return (
-    <button className="topbar__btn" onClick={next} title={`Theme: ${label}`}>
-      {icon}
-    </button>
-  )
-}
-
-function AdminMenu() {
-  const { can } = useAuth()
-  const { t } = useTranslation()
-  const [open, setOpen] = useState(false)
-  const ref = useRef(null)
-
-  const items = [
-    { to: '/routing', label: 'Channel routing', show: can.manage_routing },
-    { to: '/projects', label: t('label.proyect'), show: true },
-    { to: '/roles', label: t('label.roles'), show: can.manage_roles },
-    { to: '/users', label: t('label.users'), show: can.manage_users },
-  ].filter((i) => i.show)
-
-  if (!items.length) return null
-
-  return (
-    <div className="topbar__account" ref={ref}>
-      <button className="topbar__btn" onClick={() => setOpen(!open)} title="Administration">
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
-             strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="12" cy="12" r="3" />
-          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-        </svg>
-      </button>
-      {open && (
-        <div className="topbar__dropdown" style={{ minWidth: 200 }}>
-          {items.map((item) => (
-            <Link
-              key={item.to}
-              to={item.to}
-              className="topbar__dropdown-item"
-              style={{ textDecoration: 'none' }}
-              onClick={() => setOpen(false)}
-            >
-              {item.label}
-            </Link>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function TopbarAccount() {
-  const { user, signOut } = useAuth()
-  const { t } = useTranslation()
-  const navigate = useNavigate()
-  const [open, setOpen] = useState(false)
-  const [busy, setBusy] = useState(false)
-  const ref = useRef(null)
-
-  const leave = async () => {
-    setBusy(true)
-    await signOut()
-    navigate('/login', { replace: true, state: { signedOut: true } })
-  }
-
-  return (
-    <div className="topbar__account" ref={ref}>
-      <button className="topbar__user" onClick={() => setOpen(!open)}>
-        <span className="topbar__avatar">{initials(user)}</span>
-        <span className="topbar__name">{user?.full_name || user?.email}</span>
-        <span className="topbar__role">{user?.role_label || user?.role}</span>
-        <span style={{ fontSize: 10, color: 'var(--ink-3)' }}>▾</span>
-      </button>
-      {open && (
-        <div className="topbar__dropdown">
-          <div style={{ padding: '6px 12px', borderBottom: '1px solid var(--line)' }}>
-            <span className="tiny muted" style={{ display: 'block', marginBottom: 4 }}>Language</span>
-            <LanguageSwitcher style={{ width: '100%' }} />
-          </div>
-          <button className="topbar__dropdown-item" onClick={leave} disabled={busy}>
-            {busy ? <span className="spin" /> : t('button.sign.out')}
-          </button>
-        </div>
-      )}
-    </div>
-  )
-}
-
 /** The shell: navigation plus whatever is being worked on. */
 function Shell() {
   const [mobileMenu, setMobileMenu] = useState(false)
@@ -193,23 +90,13 @@ function Shell() {
         {mobileMenu ? '✕' : '☰'}
       </button>
 
+      {collapsed && (
+        <button className="side-expand" onClick={toggleCollapse} title="Expand sidebar" aria-label="Expand sidebar">
+          ☰
+        </button>
+      )}
       <Sidebar onNavigate={() => setMobileMenu(false)} collapsed={collapsed} onToggleCollapse={toggleCollapse} />
       <div className="body" onClick={() => mobileMenu && setMobileMenu(false)}>
-        <div className="topbar">
-          {collapsed && (
-            <button className="topbar__btn topbar__collapse" onClick={toggleCollapse} title="Expand sidebar">
-              ☰
-            </button>
-          )}
-          <Link to="/" className="topbar__brand">
-            <span className="brand__mark">e</span>
-            e-Agrology
-          </Link>
-          <span className="grow" />
-          <ThemeButton />
-          <AdminMenu />
-          <TopbarAccount />
-        </div>
         <Outlet />
       </div>
     </div>

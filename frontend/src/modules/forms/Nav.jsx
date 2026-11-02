@@ -9,12 +9,22 @@ import { useProjects } from '../projects/active.js'
 import { useTranslation } from '../../core/language.jsx'
 
 export const SECTIONS = [
+  // Questions now holds the unified canvas (questions + layout); the classic
+  // Design tab is reachable from the builder's own "Classic editor" toggle.
   ['questions', 'Questions', 'label.questions'],
-  ['design', 'Design', 'label.design'],
   ['preview', 'Preview', 'label.preview'],
   ['json', 'JSON', 'label.json'],
   ['history', 'History', 'label.history'],
   ['responses', 'Data View', 'label.data.view'],
+]
+
+// What an expanded form shows in the sidebar tree. Only these two — the editor
+// pages (Questions, Preview, Script, JSON) are tabs on the form itself, reached
+// by clicking the form name. Data View and History are the destinations you go
+// to *without* opening the editor, so they stay in the rail.
+const TREE_PAGES = [
+  ['responses', 'Data View', 'label.data.view'],
+  ['history', 'History', 'label.history'],
 ]
 
 /**
@@ -24,7 +34,7 @@ export const SECTIONS = [
  * space the sidebar has left. Anything rendered after it would be pushed to the
  * bottom, which is why core keeps its own links above the panels.
  */
-export function FormsPanel({ onNavigate }) {
+export function FormsPanel({ onNavigate, embedded = false }) {
   const { can } = useAuth()
   const { t } = useTranslation()
   const revision = useFormsRevision()
@@ -76,8 +86,18 @@ export function FormsPanel({ onNavigate }) {
     activeRow.current.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' })
   }, [activeId, forms])
 
+  const navigate = useNavigate()
+
   const toggleExpand = (formId) =>
     setExpanded((cur) => cur === formId ? null : formId)
+
+  // Clicking a form opens its editor on the Questions tab (where Preview, Script
+  // and JSON live as tabs) and expands its row to reveal Data View and History.
+  const openForm = (formId) => {
+    navigate(`/forms/${formId}/questions`)
+    setExpanded(formId)
+    onNavigate?.()
+  }
 
   // The list follows the context the application is working in, so a project's
   // sidebar never shows another project's forms — or, while a project is
@@ -167,19 +187,26 @@ export function FormsPanel({ onNavigate }) {
 
   const visible = (rows || []).filter(({ form }) => !hidden(form))
 
+  // Embedded inside a project folder in the tree: the folder already shows the
+  // project's name and controls expansion, so the panel's own header is dropped
+  // and the list is always shown.
+  const treeOpen = embedded || sectionOpen
+
   return (
     <>
-      <div className="side__label side__label--rule" style={{ cursor: 'pointer' }} onClick={toggleSection}>
-        <svg className={`nav__chev${sectionOpen ? ' on' : ''}`} viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">
-          <path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-        {builder ? (system ? t('label.system.forms') : active?.name || t('label.forms')) : t('label.forms')}
-        <NavLink to={builder ? '/forms' : '/fill'} className="side__all" onClick={(e) => { e.stopPropagation(); onNavigate?.() }}>
-          All
-        </NavLink>
-      </div>
+      {!embedded && (
+        <div className="side__label side__label--rule" style={{ cursor: 'pointer' }} onClick={toggleSection}>
+          <svg className={`nav__chev${sectionOpen ? ' on' : ''}`} viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">
+            <path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          {builder ? (system ? t('label.system.forms') : active?.name || t('label.forms')) : t('label.forms')}
+          <NavLink to={builder ? '/forms' : '/fill'} className="side__all" onClick={(e) => { e.stopPropagation(); onNavigate?.() }}>
+            All
+          </NavLink>
+        </div>
+      )}
 
-      {sectionOpen && forms && forms.length > 6 && (
+      {!embedded && treeOpen && forms && forms.length > 6 && (
         <div className="side__search">
           <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true">
             <circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" strokeWidth="2" />
@@ -196,7 +223,7 @@ export function FormsPanel({ onNavigate }) {
         </div>
       )}
 
-      <nav className="side__forms" hidden={!sectionOpen}>
+      <nav className={`side__forms${embedded ? ' side__forms--embedded' : ''}`} hidden={!treeOpen}>
         {forms === null && [0, 1, 2].map((i) => (
           <div key={i} className="skeleton" style={{ height: 28, margin: '3px 12px' }} />
         ))}
@@ -263,7 +290,7 @@ export function FormsPanel({ onNavigate }) {
                 <button
                   type="button"
                   className={`side__form side__form--tree grow${open ? ' on' : ''}`}
-                  onClick={() => toggleExpand(f.form_id)}
+                  onClick={() => openForm(f.form_id)}
                   title={f.form_title}
                 >
                   <svg className={`side__tree-chev${isExpanded ? ' on' : ''}`}
@@ -278,7 +305,7 @@ export function FormsPanel({ onNavigate }) {
 
               {isExpanded && (
                 <div className="side__tree-sub" style={{ '--depth': depth + 1 }}>
-                  {SECTIONS.map(([key, label, labelKey]) => (
+                  {TREE_PAGES.map(([key, label, labelKey]) => (
                     <NavLink
                       key={key}
                       to={`/forms/${f.form_id}/${key}`}
@@ -288,22 +315,6 @@ export function FormsPanel({ onNavigate }) {
                       {labelKey ? t(labelKey) : label}
                     </NavLink>
                   ))}
-                  <NavLink
-                    to={`/f/${f.form_id}`}
-                    className="side__tree-item side__tree-item--action"
-                    onClick={onNavigate}
-                  >
-                    Open live form
-                  </NavLink>
-                  {can.export_forms && (
-                    <NavLink
-                      to={`/forms/${f.form_id}/share`}
-                      className="side__tree-item side__tree-item--action"
-                      onClick={onNavigate}
-                    >
-                      Share publicly
-                    </NavLink>
-                  )}
                 </div>
               )}
             </div>

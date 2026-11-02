@@ -766,6 +766,20 @@ export default function FieldEditor({
             onChange={onRules}
           />
         )}
+
+        {/* Links this question to a shared field standard — the pairing is made
+            on the Standards tab, so this is the one-click way in from the field. */}
+        <button
+          type="button"
+          className="btn btn--quiet btn--sm insp__tostandard"
+          onClick={() => setTab('standards')}
+        >
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+               strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M4 5h13M4 10h13M4 15h8" /><path d="M17 14l3 3 3-3" transform="translate(-4 0)" />
+          </svg>
+          Add to Field Standard
+        </button>
         </div>
         )}
 

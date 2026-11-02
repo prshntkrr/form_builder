@@ -1,8 +1,10 @@
-import React, { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import React, { useEffect, useRef, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { api } from './api.js'
-import { useAuth } from './auth.jsx'
-import { homeFor, moduleLists, moduleNavs } from './registry.js'
+import { initials, useAuth } from './auth.jsx'
+import { useTranslation } from './language.jsx'
+import LanguageSwitcher from './LanguageSwitcher.jsx'
+import { homeFor, moduleNavs } from './registry.js'
 import SystemNav from './SystemNav.jsx'
 
 function Trouble() {
@@ -26,6 +28,77 @@ function Trouble() {
   )
 }
 
+/** Theme cycle — light → system → dark — now in the sidebar foot. */
+function ThemeButton() {
+  const [theme, setTheme] = useState(() => {
+    try { return localStorage.getItem('theme') || 'system' } catch { return 'system' }
+  })
+  const next = () => {
+    const order = ['light', 'system', 'dark']
+    const n = order[(order.indexOf(theme) + 1) % order.length]
+    setTheme(n)
+    const root = document.documentElement
+    if (n === 'system') root.removeAttribute('data-theme')
+    else root.setAttribute('data-theme', n)
+    try { localStorage.setItem('theme', n) } catch {}
+  }
+  const icon = theme === 'dark' ? '🌙' : theme === 'light' ? '☀️' : '💻'
+  const label = theme === 'dark' ? 'Dark' : theme === 'light' ? 'Light' : 'Auto'
+  return (
+    <button className="side__themebtn" onClick={next} title={`Theme: ${label}`} aria-label={`Theme: ${label}`}>
+      {icon}
+    </button>
+  )
+}
+
+/** The account menu, moved from the old top bar into the sidebar foot. Its
+ *  dropdown opens upward, since it now sits at the bottom of the rail. */
+function SidebarAccount({ onNavigate }) {
+  const { user, signOut } = useAuth()
+  const { t } = useTranslation()
+  const navigate = useNavigate()
+  const [open, setOpen] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    const away = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', away)
+    return () => document.removeEventListener('mousedown', away)
+  }, [open])
+
+  const leave = async () => {
+    setBusy(true)
+    await signOut()
+    navigate('/login', { replace: true, state: { signedOut: true } })
+  }
+
+  return (
+    <div className="side__account" ref={ref}>
+      <button className="side__user" onClick={() => setOpen(!open)}>
+        <span className="side__avatar">{initials(user)}</span>
+        <span className="side__userinfo">
+          <span className="side__username">{user?.full_name || user?.email}</span>
+          <span className="side__userrole">{user?.role_label || user?.role}</span>
+        </span>
+        <span className="side__usercaret" aria-hidden="true">▾</span>
+      </button>
+      {open && (
+        <div className="side__usermenu">
+          <div className="side__usermenu-lang">
+            <span className="tiny">Language</span>
+            <LanguageSwitcher style={{ width: '100%' }} />
+          </div>
+          <button className="side__usermenu-item" onClick={leave} disabled={busy}>
+            {busy ? <span className="spin" /> : t('button.sign.out')}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function Sidebar({ onNavigate, collapsed, onToggleCollapse }) {
   const { can, modules } = useAuth()
 
@@ -40,11 +113,22 @@ export default function Sidebar({ onNavigate, collapsed, onToggleCollapse }) {
         </Link>
       </div>
 
-      {moduleNavs(modules).map(({ name, Nav }) => <Nav key={name} onNavigate={onNavigate} />)}
-      <SystemNav onNavigate={onNavigate} />
-      {moduleLists(modules).map(({ name, List }) => <List key={name} onNavigate={onNavigate} />)}
+      {/* Only the projects tree scrolls — it is the long, growing list. The
+          system groups below it stay put, so Configuration / Data & Channels /
+          Administration are always in reach. */}
+      <div className="side__scroll">
+        {moduleNavs(modules).map(({ name, Nav }) => <Nav key={name} onNavigate={onNavigate} />)}
+      </div>
+
+      <div className="side__sys">
+        <SystemNav onNavigate={onNavigate} />
+      </div>
 
       <div className="side__foot">
+        <div className="side__acctrow">
+          <SidebarAccount onNavigate={onNavigate} />
+          <ThemeButton />
+        </div>
         <Trouble />
         <button className="side__collapse-btn" onClick={onToggleCollapse} title="Collapse sidebar">
           ◁ Collapse

@@ -114,15 +114,19 @@ describe('the builder page fills the window', () => {
   })
 
   test('it is bounded by the viewport, so its children can scroll', () => {
-    expect(winner(BUILDER, 'height')).toBe('100vh')
+    // The height is divided by the global UI scale so the builder still fills
+    // the window under the `zoom` applied to the body.
+    expect(winner(BUILDER, 'height')).toBe('calc(100vh / var(--ui-scale))')
     expect(winner(BUILDER, 'overflow')).toBe('hidden')
   })
 })
 
 describe('the two panes scroll on their own', () => {
-  test('the workspace is a grid the height of the page', () => {
+  test('the workspace is a grid that fills the space between the bands', () => {
+    // The builder is a flex column now — header band, columns, action bar — so
+    // the grid takes the remaining height with `flex`, not `height: 100%`.
     expect(winner(['workspace'], 'display')).toBe('grid')
-    expect(winner(['workspace'], 'height')).toBe('100%')
+    expect(winner(['workspace'], 'flex')).toBe('1 1 auto')
     expect(winner(['workspace'], 'min-height')).toBe('0')
   })
 
@@ -238,16 +242,24 @@ describe('the builder action bar', () => {
     expect(list.slice(0, list.indexOf('}'))).toContain('overflow-y: auto')
   })
 
-  test('every button it had is still on it', () => {
+  test('the bottom bar keeps the reading actions; saving moved to the header', () => {
     const builder = read('src/modules/forms/pages/Builder.jsx')
     const start = builder.indexOf('className="savebar"')
     const bar = builder.slice(start, start + 4000)
 
-    for (const label of ['Add to library', 'Check responses', 'Back to draft',
-                         'Save changes']) {
+    // The bottom bar reads with the count: check collected answers, export, and
+    // promote the whole form to a shared standard.
+    for (const label of ['Check responses', 'Export Excel', 'Add to Standard forms']) {
       expect(bar).toContain(label)
     }
     // And the count that leads it.
     expect(bar).toContain('question{form.fields.length === 1')
+
+    // The save / publish / draft controls now live in the page header, not here.
+    const head = builder.slice(builder.indexOf('className="bld-actions"'),
+                               builder.indexOf('className="bld-actions"') + 9000)
+    for (const label of ['Save changes', 'Publish', 'Back to draft', 'Save as draft', 'Preview']) {
+      expect(head).toContain(label)
+    }
   })
 })
