@@ -91,7 +91,7 @@ export default function FieldStandards() {
           <h1 className="page__title" style={{ margin: 0, fontSize: 20 }}>Field Standards</h1>
           <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>Reusable field definitions — matching fields are suggested in the form builder.</p>
         </div>
-        <button className="btn btn--primary" onClick={openAdd}>+ Add Field</button>
+        {/* Fields are added from the form builder, not from this page */}
       </div>
 
       <div className="fm__bar">
