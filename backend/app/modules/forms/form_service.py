@@ -617,7 +617,10 @@ def create_form(
         row = dict(cur.fetchone())
 
         cur.execute(
-            "INSERT INTO form_version (form_id, version_no, form_json) VALUES (%s, %s, %s)",
+            """INSERT INTO form_version (form_id, version_no, form_json)
+               VALUES (%s, %s, %s)
+               ON CONFLICT (form_id, version_no)
+               DO UPDATE SET form_json = EXCLUDED.form_json""",
             (form_id, 1, Json(definition)),
         )
 
