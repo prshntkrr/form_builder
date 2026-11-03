@@ -1246,15 +1246,47 @@ export default function Builder() {
   // the same `form` state (sections, fields, layout) the rest of the builder
   // uses. Deleting keeps the section's questions — they go back to Unplaced —
   // rather than destroying answers; say so in the confirm on the canvas.
-  const deleteSectionByKey = (key) => {
+  // Section deletion — a modal asks whether to move the questions or delete them too.
+  const [deletingSection, setDeletingSection] = useState(null) // { key, count }
+  const [moveTo, setMoveTo] = useState('')
+
+  const confirmDeleteSection = (moveQuestions) => {
+    const key = deletingSection.key
     const sections = (form.sections || []).filter((s) => s.key !== key)
-    const fields = form.fields.map((f) => ((f.section || null) === key ? { ...f, section: null } : f))
     const rules = (form.rules || []).filter((r) => !(r.target?.type === 'section' && r.target?.key === key))
+
+    let fields
+    if (moveQuestions) {
+      const target = moveTo || null
+      fields = form.fields.map((f) => ((f.section || null) === key ? { ...f, section: target } : f))
+    } else {
+      const inSection = new Set(form.fields.filter((f) => (f.section || null) === key).map((f) => f.name))
+      fields = form.fields.filter((f) => !inSection.has(f.name))
+    }
+
     const next = { ...form, sections, fields }
     if (rules.length !== (form.rules || []).length) next.rules = rules
     if (form.layout?.sections) next.layout = removeSection(form.layout, key)
     setForm(next)
     if (chosenSection === key) setChosenSection(null)
+    setDeletingSection(null)
+    setMoveTo('')
+  }
+
+  const deleteSectionByKey = (key, count) => {
+    if (!count) {
+      // Empty section — just remove it, no modal needed.
+      const sections = (form.sections || []).filter((s) => s.key !== key)
+      const rules = (form.rules || []).filter((r) => !(r.target?.type === 'section' && r.target?.key === key))
+      const next = { ...form, sections }
+      if (rules.length !== (form.rules || []).length) next.rules = rules
+      if (form.layout?.sections) next.layout = removeSection(form.layout, key)
+      setForm(next)
+      if (chosenSection === key) setChosenSection(null)
+      return
+    }
+    setDeletingSection({ key, count })
+    setMoveTo('')
   }
 
   const duplicateSectionByKey = (key) => {
@@ -2292,6 +2324,37 @@ export default function Builder() {
             <div style={{ fontSize: 36, marginBottom: 12 }}>⚠️</div>
             <p style={{ fontSize: 15, fontWeight: 500, marginBottom: 20 }}>{popup}</p>
             <button className="btn btn--primary" onClick={() => setPopup(null)}>OK</button>
+          </div>
+        </div>
+      )}
+      {deletingSection && (
+        <div className="sheet" onMouseDown={() => { setDeletingSection(null); setMoveTo('') }}>
+          <div className="sheet__panel" role="alertdialog" aria-modal="true"
+               onMouseDown={(e) => e.stopPropagation()}
+               style={{ maxWidth: 440 }}>
+            <div className="sheet__head">
+              <h3>Delete section</h3>
+            </div>
+            <div className="sheet__body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <p style={{ margin: 0 }}>
+                This section has <strong>{deletingSection.count}</strong> question{deletingSection.count === 1 ? '' : 's'}.
+                Deleting it will also delete {deletingSection.count === 1 ? 'that question' : 'all its questions'} unless you move them first.
+              </p>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span className="minilabel">Move questions to</span>
+                <select className="control" value={moveTo} onChange={(e) => setMoveTo(e.target.value)}>
+                  <option value="">Unplaced questions</option>
+                  {(form.sections || [])
+                    .filter((s) => s.key !== deletingSection.key)
+                    .map((s) => <option key={s.key} value={s.key}>{s.title || s.key}</option>)}
+                </select>
+              </label>
+            </div>
+            <div className="sheet__foot">
+              <button className="btn" onClick={() => { setDeletingSection(null); setMoveTo('') }}>Cancel</button>
+              <button className="btn btn--primary" onClick={() => confirmDeleteSection(true)}>Move &amp; delete section</button>
+              <button className="btn btn--danger" onClick={() => confirmDeleteSection(false)}>Delete all</button>
+            </div>
           </div>
         </div>
       )}

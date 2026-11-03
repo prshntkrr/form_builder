@@ -277,7 +277,7 @@ export default function CanvasDesigner({
                       <button type="button" role="menuitem" className="cv__menuitem cv__menuitem--danger"
                         aria-label={`Delete ${heading}`}
                         onClick={() => {
-                          if (confirmRemove(count, 'section')) onDeleteSection?.(section.id)
+                          onDeleteSection?.(section.id, count)
                           setMenu(null)
                         }}>Delete</button>
                     </div>

@@ -221,7 +221,6 @@ a:hover { text-decoration: underline; }
 .proj__sub.on { background: rgba(255,255,255,.12); color: #fff; font-weight: 600; }
 
 /* The forms tree, embedded under a project folder — not its own scroll area. */
-.side__forms--embedded { flex: none; min-height: 0; max-height: none; overflow: visible; padding: 2px 0 0; }
 
 .side {
   /* Everything above and below the scrolling middle stays put: the brand, the
@@ -248,6 +247,7 @@ a:hover { text-decoration: underline; }
 /* Neither of these may be squeezed: a heading and a search box that shrink are
    a heading and a search box nobody can use. */
 .side__label, .side__search { flex: none; }
+.side__forms--embedded { flex: none; min-height: 0; max-height: none; overflow: visible; padding: 2px 0 0; overscroll-behavior: auto; }
 .side__forms[hidden] { display: none; }
 
 /* The foot stays at the bottom even when the list above is short. */
