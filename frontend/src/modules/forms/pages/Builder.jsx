@@ -317,7 +317,9 @@ export default function Builder() {
             // (it can still be changed while this is an unsaved draft).
             const channel = location.state?.channel || 'web'
             setNewChannel(channel)
-            setForm(prep({ ...res.form_json, channel }))
+            const fj = { ...res.form_json, channel }
+            fj.fields = (fj.fields || []).map((f) => ({ ...f, _orig: f.name }))
+            setForm(prep(fj))
           })
           .catch((e) => setError(e.message))
           .finally(() => setBusy(null))
@@ -1119,6 +1121,11 @@ export default function Builder() {
   // question in that section and place it there, then select it — the same
   // field `add` makes, but sectioned and placed rather than loose.
   const addFieldToSection = (key) => {
+    const sec = (form.sections || []).find((s) => s.key === key)
+    if (sec && !sec.title?.trim()) {
+      setPopup('Please set a section name before adding questions to it.')
+      return
+    }
     const n = Math.max(
       form.fields.length,
       ...form.fields.map((f) => Number(/^question_(\d+)$/.exec(f.name || '')?.[1] || 0)),
@@ -1182,6 +1189,14 @@ export default function Builder() {
 
   const addFieldAt = (type, containerId, index) => {
     if (!form.layout?.sections) return
+    const ownerSec = form.layout.sections.find((s) => (s.containers || []).some((c) => c.id === containerId))
+    if (ownerSec) {
+      const fSec = (form.sections || []).find((s) => s.key === ownerSec.id)
+      if (fSec && !fSec.title?.trim()) {
+        setPopup('Please set a section name before adding questions to it.')
+        return
+      }
+    }
     makeAndPlace(type, containerId, index, form.layout)
   }
 
@@ -1266,7 +1281,17 @@ export default function Builder() {
 
     const next = { ...form, sections, fields }
     if (rules.length !== (form.rules || []).length) next.rules = rules
-    if (form.layout?.sections) next.layout = removeSection(form.layout, key)
+    if (form.layout?.sections) {
+      const lSrc = form.layout.sections.find((s) => s.id === key)
+      const movedContainers = (moveQuestions && moveTo && lSrc) ? lSrc.containers || [] : []
+      let layoutSections = form.layout.sections.filter((s) => s.id !== key)
+      if (movedContainers.length) {
+        layoutSections = layoutSections.map((s) =>
+          s.id === moveTo ? { ...s, containers: [...(s.containers || []), ...movedContainers] } : s
+        )
+      }
+      next.layout = { ...form.layout, sections: layoutSections }
+    }
     setForm(next)
     if (chosenSection === key) setChosenSection(null)
     setDeletingSection(null)
@@ -2137,7 +2162,10 @@ export default function Builder() {
           projectId={buildingIn || activeProjectId()}
           onClose={() => setPicker(null)}
           onPick={(formJson) => {
-            setForm(prep(form ? keepChannel(formJson) : { ...formJson, channel: newChannel }, editing))
+            const existing = new Set((form?.fields || []).map((f) => f.name))
+            const fj = form ? keepChannel(formJson) : { ...formJson, channel: newChannel }
+            fj.fields = (fj.fields || []).map((f) => existing.has(f.name) ? f : { ...f, _orig: f._orig || f.name })
+            setForm(prep(fj, editing))
             setPicker(null)
             setTrial({})
           }}
