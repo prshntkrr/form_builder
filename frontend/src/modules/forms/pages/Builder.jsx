@@ -400,7 +400,10 @@ export default function Builder() {
    *  the attempt says so and the next minute tries again. What it must never do
    *  is interrupt somebody mid-question with an error they did not ask for.
    */
+  const autoSavingRef = useRef(false)
   const autosave = async () => {
+    if (autoSavingRef.current) return
+    autoSavingRef.current = true
     const payload = untag(form)
 
     try {
@@ -455,6 +458,8 @@ export default function Builder() {
         why: e?.fieldErrors?.length || e?.status === 422 ? explain(e) : '',
       }))
       return false
+    } finally {
+      autoSavingRef.current = false
     }
   }
 
@@ -769,6 +774,7 @@ export default function Builder() {
 
   const save = (saveAs = 'Active') =>
     run('save', async () => {
+      while (autoSavingRef.current) await new Promise((r) => setTimeout(r, 100))
       if (!namedOnPurpose()) return
       const renames = {}
       for (const f of form.fields) if (f._orig && f._orig !== f.name) renames[f._orig] = f.name

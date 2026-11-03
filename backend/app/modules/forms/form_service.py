@@ -810,7 +810,13 @@ def update_form(
             cur.execute(
                 "INSERT INTO form_version (form_id, version_no, form_json,"
                 " version_tag, version_label, version_description, saved_at)"
-                " VALUES (%s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)",
+                " VALUES (%s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)"
+                " ON CONFLICT (form_id, version_no) DO UPDATE"
+                " SET form_json = EXCLUDED.form_json,"
+                "     version_tag = EXCLUDED.version_tag,"
+                "     version_label = EXCLUDED.version_label,"
+                "     version_description = EXCLUDED.version_description,"
+                "     saved_at = EXCLUDED.saved_at",
                 (form_id, version_no, Json(definition),
                  version_tag, version_label, version_description),
             )
