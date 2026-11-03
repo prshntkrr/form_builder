@@ -271,6 +271,7 @@ export default function Builder() {
   // autosave created it as a Draft. From then on this is the form being edited,
   // even though the URL still says /builder.
   const [autoSavedId, setAutoSavedId] = useState(null)
+  const autoSavedIdRef = useRef(null)
   // When the server last took a copy, and whether the last attempt got there.
   const [autoSaved, setAutoSaved] = useState(null)
   /* The payload the server last took, so a form nobody has touched since is not
@@ -293,6 +294,7 @@ export default function Builder() {
     setTrial({})
     setDraftTab('questions')
     setRecovered(null)
+    autoSavedIdRef.current = null
     setAutoSavedId(null)
     setAutoSaved(null)
     setWaRoute({ receiver_number: '', keyword: '' })
@@ -426,6 +428,7 @@ export default function Builder() {
       } else {
         const made = await api.createForm(payload, undefined, 'Draft', buildingIn,
                                           whatsappRouting(), ivrRouting())
+        autoSavedIdRef.current = made.form_id
         setAutoSavedId(made.form_id)
         setStatus('Draft')
         formsChanged()
@@ -493,7 +496,8 @@ export default function Builder() {
     // not send the same form every minute for an afternoon.
     if (JSON.stringify(untag(form)) === sentRef.current) return
 
-    autosave()
+    // autosave disabled temporarily — manual save/publish only
+    // autosave()
   }
 
   keepRef.current = () => {
@@ -544,7 +548,7 @@ export default function Builder() {
     }, false))
     // Whatever autosave had already created for these questions is the form
     // they belong to; without this the next save would make a second one.
-    if (recovered.serverId) setAutoSavedId(recovered.serverId)
+    if (recovered.serverId) { autoSavedIdRef.current = recovered.serverId; setAutoSavedId(recovered.serverId) }
     recovery.drop(editing ? formId : null)
     setRecovered(false)
   }
@@ -631,6 +635,7 @@ export default function Builder() {
        not inherit the last one's id or the browser copy kept for it. */
     recovery.drop(null)
     setRecovered(false)
+    autoSavedIdRef.current = null
     setAutoSavedId(null)
     setAutoSaved(null)
     sentRef.current = null
@@ -788,12 +793,15 @@ export default function Builder() {
         if (versionMeta === null) return // cancelled
       }
 
-      const result = draftId
-        ? await api.updateForm(draftId, payload, undefined, renames, whatsappRouting(), ivrRouting(), versionMeta)
+      // Use the ref for the latest id — React state may not have re-rendered
+      // after autosave set it, so the closure's `draftId` can be stale.
+      const liveDraftId = editing ? formId : autoSavedIdRef.current
+      const result = liveDraftId
+        ? await api.updateForm(liveDraftId, payload, undefined, renames, whatsappRouting(), ivrRouting(), versionMeta)
         : await api.createForm(payload, undefined, saveAs, buildingIn, whatsappRouting(), ivrRouting())
 
-      if (draftId && !editing && saveAs !== 'Draft') {
-        await api.setStatus(draftId, saveAs)
+      if (liveDraftId && !editing && saveAs !== 'Draft') {
+        await api.setStatus(liveDraftId, saveAs)
       }
 
       formsChanged()
@@ -804,7 +812,7 @@ export default function Builder() {
       setRecovered(false)
 
       if (!editing) {
-        const newId = result.form_id || draftId
+        const newId = result.form_id || liveDraftId
         // A draft has nothing live to open, so stay in the builder on it. Only a
         // published form goes straight to the form people will fill in.
         // A form answered elsewhere (WhatsApp) has no page here to fill in, so
@@ -1831,7 +1839,8 @@ export default function Builder() {
       {/* Whether the server has this draft. Said plainly, because an autosave
           nobody can see is an autosave nobody trusts — and a failing one has to
           be visible without interrupting the question being typed. */}
-      {unsaved && autoSaved && (
+      {/* autosave disabled temporarily */}
+      {false && unsaved && autoSaved && (
         <p className={`tiny autosave${autoSaved.ok ? '' : ' autosave--stale'}`} role="status">
           {autoSaved.ok
             ? `Draft saved automatically at ${new Date(autoSaved.at).toLocaleTimeString()}`

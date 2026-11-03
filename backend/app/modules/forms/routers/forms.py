@@ -474,6 +474,7 @@ def create(req: CreateFormRequest, user: Dict[str, Any] = Depends(_could_build_s
     except form_service.FormServiceError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except IntegrityError as exc:
+        logger.warning("Form creation IntegrityError: %s", exc)
         raise HTTPException(status_code=409, detail=_constraint_message(exc))
     except Exception as exc:
         logger.exception("Form creation failed")
