@@ -4,6 +4,7 @@ import Builder from './pages/Builder.jsx'
 import Catalogues from './pages/Catalogues.jsx'
 import CimmytStandard from './pages/CimmytStandard.jsx'
 import Standards from './pages/Standards.jsx'
+import FieldStandards from './pages/FieldStandards.jsx'
 import FormFill from './pages/FormFill.jsx'
 import FormRecords from './pages/FormRecords.jsx'
 import RecordDetailPage from './pages/RecordDetail.jsx'
@@ -53,6 +54,8 @@ export default {
       requires: 'use_client_catalogs', icon: 'catalogue' },
     { group: 'configuration', label: 'Standards', labelKey: 'label.standards', to: '/standards',
       requires: (can) => can.use_standards || can.use_ontology || can.use_crop_ontology, icon: 'standards' },
+    { group: 'configuration', label: 'Field Standards', labelKey: 'label.field.standards', to: '/field-standards',
+      requires: 'manage_field_master', icon: 'standards' },
     { group: 'administration', label: 'Channel routing', labelKey: 'label.routing', to: '/routing',
       requires: 'manage_routing', icon: 'routing', order: 800 },
   ],
@@ -76,6 +79,7 @@ export default {
     { path: '/cimmyt', element: <CimmytStandard />, requires: 'use_standards' },
     { path: '/catalogues', element: <Catalogues />, requires: 'use_client_catalogs' },
     { path: '/standards', element: <Standards />, requires: 'use_standards' },
+    { path: '/field-standards', element: <FieldStandards />, requires: 'manage_field_master' },
     { path: '/routing', element: <Routing />, requires: 'manage_routing' },
     /* WhatsApp's own operational list: every WhatsApp form and the keyword
        that reaches it, including the ones with no keyword yet. */

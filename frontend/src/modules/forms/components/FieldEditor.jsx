@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { DIGITS, NUMERIC, STORAGE, TEXTUAL, TYPES, WITH_OPTIONS } from '../fieldTypes.js'
 import PolygonPicker from './PolygonPicker.jsx'
 import StandardPicker from './StandardPicker.jsx'
+import FieldMasterSuggest from './FieldMasterSuggest.jsx'
 import ConditionEditor from './ConditionEditor.jsx'
 import { api } from '../api.js'
 import CatalogueValues from './CatalogueValues.jsx'
@@ -355,6 +356,7 @@ export default function FieldEditor({
   // The name of a section being created from this question, or null when the
   // picker is just a picker.
   const [newSection, setNewSection] = useState(null)
+  const [suggestOpen, setSuggestOpen] = useState(false)
 
   const row = useRef(null)
   const [tab, setTab] = useState('field')
@@ -387,6 +389,24 @@ export default function FieldEditor({
     patch(changes)
   }
 
+  const pickStandard = (std) => {
+    const fj = std.field_json || {}
+    const fixedName = slug(std.name) || field.name
+    const changes = {
+      label: std.name,
+      name: fixedName,
+      field_id: std.field_id,
+      type: fj.type || std.data_type || 'text',
+      required: fj.required || false,
+      placeholder: fj.placeholder || '',
+      help_text: fj.hint || '',
+    }
+    if (fj.choices?.length) changes.options = fj.choices.map((c) => ({ label: c, value: slug(c) || c }))
+    if (std.ref_ontology) changes.ref_ontology = std.ref_ontology
+    patch(changes)
+    setSuggestOpen(false)
+  }
+
   const editOption = (i, label) => {
     const options = [...(field.options || [])]
     // Typing over a choice makes it yours: the ontology's URI no longer
@@ -409,7 +429,7 @@ export default function FieldEditor({
     return (
       <div className="insp">
         <div className="row tabs insp__tabs">
-          {[['field', 'Field'], ['variable', 'Variable'], ['standards', 'Standards']]
+          {[['field', 'Field'], ['standards', 'Standards']]
             .map(([key, name]) => (
               <button
                 key={key}
@@ -424,21 +444,67 @@ export default function FieldEditor({
         {tab === 'field' && (
         <div className="frow__more">
         <div className="frow__grid">
-          <label className="col">
+          <div className="col" style={{ position: 'relative' }}>
             <span className="minilabel">Label</span>
             <input
               className="control"
               value={shown.label || ''}
               placeholder={translating ? field.label : 'Question'}
+              onFocus={() => setSuggestOpen(true)}
+              onBlur={() => setTimeout(() => setSuggestOpen(false), 200)}
               onChange={(e) => {
                 const label = e.target.value
-                // A translation is wording and nothing else — the stored key is
-                // where answers live and must not move with the language.
                 if (translating) return setWords({ label })
-                patch(field._orig ? { label } : { label, name: slug(label) || field.name })
+                patch({ label })
               }}
             />
-          </label>
+          </div>
+
+          {(() => {
+            const isPlaceholder = /^question_\d+$/.test(field.name || '')
+            const displayName = isPlaceholder ? '' : (field.name || '')
+            const nameErrors = []
+            if (displayName && !/^[a-z]/.test(displayName)) nameErrors.push('Must start with a lowercase letter.')
+            if (displayName && /[^a-z0-9_]/.test(displayName)) nameErrors.push('Only lowercase a-z, 0-9 and underscores.')
+            if (displayName && /__/.test(displayName)) nameErrors.push('No consecutive underscores.')
+            if (displayName && /_$/.test(displayName)) nameErrors.push('Must not end with an underscore.')
+            if (RESERVED_DB_WORDS.has(displayName)) nameErrors.push(`"${displayName}" is a reserved database keyword.`)
+            const dup = displayName && allFields.some((f) => f.name === displayName && f !== field)
+            if (dup) nameErrors.push('Another question already uses this name.')
+            const nameOk = displayName.length > 0 && nameErrors.length === 0
+            return (
+              <div className="col" style={{ position: 'relative' }}>
+                <span className="minilabel">Variable name</span>
+                <input
+                  className={`control${nameErrors.length ? ' control--bad' : ''}`}
+                  value={displayName}
+                  maxLength={MAX_FIELD_NAME}
+                  readOnly={!!field._orig}
+                  style={field._orig ? { opacity: 0.7, cursor: 'not-allowed' } : undefined}
+                  placeholder="e.g. farmer_name"
+                  onFocus={() => setSuggestOpen(true)}
+                  onBlur={() => setTimeout(() => setSuggestOpen(false), 200)}
+                  onChange={(e) => {
+                    if (field._orig) return
+                    const raw = e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '').replace(/_{2,}/g, '_')
+                    patch({ name: raw })
+                  }}
+                />
+                {!translating && !field._orig && (
+                  <FieldMasterSuggest query={displayName} onPick={pickStandard} visible={suggestOpen} />
+                )}
+                {field._orig && (
+                  <span className="tiny muted">Locked after save.</span>
+                )}
+                {nameErrors.map((err, i) => (
+                  <span key={i} className="tiny" style={{ color: 'var(--danger, #c33)' }}>{err}</span>
+                ))}
+                {nameOk && (
+                  <span className="tiny" style={{ color: 'var(--success, #396)' }}>Valid</span>
+                )}
+              </div>
+            )
+          })()}
 
           <label className="col">
             <span className="minilabel">Type</span>
@@ -783,125 +849,6 @@ export default function FieldEditor({
         </div>
         )}
 
-        {tab === 'variable' && (() => {
-          const name = field.name || ''
-          const nameErrors = []
-          if (name && !/^[a-z]/.test(name)) nameErrors.push('Must start with a lowercase letter.')
-          if (name && /[^a-z0-9_]/.test(name)) nameErrors.push('Only lowercase a-z, 0-9 and underscores.')
-          if (name && /__/.test(name)) nameErrors.push('No consecutive underscores.')
-          if (name && /_$/.test(name)) nameErrors.push('Must not end with an underscore.')
-          if (RESERVED_DB_WORDS.has(name)) nameErrors.push(`"${name}" is a reserved database keyword.`)
-          const dup = allFields.some((f) => f.name === name && f !== field)
-          if (dup) nameErrors.push('Another question already uses this name.')
-          const nameOk = name.length > 0 && nameErrors.length === 0
-
-          return (
-        <div className="frow__more">
-          <p className="tiny muted">
-            How this answer is named and stored. What somebody reads on the form
-            is the Field tab; this is what the data becomes.
-          </p>
-
-          <div className="frow__grid">
-            <label className="col">
-              <span className="minilabel">Variable name (database column)</span>
-              <input
-                className={`control${nameErrors.length ? ' control--bad' : ''}`}
-                value={name}
-                maxLength={MAX_FIELD_NAME}
-                onChange={(e) => {
-                  const raw = e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '').replace(/_{2,}/g, '_')
-                  patch({ name: raw })
-                }}
-              />
-              <span className={`tiny${name.length > MAX_FIELD_NAME * 0.8 ? '' : ' muted'}`}>
-                {name.length} / {MAX_FIELD_NAME} characters
-              </span>
-              {nameErrors.map((err, i) => (
-                <span key={i} className="tiny" style={{ color: 'var(--danger, #c33)' }}>{err}</span>
-              ))}
-              {nameOk && (
-                <span className="tiny" style={{ color: 'var(--success, #396)' }}>Valid variable name</span>
-              )}
-            </label>
-          </div>
-
-          <div className="variable-rules">
-            <p className="tiny muted" style={{ margin: '8px 0 4px' }}>
-              <strong>Naming rules:</strong> lowercase letters, numbers, underscores only.
-              Must start with a letter. No spaces, hyphens, or accented characters.
-              The label can be anything ("Área sembrada este año") — this is just the database key.
-            </p>
-          </div>
-
-          <p className="tiny muted">
-            The key inside <code>form_data</code> and the column in the flat
-            mirror. It never changes with the language, so an answer given in one
-            language and one given in another land in the same place.
-          </p>
-
-          {renamedFrom && (
-            <p className="tiny muted">
-              Renaming from <code>{renamedFrom}</code>
-              {hasResponses ? ' — existing answers move across when you save.' : '.'}
-            </p>
-          )}
-
-          <div className="insp__facts">
-            <div><b>Stored as</b>{STORAGE[field.type]?.[0] || 'string'}</div>
-            <div><b>Mirror column</b>{STORAGE[field.type]?.[1] || 'TEXT'}</div>
-            <div><b>Answers land in</b>form_data.{field.name}</div>
-          </div>
-
-          {field.options_from && (
-            <div className="insp__facts">
-              <div><b>Answered from</b>{field.options_from.source === 'client_catalog'
-                ? `CIMMYT Catalogue ${field.options_from.catalog}`
-                  + (field.options_from.allowed_values?.length
-                      ? ` (${field.options_from.allowed_values.length} of its values)` : '')
-                : `the imported ${field.options_from.kind}s`}</div>
-              {field.options_from.depends_on && (
-                <div><b>Narrowed by</b>{field.options_from.depends_on}</div>
-              )}
-              <div><b>Stored value</b>the source's own code</div>
-            </div>
-          )}
-
-          {field.input_unit && (
-            <div className="insp__facts">
-              <div><b>Collected in</b>{field.input_unit}</div>
-            </div>
-          )}
-
-          {field.source && (
-            <>
-              <span className="minilabel">Where this question came from</span>
-              <div className="insp__facts">
-                {field.source.source_variable && (
-                  <div><b>Workbook variable</b>{field.source.source_variable}</div>
-                )}
-                {field.source.field_type && (
-                  <div><b>Workbook type</b>{field.source.field_type}</div>
-                )}
-                {field.source.catalog_id && (
-                  <div><b>CIMMYT Catalogue</b>{field.source.catalog_id}</div>
-                )}
-                {field.source.father_list && (
-                  <div><b>Parent list</b>{field.source.father_list}</div>
-                )}
-                {field.source.skip_logic && (
-                  <div><b>Condition as written</b>{field.source.skip_logic}</div>
-                )}
-              </div>
-              <p className="tiny muted">
-                Read from CIMMYT's workbook and kept as they wrote it.
-              </p>
-            </>
-          )}
-        </div>
-          )
-        })()}
-
         {tab === 'standards' && (
         <div className="frow__more">
           <StandardPicker
@@ -946,21 +893,20 @@ export default function FieldEditor({
           aria-label={`Reorder ${field.label || 'question'}, position ${index + 1} of ${total}`}
         >⠿</button>
 
-        <input
-          className="frow__name"
-          value={shown.label || ''}
-          placeholder={translating ? field.label : 'Question'}
-          onChange={(e) => {
-            const label = e.target.value
-            // A translation is wording and nothing else. The key stays what the
-            // form was built with, because it is where answers are stored — a
-            // Spanish answer and an English one land in the same column.
-            if (translating) return setWords({ label })
-            // Before the form is saved the key just tracks the label; afterwards
-            // it is a real stored key and only changes if you edit it directly.
-            patch(field._orig ? { label } : { label, name: slug(label) || field.name })
-          }}
-        />
+        <div style={{ position: 'relative', flex: 1 }}>
+          <input
+            className="frow__name"
+            value={shown.label || ''}
+            placeholder={translating ? field.label : 'Question'}
+            onFocus={() => setSuggestOpen(true)}
+            onBlur={() => setTimeout(() => setSuggestOpen(false), 150)}
+            onChange={(e) => {
+              const label = e.target.value
+              if (translating) return setWords({ label })
+              patch({ label })
+            }}
+          />
+        </div>
 
         <select className="frow__type" value={field.type} onChange={(e) => setType(e.target.value)}>
           {TYPES.map(([value, name]) => (

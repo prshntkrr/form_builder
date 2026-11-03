@@ -1221,12 +1221,23 @@ export default function Builder() {
   const selectCanvasSection = (id) => {
     if ((form.sections || []).some((s) => s.key === id)) { pickSection(id); return }
     const ls = (form.layout?.sections || []).find((s) => s.id === id)
-    if (!ls || !/^[a-z][a-z0-9_]*$/.test(id)) return
+    if (!ls) return
+    // Layout-only section with an invalid key (e.g. _all) — assign a valid key
+    let key = id
+    if (!/^[a-z][a-z0-9_]*$/.test(key)) {
+      const taken = new Set((form.sections || []).map((s) => s.key))
+      key = 'section'
+      for (let n = 2; taken.has(key); n += 1) key = `section_${n}`
+    }
     const names = new Set((ls.containers || []).flatMap((c) => (c.fields || []).map((f) => f.fieldId)))
-    const sections = [...(form.sections || []), { key: id, title: ls.title || '', description: ls.description || '' }]
-    const fields = form.fields.map((f) => (names.has(f.name) ? { ...f, section: id } : f))
-    setForm({ ...form, sections, fields })
-    pickSection(id)
+    const sections = [...(form.sections || []), { key, title: ls.title || '', description: ls.description || '' }]
+    const fields = form.fields.map((f) => (names.has(f.name) ? { ...f, section: key } : f))
+    // Remap layout section id to the valid key
+    const layout = key !== id
+      ? { ...form.layout, sections: form.layout.sections.map((s) => s.id === id ? { ...s, id: key } : s) }
+      : form.layout
+    setForm({ ...form, sections, fields, layout })
+    pickSection(key)
   }
 
   const openLibrary = () => setPicker('borrow')
@@ -1401,6 +1412,49 @@ export default function Builder() {
     const made = generateLayout({ ...form, layout: null })
     if (made) setForm({ ...form, layout: made })
   }, [view, form])
+
+  // Legacy forms may have layout sections but no form.sections entries.
+  // Sync them so the section dropdown and inspector work.
+  useEffect(() => {
+    if (!form?.layout?.sections) return
+    const existing = new Set((form.sections || []).map((s) => s.key))
+    const missing = form.layout.sections.filter(
+      (ls) => ls.id && !existing.has(ls.id),
+    )
+    if (!missing.length) return
+    // Remap internal ids (_all, _loose) to valid keys
+    const taken = new Set(existing)
+    const idMap = new Map()
+    for (const ls of missing) {
+      let key = ls.id
+      if (!/^[a-z][a-z0-9_]*$/.test(key)) {
+        key = 'section'
+        for (let n = 2; taken.has(key); n += 1) key = `section_${n}`
+      }
+      taken.add(key)
+      idMap.set(ls.id, key)
+    }
+    const sections = [...(form.sections || []), ...missing.map((ls) => ({
+      key: idMap.get(ls.id), title: ls.title || '', description: ls.description || '',
+    }))]
+    // Remap layout section ids to valid keys
+    const needsRemap = missing.some((ls) => idMap.get(ls.id) !== ls.id)
+    const layout = needsRemap
+      ? { ...form.layout, sections: form.layout.sections.map((ls) => idMap.has(ls.id) && idMap.get(ls.id) !== ls.id ? { ...ls, id: idMap.get(ls.id) } : ls) }
+      : form.layout
+    // Also set field.section for fields inside these layout sections
+    const sectionOf = new Map()
+    for (const ls of missing) {
+      const key = idMap.get(ls.id)
+      for (const row of ls.containers || []) {
+        for (const cell of row.fields || []) sectionOf.set(cell.fieldId, key)
+      }
+    }
+    const fields = sectionOf.size
+      ? form.fields.map((f) => sectionOf.has(f.name) ? { ...f, section: sectionOf.get(f.name) } : f)
+      : form.fields
+    setForm({ ...form, sections, fields, layout })
+  }, [form?.layout?.sections?.length, form?.sections?.length])
 
   // ── render ────────────────────────────────────────────────────────────────
   if (busy === 'load') {

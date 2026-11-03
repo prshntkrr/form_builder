@@ -660,6 +660,21 @@ def soft_delete(form_id: str,
         raise HTTPException(status_code=409, detail=_constraint_message(exc))
 
 
+@router.delete("/{form_id}/permanent")
+def hard_delete(form_id: str,
+                drop_data: bool = Query(False, description="Also drop the form's data table"),
+                user: Dict[str, Any] = Depends(needs("users.manage"))):
+    """Permanently delete the form, its versions, and optionally its data table. Admin only."""
+    try:
+        result = form_service.hard_delete(form_id, drop_data=drop_data)
+        return result
+    except form_service.FormNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        logger.exception("Hard delete failed for form %s", form_id)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
 @router.post("/{form_id}/rollback")
 def rollback(form_id: str, req: RollbackRequest,
              user: Dict[str, Any] = Depends(needs_on_form(FORMS_EDIT, "project.forms.manage"))):

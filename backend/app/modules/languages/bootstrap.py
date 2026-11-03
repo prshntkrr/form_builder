@@ -92,6 +92,7 @@ EN_US = {
     "label.submissions": "Submissions",
     "label.collapse": "Collapse",
     "label.json": "JSON",
+    "label.field.standards": "Field Standards",
 }
 
 ES_MX = {
@@ -183,6 +184,7 @@ ES_MX = {
     "label.submissions": "Envíos",
     "label.collapse": "Contraer",
     "label.json": "JSON",
+    "label.field.standards": "Estándares de campos",
 }
 
 HI_IN = {
@@ -274,6 +276,7 @@ HI_IN = {
     "label.submissions": "सबमिशन",
     "label.collapse": "संकुचित करें",
     "label.json": "JSON",
+    "label.field.standards": "फील्ड मानक",
 }
 
 

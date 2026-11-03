@@ -68,7 +68,16 @@ function ProjectsNav({ onNavigate }) {
   // to its settings — there is no separate "Project settings" row any more. The
   // System folder has no settings page, so it only opens.
   const pick = (id) => {
-    if (id !== activeId) choose(id)
+    if (id === activeId) {
+      if (activeOpen) {
+        setActiveOpen(false)
+      } else {
+        setActiveOpen(true)
+        if (id !== SYSTEM) { navigate(`/projects/${id}`); onNavigate?.() }
+      }
+      return
+    }
+    choose(id)
     setActiveOpen(true)
     if (id !== SYSTEM) {
       navigate(`/projects/${id}`)

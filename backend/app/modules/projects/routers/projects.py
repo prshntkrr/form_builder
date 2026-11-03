@@ -224,16 +224,20 @@ def candidates(
     with transaction() as cur:
         cur.execute(
             """
-            SELECT u.user_id, u.email, u.full_name
+            SELECT u.user_id, u.email, u.full_name, u.phone, u.username
             FROM   app_user u
             WHERE  u.is_active
               AND  NOT EXISTS (SELECT 1 FROM project_member m
                                WHERE m.project_id = %s AND m.user_id = u.user_id)
-              AND  (%s = '%%%%' OR lower(u.email) LIKE %s OR lower(u.full_name) LIKE %s)
+              AND  (%s = '%%%%'
+                    OR lower(u.email) LIKE %s
+                    OR lower(u.full_name) LIKE %s
+                    OR lower(u.phone) LIKE %s
+                    OR lower(u.username) LIKE %s)
             ORDER  BY u.full_name, u.email
             LIMIT  50
             """,
-            (project_id, wanted, wanted, wanted),
+            (project_id, wanted, wanted, wanted, wanted, wanted),
         )
         return {"candidates": [dict(row) for row in cur.fetchall()]}
 
@@ -441,3 +445,17 @@ def rotate_api_key(project_id: str, key_id: str,
         return api_key_service.rotate_key(key_id, project_id, auth_service.display_name(user))
     except api_key_service.KeyError_:
         raise HTTPException(status_code=404, detail="Key not found")
+
+
+@router.delete("/{project_id}")
+def delete_project(project_id: str,
+                   user: Dict[str, Any] = Depends(needs("users.manage"))):
+    """Permanently delete a project. Admin only.
+
+    Members, groups, and API keys cascade. Forms become system forms
+    (project_id set to NULL by the FK constraint).
+    """
+    deleted = project_service.delete_project(project_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return {"project_id": project_id, "deleted": True}

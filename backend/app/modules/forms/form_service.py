@@ -944,3 +944,54 @@ def _follow_status_on_channels(form_id: str, status: str) -> None:
                 )
         except Exception:
             logger.exception("Could not sync IVR publication to Indev for %s", form_id)
+
+
+def hard_delete(form_id: str, *, drop_data: bool = False) -> Dict[str, Any]:
+    """Permanently delete a form, its versions, and optionally its data table."""
+    with transaction() as cur:
+        cur.execute("SELECT form_json FROM forms WHERE form_id = %s", (form_id,))
+        row = cur.fetchone()
+        if not row:
+            raise FormNotFound(f"Form {form_id} not found")
+
+        table_name = (row["form_json"] or {}).get("table_name")
+
+        cur.execute("""
+            SELECT tc.table_name, kcu.column_name
+            FROM information_schema.table_constraints tc
+            JOIN information_schema.key_column_usage kcu
+                 ON tc.constraint_name = kcu.constraint_name
+            JOIN information_schema.constraint_column_usage ccu
+                 ON tc.constraint_name = ccu.constraint_name
+            WHERE ccu.table_name = 'forms' AND ccu.column_name = 'form_id'
+              AND tc.constraint_type = 'FOREIGN KEY'
+              AND tc.table_name != 'forms'
+        """)
+        for dep in cur.fetchall():
+            cur.execute(sql.SQL("DELETE FROM {} WHERE {} = %s").format(
+                sql.Identifier(dep["table_name"]),
+                sql.Identifier(dep["column_name"]),
+            ), (form_id,))
+
+        cur.execute(
+            "UPDATE forms SET parent_id = NULL WHERE parent_id = %s", (form_id,))
+        cur.execute("DELETE FROM forms WHERE form_id = %s", (form_id,))
+
+        dropped = False
+        if drop_data and table_name:
+            from app.modules.forms.table_service import sequence_name
+            seq = sequence_name(table_name)
+            cur.execute(sql.SQL("DROP TABLE IF EXISTS {} CASCADE").format(
+                sql.Identifier(table_name)))
+            cur.execute(sql.SQL("DROP SEQUENCE IF EXISTS {}").format(
+                sql.Identifier(seq)))
+            dropped = True
+            logger.info("Dropped data table %s and sequence %s", table_name, seq)
+
+    logger.info("Hard-deleted form %s (data table dropped: %s)", form_id, dropped)
+    return {
+        "form_id": form_id,
+        "deleted": True,
+        "data_table_dropped": dropped,
+        "table_name": table_name,
+    }

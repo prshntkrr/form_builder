@@ -22,6 +22,9 @@ export const api = {
   updateProject: (projectId, changes) =>
     request(`/projects/${projectId}`, { method: 'PATCH', body: JSON.stringify(changes) }),
 
+  deleteProject: (projectId) =>
+    request(`/projects/${projectId}`, { method: 'DELETE' }),
+
   // The roles a membership can carry. Derived by the backend from which roles
   // hold project permissions, so nothing here names one.
   projectRoles: () => request('/projects/roles'),

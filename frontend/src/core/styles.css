@@ -113,6 +113,7 @@ a:hover { text-decoration: underline; }
   display: flex; flex-direction: column;
   background: #1e3a2f; border-right: none;
   position: sticky; top: 0; height: calc(100vh / var(--ui-scale));
+  overflow: hidden;
   color: #fff;
 }
 
@@ -162,7 +163,7 @@ a:hover { text-decoration: underline; }
 .side__icon--dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; margin: 0 4px; }
 
 /* The scrolling middle: the projects tree and the system groups beneath it. */
-.side__scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.side__scroll { flex: 1 1 0; overflow-y: auto; overscroll-behavior: contain; }
 
 /* The projects tree — folders, the active one open to its screens and forms. */
 .proj { padding: 0 8px 6px; }

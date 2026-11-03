@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api as projectApi } from '../../modules/projects/api.js'
+import { api as formApi } from '../../modules/forms/api.js'
 import { api as coreApi } from '../api.js'
 import { useAuth } from '../auth.jsx'
 import { useTranslation } from '../language.jsx'
@@ -61,7 +62,7 @@ function ProgressBar({ count, total }) {
   )
 }
 
-function ProjectCard({ project, forms, formCounts, color, expanded, onToggle, loading, canBuild, canManageMembers, canViewSettings }) {
+function ProjectCard({ project, forms, formCounts, color, expanded, onToggle, loading, canBuild, canManageMembers, canViewSettings, isAdmin, onDeleteForm, onDeleteProject }) {
   const { t } = useTranslation()
   const tree = useMemo(() => formTree(forms), [forms])
   const showHierarchy = useMemo(() => hasHierarchy(forms), [forms])
@@ -157,10 +158,17 @@ function ProjectCard({ project, forms, formCounts, color, expanded, onToggle, lo
                         {f.updated_on ? timeAgo(f.updated_on) : '—'}
                       </td>
                       <td className="ap-ver-col">v{f.version || 1}</td>
-                      <td>
+                      <td style={{ display: 'flex', gap: 4 }}>
                         <Link to={`/forms/${f.form_id}`} className="ap-btn ap-btn--sm ap-btn--ghost">
                           {t('label.open')}
                         </Link>
+                        {isAdmin && (
+                          <button className="ap-btn ap-btn--sm ap-btn--danger"
+                            title="Delete permanently"
+                            onClick={() => onDeleteForm(f)}>
+                            ✕
+                          </button>
+                        )}
                       </td>
                     </tr>
                   )
@@ -178,6 +186,12 @@ function ProjectCard({ project, forms, formCounts, color, expanded, onToggle, lo
               )}
               {canViewSettings && (
                 <Link to={`/projects/${project.project_id}`} className="ap-btn ap-btn--sm ap-btn--ghost">{t('label.setting')}</Link>
+              )}
+              {isAdmin && (
+                <button className="ap-btn ap-btn--sm ap-btn--danger"
+                  onClick={() => onDeleteProject(project)}>
+                  Delete project
+                </button>
               )}
             </div>
           )}
@@ -342,6 +356,9 @@ export default function HomeDashboard() {
   const [activeFilter, setActiveFilter] = useState('all')
   const [showActivity, setShowActivity] = useState(true)
   const [error, setError] = useState('')
+  const [deleteFormTarget, setDeleteFormTarget] = useState(null)
+  const [deleteProjectTarget, setDeleteProjectTarget] = useState(null)
+  const [deleteBusy, setDeleteBusy] = useState(false)
   const [sysStats, setSysStats] = useState(null)
   const [chartRange, setChartRange] = useState('Month')
   const [showSystem, setShowSystem] = useState(true)
@@ -402,6 +419,48 @@ export default function HomeDashboard() {
   const toggle = useCallback((id) => {
     setExpanded(prev => prev.has(id) ? new Set() : new Set([id]))
   }, [])
+
+  const reload = () => {
+    projectApi.projects().then(res => {
+      const list = res.projects || res
+      setProjects(list)
+      for (const p of list) {
+        projectApi.projectForms(p.project_id).then(res => {
+          setFormsByProject(prev => ({ ...prev, [p.project_id]: res.forms || res }))
+        })
+      }
+    })
+  }
+
+  const handleDeleteForm = (form) => setDeleteFormTarget(form)
+
+  const confirmDeleteForm = async (dropData) => {
+    setDeleteBusy(true)
+    try {
+      await formApi.hardDeleteForm(deleteFormTarget.form_id, dropData)
+      setDeleteFormTarget(null)
+      reload()
+    } catch (e) { setError(e.message); setDeleteFormTarget(null) }
+    finally { setDeleteBusy(false) }
+  }
+
+  const handleDeleteProject = (project) => {
+    if (Number(project.form_count) > 0) {
+      setError(`Cannot delete "${project.name}" — it still has ${project.form_count} form(s). Remove all forms first.`)
+      return
+    }
+    setDeleteProjectTarget(project)
+  }
+
+  const confirmDeleteProject = async () => {
+    setDeleteBusy(true)
+    try {
+      await projectApi.deleteProject(deleteProjectTarget.project_id)
+      setDeleteProjectTarget(null)
+      reload()
+    } catch (e) { setError(e.message); setDeleteProjectTarget(null) }
+    finally { setDeleteBusy(false) }
+  }
 
   const filtered = useMemo(() => {
     if (!projects) return []
@@ -548,6 +607,9 @@ export default function HomeDashboard() {
                 canBuild={canBuild}
                 canManageMembers={canManageMembers}
                 canViewSettings={canViewSettings}
+                isAdmin={isAdmin}
+                onDeleteForm={handleDeleteForm}
+                onDeleteProject={handleDeleteProject}
               />
             ))
           )}
@@ -579,6 +641,48 @@ export default function HomeDashboard() {
               <ServerStatusPanel stats={sysStats} />
             </div>
           )}
+        </div>
+      )}
+      {deleteFormTarget && (
+        <div className="sheet" onMouseDown={() => !deleteBusy && setDeleteFormTarget(null)}>
+          <div className="sheet__panel" role="dialog" aria-modal="true"
+               onMouseDown={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
+            <div className="sheet__head">
+              <h2>Delete form</h2>
+              <p className="muted">{deleteFormTarget.form_title || deleteFormTarget.title}</p>
+            </div>
+            <div className="sheet__body">
+              <p>This will permanently delete the form definition and all its versions. This cannot be undone.</p>
+              <p className="tiny muted" style={{ marginTop: 8 }}>You can also drop the data table (all collected responses).</p>
+            </div>
+            <div className="sheet__foot" style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn btn--quiet" disabled={deleteBusy} onClick={() => setDeleteFormTarget(null)}>Cancel</button>
+              <button className="btn btn--danger" disabled={deleteBusy} onClick={() => confirmDeleteForm(false)}>
+                {deleteBusy && <span className="spin" />} Delete form</button>
+              <button className="btn btn--danger" disabled={deleteBusy} onClick={() => confirmDeleteForm(true)}>
+                {deleteBusy && <span className="spin" />} Delete form + data</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteProjectTarget && (
+        <div className="sheet" onMouseDown={() => !deleteBusy && setDeleteProjectTarget(null)}>
+          <div className="sheet__panel" role="dialog" aria-modal="true"
+               onMouseDown={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
+            <div className="sheet__head">
+              <h2>Delete project</h2>
+              <p className="muted">{deleteProjectTarget.name}</p>
+            </div>
+            <div className="sheet__body">
+              <p>This will permanently delete this project. This cannot be undone.</p>
+            </div>
+            <div className="sheet__foot" style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn btn--quiet" disabled={deleteBusy} onClick={() => setDeleteProjectTarget(null)}>Cancel</button>
+              <button className="btn btn--danger" disabled={deleteBusy} onClick={confirmDeleteProject}>
+                {deleteBusy && <span className="spin" />} Delete project</button>
+            </div>
+          </div>
         </div>
       )}
     </main>
@@ -689,6 +793,8 @@ const AP_STYLES = `
   .ap-btn--sm { padding: 5px 10px; font-size: 0.78rem; }
   .ap-btn--ghost { border: none; background: none; color: var(--ink-2, #4b5563); padding: 5px 8px; }
   .ap-btn--ghost:hover { background: rgba(0,0,0,0.04); }
+  .ap-btn--danger { border: 1px solid var(--danger, #c33); background: none; color: var(--danger, #c33); }
+  .ap-btn--danger:hover { background: var(--danger, #c33); color: #fff; }
 
   .ap-project__actions { padding: 10px 20px; display: flex; gap: 8px; justify-content: flex-end;
     border-top: 1px solid var(--line, #e3e6eb); }

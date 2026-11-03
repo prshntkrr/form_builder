@@ -256,7 +256,7 @@ function AddMember({ projectId, roles, onClose, onAdded }) {
             <input
               className="control"
               value={search}
-              placeholder="Name or email"
+              placeholder="Name, email, phone or username"
               aria-labelledby="find-somebody"
               role="combobox"
               aria-expanded={listOpen && (found?.length ?? 0) > 0}
@@ -282,12 +282,12 @@ function AddMember({ projectId, roles, onClose, onAdded }) {
                       className="find__hit"
                       onClick={() => {
                         setPicked(c)
-                        setSearch(c.full_name || c.email)
+                        setSearch(c.full_name || c.email || c.phone || c.username)
                         setListOpen(false)
                       }}
                     >
-                      <span className="strong ellipsis">{c.full_name || c.email}</span>
-                      <span className="tiny muted ellipsis">{c.email}</span>
+                      <span className="strong ellipsis">{c.full_name || c.email || c.phone || c.username}</span>
+                      <span className="tiny muted ellipsis">{[c.email, c.phone, c.username].filter(Boolean).join(' · ')}</span>
                     </button>
                   </li>
                 ))}
@@ -296,7 +296,7 @@ function AddMember({ projectId, roles, onClose, onAdded }) {
 
             {picked && (
               <span className="tiny muted">
-                Adding <b>{picked.full_name || picked.email}</b> ({picked.email})
+                Adding <b>{picked.full_name || picked.email || picked.phone || picked.username}</b> ({[picked.email, picked.phone, picked.username].filter(Boolean).join(' · ')})
               </span>
             )}
 

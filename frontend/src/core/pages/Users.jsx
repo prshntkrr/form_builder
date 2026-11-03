@@ -29,6 +29,10 @@ function AddPerson({ roles, onAdded, onClose }) {
 
   const submit = async (e) => {
     e.preventDefault()
+    if (!form.full_name.trim()) {
+      setError('Full name is required.')
+      return
+    }
     if (!named) {
       setError('Give an email address, a username or a phone number — '
                + 'whichever they will sign in with.')
@@ -69,8 +73,8 @@ function AddPerson({ roles, onAdded, onClose }) {
                      value={form.email} onChange={set('email')} />
             </label>
             <label className="col">
-              <span className="minilabel">Full name</span>
-              <input className="control" value={form.full_name} onChange={set('full_name')} />
+              <span className="minilabel">Full name <span style={{ color: 'var(--bad, #c00)' }}>*</span></span>
+              <input className="control" required value={form.full_name} onChange={set('full_name')} />
             </label>
           </div>
 

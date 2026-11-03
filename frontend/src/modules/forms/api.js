@@ -310,6 +310,9 @@ export const api = {
 
   deleteForm: (formId) => request(`/forms/${formId}`, { method: 'DELETE' }),
 
+  hardDeleteForm: (formId, dropData = false) =>
+    request(`/forms/${formId}/permanent?drop_data=${dropData}`, { method: 'DELETE' }),
+
   // A dry run: the answers are validated and nothing is stored. `formJson` lets
   // the builder try edits that have not been saved yet.
   testSubmission: (formId, data, formJson, language) =>

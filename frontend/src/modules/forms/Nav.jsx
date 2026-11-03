@@ -88,7 +88,7 @@ export function FormsPanel({ onNavigate, embedded = false }) {
   useEffect(() => {
     if (!activeId || !activeRow.current) return
     activeRow.current.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' })
-  }, [activeId, forms])
+  }, [activeId])
 
   const navigate = useNavigate()
 
@@ -98,6 +98,10 @@ export function FormsPanel({ onNavigate, embedded = false }) {
   // Clicking a form opens its editor on the Questions tab (where Preview, Script
   // and JSON live as tabs) and expands its row to reveal Data View and History.
   const openForm = (formId) => {
+    if (formId === activeId) {
+      setExpanded((cur) => cur === formId ? null : formId)
+      return
+    }
     navigate(`/forms/${formId}/questions`)
     setExpanded(formId)
     onNavigate?.()
