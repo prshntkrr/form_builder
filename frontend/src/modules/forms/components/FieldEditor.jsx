@@ -5,6 +5,7 @@ import StandardPicker from './StandardPicker.jsx'
 import FieldMasterSuggest from './FieldMasterSuggest.jsx'
 import ConditionEditor from './ConditionEditor.jsx'
 import { api } from '../api.js'
+import { request } from '../../../core/http.js'
 import CatalogueValues from './CatalogueValues.jsx'
 import { useAuth } from '../../../core/auth.jsx'
 import { MAX_FIELD_NAME, fieldConfig, fieldHidden, identifier } from '../fieldTypes.js'
@@ -360,6 +361,8 @@ export default function FieldEditor({
 
   const row = useRef(null)
   const [tab, setTab] = useState('field')
+  const [stdBusy, setStdBusy] = useState(false)
+  const [stdNote, setStdNote] = useState('')
   const patch = (changes) => onChange(index, { ...field, ...changes })
 
   const shown = words || field
@@ -833,19 +836,43 @@ export default function FieldEditor({
           />
         )}
 
-        {/* Links this question to a shared field standard — the pairing is made
-            on the Standards tab, so this is the one-click way in from the field. */}
         <button
           type="button"
           className="btn btn--quiet btn--sm insp__tostandard"
-          onClick={() => setTab('standards')}
+          disabled={stdBusy}
+          onClick={async () => {
+            setStdBusy(true)
+            setStdNote('')
+            try {
+              const body = {
+                name: field.label || field.name,
+                data_type: field.type || 'text',
+                category: 'native',
+                ref_ontology: null,
+                field_json: {
+                  type: field.type,
+                  label: field.label,
+                  options: field.options || [],
+                  validations: field.validations || {},
+                },
+              }
+              await request('/field-master', { method: 'POST', body: JSON.stringify(body) })
+              setStdNote('Added to field standards.')
+            } catch (e) {
+              setStdNote(e.message || 'Could not add to field standards.')
+            } finally {
+              setStdBusy(false)
+            }
+          }}
         >
+          {stdBusy && <span className="spin" />}
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
                strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M4 5h13M4 10h13M4 15h8" /><path d="M17 14l3 3 3-3" transform="translate(-4 0)" />
           </svg>
           Add to Field Standard
         </button>
+        {stdNote && <p className="tiny muted">{stdNote}</p>}
         </div>
         )}
 
