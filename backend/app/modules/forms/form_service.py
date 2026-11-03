@@ -587,7 +587,7 @@ def create_form(
     with transaction() as cur:
         # Nothing invalid reaches the INSERT below.
         _validate_config(
-            cur, form_json, form_type=form_type, parent_id=parent_id, status=status
+            cur, definition, form_type=form_type, parent_id=parent_id, status=status
         )
         form_id = _next_form_id(cur)
         definition["table_name"] = resolve_table_name(cur, definition["table_name"])
@@ -728,7 +728,7 @@ def update_form(
 
         _validate_config(
             cur,
-            form_json,
+            definition,
             form_id=form_id,
             form_type=form_type,
             parent_id=parent_id,
