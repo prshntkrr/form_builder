@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { NavLink, useMatch, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../core/auth.jsx'
-import { formTree } from './formTree.js'
 import { useFormsRevision } from '../../core/events.js'
 import { api } from './api.js'
 import { api as projectApi } from '../projects/api.js'
@@ -71,6 +70,11 @@ export function FormsPanel({ onNavigate, embedded = false }) {
   const [search, setSearch] = useState('')
   const [shut, setShut] = useState({})
 
+  // Deep trees don't indent forever in a narrow rail: the indent is capped, and
+  // a branch that goes deeper is "drilled into" — `focusId` re-bases the panel
+  // to that form so its sub-tree starts again at the top, with a breadcrumb out.
+  const [focusId, setFocusId] = useState(null)
+
   // Where the list has got to, so the open row can be kept in view.
   const activeRow = useRef(null)
 
@@ -137,55 +141,82 @@ export function FormsPanel({ onNavigate, embedded = false }) {
     return () => { cancelled = true }
   }, [revision, builder, projectId, system])
 
-  /* The list, arranged by which form hangs off which.
-   *
-   * `formTree` is the same helper the project's forms table uses — one
-   * arrangement, so the sidebar and the page cannot disagree about what is a
-   * child of what. It returns a flat list of `{form, depth}`, which is what a
-   * list of rows wants.
-   *
-   * Searching flattens it on purpose: a match three levels down should be
-   * findable without knowing which parent to open first, and a tree filtered to
-   * matches only is a tree with holes in it. */
   const wanted = search.trim().toLowerCase()
 
+  // How many levels of indent before a branch drills in instead (0,1,2 — three
+  // visible levels). A narrow rail cannot keep indenting past this.
+  const CAP = 2
+
+  const folded = (id) => Boolean(shut[id])
+  const fold = (id) => setShut((current) => ({ ...current, [id]: !current[id] }))
+
+  const byId = React.useMemo(
+    () => new Map((forms || []).map((f) => [f.form_id, f])), [forms])
+
+  // Children grouped by their parent; top-level forms (no parent, or a parent in
+  // another context) sit under the `__root__` key.
+  const childrenOf = React.useMemo(() => {
+    const m = new Map()
+    for (const f of forms || []) {
+      const key = (f.parent_form_id && byId.has(f.parent_form_id)) ? f.parent_form_id : '__root__'
+      if (!m.has(key)) m.set(key, [])
+      m.get(key).push(f)
+    }
+    return m
+  }, [forms, byId])
+
+  // The ancestors of a form, root first — for the breadcrumb and for deciding
+  // where to drill so the active form stays in view.
+  const chainTo = React.useCallback((id) => {
+    const chain = []
+    const seen = new Set()
+    let at = id ? byId.get(id) : null
+    while (at && !seen.has(at.form_id)) {
+      chain.unshift(at); seen.add(at.form_id)
+      at = (at.parent_form_id && byId.has(at.parent_form_id)) ? byId.get(at.parent_form_id) : null
+    }
+    return chain
+  }, [byId])
+
+  // Drilling resets when the context changes out from under it.
+  useEffect(() => { setFocusId(null) }, [projectId, system])
+
+  // Keep the active form reachable: if it sits deeper than the cap, drill to the
+  // ancestor that brings it up to the deepest visible level.
+  useEffect(() => {
+    if (!activeId || !byId.has(activeId)) return
+    const chain = chainTo(activeId)
+    const depth = chain.length - 1
+    setFocusId(depth <= CAP ? null : (chain[depth - CAP - 1]?.form_id || null))
+  }, [activeId, byId, chainTo])
+
+  /* The rows to draw. Searching flattens everything — a match three levels down
+     should be findable without knowing which parent to open first. Otherwise
+     walk the sub-tree under the current focus, capping the indent: a form at the
+     cap that still has children is a drill-in, not an inline expand. */
   const rows = React.useMemo(() => {
     if (!forms) return null
     if (wanted) {
       return forms
         .filter((f) => (f.form_title || '').toLowerCase().includes(wanted))
-        .map((form) => ({ form, depth: 0 }))
+        .map((form) => ({ form, depth: 0, hasKids: false, canDrill: false }))
     }
-    return formTree(forms)
-  }, [forms, wanted])
-
-  // Which forms have children, so only those get a chevron.
-  const parents = React.useMemo(() => {
-    const held = new Set()
-    for (const f of forms || []) if (f.parent_form_id) held.add(f.parent_form_id)
-    return held
-  }, [forms])
-
-  const folded = (id) => Boolean(shut[id])
-
-  const fold = (id) => setShut((current) => ({ ...current, [id]: !current[id] }))
-
-  /* A row is drawn unless one of the forms above it is folded. Checked against
-     every ancestor, not just the parent, so folding a grandparent takes the
-     whole branch with it. */
-  const hidden = (form) => {
-    const byId = new Map((forms || []).map((f) => [f.form_id, f]))
-    let at = byId.get(form.parent_form_id)
-    const seen = new Set()
-    while (at && !seen.has(at.form_id)) {
-      if (folded(at.form_id)) return true
-      seen.add(at.form_id)
-      at = byId.get(at.parent_form_id)
+    const out = []
+    const walk = (node, rel) => {
+      const kids = childrenOf.get(node.form_id) || []
+      const hasKids = kids.length > 0
+      const atCap = rel >= CAP
+      out.push({ form: node, depth: rel, hasKids, canDrill: atCap && hasKids })
+      if (hasKids && !atCap && !shut[node.form_id]) {
+        for (const k of kids) walk(k, rel + 1)
+      }
     }
-    return false
-  }
+    for (const r of (childrenOf.get(focusId || '__root__') || [])) walk(r, 0)
+    return out
+  }, [forms, wanted, focusId, childrenOf, shut])
 
-  const visible = (rows || []).filter(({ form }) => !hidden(form))
+  const visible = rows || []
+  const crumbs = (!wanted && focusId) ? chainTo(focusId) : []
 
   // Embedded inside a project folder in the tree: the folder already shows the
   // project's name and controls expansion, so the panel's own header is dropped
@@ -242,26 +273,82 @@ export function FormsPanel({ onNavigate, embedded = false }) {
           <p className="side__empty">Nothing matches “{search.trim()}”.</p>
         )}
 
-        {visible.map(({ form: f, depth }) => {
+        {/* The trail out of a drilled-in sub-tree. Each step jumps straight to
+            that level; "⌂" goes all the way back to the project's own forms. */}
+        {crumbs.length > 0 && (
+          <div className="side__crumbs">
+            <button type="button" className="side__crumb" title="All forms"
+                    aria-label="Back to all forms" onClick={() => setFocusId(null)}>⌂</button>
+            {crumbs.map((c, i) => {
+              const last = i === crumbs.length - 1
+              return (
+                <React.Fragment key={c.form_id}>
+                  <span className="side__crumbsep" aria-hidden="true">›</span>
+                  {last ? (
+                    <span className="side__crumb side__crumb--on ellipsis" title={c.form_title}>{c.form_title}</span>
+                  ) : (
+                    <button type="button" className="side__crumb ellipsis" title={c.form_title}
+                            onClick={() => setFocusId(c.form_id)}>{c.form_title}</button>
+                  )}
+                </React.Fragment>
+              )
+            })}
+          </div>
+        )}
+
+        {visible.map(({ form: f, depth, hasKids, canDrill }) => {
           const open = f.form_id === activeId
-          const parent = parents.has(f.form_id)
           // The rail and the indent together; one variable so the row, its
           // chevron and its label cannot drift apart.
           const inset = { '--depth': depth }
 
+          // The control at the head of the row: drill into a deep branch, fold a
+          // shallow one, or a spacer when it is a leaf.
+          const lead = canDrill ? (
+            <button
+              type="button"
+              className="side__drill"
+              aria-label={`Open the forms under ${f.form_title}`}
+              title="Open sub-forms"
+              onClick={() => setFocusId(f.form_id)}
+            >
+              <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">
+                <path d="M9 6l6 6-6 6" fill="none" stroke="currentColor"
+                      strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          ) : hasKids ? (
+            <button
+              type="button"
+              className={`side__fold${folded(f.form_id) ? '' : ' on'}`}
+              aria-expanded={!folded(f.form_id)}
+              aria-label={`${folded(f.form_id) ? 'Show' : 'Hide'} the forms under ${f.form_title}`}
+              onClick={() => fold(f.form_id)}
+            >
+              <svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true">
+                <path d="M9 6l6 6-6 6" fill="none" stroke="currentColor"
+                      strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          ) : (
+            <span className="side__fold side__fold--none" aria-hidden="true" />
+          )
+
           // A field officer goes straight to the form; there is nothing to edit.
           if (!builder) {
             return (
-              <NavLink
-                key={f.form_id}
-                to={`/f/${f.form_id}`}
-                className={`side__form${open ? ' on' : ''}`}
-                style={inset}
-                onClick={onNavigate}
-                title={f.form_description || f.form_title}
-              >
-                <span className="grow ellipsis">{f.form_title}</span>
-              </NavLink>
+              <div key={f.form_id} className="side__row" style={inset} ref={open ? activeRow : null}>
+                {lead}
+                <NavLink
+                  to={`/f/${f.form_id}`}
+                  className={`side__form side__form--tree grow${open ? ' on' : ''}`}
+                  onClick={onNavigate}
+                  title={f.form_description || f.form_title}
+                >
+                  <span className={`dot dot--${(f.form_status || '').toLowerCase()}`} />
+                  <span className="grow ellipsis">{f.form_title}</span>
+                </NavLink>
+              </div>
             )
           }
 
@@ -270,23 +357,7 @@ export function FormsPanel({ onNavigate, embedded = false }) {
           return (
             <div key={f.form_id} ref={open ? activeRow : null} style={inset}>
               <div className="side__row">
-                {parent ? (
-                  <button
-                    type="button"
-                    className={`side__fold${folded(f.form_id) ? '' : ' on'}`}
-                    aria-expanded={!folded(f.form_id)}
-                    aria-label={`${folded(f.form_id) ? 'Show' : 'Hide'} the forms under ${f.form_title}`}
-                    onClick={() => fold(f.form_id)}
-                  >
-                    <svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true">
-                      <path d="M9 6l6 6-6 6" fill="none" stroke="currentColor"
-                            strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </button>
-                ) : (
-                  <span className="side__fold side__fold--none" aria-hidden="true" />
-                )}
-
+                {lead}
                 <button
                   type="button"
                   className={`side__form side__form--tree grow${open ? ' on' : ''}`}
@@ -305,6 +376,15 @@ export function FormsPanel({ onNavigate, embedded = false }) {
 
               {isExpanded && (
                 <div className="side__tree-sub" style={{ '--depth': depth + 1 }}>
+                  {/* Fill the form in — a new submission. A different route from
+                      the editor pages (/f/… not /forms/…), so it sits apart. */}
+                  <NavLink
+                    to={`/f/${f.form_id}/new`}
+                    className={({ isActive }) => `side__tree-item${isActive ? ' on' : ''}`}
+                    onClick={onNavigate}
+                  >
+                    {t('label.fill') === 'label.fill' ? 'Fill' : t('label.fill')}
+                  </NavLink>
                   {TREE_PAGES.map(([key, label, labelKey]) => (
                     <NavLink
                       key={key}

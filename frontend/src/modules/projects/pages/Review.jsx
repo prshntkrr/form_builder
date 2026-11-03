@@ -56,7 +56,7 @@ function ChannelBadge({ channel }) {
       borderRadius: '12px', background: '#f1f5f9', color: '#334155',
       border: '1px solid #cbd5e1', whiteSpace: 'nowrap',
     }}>
-      🌐 Web/Mobile
+      🌐 {norm === 'web' ? 'Web' : 'Web/Mobile'}
     </span>
   )
 }
@@ -131,7 +131,9 @@ function Queue() {
   const filteredForms = useMemo(() => {
     if (!channelFilter) return forms
     return forms.filter((f) => {
-      const ch = (f.form_json?.channel || 'web_mobile').toLowerCase()
+      // The channel is a top-level field on the form row (same place the forms
+      // table reads it), not inside form_json.
+      const ch = (f.channel || 'web_mobile').toLowerCase()
       return ch === channelFilter
     })
   }, [forms, channelFilter])
@@ -205,7 +207,7 @@ function Queue() {
                   <strong>{label(f, forms)}</strong>
                   <div className="tiny muted">{f.form_id}</div>
                 </div>
-                <ChannelBadge channel={f.form_json?.channel} />
+                <ChannelBadge channel={f.channel} />
               </div>
               <span className="review__form-count">
                 {counts[f.form_id] ?? '...'} records
@@ -328,7 +330,7 @@ function FormRecordQueue({ projectId, form, forms, mayReview, onBack }) {
           <button className="btn btn--quiet btn--sm" onClick={onBack}>&larr; Back to forms</button>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4 }}>
             <h1 style={{ margin: 0 }}>{label(form, forms)}</h1>
-            <ChannelBadge channel={form.form_json?.channel} />
+            <ChannelBadge channel={form.channel} />
           </div>
           <p className="lede">{total} record{total === 1 ? '' : 's'}</p>
         </div>

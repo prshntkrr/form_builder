@@ -64,12 +64,16 @@ function ProjectsNav({ onNavigate }) {
     onNavigate?.()
   }
 
-  // Clicking the open folder closes it; clicking another switches the context
-  // the whole application works in, and opens it.
+  // Clicking a project makes it the active context, opens it, and goes straight
+  // to its settings — there is no separate "Project settings" row any more. The
+  // System folder has no settings page, so it only opens.
   const pick = (id) => {
-    if (id === activeId) { setActiveOpen((o) => !o); return }
-    choose(id)
+    if (id !== activeId) choose(id)
     setActiveOpen(true)
+    if (id !== SYSTEM) {
+      navigate(`/projects/${id}`)
+      onNavigate?.()
+    }
   }
 
   const sub = (to, label) => (
@@ -83,8 +87,6 @@ function ProjectsNav({ onNavigate }) {
     <div className="proj__body">
       {sub('/dashboards', t('label.dashboards'))}
       {sub('/review', can('project.submissions.review') ? t('label.review') : t('label.my.submissions'))}
-      {(can('project.members.manage') || can('project.groups.manage')) &&
-        sub(`/projects/${projectId}`, t('label.project.settings'))}
       {hasForms && <FormsPanel onNavigate={onNavigate} embedded />}
     </div>
   )

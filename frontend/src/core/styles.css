@@ -408,6 +408,34 @@ a:hover { text-decoration: underline; }
 /* A form with nothing under it keeps the width, so every title lines up. */
 .side__fold--none { cursor: default; }
 @media (prefers-reduced-motion: reduce) { .side__fold svg { transition: none; } }
+
+/* The drill-in control: a deep branch is entered rather than indented further.
+   Brighter than the fold chevron so "goes deeper" reads as a step, not a toggle. */
+.side__drill {
+  flex: none; width: 16px; height: 22px;
+  display: grid; place-items: center;
+  border: 0; background: none; padding: 0; cursor: pointer;
+  color: rgba(255,255,255,.7); border-radius: 5px;
+}
+.side__drill:hover { background: rgba(255,255,255,.14); color: #fff; }
+.side__drill:focus-visible { outline: 2px solid var(--accent-deep); outline-offset: -2px; }
+
+/* The breadcrumb out of a drilled-in sub-tree — compact, wraps if it must. */
+.side__crumbs {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 2px;
+  padding: 4px 10px 6px; margin-bottom: 2px;
+  font-size: 11.5px; color: rgba(255,255,255,.55);
+  border-bottom: 1px solid rgba(255,255,255,.08);
+}
+.side__crumb {
+  max-width: 120px; border: 0; background: none; cursor: pointer;
+  color: rgba(255,255,255,.6); font: inherit; font-size: 11.5px;
+  padding: 1px 4px; border-radius: 4px;
+}
+.side__crumb:hover { background: rgba(255,255,255,.1); color: #fff; }
+.side__crumb--on { color: #fff; font-weight: 650; cursor: default; }
+.side__crumb--on:hover { background: none; }
+.side__crumbsep { opacity: .5; }
 /* A draft is built but not published: hollow, not coloured in. */
 .dot--draft { background: transparent; box-shadow: inset 0 0 0 1.5px var(--ink-3); }
 .side .dot--draft { box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.4); }
@@ -455,10 +483,12 @@ a:hover { text-decoration: underline; }
 
 /* Tree-style inline sub-items under each form */
 .side__form--tree {
-  display: flex; align-items: center; gap: 5px;
+  display: flex; align-items: center; gap: 5px; min-width: 0;
   background: none; border: 0; color: inherit; font: inherit;
   cursor: pointer; text-align: left; padding: 5px 8px;
-  padding-left: calc(10px + var(--depth, 0) * 11px);
+  /* Fixed — the indent comes from `.side__row` (one `--depth`), so the chevron,
+     dot and title cannot drift apart as the tree deepens. */
+  padding-left: 6px;
   border-radius: var(--r-sm);
 }
 .side__form--tree:hover { background: rgba(255,255,255,.08); color: #fff; }

@@ -1495,6 +1495,7 @@ export default function Builder() {
             />
           </div>
 
+          {view !== 'responses' && (
           <div className="bld-actions">
             {editing && isWebBuilder && status === 'Active' && (
               <Link className="btn btn--sm" to={`/f/${formId}`} title="Open the form people fill in">
@@ -1586,6 +1587,7 @@ export default function Builder() {
               </button>
             )}
           </div>
+          )}
         </div>
       </div>
 
