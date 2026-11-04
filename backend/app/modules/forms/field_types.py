@@ -181,6 +181,22 @@ def _to_email(value: Any) -> Optional[str]:
 
 
 # --------------------------------------------------------------------------- #
+def _to_table(value: Any) -> Optional[List[Dict[str, Any]]]:
+    if _blank(value):
+        return None
+    if isinstance(value, list):
+        return [v for v in value if isinstance(v, dict)]
+    if isinstance(value, str):
+        import json
+        try:
+            parsed = json.loads(value)
+            if isinstance(parsed, list):
+                return [v for v in parsed if isinstance(v, dict)]
+        except Exception:
+            pass
+    raise FieldValueError(f"'{value}' is not a valid table dataset")
+
+
 # registry
 # --------------------------------------------------------------------------- #
 @dataclass(frozen=True)
@@ -246,6 +262,8 @@ _TYPES: List[FieldType] = [
     # kept had to change to hold one.
     FieldType("polygon", _to_ring, "array [[lng, lat], ...]", "TEXT",
               aliases=["boundary", "area", "geopolygon", "geofence"]),
+    FieldType("table", _to_table, "array [object, ...]", "JSONB",
+              multi=True, aliases=["grid", "subtable", "matrix", "table_input"]),
 ]
 
 FIELD_TYPES: Dict[str, FieldType] = {t.name: t for t in _TYPES}
