@@ -15,6 +15,7 @@ from app.modules.dashboards.services.dashboard_validator import (
 from app.core.config import settings
 
 from app.core.deps import current_user
+from app.core.auth_service import display_name
 from app.modules.dashboards import dash_access
 from app.modules.dashboards.permissions import (
     DASHBOARDS_CREATE,
@@ -124,7 +125,7 @@ def save_dashboard(
     saved = create_dashboard(
         title=title,
         dashboard_json=payload,
-        created_by=user.get("username"),
+        created_by=display_name(user),
         project_id=project_id,
     )
 
@@ -233,7 +234,7 @@ async def import_excel_data_source(
         result = import_workbook(
             data,
             table_name,
-            imported_by=user.get("username", ""),
+            imported_by=display_name(user),
             sheet_name=sheet_name or None,
         )
     except ExcelSourceError as exc:
@@ -248,7 +249,7 @@ async def import_excel_data_source(
         table_name=result["table_name"],
         project_id=project_id,
         source_type="excel",
-        created_by=user.get("username"),
+        created_by=display_name(user),
     )
 
     return result
@@ -411,7 +412,7 @@ def update_dashboard_route(
         dashboard_id=dashboard_id,
         title=title,
         dashboard_json=payload,
-        created_by=user.get("username"),
+        created_by=display_name(user),
     )
 
     if updated is None:
@@ -506,7 +507,7 @@ def restore_version_route(
     result = restore_version(
         dashboard_id,
         version_no,
-        created_by=user.get("username"),
+        created_by=display_name(user),
     )
 
     if result is None:

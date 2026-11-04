@@ -203,6 +203,8 @@ export default function Dashboards() {
 
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [dashboardName, setDashboardName] = useState("");
+  const [showManualNameModal, setShowManualNameModal] = useState(false);
+  const [manualDashboardName, setManualDashboardName] = useState("");
 
   const [savedDashboardId, setSavedDashboardId] = useState(null);
   const [loadingSavedDashboards, setLoadingSavedDashboards] = useState(false);
@@ -327,6 +329,7 @@ export default function Dashboards() {
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [addMenuOpensUp, setAddMenuOpensUp] = useState(true);
   const addMenuRef = useRef(null);
+  const exportMenuRef = useRef(null);
 
   useEffect(() => {
     if (!addMenuOpen) {
@@ -355,6 +358,23 @@ export default function Dashboards() {
       document.removeEventListener("keydown", closeOnEscape);
     };
   }, [addMenuOpen]);
+
+  useEffect(() => {
+    const closeExportMenu = (event) => {
+      const el = exportMenuRef.current;
+      if (el && el.open && !el.contains(event.target)) {
+        el.removeAttribute("open");
+      }
+    };
+
+    document.addEventListener("mousedown", closeExportMenu);
+    document.addEventListener("touchstart", closeExportMenu);
+
+    return () => {
+      document.removeEventListener("mousedown", closeExportMenu);
+      document.removeEventListener("touchstart", closeExportMenu);
+    };
+  }, []);
 
   /* Which page of each table is on screen. Keyed by widget, because two
      tables on one dashboard page independently. */
@@ -1235,6 +1255,7 @@ export default function Dashboards() {
     setSelectedWidgetId(null);
     setAiCandidate(null);
     setCandidateData(EMPTY_PREVIEW);
+    setEditPrompt("");
     setFilterSelections({});
     setFilterOptions({});
     setFilterSearch({});
@@ -2189,17 +2210,24 @@ export default function Dashboards() {
       return;
     }
 
+    setManualDashboardName("");
+    setShowManualNameModal(true);
+  };
+
+  const confirmManualDashboard = () => {
+    const name = manualDashboardName.trim() || "Untitled dashboard";
+
     const empty = {
       schema_version: 1,
 
       dashboard: {
-        name: "Untitled dashboard",
+        name,
         description: "",
       },
 
       data_sources: [
         {
-          id: selectedSource.name,
+          id: "source_1",
           type: liveSource ? "databricks" : "postgresql_tabular",
           name: selectedSource.name,
         },
@@ -2219,11 +2247,10 @@ export default function Dashboards() {
     setSavedGridLayout([]);
     setAllLayouts({ lg: [] });
 
-    setEditDashboardName(empty.dashboard.name);
+    setEditDashboardName(name);
     setEditError("");
     setIsEditMode(true);
-
-    startAddWidget();
+    setShowManualNameModal(false);
   };
 
   /* =========================================================
@@ -5219,7 +5246,7 @@ export default function Dashboards() {
                     {/* One control instead of three. <details> is the
                         browser's own disclosure widget: it opens on click and
                         on Enter, and needs no state of ours to stay right. */}
-                    <details className="dash__menu">
+                    <details className="dash__menu" ref={exportMenuRef}>
                       <summary className="btn">Export and share</summary>
 
                       <div className="dash__menu-body" role="menu">
@@ -5621,6 +5648,17 @@ export default function Dashboards() {
                         }
 
                         // Normal edit flow: no stashed version exists.
+                        if (!savedDashboardId) {
+                          setDashboard(null);
+                          setIsEditMode(false);
+                          setEditError("");
+                          setWidgetData({});
+                          setGridLayout([]);
+                          setSavedGridLayout([]);
+                          setAllLayouts({ lg: [] });
+                          return;
+                        }
+
                         setGridLayout(savedGridLayout);
                         setAllLayouts({ lg: savedGridLayout });
                         setIsEditMode(false);
@@ -5933,6 +5971,68 @@ export default function Dashboards() {
                 onClick={saveCurrentDashboard}
               >
                 {saving ? "Saving..." : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =====================================================
+          MANUAL DASHBOARD NAME MODAL
+          ===================================================== */}
+
+      {showManualNameModal && (
+        <div className="modal-backdrop">
+          <div
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="manual-dashboard-title"
+          >
+            <h2 id="manual-dashboard-title">Name Your Dashboard</h2>
+
+            <p className="muted">Enter a name for your new dashboard.</p>
+
+            <input
+              type="text"
+              value={manualDashboardName}
+              onChange={(e) => setManualDashboardName(e.target.value)}
+              placeholder="Dashboard name"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && manualDashboardName.trim()) {
+                  confirmManualDashboard();
+                }
+
+                if (e.key === "Escape") {
+                  setShowManualNameModal(false);
+                }
+              }}
+            />
+
+            <div
+              className="row"
+              style={{
+                marginTop: 16,
+              }}
+            >
+              <span className="spacer" />
+
+              <button
+                className="btn"
+                type="button"
+                onClick={() => setShowManualNameModal(false)}
+              >
+                Cancel
+              </button>
+
+              <button
+                className="btn btn--primary"
+                type="button"
+                disabled={!manualDashboardName.trim()}
+                onClick={confirmManualDashboard}
+              >
+                Create
               </button>
             </div>
           </div>
