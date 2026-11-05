@@ -11,6 +11,7 @@ import ResearchFormsList from './pages/ResearchFormsList.jsx'
 import ResearchFormBuilder from './pages/ResearchFormBuilder.jsx'
 import ResearchFormFill from './pages/ResearchFormFill.jsx'
 import ResearchFormSubmissions from './pages/ResearchFormSubmissions.jsx'
+import PublicResearchForm from './pages/PublicResearchForm.jsx'
 import './styles.css'
 
 export default {
@@ -63,5 +64,6 @@ export default {
     { path: '/research/forms/:formId/edit', element: <ResearchFormBuilder />, requires: 'manage_research_platforms' },
     { path: '/research/forms/:formId/fill', element: <ResearchFormFill />, requires: 'use_research_platforms' },
     { path: '/research/forms/:formId/submissions', element: <ResearchFormSubmissions />, requires: 'use_research_platforms' },
+    { path: '/research/p/:token', element: <PublicResearchForm />, public: true },
   ],
 }

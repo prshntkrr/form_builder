@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api.js'
 import FormRenderer from '../../forms/components/FormRenderer.jsx'
+import ResearchPublicShareModal from '../components/ResearchPublicShareModal.jsx'
 
 export default function ResearchFormFill() {
   const { formId } = useParams()
@@ -30,6 +31,7 @@ export default function ResearchFormFill() {
   const [success, setSuccess] = useState(null)
   const [error, setError] = useState('')
   const [copiedLink, setCopiedLink] = useState(false)
+  const [showShareModal, setShowShareModal] = useState(false)
 
   const handleCopyShareLink = async () => {
     const url = window.location.href
@@ -215,11 +217,11 @@ export default function ResearchFormFill() {
         <div className="research-actions" style={{ display: 'flex', gap: 8 }}>
           <button
             type="button"
-            onClick={handleCopyShareLink}
+            onClick={() => setShowShareModal(true)}
             className="btn btn--secondary btn--sm"
-            title="Copy shareable direct link to this form"
+            title="Configure and copy public/evaluator share links"
           >
-            {copiedLink ? 'Link Copied' : 'Share Form Link'}
+            Share Form Link
           </button>
           <Link to={`/research/forms/${formId}/submissions`} className="btn btn--quiet btn--sm">
             View All Data
@@ -342,6 +344,15 @@ export default function ResearchFormFill() {
           submitting={submitting}
         />
       </div>
+
+      {showShareModal && (
+        <ResearchPublicShareModal
+          formId={formId}
+          formTitle={form?.title}
+          formStatus={form?.status}
+          onClose={() => setShowShareModal(false)}
+        />
+      )}
     </div>
   )
 }

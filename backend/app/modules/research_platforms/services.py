@@ -7,6 +7,7 @@ and observation data pipelines.
 import io
 import itertools
 import json
+import secrets
 import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
@@ -1197,3 +1198,198 @@ class ResearchFormService:
             "status": form.get("status"),
             "updated_on": str(form.get("updated_on")),
         }
+
+    @staticmethod
+    def get_public_share_state(form_id: str) -> Dict[str, Any]:
+        with transaction() as cur:
+            cur.execute(
+                """
+                SELECT public_token, public_enabled, public_expires_on,
+                       public_allow_multiple, public_shared_by, public_shared_on,
+                       status, title
+                FROM research_form
+                WHERE form_id = %s
+                """,
+                (form_id,),
+            )
+            row = cur.fetchone()
+            if not row:
+                raise ValueError(f"Research form '{form_id}' not found.")
+
+            return {
+                "form_id": form_id,
+                "title": row.get("title"),
+                "status": row.get("status"),
+                "enabled": bool(row.get("public_enabled")),
+                "token": row.get("public_token"),
+                "expires_on": str(row.get("public_expires_on")) if row.get("public_expires_on") else None,
+                "allow_multiple": bool(row.get("public_allow_multiple", True)),
+                "shared_by": row.get("public_shared_by"),
+                "shared_on": str(row.get("public_shared_on")) if row.get("public_shared_on") else None,
+            }
+
+    @staticmethod
+    def share_publicly(
+        form_id: str,
+        shared_by: str,
+        *,
+        regenerate: bool = False,
+        expires_on: Optional[str] = None,
+        allow_multiple: bool = True,
+    ) -> Dict[str, Any]:
+        with transaction() as cur:
+            cur.execute(
+                "SELECT form_id, status, public_token FROM research_form WHERE form_id = %s FOR UPDATE",
+                (form_id,),
+            )
+            row = cur.fetchone()
+            if not row:
+                raise ValueError(f"Research form '{form_id}' not found.")
+
+            if row.get("status") != "Active":
+                raise ValueError("Only an active research form can be shared publicly. Please publish it first.")
+
+            existing_token = row.get("public_token")
+            token = secrets.token_urlsafe(32) if (regenerate or not existing_token) else existing_token
+
+            exp_val = None
+            if expires_on:
+                try:
+                    exp_val = datetime.fromisoformat(expires_on.replace("Z", "+00:00"))
+                except Exception:
+                    exp_val = None
+
+            cur.execute(
+                """
+                UPDATE research_form
+                SET public_token = %s,
+                    public_enabled = TRUE,
+                    public_expires_on = %s,
+                    public_allow_multiple = %s,
+                    public_shared_by = %s,
+                    public_shared_on = CURRENT_TIMESTAMP
+                WHERE form_id = %s
+                """,
+                (token, exp_val, allow_multiple, shared_by, form_id),
+            )
+
+        return ResearchFormService.get_public_share_state(form_id)
+
+    @staticmethod
+    def disable_public_share(form_id: str) -> Dict[str, Any]:
+        with transaction() as cur:
+            cur.execute(
+                "UPDATE research_form SET public_enabled = FALSE WHERE form_id = %s",
+                (form_id,),
+            )
+        return ResearchFormService.get_public_share_state(form_id)
+
+    @staticmethod
+    def resolve_public_token(token: str, trial_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        if not token:
+            return None
+
+        with transaction() as cur:
+            cur.execute(
+                """
+                SELECT form_id, title, description, category, platform_id, trial_id,
+                       channel, status, form_json, public_expires_on, public_allow_multiple
+                FROM research_form
+                WHERE public_token = %s
+                  AND public_enabled = TRUE
+                  AND status = 'Active'
+                """,
+                (token,),
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+
+            if row.get("public_expires_on") and row["public_expires_on"] < datetime.now():
+                return None
+
+            form_dict = dict(row)
+            if isinstance(form_dict.get("form_json"), str):
+                form_dict["form_json"] = json.loads(form_dict["form_json"])
+
+            bound_trial_id = form_dict.get("trial_id")
+            effective_trial = bound_trial_id or trial_id
+            trials_info = []
+            if bound_trial_id:
+                cur.execute("SELECT trial_id, name, payload FROM research_trial WHERE trial_id = %s", (bound_trial_id,))
+                t_row = cur.fetchone()
+                if t_row:
+                    trials_info.append({"trial_id": t_row["trial_id"], "name": t_row["name"]})
+            else:
+                cur.execute("SELECT trial_id, name FROM research_trial ORDER BY name LIMIT 50")
+                trials_info = [{"trial_id": r["trial_id"], "name": r["name"]} for r in cur.fetchall()]
+
+            form_dict["trials"] = trials_info
+
+            if effective_trial:
+                cur.execute(
+                    """
+                    SELECT c.cycle_id, c.year, c.season, p.protocol_id, p.payload AS protocol_payload
+                    FROM research_cycle c
+                    LEFT JOIN research_protocol p ON p.cycle_id = c.cycle_id
+                    WHERE c.trial_id = %s
+                    ORDER BY c.year DESC, c.season DESC
+                    """,
+                    (effective_trial,),
+                )
+                form_dict["cycles"] = [dict(c) for c in cur.fetchall()]
+            else:
+                form_dict["cycles"] = []
+
+            return form_dict
+
+    @staticmethod
+    def get_public_cycles(token: str, trial_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        form = ResearchFormService.resolve_public_token(token)
+        if not form:
+            raise ValueError("This public research form link is not valid or has expired.")
+
+        target_trial = form.get("trial_id") or trial_id
+        if not target_trial:
+            return []
+
+        with transaction() as cur:
+            cur.execute(
+                """
+                SELECT c.cycle_id, c.year, c.season, p.protocol_id, p.payload AS protocol_payload
+                FROM research_cycle c
+                LEFT JOIN research_protocol p ON p.cycle_id = c.cycle_id
+                WHERE c.trial_id = %s
+                ORDER BY c.year DESC, c.season DESC
+                """,
+                (target_trial,),
+            )
+            return [dict(c) for c in cur.fetchall()]
+
+    @staticmethod
+    def submit_public(
+        token: str,
+        data: Dict[str, Any],
+        trial_id: Optional[str] = None,
+        cycle_id: Optional[str] = None,
+        plot_no: Optional[int] = None,
+        treatment_id: Optional[int] = None,
+        evaluator_name: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        form = ResearchFormService.resolve_public_token(token)
+        if not form:
+            raise ValueError("This public research form link is not valid or has expired.")
+
+        form_id = form["form_id"]
+        final_trial_id = form.get("trial_id") or trial_id
+        author = f"Public evaluator: {evaluator_name.strip()}" if evaluator_name and evaluator_name.strip() else "Public Link (Research)"
+
+        return ResearchFormService.submit(
+            form_id=form_id,
+            data=data,
+            trial_id=final_trial_id,
+            cycle_id=cycle_id,
+            plot_no=plot_no,
+            treatment_id=treatment_id,
+            created_by=author,
+        )

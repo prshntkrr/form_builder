@@ -236,6 +236,44 @@ def test_module():
     wb_buf2 = ResearchExportService.export_trial_workbook(trial_id)
     print(f"10e. Re-exported trial workbook with custom form sheet: {len(wb_buf2.getvalue())} bytes")
 
+    # 11. Test Public Link & Standalone Evaluator Submission
+    share_state = ResearchFormService.share_publicly(rf_id, shared_by="scientist_dr_jane")
+    print(f"11a. Issued public share link for research form: token={share_state['token']}, enabled={share_state['enabled']}")
+    assert share_state["enabled"] is True
+    assert share_state["token"] is not None
+    pub_token = share_state["token"]
+
+    # Resolve token publicly (unauthenticated view)
+    resolved = ResearchFormService.resolve_public_token(pub_token)
+    assert resolved is not None
+    assert resolved["form_id"] == rf_id
+    assert resolved["title"] == custom_form["title"]
+    assert len(resolved.get("cycles", [])) > 0
+    print(f"11b. Resolved public research form: title='{resolved['title']}', cycles={len(resolved['cycles'])}")
+
+    # Submit observation via public token
+    pub_sub = ResearchFormService.submit_public(
+        token=pub_token,
+        data={
+            "plot_no": 102,
+            "canopy_temp_c": 23.8,
+            "ambient_temp_c": 28.3,
+        },
+        trial_id=trial_id,
+        cycle_id=cycle_id,
+        plot_no=102,
+        evaluator_name="Field Scout John",
+    )
+    print(f"11c. Public observation submitted: id={pub_sub['submission_id']}, plot={pub_sub['plot_no']}, treatment={pub_sub['treatment_id']}")
+    assert pub_sub["plot_no"] == 102
+    assert pub_sub["submission_id"] is not None
+
+    # Disable public link
+    disabled_state = ResearchFormService.disable_public_share(rf_id)
+    assert disabled_state["enabled"] is False
+    assert ResearchFormService.resolve_public_token(pub_token) is None
+    print(f"11d. Public share disabled successfully: resolve_public_token returns None")
+
     print("\nALL BACKEND TESTS PASSED!")
     close_pool()
 

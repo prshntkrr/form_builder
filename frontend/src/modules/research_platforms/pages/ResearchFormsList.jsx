@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../api.js'
 import { useAuth } from '../../../core/auth.jsx'
+import ResearchPublicShareModal from '../components/ResearchPublicShareModal.jsx'
 
 const CATEGORIES = [
   'All',
@@ -23,6 +24,7 @@ export default function ResearchFormsList() {
   const [search, setSearch] = useState('')
   const [selectedCat, setSelectedCat] = useState('All')
   const [copiedId, setCopiedId] = useState('')
+  const [shareModalForm, setShareModalForm] = useState(null)
 
   const handleCopyLink = async (formId) => {
     const url = `${window.location.origin}/research/forms/${formId}/fill`
@@ -200,12 +202,12 @@ export default function ResearchFormsList() {
                     </Link>
                     <button
                       type="button"
-                      onClick={() => handleCopyLink(f.form_id)}
+                      onClick={() => setShareModalForm(f)}
                       className="btn btn--secondary btn--xs"
-                      title="Copy direct shareable web/mobile link"
+                      title="Configure and copy public/evaluator share links"
                       style={{ minWidth: 76 }}
                     >
-                      {copiedId === f.form_id ? 'Link Copied' : 'Share Link'}
+                      Share Link
                     </button>
                     <Link to={`/research/forms/${f.form_id}/submissions`} className="btn btn--quiet btn--xs">
                       Data ({f.submission_count || 0})
@@ -243,6 +245,15 @@ export default function ResearchFormsList() {
             )
           })}
         </div>
+      )}
+
+      {shareModalForm && (
+        <ResearchPublicShareModal
+          formId={shareModalForm.form_id}
+          formTitle={shareModalForm.title}
+          formStatus={shareModalForm.status}
+          onClose={() => setShareModalForm(null)}
+        />
       )}
     </div>
   )

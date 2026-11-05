@@ -107,8 +107,18 @@ CREATE TABLE IF NOT EXISTS research_form (
     form_json        JSONB        NOT NULL,
     created_on       TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
     updated_on       TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
-    created_by       VARCHAR(50)
+    created_by       VARCHAR(50),
+    public_token     VARCHAR(64),
+    public_enabled   BOOLEAN      NOT NULL DEFAULT FALSE,
+    public_expires_on TIMESTAMP,
+    public_allow_multiple BOOLEAN NOT NULL DEFAULT TRUE,
+    public_shared_by VARCHAR(50),
+    public_shared_on TIMESTAMP
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_research_form_public_token
+    ON research_form (public_token)
+    WHERE public_token IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_research_form_title ON research_form (title);
 CREATE INDEX IF NOT EXISTS idx_research_form_trial ON research_form (trial_id);

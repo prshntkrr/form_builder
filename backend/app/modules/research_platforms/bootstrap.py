@@ -31,6 +31,21 @@ def ensure_research_tables() -> bool:
             else:
                 logger.error("schema.sql not found at %s", SCHEMA_PATH)
 
+        # Ensure public share columns exist on research_form
+        if table_exists(cur, "research_form"):
+            cur.execute("""
+                ALTER TABLE research_form ADD COLUMN IF NOT EXISTS public_token VARCHAR(64);
+                ALTER TABLE research_form ADD COLUMN IF NOT EXISTS public_enabled BOOLEAN NOT NULL DEFAULT FALSE;
+                ALTER TABLE research_form ADD COLUMN IF NOT EXISTS public_expires_on TIMESTAMP;
+                ALTER TABLE research_form ADD COLUMN IF NOT EXISTS public_allow_multiple BOOLEAN NOT NULL DEFAULT TRUE;
+                ALTER TABLE research_form ADD COLUMN IF NOT EXISTS public_shared_by VARCHAR(50);
+                ALTER TABLE research_form ADD COLUMN IF NOT EXISTS public_shared_on TIMESTAMP;
+
+                CREATE UNIQUE INDEX IF NOT EXISTS uq_research_form_public_token
+                    ON research_form (public_token)
+                    WHERE public_token IS NOT NULL;
+            """)
+
         # Seed initial research templates if empty
         if table_exists(cur, "research_form"):
             cur.execute("SELECT COUNT(*) AS c FROM research_form")

@@ -10,6 +10,7 @@ import LocationSettings from '../../forms/components/LocationSettings.jsx'
 import ResearchFieldPalette from '../components/ResearchFieldPalette.jsx'
 import PlatformRegisterModal from '../components/PlatformRegisterModal.jsx'
 import TrialRegisterModal from '../components/TrialRegisterModal.jsx'
+import ResearchPublicShareModal from '../components/ResearchPublicShareModal.jsx'
 import { identifier, MAX_IDENTIFIER } from '../../forms/fieldTypes.js'
 import { generateLayout, layoutIsStale, removeFromLayout, withFieldReplaced } from '../../forms/formLayout.js'
 import {
@@ -106,6 +107,7 @@ export default function ResearchFormBuilder() {
   const [copiedLink, setCopiedLink] = useState(false)
   const [showPlatformModal, setShowPlatformModal] = useState(false)
   const [showTrialModal, setShowTrialModal] = useState(false)
+  const [showShareModal, setShowShareModal] = useState(false)
 
   // Research Metadata Lists
   const [platforms, setPlatforms] = useState([])
@@ -901,19 +903,10 @@ export default function ResearchFormBuilder() {
               <button
                 type="button"
                 className="btn btn--quiet btn--sm"
-                onClick={async () => {
-                  const url = `${window.location.origin}/research/forms/${formId}/fill`
-                  try {
-                    await navigator.clipboard.writeText(url)
-                    setCopiedLink(true)
-                    setTimeout(() => setCopiedLink(false), 2500)
-                  } catch (_e) {
-                    window.prompt('Copy form link:', url)
-                  }
-                }}
-                title="Copy shareable link to fill this research form"
+                onClick={() => setShowShareModal(true)}
+                title="Configure and copy public/evaluator share links"
               >
-                {copiedLink ? 'Link Copied' : 'Share Link'}
+                Share Link
               </button>
             )}
 
@@ -1019,6 +1012,15 @@ export default function ResearchFormBuilder() {
             }))
             setShowTrialModal(false)
           }}
+        />
+      )}
+
+      {showShareModal && (
+        <ResearchPublicShareModal
+          formId={formId}
+          formTitle={form.title}
+          formStatus={form.status}
+          onClose={() => setShowShareModal(false)}
         />
       )}
     </main>

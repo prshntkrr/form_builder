@@ -159,6 +159,21 @@ class ResearchFormSubmitRequest(BaseModel):
     treatment_id: Optional[int] = None
 
 
+class ResearchFormPublicShareRequest(BaseModel):
+    regenerate: bool = False
+    expires_on: Optional[str] = None
+    allow_multiple: bool = True
+
+
+class ResearchFormPublicSubmitRequest(BaseModel):
+    data: Dict[str, Any]
+    trial_id: Optional[str] = None
+    cycle_id: Optional[str] = None
+    plot_no: Optional[int] = None
+    treatment_id: Optional[int] = None
+    evaluator_name: Optional[str] = None
+
+
 class YieldCalcRequest(BaseModel):
     area_m2: float
     grain_weight_kg: float
@@ -742,3 +757,72 @@ def export_research_form_excel(
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
+@router.get("/forms/{form_id}/public-share")
+def get_research_form_public_share(
+    form_id: str,
+    user: Dict[str, Any] = Depends(needs(permissions.PLATFORM_MANAGE)),
+):
+    try:
+        return ResearchFormService.get_public_share_state(form_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/forms/{form_id}/public-share")
+def set_research_form_public_share(
+    form_id: str,
+    req: ResearchFormPublicShareRequest,
+    user: Dict[str, Any] = Depends(needs(permissions.PLATFORM_MANAGE)),
+):
+    username = user.get("username") or user.get("sub") or "scientist"
+    try:
+        return ResearchFormService.share_publicly(
+            form_id,
+            shared_by=username,
+            regenerate=req.regenerate,
+            expires_on=req.expires_on,
+            allow_multiple=req.allow_multiple,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete("/forms/{form_id}/public-share")
+def disable_research_form_public_share(
+    form_id: str,
+    user: Dict[str, Any] = Depends(needs(permissions.PLATFORM_MANAGE)),
+):
+    return ResearchFormService.disable_public_share(form_id)
+
+
+# Public unauthenticated routes for Research Forms
+@router.get("/public/forms/{token}")
+def get_public_research_form(token: str, trial_id: Optional[str] = None):
+    form = ResearchFormService.resolve_public_token(token, trial_id=trial_id)
+    if not form:
+        raise HTTPException(status_code=404, detail="This research form link is not valid or has expired.")
+    return form
+
+
+@router.get("/public/forms/{token}/cycles")
+def get_public_research_form_cycles(token: str, trial_id: Optional[str] = None):
+    try:
+        return ResearchFormService.get_public_cycles(token, trial_id=trial_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/public/forms/{token}/submit", status_code=201)
+def submit_public_research_form(token: str, req: ResearchFormPublicSubmitRequest):
+    try:
+        return ResearchFormService.submit_public(
+            token=token,
+            data=req.data,
+            trial_id=req.trial_id,
+            cycle_id=req.cycle_id,
+            plot_no=req.plot_no,
+            treatment_id=req.treatment_id,
+            evaluator_name=req.evaluator_name,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))

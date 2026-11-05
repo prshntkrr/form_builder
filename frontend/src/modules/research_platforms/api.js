@@ -106,6 +106,19 @@ export const api = {
   exportResearchFormExcel: (formId) =>
     download(`/research/forms/${formId}/export`, `research_form_${formId}.xlsx`),
 
+  // Research Form Public Sharing
+  getResearchFormPublicShare: (formId) => request(`/research/forms/${formId}/public-share`),
+  shareResearchFormPublicly: (formId, data) =>
+    request(`/research/forms/${formId}/public-share`, { method: 'POST', body: JSON.stringify(data) }),
+  disableResearchFormPublicShare: (formId) =>
+    request(`/research/forms/${formId}/public-share`, { method: 'DELETE' }),
+  getPublicResearchForm: (token, trialId) =>
+    request(`/research/public/forms/${encodeURIComponent(token)}${trialId ? `?trial_id=${encodeURIComponent(trialId)}` : ''}`),
+  getPublicResearchFormCycles: (token, trialId) =>
+    request(`/research/public/forms/${encodeURIComponent(token)}/cycles${trialId ? `?trial_id=${encodeURIComponent(trialId)}` : ''}`),
+  submitPublicResearchForm: (token, data) =>
+    request(`/research/public/forms/${encodeURIComponent(token)}/submit`, { method: 'POST', body: JSON.stringify(data) }),
+
   // Client Controlled Catalogues
   listCatalogues: (search = '') => {
     const qs = search ? `?search=${encodeURIComponent(search)}` : ''
