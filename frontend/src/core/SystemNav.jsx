@@ -56,6 +56,30 @@ export function NavIcon({ name }) {
     className: 'side__icon',
   }
   switch (name) {
+    case 'platforms':
+      return (
+        <svg {...common}>
+          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+          <circle cx="12" cy="10" r="3" />
+        </svg>
+      )
+    case 'trials':
+      return (
+        <svg {...common}>
+          <path d="M10 2v7.31L4.2 18.5A2 2 0 0 0 5.9 21.5h12.2a2 2 0 0 0 1.7-3L14 9.31V2" />
+          <path d="M8.5 2h7" />
+          <path d="M7 16h10" />
+        </svg>
+      )
+    case 'research_forms':
+      return (
+        <svg {...common}>
+          <rect x="3" y="4" width="18" height="16" rx="2" />
+          <path d="M7 8h10" />
+          <path d="M7 12h10" />
+          <path d="M7 16h6" />
+        </svg>
+      )
     case 'library':
       return <svg {...common}><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" /></svg>
     case 'cimmyt':
@@ -91,7 +115,8 @@ export default function SystemNav({ onNavigate }) {
   const isOpen = useCallback((group) => openIn(open, group.key), [open])
 
   const holdsCurrent = (group) =>
-    group.items.some((item) => pathname === item.to || pathname.startsWith(`${item.to}/`))
+    group.items.some((item) => pathname === item.to || pathname.startsWith(`${item.to}/`)) ||
+    (group.key === 'research_platforms' && pathname.startsWith('/research/'))
 
   const toggle = (group) => {
     setOpen((current) => {
@@ -111,7 +136,7 @@ export default function SystemNav({ onNavigate }) {
           <div key={group.key} className="navgroup">
             <button type="button" className="navgroup__head" aria-expanded={shown}
               onClick={() => toggle(group)}>
-              <span className="navgroup__label">{group.label}</span>
+              <span className="navgroup__label">{(group.labelKey && t(group.labelKey) !== group.labelKey) ? t(group.labelKey) : group.label}</span>
               <Chevron open={shown} />
             </button>
             {shown && (

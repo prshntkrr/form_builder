@@ -1,5 +1,4 @@
 import React from 'react'
-import ResearchNav from './Nav.jsx'
 import PlatformsList from './pages/PlatformsList.jsx'
 import PlatformRegister from './pages/PlatformRegister.jsx'
 import PlatformDetail from './pages/PlatformDetail.jsx'
@@ -18,8 +17,35 @@ export default {
   name: 'research_platforms',
   label: 'Research Platforms & Long-Term Trials',
   order: 8,
-  Nav: ResearchNav,
-  navItems: [],
+  navItems: [
+    {
+      group: 'research_platforms',
+      label: 'Platforms & Stations',
+      labelKey: 'label.research.platforms',
+      to: '/research/platforms',
+      requires: 'use_research_platforms',
+      icon: 'platforms',
+      order: 10,
+    },
+    {
+      group: 'research_platforms',
+      label: 'Experimental Trials',
+      labelKey: 'label.research.trials',
+      to: '/research/trials',
+      requires: 'use_research_platforms',
+      icon: 'trials',
+      order: 20,
+    },
+    {
+      group: 'research_platforms',
+      label: 'Research Form Studio',
+      labelKey: 'label.research.forms',
+      to: '/research/forms',
+      requires: 'use_research_platforms',
+      icon: 'research_forms',
+      order: 30,
+    },
+  ],
   home: (can) => (can?.use_research_platforms ? '/research/platforms' : null),
   routes: [
     { path: '/research/platforms', element: <PlatformsList />, requires: 'use_research_platforms' },

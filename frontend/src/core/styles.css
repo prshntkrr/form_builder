@@ -262,7 +262,12 @@ a:hover { text-decoration: underline; }
 
 /* The system groups sit fixed below the scrolling projects tree — always in
    reach, never scrolled away with the projects list. */
-.side__sys { flex: none; }
+.side__sys {
+  flex: 0 1 auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
 
 /* Account + theme, moved from the old top bar into the foot. */
 .side__acctrow { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
