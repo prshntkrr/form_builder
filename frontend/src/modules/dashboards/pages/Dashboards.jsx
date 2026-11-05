@@ -237,6 +237,7 @@ export default function Dashboards() {
 
   const [widgetData, setWidgetData] = useState({});
   const [dataLoading, setDataLoading] = useState(false);
+  const [openingDashboard, setOpeningDashboard] = useState(false);
   const [dataError, setDataError] = useState("");
   /* The filters that are actually applied — the shape the binding has
      always carried, which is what every widget's request already merges in.
@@ -1753,6 +1754,8 @@ export default function Dashboards() {
 
   const openSavedDashboard = async (dashboardId) => {
     setView("builder");
+    setOpeningDashboard(true);
+    setDashboard(null);
     setDataError("");
     setGenerationError("");
     setEditError("");
@@ -1800,6 +1803,10 @@ export default function Dashboards() {
 
       setDashboard(openDashboard);
       setCurrentVersionNo(targetVersion);
+
+      const url = new URL(window.location);
+      url.searchParams.set("dashboard", dashboardId);
+      window.history.replaceState({}, "", url);
 
       const initialLayout = buildGridLayout(openDashboard?.widgets || []);
 
@@ -1864,6 +1871,8 @@ export default function Dashboards() {
       }
     } catch (e) {
       setGenerationError(e.message || "Failed to open dashboard.");
+    } finally {
+      setOpeningDashboard(false);
     }
   };
 
@@ -1898,6 +1907,10 @@ export default function Dashboards() {
     setIsEditMode(false);
     setLiveSource(null);
     loadSavedDashboards();
+
+    const url = new URL(window.location);
+    url.searchParams.delete("dashboard");
+    window.history.replaceState({}, "", url);
   };
 
   /* A dashboard's name, as a file name. */
@@ -3862,6 +3875,10 @@ export default function Dashboards() {
       setWidgetData({});
       setView("list");
 
+      const url = new URL(window.location);
+      url.searchParams.delete("dashboard");
+      window.history.replaceState({}, "", url);
+
       await loadSavedDashboards();
     } catch (e) {
       setEditError(e.message || "Failed to delete dashboard.");
@@ -4655,10 +4672,70 @@ export default function Dashboards() {
         </section>
       )}
 
+      {/* Shimmer skeleton while a saved dashboard is loading. */}
+      {projectId && view === "builder" && openingDashboard && (
+        <div style={{ padding: "0 4px" }}>
+          {/* Title bar skeleton */}
+          <div style={{ marginBottom: 16, display: "flex", alignItems: "center", gap: 12 }}>
+            <div className="skeleton" style={{ width: 200, height: 26, borderRadius: 6 }} />
+            <div className="skeleton" style={{ width: 100, height: 22, borderRadius: 12 }} />
+            <span className="spacer" />
+            <div className="skeleton" style={{ width: 130, height: 34, borderRadius: 6 }} />
+            <div className="skeleton" style={{ width: 140, height: 34, borderRadius: 6 }} />
+            <div className="skeleton" style={{ width: 120, height: 34, borderRadius: 6 }} />
+            <div className="skeleton" style={{ width: 60, height: 34, borderRadius: 6 }} />
+          </div>
+
+          {/* Filter section skeleton */}
+          <div className="card card--pad" style={{ marginBottom: 16 }}>
+            <div className="skeleton" style={{ width: 140, height: 18, borderRadius: 4, marginBottom: 6 }} />
+            <div className="skeleton" style={{ width: 300, height: 14, borderRadius: 4, marginBottom: 12 }} />
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <div className="skeleton" style={{ width: 130, height: 32, borderRadius: 6 }} />
+            </div>
+          </div>
+
+          {/* Stat tiles row */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+            <div className="card card--pad" style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px 20px" }}>
+              <div className="skeleton" style={{ width: 48, height: 48, borderRadius: "50%" }} />
+              <div>
+                <div className="skeleton" style={{ width: 120, height: 14, borderRadius: 4, marginBottom: 8 }} />
+                <div className="skeleton" style={{ width: 60, height: 22, borderRadius: 4 }} />
+              </div>
+            </div>
+            <div className="card card--pad" style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px 20px" }}>
+              <div className="skeleton" style={{ width: 48, height: 48, borderRadius: "50%" }} />
+              <div>
+                <div className="skeleton" style={{ width: 120, height: 14, borderRadius: 4, marginBottom: 8 }} />
+                <div className="skeleton" style={{ width: 80, height: 22, borderRadius: 4 }} />
+              </div>
+            </div>
+          </div>
+
+          {/* Charts row */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+            <div className="card card--pad skeleton" style={{ height: 280, borderRadius: 8 }} />
+            <div className="card card--pad skeleton" style={{ height: 280, borderRadius: 8 }} />
+          </div>
+
+          {/* Bottom row — chart + table */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div className="card card--pad skeleton" style={{ height: 260, borderRadius: 8 }} />
+            <div className="card card--pad" style={{ borderRadius: 8 }}>
+              <div className="skeleton" style={{ width: 160, height: 18, borderRadius: 4, marginBottom: 12 }} />
+              {[...Array(6)].map((_, i) => (
+                <div key={i} className="skeleton" style={{ height: 20, borderRadius: 4, marginBottom: 8 }} />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Data source selector. It used to stay on screen above an opened
           dashboard, which is what made opening one look like nothing had
           happened. */}
-      {projectId && view === "builder" && !dashboard && !loading && !error && (
+      {projectId && view === "builder" && !dashboard && !openingDashboard && !loading && !error && (
         <section className="card card--pad">
           {/* The heading carries the import action, so bringing data in and
               choosing data are the same decision in the same place. */}
@@ -5109,6 +5186,7 @@ export default function Dashboards() {
           section, so the section has to survive once one is open. What is
           hidden then is the prompt, not the dashboard. */}
       {view === "builder"
+        && !openingDashboard
         && (dashboard || (selectedSource && fields?.length > 0)) && (
         <section
           className="card card--pad"
