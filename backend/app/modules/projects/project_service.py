@@ -640,3 +640,14 @@ def set_form_project(form_id: str, project_id: Optional[str]) -> None:
 
         cur.execute("UPDATE forms SET project_id = %s WHERE form_id = %s",
                     (project_id, form_id))
+
+
+def delete_project(project_id: str) -> bool:
+    """Permanently delete a project. Members, groups, API keys cascade.
+    Forms become system forms (project_id → NULL via FK ON DELETE SET NULL)."""
+    with transaction() as cur:
+        cur.execute("DELETE FROM project WHERE project_id = %s", (project_id,))
+        deleted = cur.rowcount > 0
+    if deleted:
+        logger.info("Deleted project %s", project_id)
+    return deleted

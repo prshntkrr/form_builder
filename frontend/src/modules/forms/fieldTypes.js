@@ -7,6 +7,7 @@ export const TYPES = [
   ['url', 'Link'],
   ['number', 'Whole number'],
   ['decimal', 'Decimal'],
+  ['currency', 'Currency'],
   ['rating', 'Rating'],
   ['date', 'Date'],
   ['datetime', 'Date & time'],
@@ -22,6 +23,8 @@ export const TYPES = [
   ['location', 'Location'],
   ['polygon', 'Polygon'],
   ['table', 'Table (Dynamic Rows)'],
+  ['label', 'Label / Text'],
+  ['banner', 'Banner image'],
 ]
 
 const NAMES = Object.fromEntries(TYPES)
@@ -33,10 +36,10 @@ export const WITH_OPTIONS = new Set(['select', 'radio', 'multiselect'])
 export const TABLE_COLUMN_TYPES = TYPES.filter(([type]) => type !== 'table')
 
 /** Have a value worth bounding with a smallest / largest. */
-export const NUMERIC = new Set(['number', 'decimal', 'rating'])
+export const NUMERIC = new Set(['number', 'decimal', 'currency', 'rating'])
 
 /** Length limits count digits here, not characters — mirrors the backend registry. */
-export const DIGITS = new Set(['number', 'decimal', 'rating', 'phone'])
+export const DIGITS = new Set(['number', 'decimal', 'currency', 'rating', 'phone'])
 
 export const TEXTUAL = new Set(['text', 'textarea', 'email', 'phone', 'url'])
 
@@ -56,6 +59,7 @@ export const STORAGE = {
   url: ['string', 'TEXT'],
   number: ['number', 'INTEGER'],
   decimal: ['number', 'NUMERIC(18,4)'],
+  currency: ['number', 'NUMERIC(18,4)'],
   rating: ['number', 'INTEGER'],
   date: ['string (YYYY-MM-DD)', 'DATE'],
   datetime: ['string (ISO 8601)', 'TIMESTAMP'],
@@ -76,6 +80,8 @@ export const STORAGE = {
   // as TEXT. Mirrors backend/app/modules/forms/field_types.py.
   polygon: ['array [[lng, lat], …]', 'TEXT'],
   table: ['array [object, …]', 'JSONB'],
+  label: ['none (display only)', '—'],
+  banner: ['none (display only)', '—'],
 }
 
 /**

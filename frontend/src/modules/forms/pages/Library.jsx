@@ -17,9 +17,9 @@ export default function Library() {
   const [importing, setImporting] = useState(false)
 
   useEffect(() => {
-    api.listStandards({ project_id: projectId || undefined })
+    api.listStandards({})
       .then(setCatalogue).catch((e) => setError(e.message))
-  }, [projectId])
+  }, [])
 
   const forms = useMemo(() => {
     const needle = search.trim().toLowerCase()
@@ -42,7 +42,7 @@ export default function Library() {
     if (!ok) return
     try {
       await api.removeFromLibrary(entry.standard_id)
-      setCatalogue(await api.listStandards({ project_id: projectId || undefined }))
+      setCatalogue(await api.listStandards({}))
     } catch (e) {
       setError(e.message)
     }
@@ -212,7 +212,7 @@ export default function Library() {
           onClose={() => setImporting(false)}
           onSaved={async (entry) => {
             setImporting(false)
-            setCatalogue(await api.listStandards({ project_id: projectId || undefined }))
+            setCatalogue(await api.listStandards({}))
           }}
         />
       )}

@@ -85,11 +85,29 @@ export const missingTypes = () => TYPES.map(([type]) => type).filter((type) => !
 // the channel its profile is closest to, which for every form built before this
 // is Web / Mobile.
 
-export const FORM_CHANNELS = ['web_mobile', 'whatsapp', 'ivr']
+export const FORM_CHANNELS = ['web', 'web_mobile', 'whatsapp', 'ivr']
 
-export const FORM_CHANNEL_NAMES = { web_mobile: 'Web / Mobile', whatsapp: 'WhatsApp', ivr: 'IVR' }
+export const FORM_CHANNEL_NAMES = { web: 'Web', web_mobile: 'Web / Mobile', whatsapp: 'WhatsApp', ivr: 'IVR' }
 
-export const PUBLISHABLE = ['web_mobile', 'whatsapp', 'ivr']
+export const PUBLISHABLE = ['web', 'web_mobile', 'whatsapp', 'ivr']
+
+/** The additional channel beyond web, or null for web-only. */
+export const ADDITIONAL_CHANNELS = ['mobile', 'whatsapp', 'ivr']
+export const ADDITIONAL_CHANNEL_NAMES = { mobile: 'Mobile', whatsapp: 'WhatsApp', ivr: 'IVR' }
+
+/** Map an additional-channel pick to the stored form channel value. */
+export function additionalToFormChannel(additional) {
+  if (!additional) return 'web'
+  if (additional === 'mobile') return 'web_mobile'
+  return additional // 'whatsapp' or 'ivr'
+}
+
+/** Extract the additional channel from a stored form channel value. */
+export function formChannelToAdditional(channel) {
+  if (channel === 'web' || !channel) return null
+  if (channel === 'web_mobile') return 'mobile'
+  return channel // 'whatsapp' or 'ivr'
+}
 
 export function formChannel(formJson) {
   if (FORM_CHANNELS.includes(formJson?.channel)) return formJson.channel
@@ -97,7 +115,7 @@ export function formChannel(formJson) {
   if (on.web || on.mobile) return 'web_mobile'
   if (on.whatsapp) return 'whatsapp'
   if (on.ivr) return 'ivr'
-  return 'web_mobile'
+  return 'web'
 }
 
 // ── how WhatsApp asks each kind of question ─────────────────────────────────

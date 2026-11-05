@@ -48,7 +48,7 @@ class CreateUserRequest(BaseModel):
     # neither signs in by email, as every account did before these existed.
     username: Optional[str] = Field(default=None, max_length=50)
     phone: Optional[str] = Field(default=None, max_length=20)
-    full_name: Optional[str] = Field(default=None, max_length=120)
+    full_name: str = Field(..., min_length=1, max_length=120)
     # A role id or a role name.
     role: str = "field"
 

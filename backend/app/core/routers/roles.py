@@ -19,10 +19,11 @@ router = APIRouter(prefix="/api/roles", tags=["roles"])
 def catalogue(user: Dict[str, Any] = Depends(needs(ROLES_MANAGE))):
     """Everything a role can be given, grouped for the screen that assigns them.
 
-    Fixed in code: a permission only means something because an endpoint checks
-    it, so this list is not editable.
+    Admin-only permissions (users.manage, users.delete, roles.manage) are
+    excluded — they belong exclusively on the Administrator system role and
+    cannot be assigned to project roles.
     """
-    return permissions.as_catalogue()
+    return permissions.as_catalogue(exclude_admin_only=True)
 
 
 @router.get("")

@@ -1,12 +1,13 @@
 import React from 'react'
 import { Navigate, useParams } from 'react-router-dom'
-import { FormsPanel } from './Nav.jsx'
 import Builder from './pages/Builder.jsx'
 import Catalogues from './pages/Catalogues.jsx'
 import CimmytStandard from './pages/CimmytStandard.jsx'
 import Standards from './pages/Standards.jsx'
+import FieldStandards from './pages/FieldStandards.jsx'
 import FormFill from './pages/FormFill.jsx'
 import FormRecords from './pages/FormRecords.jsx'
+import RecordDetailPage from './pages/RecordDetail.jsx'
 import Library from './pages/Library.jsx'
 import LiveForms from './pages/LiveForms.jsx'
 import PublicForm from './pages/PublicForm.jsx'
@@ -37,18 +38,26 @@ export default {
   name: 'forms',
   label: 'Forms',
   order: 10,
-  List: FormsPanel,
+  /* The forms tree is rendered inside the active project's folder in the
+     projects tree (projects/index.jsx imports FormsPanel), so it is no longer a
+     standalone sidebar List. FormsPanel is still exported for that use. */
   /* Where this module's links sit in the system navigation. Core assembles the
      groups, because a group holds links from more than one module — see
      `NAV_GROUPS` in core/registry.js. `requires` is the same capability flag
      as on the route behind it, so the link and the screen cannot disagree. */
   navItems: [
-    { group: 'configuration', label: 'CIMMYT standard', to: '/cimmyt',
-      requires: 'use_standards' },
-    { group: 'configuration', label: 'Catalogue', to: '/catalogues',
-      requires: 'use_client_catalogs' },
-    { group: 'configuration', label: 'Standards', to: '/standards',
-      requires: (can) => can.use_standards || can.use_ontology || can.use_crop_ontology },
+    { group: 'configuration', label: 'Standard Forms', labelKey: 'label.standard.forms', to: '/library',
+      requires: 'build_forms', icon: 'library' },
+    { group: 'configuration', label: 'CIMMYT standard', labelKey: 'label.cimmyt.standard', to: '/cimmyt',
+      requires: 'use_standards', icon: 'cimmyt' },
+    { group: 'configuration', label: 'Catalogue', labelKey: 'label.catalogue', to: '/catalogues',
+      requires: 'use_client_catalogs', icon: 'catalogue' },
+    { group: 'configuration', label: 'Standards', labelKey: 'label.standards', to: '/standards',
+      requires: (can) => can.use_standards || can.use_ontology || can.use_crop_ontology, icon: 'standards' },
+    { group: 'configuration', label: 'Field Standards', labelKey: 'label.field.standards', to: '/field-standards',
+      requires: 'manage_field_master', icon: 'standards' },
+    { group: 'administration', label: 'Channel routing', labelKey: 'label.routing', to: '/routing',
+      requires: 'manage_routing', icon: 'routing', order: 800 },
   ],
   // /forms shows whichever context is active, so it is the right landing
   // place for a project member as much as for a builder.
@@ -61,6 +70,7 @@ export default {
     // Anyone signed in: filling forms in.
     { path: '/fill', element: <LiveForms /> },
     { path: '/f/:formId', element: <FormRecords /> },
+    { path: '/f/:formId/record/:surveyId', element: <RecordDetailPage /> },
     { path: '/f/:formId/new', element: <FormFill /> },
 
     // The builder.
@@ -69,6 +79,7 @@ export default {
     { path: '/cimmyt', element: <CimmytStandard />, requires: 'use_standards' },
     { path: '/catalogues', element: <Catalogues />, requires: 'use_client_catalogs' },
     { path: '/standards', element: <Standards />, requires: 'use_standards' },
+    { path: '/field-standards', element: <FieldStandards />, requires: 'manage_field_master' },
     { path: '/routing', element: <Routing />, requires: 'manage_routing' },
     /* WhatsApp's own operational list: every WhatsApp form and the keyword
        that reaches it, including the ones with no keyword yet. */

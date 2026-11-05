@@ -5,6 +5,42 @@
  * so two modules never edit the same stylesheet. Prefix new class names with
  * the module (`.forms__…`) to keep that true as both files grow. */
 
+/* ── Unified canvas design tokens (Phase 1) ─────────────────────────────────
+ *
+ * Primitives for the WYSIWYG form-building canvas, adapted from ../prototype/'s
+ * visual language onto this project's existing green system. Namespaced `--cv-`
+ * so they cannot collide with core tokens or the undefined-but-fallback names
+ * the module already uses (`--surface`, `--wash`, `--mono`).
+ *
+ * Nothing consumes these yet — they are defined here first so the canvas,
+ * inspector and outline (Phase 2+) share one source of truth. Until then this
+ * block changes nothing on screen, and deleting it is a complete revert.
+ *
+ * Every value references a core token or is a theme-agnostic literal, so the
+ * whole set flips correctly under BOTH of core's dark mechanisms —
+ * `:root[data-theme="dark"]` (manual toggle) and the
+ * `@media (prefers-color-scheme: dark)` block (OS dark). That is why there is
+ * no `--cv-*` dark override here: an override would have to be duplicated
+ * across both mechanisms, and missing one is exactly what left the canvas
+ * backdrop light under OS dark mode. Deriving `--cv-surface` from `--paper`
+ * avoids the whole class of bug. */
+:root {
+  --cv-surface: var(--paper);                                /* canvas backdrop — recessed, flips with the theme */
+  --cv-section-bg: var(--card);                              /* section card */
+  --cv-cell-bg: var(--card);                                 /* question cell */
+  --cv-cell-hover: var(--accent-wash);                       /* cell hover tint */
+  --cv-selected-bg: color-mix(in srgb, var(--accent) 6%, var(--card));
+  --cv-selected-ring: var(--accent);                         /* selection outline */
+  --cv-highlight: #69b85b;                                   /* bright affordance cue; readable on both themes */
+  --cv-logic: var(--amber);                                  /* conditional-logic indicator */
+  --cv-grid-gap: 8px;                                        /* gap between cells in a row */
+  --cv-cell-min-h: 60px;                                     /* readable target, not dense */
+  --cv-radius: var(--r);
+  --cv-radius-sm: var(--r-sm);
+  --cv-shadow: var(--shadow-sm);
+  --cv-outline-width: 2px;
+}
+
 /* Testing a draft in the Preview tab. */
 .trial__bar {
   margin-top: 18px; padding-top: 14px;
@@ -13,6 +49,12 @@
 }
 .trial__ok { margin-top: 14px; }
 .trial__ok .json { margin-top: 10px; }
+.trial__tabs { display: flex; gap: 6px; margin-top: 10px; }
+.trial__table { width: 100%; margin-top: 10px; border-collapse: collapse; font-size: 13px; }
+.trial__table th,
+.trial__table td { padding: 6px 10px; border: 1px solid var(--line); text-align: left; }
+.trial__table th { background: var(--bg-raised); font-weight: 600; }
+.trial__key { font-family: var(--mono); font-size: 12px; white-space: nowrap; }
 
 /* Translating a form: rows are what the form says, columns are the languages. */
 .i18n__add { padding: 4px 8px; font-size: 13px; }
@@ -47,6 +89,7 @@
 .tabbar { display: flex; align-items: flex-end; gap: 12px; }
 .tabbar .tabs { flex: 1 1 auto; }
 .tabs__aside { flex: 0 0 auto; margin-bottom: 8px; }
+.tabs__classic { flex: 0 0 auto; margin-bottom: 8px; }
 
 @media (max-width: 720px) {
   /* The grid keeps its columns and scrolls sideways: stacking the languages
@@ -282,6 +325,10 @@
    means. One long panel ran them together and buried the stored key. */
 .insp { display: flex; flex-direction: column; }
 .insp__tabs { margin-bottom: 4px; }
+.insp__tostandard {
+  width: 100%; justify-content: center; gap: 7px; margin-top: 16px;
+  border: 1px solid var(--line);
+}
 .insp__check { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
 .insp__check input { width: auto; }
 
@@ -309,8 +356,22 @@
  * on specificity whatever order the bundler picks. */
 .main.main--builder {
   max-width: none; width: 100%;
-  padding: 0; height: 100vh; min-height: 0; overflow: hidden;
+  padding: 0; height: calc(100vh / var(--ui-scale)); min-height: 0; overflow: hidden;
+  /* A column: the header band on top, the three scrolling columns in the
+     middle, the action bar at the foot — both bands full width, as in the
+     prototype, with only the middle scrolling. */
+  display: flex; flex-direction: column;
 }
+
+/* The full-width header band above the columns: breadcrumb, title, actions and
+   the tabs. Fixed — only the columns below it scroll. */
+.bld-topbar {
+  flex: none; background: var(--card); border-bottom: 1px solid var(--line);
+}
+/* The band's own bottom border is the separator; the tab strip must not draw a
+   second line a pixel above it. The active tab still shows its accent underline. */
+.bld-topbar .tabs { border-bottom: none; }
+.bld-topbar .tabbar { padding: 0 0 2px; }
 
 .workspace {
   display: grid;
@@ -318,7 +379,7 @@
      are usable at. `minmax(0, 1fr)` rather than `1fr`, or a long question label
      widens the column past the window. */
   grid-template-columns: minmax(0, 1fr) minmax(380px, 460px);
-  height: 100%; min-height: 0; width: 100%;
+  flex: 1 1 auto; min-height: 0; width: 100%;
 }
 
 /* Each pane scrolls on its own. `min-height: 0` on both, because a grid child
@@ -364,10 +425,114 @@
 @media (max-width: 1180px) {
   .main.main--builder { height: auto; overflow: visible; }
   .workspace { grid-template-columns: 1fr; height: auto; }
+  .workspace--3col { grid-template-columns: 1fr; }
   .workspace__main { overflow: visible; padding: 24px 18px 36px; }
   .inspector { border-left: 0; border-top: 1px solid var(--line); }
   .inspector__body { overflow: visible; padding-bottom: 24px; }
+  .builderleft { border-right: 0; border-bottom: 1px solid var(--line); }
 }
+
+/* --- three-panel builder: left (Widget / Navigation) panel ----------------
+   Added beside the canvas in the Design pane; the canvas stays the centre and
+   the inspector the right. Collapses to a rail, and stacks under 1180px. */
+.workspace--3col {
+  grid-template-columns: minmax(200px, 260px) minmax(0, 1fr) minmax(380px, 460px);
+}
+.builderleft {
+  min-width: 0; min-height: 0;
+  display: flex; flex-direction: column;
+  background: var(--paper);
+  border-right: 1px solid var(--line);
+}
+.builderleft__head {
+  flex: none; display: flex; align-items: center;
+  border-bottom: 1px solid var(--line);
+}
+.builderleft__tabs { display: flex; flex: 1; }
+.builderleft__tab {
+  flex: 1; padding: 11px 8px; font-size: 12.5px; font-weight: 600;
+  background: transparent; border: none; border-bottom: 2px solid transparent;
+  color: var(--ink-3); cursor: pointer;
+}
+.builderleft__tab:hover { color: var(--ink-2); }
+.builderleft__tab.on { color: var(--ink); border-bottom-color: var(--accent); }
+.builderleft__collapse { margin: 0 6px; }
+.builderleft__body { flex: 1; min-height: 0; overflow-y: auto; padding: 10px; }
+.builderleft__soon { padding: 12px; line-height: 1.5; }
+.builderleft__rail {
+  display: flex; align-items: flex-start; justify-content: center;
+  padding-top: 14px; width: 30px;
+  background: var(--paper); border: none; border-right: 1px solid var(--line);
+  color: var(--ink-3); cursor: pointer; font-size: 16px;
+}
+.builderleft__rail:hover { color: var(--ink); background: var(--accent-wash); }
+
+/* The outline tree. */
+.outline { display: grid; gap: 8px; }
+.outline__empty { padding: 10px; }
+.outline__group { display: grid; gap: 1px; }
+.outline__sec {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 6px 8px; border: none; border-radius: var(--r-sm);
+  background: transparent; cursor: pointer; text-align: left;
+  font-size: 11.5px; font-weight: 700; letter-spacing: .02em;
+  text-transform: uppercase; color: var(--accent-deep);
+}
+.outline__sec:hover,
+.outline__sec.is-selected { background: var(--accent-wash); }
+.outline__sec--plain { cursor: default; color: var(--ink-3); }
+.outline__fields { list-style: none; margin: 0; padding: 0 0 2px 10px; display: grid; gap: 1px; }
+.outline__field {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 5px 8px; border: none; border-radius: var(--r-sm);
+  background: transparent; cursor: pointer; text-align: left;
+  font-size: 13px; color: var(--ink-2);
+}
+.outline__field:hover { background: var(--accent-wash); }
+.outline__field.is-selected { background: var(--accent-wash); color: var(--accent-deep); font-weight: 600; }
+.outline__label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.outline__type,
+.outline__count { flex: none; }
+.outline__logic { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--amber); }
+
+/* The Widget palette: draggable field types + add-section + library. */
+.palette { display: grid; gap: 10px; }
+.palette__head {
+  font-size: 11px; font-weight: 700; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--ink-3); padding: 2px 4px;
+}
+.palette__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.palette__item {
+  padding: 8px 10px; font-size: 12.5px; text-align: left;
+  border: 1px solid var(--line); border-radius: var(--r-sm);
+  background: var(--card); color: var(--ink-2); cursor: grab;
+}
+.palette__item:hover {
+  border-color: var(--accent); background: var(--accent-wash); color: var(--accent-deep);
+}
+.palette__item:active { cursor: grabbing; }
+.palette__foot { display: grid; gap: 6px; padding-top: 8px; border-top: 1px solid var(--line); }
+.palette__add {
+  width: 100%; justify-content: center;
+  border: 1px dashed var(--line-2); color: var(--accent-deep);
+}
+
+/* The form's own tools, under the palette in the Widget panel. */
+.builderleft__tools {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 14px;
+}
+.lp__group { display: grid; gap: 8px; }
+.lp__grouphead {
+  margin: 0;
+  font-size: 11px; font-weight: 700; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--ink-3);
+}
+.lp__revise { display: grid; gap: 6px; }
+.lp__revise .control { width: 100%; }
 
 /* One form's submissions hanging off another's. */
 .rel { display: flex; flex-direction: column; gap: 6px; padding: 14px 0 4px; }
@@ -419,6 +584,42 @@
   max-width: 220px; max-height: 160px; border-radius: var(--r-sm);
   border: 1px solid var(--line);
 }
+.media__files { display: flex; flex-direction: column; gap: 4px; }
+.media__file {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 8px; background: var(--accent-wash, #f8f7f4);
+  border-radius: var(--r-sm); border: 1px solid var(--line);
+}
+.media__thumb { width: 36px; height: 36px; object-fit: cover; border-radius: var(--r-sm); }
+.media__rm {
+  flex: none; width: 20px; height: 20px; border: none; background: none;
+  font-size: 16px; cursor: pointer; color: var(--ink-3); line-height: 1;
+}
+.media__rm:hover { color: var(--danger, #c33); }
+
+.currency-input { display: flex; align-items: center; gap: 0; }
+.currency-input__sym {
+  flex: none; padding: 6px 10px; background: var(--accent-wash, #f5f4f0);
+  border: 1px solid var(--line); border-right: none; border-radius: var(--r-sm) 0 0 var(--r-sm);
+  font-size: 14px; font-weight: 600; color: var(--ink-2); line-height: 1.4;
+}
+.currency-input .control { border-radius: 0 var(--r-sm) var(--r-sm) 0; }
+
+.field__ro { font-size: 12px; color: var(--ink-3); font-weight: 400; }
+.control--readonly { opacity: .7; cursor: not-allowed; background: var(--accent-wash, #f5f4f0); }
+
+/* Label field — display-only text block */
+.field--label { padding: 8px 0; }
+.field__label-title { font-size: 15px; font-weight: 600; color: var(--ink); margin-bottom: 4px; }
+.field__label-text { font-size: 14px; color: var(--ink-2); line-height: 1.6; white-space: pre-wrap; }
+
+/* Banner field — display-only image */
+.field--banner { padding: 4px 0; }
+.field__banner-img { width: 100%; max-height: 300px; object-fit: cover; border-radius: var(--r); }
+.field__banner-empty {
+  padding: 32px; text-align: center; border: 2px dashed var(--line-2);
+  border-radius: var(--r); color: var(--ink-3); font-size: 13px;
+}
 
 .loc__row { display: flex; align-items: center; gap: 10px; font-size: 13.5px; }
 .loc__row > span { flex: 1; }
@@ -440,7 +641,7 @@
    a column wide enough to answer questions in on a phone or a desktop. */
 .forms__public {
   width: 100%;
-  min-height: 100vh;
+  min-height: calc(100vh / var(--ui-scale));
   max-width: 760px;
   margin: 0 auto;
   padding: clamp(16px, 3vw, 40px);
@@ -638,6 +839,323 @@
   .lay__cell { grid-column: span 12; }
 }
 
+/* --- the unified canvas ---------------------------------------------------
+   A WYSIWYG design surface drawn from the same layout and the same .lay__ grid
+   as the real form, using the --cv-* tokens. The nested row/container model is
+   kept but not drawn: questions flow and wrap by width, and every arranging
+   control (drag grip, resize handle, per-question tools, row controls, section
+   actions) is hidden until its target is hovered or holds keyboard focus, so
+   the canvas reads as a form at rest. Each preview is inert. */
+.cv {
+  background: var(--cv-surface);
+  padding: 20px;
+  display: grid;
+  gap: 16px;
+}
+.cv__empty {
+  padding: 40px 16px;
+  text-align: center;
+}
+
+/* The preview inside a cell is inert: a disabled, aria-hidden fieldset with
+   pointer-events off, so its own inputs are never focusable, clickable or
+   announced — the question is the one control, and a click selects it. */
+.cv__preview {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  pointer-events: none;
+}
+
+/* ── section card ── */
+.cv__section {
+  background: var(--cv-section-bg);
+  border: 1px solid var(--line);
+  border-radius: var(--cv-radius);
+  box-shadow: var(--cv-shadow);
+  padding: 6px 16px 16px;
+}
+.cv__section--unplaced {
+  border-style: dashed;
+  border-color: var(--line-2);
+  background: transparent;
+  box-shadow: none;
+}
+.cv__section.is-selected {
+  border-color: var(--cv-selected-ring);
+  box-shadow: 0 0 0 1px var(--cv-selected-ring);
+}
+.cv__sectionhead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 14px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.cv__sectiontitle {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+  color: var(--accent-deep);
+}
+/* The heading is a button: clicking it configures the section in the inspector. */
+.cv__sectionselect {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 4px 6px;
+  border: 1px solid transparent;
+  border-radius: var(--cv-radius-sm);
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+.cv__sectionselect:hover { background: var(--cv-cell-hover); }
+.cv__sectionselect:focus-visible {
+  outline: var(--cv-outline-width) solid var(--cv-selected-ring);
+  outline-offset: 2px;
+}
+.cv__sectionmeta { white-space: nowrap; }
+.cv__sectiondesc,
+.cv__sectionempty {
+  flex-basis: 100%;
+  font-size: 12.5px;
+  color: var(--ink-3);
+  text-transform: none;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+/* ── rows: invisible structure, subtle grouping ── */
+.cv__rowwrap {
+  position: relative;
+  border-radius: var(--cv-radius-sm);
+}
+.cv__rowwrap + .cv__rowwrap { margin-top: 10px; }
+/* A faint wash on hover tells which questions share a row without drawing it. */
+.cv__rowwrap:hover { background: color-mix(in srgb, var(--accent) 3%, transparent); }
+.cv__rowwrap.is-shared::before {
+  content: "";
+  position: absolute;
+  left: -8px;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--line-2);
+  opacity: 0;
+  transition: opacity .12s ease;
+}
+.cv__rowwrap.is-shared:hover::before,
+.cv__rowwrap.is-shared:focus-within::before { opacity: 1; }
+.cv__row { padding: 2px 0; }
+
+/* ── question card ── */
+/* A hidden question still shows on the canvas, dimmed and badged, so it can be
+   found and unhidden — the classic list used to mark it the same way. */
+.cv__cell--hidden { opacity: .6; }
+.cv__hidden {
+  position: absolute; top: 6px; right: 8px; z-index: 1;
+  padding: 1px 7px; border-radius: 10px;
+  background: var(--ink-3); color: var(--card);
+  font-size: 10px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase;
+}
+.cv__cell {
+  position: relative;
+  background: var(--cv-cell-bg);
+  border: 1px solid var(--line);
+  border-radius: var(--cv-radius-sm);
+  padding: 10px 12px;
+  min-height: var(--cv-cell-min-h);
+  transition: border-color .12s ease, box-shadow .12s ease, background .12s ease;
+}
+.cv__cell:hover { border-color: var(--line-2); }
+.cv__cell.is-lifted { opacity: .45; }
+.cv__cell.is-selected {
+  border-color: var(--cv-selected-ring);
+  background: var(--cv-selected-bg);
+  box-shadow: 0 0 0 var(--cv-outline-width) var(--cv-selected-ring);
+}
+.cv__cell.is-before { box-shadow: inset 2px 0 0 var(--cv-selected-ring); }
+.cv__cell.is-after { box-shadow: inset -2px 0 0 var(--cv-selected-ring); }
+.cv__row.is-over {
+  outline: 2px dashed var(--cv-selected-ring);
+  outline-offset: 3px;
+  border-radius: var(--cv-radius-sm);
+}
+
+.cv__pick { display: block; border-radius: var(--cv-radius-sm); }
+.cv__pick[role="button"] { cursor: pointer; }
+.cv__pick:focus-visible {
+  outline: var(--cv-outline-width) solid var(--cv-selected-ring);
+  outline-offset: 3px;
+}
+
+/* The whole card is the drag source; this dotted grip is a hover affordance. */
+.cv__grip {
+  position: absolute;
+  left: 1px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 12px;
+  height: 26px;
+  border-radius: 3px;
+  cursor: grab;
+  opacity: 0;
+  transition: opacity .12s ease;
+  background-image: radial-gradient(var(--ink-3) 1px, transparent 1px);
+  background-size: 4px 4px;
+  background-position: center;
+  pointer-events: none;
+}
+.cv__cell[draggable="true"] { cursor: grab; }
+.cv__cell[draggable="true"]:active { cursor: grabbing; }
+.cv__cell:hover > .cv__grip,
+.cv__cell:focus-within > .cv__grip { opacity: .5; }
+
+/* A single "⋮" button opens a menu; no persistent toolbar. The menu holds the
+   keyboard equivalents (width, move, remove) for what dragging and the resize
+   handle do with a mouse. */
+/* The menu anchors to its wrapper, so the wrapper must be positioned. On a
+   question it floats in the card's corner; on a section it sits in the header. */
+.cv__kebabwrap { position: relative; }
+.cv__cell > .cv__kebabwrap { position: absolute; top: 6px; right: 6px; z-index: 3; }
+.cv__section .cv__kebabwrap { margin-left: auto; }
+.cv__kebab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--cv-radius-sm);
+  background: transparent;
+  color: var(--ink-2);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity .12s ease, background .12s ease;
+}
+.cv__cell:hover > .cv__kebabwrap > .cv__kebab,
+.cv__cell:focus-within > .cv__kebabwrap > .cv__kebab,
+.cv__section:hover > .cv__sectionhead > .cv__kebabwrap > .cv__kebab,
+.cv__section:focus-within > .cv__sectionhead > .cv__kebabwrap > .cv__kebab,
+.cv__kebab[aria-expanded="true"] { opacity: 1; }
+.cv__kebab:hover { background: var(--cv-cell-hover); border-color: var(--line); }
+.cv__menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 20;
+  min-width: 170px;
+  display: grid;
+  gap: 2px;
+  padding: 6px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--cv-radius-sm);
+  box-shadow: var(--shadow-lg);
+}
+.cv__menuitem {
+  padding: 6px 8px;
+  border: none;
+  border-radius: var(--cv-radius-sm);
+  background: transparent;
+  color: var(--ink);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.cv__menuitem:hover:not(:disabled) { background: var(--cv-cell-hover); }
+.cv__menuitem:disabled { color: var(--ink-3); cursor: default; }
+.cv__menuitem--danger { color: var(--rose); }
+.cv__menuitem--danger:hover:not(:disabled) { background: var(--rose-wash); }
+
+/* Right-edge resize handle, mouse-only, revealed on hover / focus. */
+.cv__resize {
+  position: absolute;
+  top: 0;
+  right: -4px;
+  width: 9px;
+  height: 100%;
+  cursor: col-resize;
+  opacity: 0;
+  transition: opacity .12s ease;
+}
+.cv__resize::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 22px;
+  border-radius: 2px;
+  background: var(--cv-selected-ring);
+}
+.cv__cell:hover > .cv__resize,
+.cv__cell:focus-within > .cv__resize { opacity: .5; }
+.cv__resize:hover { opacity: 1; }
+
+/* A new question at the foot of a section. */
+.cv__sectionadd {
+  margin-top: 12px;
+  width: 100%;
+  justify-content: center;
+  color: var(--accent-deep);
+  border: 1px dashed var(--line-2);
+  background: transparent;
+}
+.cv__sectionadd:hover { background: var(--cv-cell-hover); border-color: var(--accent); }
+.cv__addsection { justify-self: start; }
+.cv__dropempty {
+  grid-column: span 12;
+  padding: 12px;
+  text-align: center;
+  color: var(--ink-3);
+  font-size: 12.5px;
+  border: 1px dashed var(--line-2);
+  border-radius: var(--cv-radius-sm);
+}
+.cv__pool.is-over {
+  outline: 2px dashed var(--cv-selected-ring);
+  outline-offset: 3px;
+}
+
+/* --- context-sensitive inspector (question / section / form) --------------
+   The right-hand inspector shows one of three configurations. The question
+   panel is the existing FieldEditor; the section and form panels group their
+   controls the same quiet way. */
+.insp__form,
+.insp__section { display: grid; gap: 18px; }
+.insp__group { display: grid; gap: 8px; }
+.insp__grouphead {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--ink-3);
+}
+.insp__field { display: grid; gap: 4px; }
+.insp__field > label { font-size: 12px; font-weight: 600; color: var(--ink-2); }
+.insp__revise {
+  display: flex;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+.insp__revise .control { flex: 1; min-width: 0; }
+
 /* --- the layout designer --------------------------------------------------
    Rows are drawn with the same .lay__row grid the form uses, so a width looks
    here exactly as it will on the page, and narrows and stacks the same way. */
@@ -755,15 +1273,30 @@
 
 
 /* --- the one channel a form is built for --------------------------------- */
-.chanpick { border: none; margin: 12px 0; padding: 0; display: grid; gap: 6px; }
+.chanpick { border: none; margin: 8px 0; padding: 0; display: grid; gap: 4px; }
 .chanpick__opt {
-  display: flex; gap: 8px; align-items: flex-start;
-  padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer;
+  display: flex; gap: 6px; align-items: center;
+  padding: 5px 10px; border: 1px solid var(--line); border-radius: 6px;
+  cursor: pointer; font-size: 0.88rem;
 }
 .chanpick__opt.is-on { border-color: var(--accent); background: var(--accent-wash); }
-.chanpick[disabled] .chanpick__opt { cursor: default; }
-.chanpick__note { margin: 2px 0 0; }
-.chanpick__copy { display: flex; flex-wrap: wrap; gap: 6px; }
+.chanpick__opt--locked {
+  cursor: default; opacity: 0.85;
+  border-color: var(--accent); background: var(--accent-wash);
+}
+.chanpick__opt--locked input { accent-color: var(--accent); }
+.chanpick[disabled] .chanpick__opt {
+  cursor: default; opacity: 0.65;
+  padding: 4px 8px; font-size: 0.82rem;
+}
+.chanpick__additional {
+  display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; margin-top: 2px;
+  padding-top: 6px; border-top: 1px solid var(--line);
+}
+.chanpick__additional > .minilabel { grid-column: 1 / -1; }
+.chanpick__additional > .minilabel { margin-bottom: 0; font-size: 0.75rem; color: var(--muted); }
+.chanpick__note { margin: 2px 0 0; font-size: 0.78rem; }
+.chanpick__copy { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 2px; }
 /* Why a new form cannot be started yet, beside the buttons that are disabled for it. */
 .compose__why { margin: 0 0 8px; color: #8a5a00; }
 .ivr__placeholder { margin: 10px 0; }
@@ -846,3 +1379,57 @@
   background: var(--wash, #f4f5f3); border-radius: 8px;
 }
 .poly__nomap p { margin: 0; max-width: 46ch; }
+
+/* ── script editor ─────────────────────────────────────────────────────────── */
+.script-editor { display: flex; flex-direction: column; gap: 8px; }
+
+.script-editor__header {
+  display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+}
+.script-editor__title { font-weight: 600; font-size: 15px; }
+
+.script-editor__body {
+  display: flex;
+  border: 1px solid var(--line); border-radius: var(--r);
+  background: var(--bg-code, #1e1e1e);
+  min-height: 400px; max-height: 70vh;
+  overflow: hidden;
+}
+
+.script-editor__gutter {
+  flex-shrink: 0; width: 48px; overflow: hidden;
+  padding: 12px 0; text-align: right;
+  background: var(--bg-gutter, #252526);
+  color: var(--fg-gutter, #858585);
+  font: 13px/20px 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  user-select: none;
+}
+.script-editor__line-no { padding-right: 12px; height: 20px; }
+
+.script-editor__code {
+  flex: 1; resize: none; border: none; outline: none;
+  padding: 12px; margin: 0;
+  background: transparent;
+  color: var(--fg-code, #d4d4d4);
+  font: 13px/20px 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  tab-size: 2; white-space: pre; overflow: auto;
+}
+.script-editor__code::placeholder {
+  color: var(--fg-gutter, #858585);
+}
+
+.script-editor__help { margin-top: 4px; }
+.script-editor__ref {
+  padding: 12px 0; font-size: 13px;
+}
+.script-editor__ref h4 { margin: 12px 0 4px; font-size: 13px; }
+.script-editor__ref dl { margin: 0; }
+.script-editor__ref dt { font-weight: 600; margin-top: 6px; }
+.script-editor__ref dd { margin: 2px 0 0 16px; color: var(--muted); }
+.script-editor__ref pre {
+  background: var(--bg-code, #1e1e1e);
+  color: var(--fg-code, #d4d4d4);
+  padding: 12px; border-radius: var(--r);
+  font-size: 12px; line-height: 18px;
+  overflow-x: auto;
+}

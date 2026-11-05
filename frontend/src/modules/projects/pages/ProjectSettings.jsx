@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import ApiKeys from '../components/ApiKeys.jsx'
 import Groups from '../components/Groups.jsx'
 import Members from '../components/Members.jsx'
 import ProjectForms from '../components/ProjectForms.jsx'
 import { api } from '../api.js'
+import { useAuth } from '../../../core/auth.jsx'
 import { isSystem, useProject, useProjects } from '../active.js'
 
 const TABS = [
@@ -26,8 +27,10 @@ const TABS = [
  */
 export default function ProjectSettings() {
   const { projectId } = useParams()
+  const { can: accountCan } = useAuth()
   const { project, state, error, can, reload } = useProject(projectId)
-  const [tab, setTab] = useState('overview')
+  const [searchParams] = useSearchParams()
+  const [tab, setTab] = useState(() => searchParams.get('tab') || 'overview')
 
   /* Switching project in the selector brings this page with it.
    *
@@ -99,7 +102,8 @@ export default function ProjectSettings() {
           no selected member, open dialog or half-made change can carry over and
           be applied to the wrong project. */}
       {tab === 'overview' && (
-        <Overview key={projectId} project={project} can={can} onSaved={reload} />
+        <Overview key={projectId} project={project} can={can} onSaved={reload}
+                  isAdmin={!!accountCan.manage_users} />
       )}
       {tab === 'members' && <Members key={projectId} projectId={projectId} can={can} />}
       {tab === 'groups' && <Groups key={projectId} projectId={projectId} can={can} />}
@@ -114,8 +118,9 @@ export default function ProjectSettings() {
   )
 }
 
-function Overview({ project, can, onSaved }) {
+function Overview({ project, can, onSaved, isAdmin }) {
   const mayEdit = can('project.members.manage')
+  const navigate = useNavigate()
 
   const [name, setName] = useState(project.name)
   const [description, setDescription] = useState(project.description || '')
@@ -123,6 +128,8 @@ function Overview({ project, can, onSaved }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [saved, setSaved] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
   const save = async () => {
     setBusy(true)
@@ -189,6 +196,59 @@ function Overview({ project, can, onSaved }) {
         What you may do here comes from the role you hold in this project — not
         from your account, and not from any other project.
       </p>
+
+      {isAdmin && (
+        <div style={{ marginTop: 32, paddingTop: 16, borderTop: '1px solid var(--border, #ddd)' }}>
+          <h3 style={{ color: 'var(--danger, #c33)', margin: '0 0 8px' }}>Danger zone</h3>
+          <p className="tiny muted" style={{ marginBottom: 8 }}>
+            Permanently delete this project. Cannot delete while it still has forms.
+          </p>
+          <button
+            className="btn btn--danger"
+            disabled={deleting || Number(project.form_count) > 0}
+            onClick={() => setShowDeleteConfirm(true)}
+          >
+            {deleting && <span className="spin" />}
+            Delete project
+          </button>
+        </div>
+      )}
+
+      {showDeleteConfirm && (
+        <div className="sheet" onMouseDown={() => !deleting && setShowDeleteConfirm(false)}>
+          <div className="sheet__panel" role="dialog" aria-modal="true"
+               onMouseDown={(e) => e.stopPropagation()}
+               style={{ maxWidth: 420 }}>
+            <div className="sheet__head">
+              <h2>Delete project</h2>
+              <p className="muted">{project.name}</p>
+            </div>
+            <div className="sheet__body">
+              <p>This will permanently delete this project. This cannot be undone.</p>
+              {error && <div className="note note--bad" style={{ marginTop: 8 }}>{error}</div>}
+            </div>
+            <div className="sheet__foot" style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn btn--quiet" disabled={deleting}
+                      onClick={() => setShowDeleteConfirm(false)}>Cancel</button>
+              <button className="btn btn--danger" disabled={deleting}
+                      onClick={async () => {
+                        setDeleting(true)
+                        setError('')
+                        try {
+                          await api.deleteProject(project.project_id)
+                          navigate('/projects', { replace: true })
+                        } catch (e) {
+                          setError(e.message)
+                          setDeleting(false)
+                        }
+                      }}>
+                {deleting && <span className="spin" />}
+                Delete project
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   )
 }

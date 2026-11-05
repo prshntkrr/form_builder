@@ -14,6 +14,6 @@ CATALOGUE = [
 register(
     permissions=CATALOGUE,
     groups=["Ontology"],
-    grants={"editor": [ONTOLOGY_VIEW]},
+    grants={},
     capabilities={"use_ontology": ONTOLOGY_VIEW},
 )

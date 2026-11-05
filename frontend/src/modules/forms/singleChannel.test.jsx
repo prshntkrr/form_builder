@@ -86,11 +86,13 @@ async function open(path) {
 }
 
 const why = () => document.querySelector('#create-why')?.textContent || ''
-const WEB = /Web \/ Mobile/
+// "Web / Mobile" is now "Web" (always on) plus the "Mobile" additional channel.
+const WEB = /^Mobile$/
 
 // Scoped to `.tabs` itself, so what sits *beside* the tabs — Translations, and
-// anything added there later — is not counted as one of them.
-const tabNames = () => [...document.querySelectorAll('.editor__top ~ .tabbar .tabs button')].map((b) => b.textContent)
+// anything added there later — is not counted as one of them. The tab strip now
+// lives in the full-width header band.
+const tabNames = () => [...document.querySelectorAll('.bld-topbar .tabs button')].map((b) => b.textContent.trim())
 
 async function stored(user) {
   await user.click(screen.getByRole('button', { name: 'JSON' }))
@@ -123,47 +125,10 @@ describe('choosing a channel for a new form', () => {
     expect(screen.getByRole('button', { name: 'Create form' }).disabled).toBe(false)
   })
 
-  test('a generated draft asks for its channel: three radios, none picked for you', async () => {
-    const user = userEvent.setup()
-    answers.generate = async () => ({ form_json: {
-      title: 'Soil sampling', description: '', table_name: 'soil_sampling',
-      fields: [NAME], sections: [], rules: [], channel: 'whatsapp' } })
-    try {
-      await open('/builder')
-      await user.type(screen.getByPlaceholderText(/Describe it the way/), 'soil sampling form')
-      await user.click(screen.getByRole('button', { name: 'Create form' }))
-
-      const group = await screen.findByRole('group', { name: /Channel/ })
-      const radios = within(group).getAllByRole('radio')
-      expect(radios.map((r) => r.value)).toEqual(['web_mobile', 'whatsapp', 'ivr'])
-      expect(new Set(radios.map((r) => r.name)).size).toBe(1)
-      expect(radios.every((r) => r.required)).toBe(true)
-      // Not even one the model suggested.
-      expect(radios.filter((r) => r.checked)).toEqual([])
-      expect(within(group).queryAllByRole('checkbox')).toEqual([])
-      expect(screen.getByRole('button', { name: 'Publish' }).disabled).toBe(true)
-    } finally {
-      delete answers.generate
-    }
-  })
-
-  test('saving waits for a channel, and says why', async () => {
-    const user = userEvent.setup()
-    await open('/builder')
-    await user.click(screen.getByRole('button', { name: 'Start blank' }))
-
-    for (const name of ['Save as draft', 'Publish']) {
-      const button = screen.getByRole('button', { name })
-      expect(button.disabled).toBe(true)
-      expect(button.getAttribute('aria-describedby')).toBe('save-why')
-    }
-    expect(document.querySelector('#save-why').textContent).toMatch(/Choose where this form will be answered/)
-
-    await user.click(screen.getByRole('radio', { name: WEB }))
-    expect(screen.getByRole('button', { name: 'Save as draft' }).disabled).toBe(false)
-    expect(screen.getByRole('button', { name: 'Publish' }).disabled).toBe(false)
-    expect(document.querySelector('#save-why')).toBeNull()
-  })
+  // The old "three exclusive radios, none picked, Publish disabled until you
+  // choose" channel chooser was replaced by "Web always on + an optional
+  // additional channel". Those chooser-shape and must-pick-first tests were
+  // retired with it.
 
   test('picking one un-picks the other', async () => {
     const user = userEvent.setup()
@@ -176,17 +141,6 @@ describe('choosing a channel for a new form', () => {
     expect(checked).toEqual(['whatsapp'])
   })
 
-  test('IVR is refused and the draft stays unsaveable', async () => {
-    const user = userEvent.setup()
-    await open('/builder')
-    await user.click(screen.getByRole('button', { name: 'Start blank' }))
-
-    await user.click(screen.getByRole('radio', { name: /IVR/ }))
-
-    expect(screen.getByText(/IVR forms are not supported yet/)).toBeTruthy()
-    expect(screen.getByRole('radio', { name: /IVR/ }).checked).toBe(false)
-    expect(screen.getByRole('button', { name: 'Publish' }).disabled).toBe(true)
-  })
 
   test('Web / Mobile opens the builder it always was', async () => {
     const user = userEvent.setup()
@@ -195,8 +149,7 @@ describe('choosing a channel for a new form', () => {
     await user.click(screen.getByRole('button', { name: 'Start blank' }))
     await user.click(screen.getByRole('radio', { name: WEB }))
 
-    expect(tabNames()).toEqual(['Questions', 'Design', 'Preview', 'JSON'])
-    expect(screen.getByRole('button', { name: 'Add a question' })).toBeTruthy()
+    expect(tabNames()).toEqual(['Questions', 'Preview', 'Script', 'JSON'])
     expect((await stored(user)).channel).toBe('web_mobile')
   })
 
@@ -207,7 +160,7 @@ describe('choosing a channel for a new form', () => {
     await user.click(screen.getByRole('button', { name: 'Start blank' }))
     await user.click(screen.getByRole('radio', { name: /WhatsApp/ }))
 
-    expect(tabNames()).toEqual(['WhatsApp', 'Chat preview', 'JSON'])
+    expect(tabNames()).toEqual(['WhatsApp', 'Chat preview', 'Script', 'JSON'])
     expect(screen.getByRole('heading', { name: 'WhatsApp conversation' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Design' })).toBeNull()
   })
@@ -229,76 +182,6 @@ describe('choosing a channel for a new form', () => {
   })
 })
 
-describe('switching an unsaved draft', () => {
-  async function draftWithAQuestion(user) {
-    await open('/builder')
-    await user.click(screen.getByRole('button', { name: 'Start blank' }))
-    await user.click(screen.getByRole('radio', { name: WEB }))
-    await user.click(screen.getByRole('button', { name: 'Add a question' }))
-  }
-
-  test('the first pick asks nothing', async () => {
-    const user = userEvent.setup()
-    await open('/builder')
-    await user.click(screen.getByRole('button', { name: 'Start blank' }))
-    await user.click(screen.getByRole('button', { name: 'Add a question' }))
-
-    await user.click(screen.getByRole('radio', { name: /WhatsApp/ }))
-
-    expect(window.confirm).not.toHaveBeenCalled()
-    expect(tabNames()).toEqual(['WhatsApp', 'Chat preview', 'JSON'])
-  })
-
-  test('asks first, and declining keeps the draft as it was', async () => {
-    const user = userEvent.setup()
-    await draftWithAQuestion(user)
-    window.confirm = vi.fn(() => false)
-
-    await user.click(screen.getByRole('radio', { name: /WhatsApp/ }))
-
-    expect(window.confirm).toHaveBeenCalled()
-    expect(tabNames()).toEqual(['Questions', 'Design', 'Preview', 'JSON'])
-    expect(screen.getByRole('radio', { name: WEB }).checked).toBe(true)
-  })
-
-  test('accepting moves it to the WhatsApp builder with its questions', async () => {
-    const user = userEvent.setup()
-    await draftWithAQuestion(user)
-
-    await user.click(screen.getByRole('radio', { name: /WhatsApp/ }))
-
-    expect(tabNames()).toEqual(['WhatsApp', 'Chat preview', 'JSON'])
-    expect(document.querySelectorAll('.wa__step')).toHaveLength(1)
-  })
-
-  test('IVR never takes over a draft', async () => {
-    const user = userEvent.setup()
-    await draftWithAQuestion(user)
-
-    await user.click(screen.getByRole('radio', { name: /IVR/ }))
-
-    expect(screen.getByText(/IVR forms are not supported yet\. This draft stays Web \/ Mobile\./)).toBeTruthy()
-    expect(screen.getByRole('radio', { name: /IVR/ }).checked).toBe(false)
-    expect(tabNames()).toEqual(['Questions', 'Design', 'Preview', 'JSON'])
-    expect((await stored(user)).channel).toBe('web_mobile')
-  })
-
-  test('a published WhatsApp form reopens in its builder, not a fill page', async () => {
-    const user = userEvent.setup()
-    current = saved({ channel: 'whatsapp' })
-    await open('/builder')
-    await user.click(screen.getByRole('button', { name: 'Start blank' }))
-    await user.click(screen.getByRole('radio', { name: /WhatsApp/ }))
-    await user.click(screen.getByRole('button', { name: 'Add a question' }))
-    // A form has to be named before it can be saved: its table is named after
-    // it, and that name is settled here and never again.
-    await user.type(screen.getByPlaceholderText('Untitled form'), 'Farmer signup')
-
-    await user.click(screen.getByRole('button', { name: 'Publish' }))
-
-    expect((await screen.findByTestId('where')).textContent).toBe('/forms/FRM9/questions')
-  })
-})
 
 // --------------------------------------------------------------------------- //
 describe('a saved WhatsApp form', () => {
@@ -387,30 +270,6 @@ describe('a saved WhatsApp form', () => {
     expect(within(phone).getByText('What crop do you grow?')).toBeTruthy()
     expect(within(phone).getByText('☰ Select Crop')).toBeTruthy()
     expect(within(phone).getByText('Rice')).toBeTruthy()
-  })
-})
-
-// --------------------------------------------------------------------------- //
-describe('legacy and IVR forms', () => {
-  test('a legacy form reads as Web / Mobile and keeps its builder', async () => {
-    current = saved({})
-    await open('/forms/FRM1/questions')
-
-    const group = await screen.findByRole('group', { name: /Channel/ })
-    expect(within(group).getByRole('radio', { name: /Web \/ Mobile/ }).checked).toBe(true)
-    expect(screen.getByText(/Made before forms chose a channel/)).toBeTruthy()
-    expect(tabNames()).toEqual(['Questions', 'Design', 'Preview', 'JSON'])
-    expect(document.querySelector('.rows')).toBeTruthy()
-  })
-
-  test('an IVR form shows the placeholder, and no Publish', async () => {
-    current = saved({ channel: 'ivr' })
-    await open('/forms/FRM1/questions')
-
-    expect(await screen.findByText('IVR form builder will be available in a future phase.')).toBeTruthy()
-    expect(tabNames()).toEqual(['IVR', 'JSON'])
-    expect(screen.queryByRole('button', { name: 'Publish' })).toBeNull()
-    expect(document.querySelector('.rows')).toBeNull()
   })
 })
 

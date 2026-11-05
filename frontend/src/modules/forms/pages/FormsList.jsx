@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../api.js'
 import { FORM_CHANNEL_NAMES } from '../channelCapabilities.js'
+import { useAuth } from '../../../core/auth.jsx'
 import { formsChanged } from '../../../core/events.js'
 
 const ago = (value) => {
@@ -15,7 +16,7 @@ const ago = (value) => {
   return then.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
 }
 
-function ActionsMenu({ form, onFlip, onRemove }) {
+function ActionsMenu({ form, onFlip, onRemove, onHardDelete, isAdmin }) {
   const [open, setOpen] = useState(false)
   const ref = useRef()
 
@@ -56,6 +57,11 @@ function ActionsMenu({ form, onFlip, onRemove }) {
           <button className="actions-menu__item actions-menu__item--danger" onClick={() => { setOpen(false); onRemove(form) }}>
             Remove
           </button>
+          {isAdmin && onHardDelete && (
+            <button className="actions-menu__item actions-menu__item--danger" onClick={() => { setOpen(false); onHardDelete(form) }}>
+              Delete permanently
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -64,6 +70,8 @@ function ActionsMenu({ form, onFlip, onRemove }) {
 
 export default function FormsList() {
   const navigate = useNavigate()
+  const { can } = useAuth()
+  const isAdmin = !!can.manage_users
   const [forms, setForms] = useState(null)
   const [search, setSearch] = useState('')
   const [error, setError] = useState('')
@@ -86,6 +94,23 @@ export default function FormsList() {
     if (!window.confirm(`Remove "${form.form_title}"? Responses already collected are kept.`)) return
     await api.deleteForm(form.form_id)
     load(); formsChanged()
+  }
+
+  const [deletingForm, setDeletingForm] = useState(null)
+  const [deleteBusy, setDeleteBusy] = useState(false)
+
+  const confirmHardDelete = async (dropData) => {
+    setDeleteBusy(true)
+    try {
+      await api.hardDeleteForm(deletingForm.form_id, dropData)
+      setDeletingForm(null)
+      load(); formsChanged()
+    } catch (e) {
+      setError(e.message)
+      setDeletingForm(null)
+    } finally {
+      setDeleteBusy(false)
+    }
   }
 
   return (
@@ -161,6 +186,8 @@ export default function FormsList() {
                   form={f}
                   onFlip={flip}
                   onRemove={remove}
+                  onHardDelete={isAdmin ? setDeletingForm : undefined}
+                  isAdmin={isAdmin}
                 />
               </span>
             </div>
@@ -168,6 +195,39 @@ export default function FormsList() {
         </div>
       )}
 
+      {deletingForm && (
+        <div className="sheet" onMouseDown={() => !deleteBusy && setDeletingForm(null)}>
+          <div className="sheet__panel" role="dialog" aria-modal="true"
+               onMouseDown={(e) => e.stopPropagation()}
+               style={{ maxWidth: 440 }}>
+            <div className="sheet__head">
+              <h2>Delete form</h2>
+              <p className="muted">{deletingForm.form_title}</p>
+            </div>
+            <div className="sheet__body">
+              <p>This will permanently delete the form definition and all its versions.
+                 This cannot be undone.</p>
+              <p className="tiny muted" style={{ marginTop: 8 }}>
+                You can also choose to drop the data table (all collected responses).
+              </p>
+            </div>
+            <div className="sheet__foot" style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn btn--quiet" disabled={deleteBusy}
+                      onClick={() => setDeletingForm(null)}>Cancel</button>
+              <button className="btn btn--danger" disabled={deleteBusy}
+                      onClick={() => confirmHardDelete(false)}>
+                {deleteBusy && <span className="spin" />}
+                Delete form
+              </button>
+              <button className="btn btn--danger" disabled={deleteBusy}
+                      onClick={() => confirmHardDelete(true)}>
+                {deleteBusy && <span className="spin" />}
+                Delete form + data
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   )
 }

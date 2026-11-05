@@ -298,6 +298,7 @@ def project_submissions(
     form_id: Optional[str] = Query(None, description="Only submissions of this form"),
     channel: Optional[str] = Query(None, description="Only submissions of this channel"),
     limit: int = Query(300, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
     user: Dict[str, Any] = Depends(current_user),
 ):
     """Every submission in the project this account may read.
@@ -351,6 +352,7 @@ def project_submissions(
         forms = [f for f in forms if form_channel(f.get("form_json")) == channel]
 
     rows = []
+    form_counts = {}
     for form in forms:
         table = (form["form_json"] or {}).get("table_name")
         if not table:
@@ -360,10 +362,6 @@ def project_submissions(
             if not table_exists(cur, table):
                 continue
 
-            # `submission_review` holds a row only once something has happened
-            # to a submission; one collected before that existed, or never acted
-            # on, reads as `submitted`. COALESCE says so in the query, so
-            # filtering on "Submitted" finds those too.
             clauses = ["t.form_id = %s"]
             values: list = [form["form_id"]]
 
@@ -375,7 +373,17 @@ def project_submissions(
                 clauses.append("COALESCE(r.status, %s) = %s")
                 values.extend([submission_workflow.DEFAULT_STATUS, status])
 
-            values.append(limit)
+            where = sql.SQL(" AND ").join(sql.SQL(c) for c in clauses)
+
+            # True count, unaffected by the page limit
+            count_q = sql.SQL(
+                "SELECT COUNT(*) AS n FROM {} t "
+                "LEFT JOIN submission_review r "
+                "       ON r.form_id = t.form_id AND r.survey_id = t.survey_id "
+                "WHERE {}"
+            ).format(sql.Identifier(table), where)
+            cur.execute(count_q, values)
+            form_counts[form["form_id"]] = cur.fetchone()["n"]
 
             query = sql.SQL(
                 "SELECT t.survey_id, t.created_on, t.created_by "
@@ -384,11 +392,8 @@ def project_submissions(
                 "       ON r.form_id = t.form_id AND r.survey_id = t.survey_id "
                 "WHERE {} "
                 "ORDER BY t.created_on DESC LIMIT %s"
-            ).format(
-                sql.Identifier(table),
-                sql.SQL(" AND ").join(sql.SQL(c) for c in clauses),
-            )
-            cur.execute(query, values)
+            ).format(sql.Identifier(table), where)
+            cur.execute(query, values + [limit])
             found = [dict(r) for r in cur.fetchall()]
 
         states = submission_workflow.statuses_for(
@@ -411,7 +416,8 @@ def project_submissions(
             })
 
     rows.sort(key=lambda r: r["created_on"] or "", reverse=True)
-    selected_rows = rows[:limit]
+    total = sum(form_counts.values())
+    selected_rows = rows[offset:offset + limit]
 
     # Identify which submissions have call audio recordings in S3 (strictly for IVR calls)
     # Check both form_id and survey_id to prevent collision with other forms
@@ -432,8 +438,10 @@ def project_submissions(
 
     return {
         "submissions": selected_rows,
+        "total": total,
+        "limit": limit,
+        "offset": offset,
         "everything": everything,
-        # What was actually applied, so a screen can tell "nothing here" from
-        # "nothing matches what you chose".
+        "form_counts": form_counts,
         "filters": {"form_id": form_id or None, "status": status or None, "channel": channel or None},
     }

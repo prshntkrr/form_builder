@@ -1,45 +1,52 @@
 import React from 'react'
-import { FORM_CHANNELS, FORM_CHANNEL_NAMES } from '../channelCapabilities.js'
+import {
+  FORM_CHANNEL_NAMES,
+  ADDITIONAL_CHANNELS, ADDITIONAL_CHANNEL_NAMES,
+  additionalToFormChannel, formChannelToAdditional,
+} from '../channelCapabilities.js'
 
-const HINTS = {
-  web_mobile: 'Filled in on the web and in the mobile app. The full form builder.',
-  whatsapp: 'Answered as a WhatsApp conversation. A builder made for chat.',
-  ivr: 'Answered on a phone call.',
-}
 
 /**
- * Which one channel a form is built for.
+ * Channel picker: Web is always on, plus an optional additional channel.
  *
- * Radio buttons, one group: a form is built for exactly one channel, so there is
- * nothing to tick twice. Editable while a form is being drafted; once it has
- * been saved its versions and answers belong to that channel, so the choice is
- * shown but fixed (`readOnly`), and moving it elsewhere means making a copy.
+ * The stored value is the form channel (`web`, `web_mobile`, `whatsapp`, `ivr`).
+ * This component shows Web as a locked default and a radio group for the
+ * additional channel (None / Mobile / WhatsApp / IVR).
  */
 export default function ChannelPicker({ value, onChange, readOnly = false, legacy = false, required = false }) {
+  const additional = formChannelToAdditional(value)
+
+  const pick = (add) => onChange?.(additionalToFormChannel(add))
+
   return (
     <fieldset className="chanpick" disabled={readOnly}>
       <legend className="minilabel">
         Channel
-        {required && !readOnly && <span className="faint"> — required: choose one</span>}
         {readOnly && <span className="faint"> — fixed once the form is saved</span>}
       </legend>
 
-      {FORM_CHANNELS.map((channel) => (
-        <label key={channel} className={`chanpick__opt${value === channel ? ' is-on' : ''}`}>
-          <input
-            type="radio"
-            name="form-channel"
-            value={channel}
-            checked={value === channel}
-            required={required}
-            onChange={() => onChange?.(channel)}
-          />
-          <span>
-            <b>{FORM_CHANNEL_NAMES[channel]}</b>
-            <span className="tiny muted"> — {HINTS[channel]}</span>
-          </span>
-        </label>
-      ))}
+      <label className="chanpick__opt is-on chanpick__opt--locked">
+        <input type="checkbox" checked disabled />
+        <b>Web</b>
+      </label>
+
+      <div className="chanpick__additional">
+        <span className="minilabel">Additional channel</span>
+
+        {ADDITIONAL_CHANNELS.map((ch) => (
+          <label key={ch} className={`chanpick__opt${additional === ch ? ' is-on' : ''}`}>
+            <input
+              type="radio"
+              name="additional-channel"
+              value={ch}
+              checked={additional === ch}
+              onChange={() => pick(ch)}
+              onClick={() => { if (additional === ch) pick(null) }}
+            />
+            <b>{ADDITIONAL_CHANNEL_NAMES[ch]}</b>
+          </label>
+        ))}
+      </div>
 
       {legacy && (
         <p className="tiny muted chanpick__note">
@@ -58,7 +65,7 @@ export function IvrPlaceholder() {
       <strong>IVR Builder</strong>
       <span>IVR form builder will be available in a future phase.</span>
       <span className="tiny muted">
-        An IVR form can be kept as a draft, but it cannot be published until then.
+        The form can still be filled in on the web.
       </span>
     </div>
   )

@@ -47,6 +47,15 @@ export const api = {
   validate: (formJson) =>
     request('/forms/validate', { method: 'POST', body: JSON.stringify({ form_json: formJson }) }),
 
+  fieldValues: (formId, field, label, filterField, filterValue) => {
+    let qs = `field=${encodeURIComponent(field)}`
+    if (label) qs += `&label=${encodeURIComponent(label)}`
+    if (filterField && filterValue) {
+      qs += `&filter_field=${encodeURIComponent(filterField)}&filter_value=${encodeURIComponent(filterValue)}`
+    }
+    return request(`/forms/${formId}/field-values?${qs}`)
+  },
+
   // --- ontology ---
   searchConcepts: (q) => request(`/ontology/search?q=${encodeURIComponent(q)}`),
 
@@ -278,7 +287,7 @@ export const api = {
   // `renames` is old field key -> new one. The server moves the stored answers
   // with them, so responses collected before the rename keep matching the
   // definition — which is why a rename cannot be sent twice.
-  updateForm: (formId, formJson, updatedBy, renames, whatsapp, ivr) =>
+  updateForm: (formId, formJson, updatedBy, renames, whatsapp, ivr, versionMeta) =>
     request(`/forms/${formId}`, {
       method: 'PUT',
       body: JSON.stringify({
@@ -287,6 +296,9 @@ export const api = {
         renames: renames && Object.keys(renames).length ? renames : null,
         whatsapp: whatsapp || null,
         ivr: ivr || null,
+        version_tag: versionMeta?.tag || null,
+        version_label: versionMeta?.label || null,
+        version_description: versionMeta?.description || null,
       }),
     }),
 
@@ -297,6 +309,9 @@ export const api = {
     }),
 
   deleteForm: (formId) => request(`/forms/${formId}`, { method: 'DELETE' }),
+
+  hardDeleteForm: (formId, dropData = false) =>
+    request(`/forms/${formId}/permanent?drop_data=${dropData}`, { method: 'DELETE' }),
 
   // A dry run: the answers are validated and nothing is stored. `formJson` lets
   // the builder try edits that have not been saved yet.
@@ -494,6 +509,9 @@ export const api = {
   // the backend to what they could already open.
   parentOptions: (formId, search = '') =>
     request(`/forms/${formId}/parent-options${search ? `?q=${encodeURIComponent(search)}` : ''}`),
+
+  nextChild: (formId, surveyId) =>
+    request(`/forms/${formId}/records/${encodeURIComponent(surveyId)}/next-child`),
 
   childSubmissions: (formId, surveyId) =>
     request(`/forms/${formId}/records/${encodeURIComponent(surveyId)}/children`),

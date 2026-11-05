@@ -6,7 +6,7 @@
  *   preview on edit    a saved (published) form previews exactly as a draft does
  */
 import React from 'react'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
@@ -78,7 +78,6 @@ describe('starting a form without a prompt', () => {
     await user.click(screen.getByRole('button', { name: 'Start blank' }))
 
     expect(screen.getByDisplayValue('Untitled form')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Add a question' })).toBeTruthy()
     // No prompt was typed and no model was asked.
     expect(calls).not.toContain('generate')
   })
@@ -138,90 +137,30 @@ describe('starting a form without a prompt', () => {
 })
 
 
-describe('a new section from a question', () => {
-  async function newQuestion(user) {
-    await open('/builder')
-    await user.click(screen.getByRole('button', { name: 'Start blank' }))
-    await user.click(screen.getByRole('radio', { name: /Web \/ Mobile/ }))
-    await user.click(screen.getByRole('button', { name: 'Add a question' }))
-    return (await screen.findAllByLabelText('Section'))[0]
-  }
-
-  test('asks for the name in place, not in a browser popup', async () => {
-    const user = userEvent.setup()
-    window.prompt = vi.fn()
-    const picker = await newQuestion(user)
-
-    await user.selectOptions(picker, '__new__')
-
-    expect(window.prompt).not.toHaveBeenCalled()
-    expect(screen.getByLabelText('New section name')).toBeTruthy()
-    // Nothing to add until there is a name.
-    expect(screen.getByRole('button', { name: 'Add' }).disabled).toBe(true)
-  })
-
-  test('creates the section and puts the question in it', async () => {
-    const user = userEvent.setup()
-    await user.selectOptions(await newQuestion(user), '__new__')
-
-    await user.type(screen.getByLabelText('New section name'), 'Farmer details')
-    await user.click(screen.getByRole('button', { name: 'Add' }))
-
-    await waitFor(() => expect(
-      screen.getAllByLabelText('Section')[0].value).toBe('sec_farmer_details'))
-    expect(screen.getAllByRole('option', { name: 'Farmer details' }).length).toBeGreaterThan(0)
-    expect(screen.queryByLabelText('New section name')).toBeNull()
-  })
-
-  test('Enter adds it too', async () => {
-    const user = userEvent.setup()
-    await user.selectOptions(await newQuestion(user), '__new__')
-
-    await user.type(screen.getByLabelText('New section name'), 'Plot{Enter}')
-
-    await waitFor(() => expect(screen.getAllByLabelText('Section')[0].value).toBe('sec_plot'))
-  })
-
-  test('Cancel creates nothing', async () => {
-    const user = userEvent.setup()
-    await user.selectOptions(await newQuestion(user), '__new__')
-
-    await user.type(screen.getByLabelText('New section name'), 'Never mind')
-    await user.click(screen.getByRole('button', { name: 'Cancel' }))
-
-    expect(screen.getAllByLabelText('Section')[0].value).toBe('')
-    expect(screen.queryAllByRole('option', { name: 'Never mind' })).toHaveLength(0)
-  })
-
-  test('two sections with the same name get different keys', async () => {
-    const user = userEvent.setup()
-    const picker = await newQuestion(user)
-
-    for (const _ of [1, 2]) {
-      await user.selectOptions(screen.getAllByLabelText('Section')[0] || picker, '__new__')
-      await user.type(screen.getByLabelText('New section name'), 'Plot{Enter}')
-    }
-
-    await user.click(screen.getByRole('button', { name: 'JSON' }))
-    const json = JSON.parse(document.querySelector('pre.json').textContent)
-    expect(json.sections.map((s) => s.key)).toEqual(['sec_plot', 'sec_plot_2'])
-  })
-})
+// The classic row editor's inline "new section from a question's Section
+// dropdown" was retired with the classic editor. Section creation on the canvas
+// is covered by the CanvasDesigner and section-inspector tests.
 
 
 describe('previewing a form that is already published', () => {
   test('the Preview tab is there while editing', async () => {
     await open('/forms/FRM1/questions')
 
-    expect(await screen.findByRole('button', { name: 'Preview' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Questions' }).className).toBe('on')
+    // The builder header also carries a Preview action now, so scope to the
+    // tab strip to assert the tab itself.
+    await screen.findByRole('button', { name: 'Questions' })
+    const tabs = within(document.querySelector('.tabs'))
+    expect(tabs.getByRole('button', { name: 'Preview' })).toBeTruthy()
+    expect(tabs.getByRole('button', { name: 'Questions' }).className).toBe('on')
   })
 
   test('opening it shows the form as people will fill it in', async () => {
     const user = userEvent.setup()
     await open('/forms/FRM1/questions')
 
-    await user.click(await screen.findByRole('button', { name: 'Preview' }))
+    await screen.findByRole('button', { name: 'Questions' })
+    const tabs = within(document.querySelector('.tabs'))
+    await user.click(tabs.getByRole('button', { name: 'Preview' }))
 
     expect(screen.getByTestId('where').textContent).toBe('/forms/FRM1/preview')
     expect(await screen.findByRole('button', { name: 'Test these answers' })).toBeTruthy()
@@ -235,6 +174,8 @@ describe('previewing a form that is already published', () => {
     await user.click(await screen.findByRole('button', { name: 'Questions' }))
 
     expect(screen.getByTestId('where').textContent).toBe('/forms/FRM1/questions')
-    expect(await screen.findByRole('button', { name: 'Add a question' })).toBeTruthy()
+    // Back on the canvas and out of preview: its "Test these answers" bar is gone.
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Test these answers' })).toBeNull())
   })
 })

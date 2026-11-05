@@ -48,16 +48,12 @@ export function useDynamicOptions(fields, values, language, { ignoreDependency =
       return [
         f.name,
         from.source,
-        from.kind || from.catalog || from.standard || '',
+        from.kind || from.catalog || from.standard || from.form_id || '',
         on ? values?.[on] ?? '' : '',
         on && !ignoreDependency ? 'dependent' : '',
-        // Which of the catalogue's values this field offers, when it offers
-        // only some. Part of the key so changing it refetches.
         (from.allowed_values || []).join(','),
-        // Which of a standard's code sets the answer is stored as. Part of the
-        // key, so changing it refetches: the labels are the same countries and
-        // the values are not.
-        from.code_type || '',
+        from.code_type || from.value_field || '',
+        from.label_field || '',
       ].join('|')
     })
     .join(';')
@@ -72,7 +68,7 @@ export function useDynamicOptions(fields, values, language, { ignoreDependency =
     const fetchAll = async () => {
       const next = {}
       for (const entry of wanted.split(';')) {
-        const [name, source, what, dependsOnValue, dependent, allowed, codeType] =
+        const [name, source, what, dependsOnValue, dependent, allowed, codeType, labelField] =
           entry.split('|')
         if (!name || !what) continue
 
@@ -84,7 +80,15 @@ export function useDynamicOptions(fields, values, language, { ignoreDependency =
         }
 
         try {
-          if (source === 'client_catalog') {
+          if (source === 'form_submissions') {
+            const f = (fields || []).find((x) => x.name === name)
+            const ff = f?.options_from?.filter_field
+            next[name] = await api.fieldValues(
+              what, codeType, labelField || null,
+              dependent && ff ? ff : null,
+              dependent ? dependsOnValue : null,
+            )
+          } else if (source === 'client_catalog') {
             next[name] = await api.clientCatalogOptions(
               what, dependsOnValue, language, allowed ? allowed.split(',') : [])
           } else if (source === 'data_standard') {

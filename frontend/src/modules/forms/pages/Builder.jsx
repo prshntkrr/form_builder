@@ -6,27 +6,62 @@ import FieldEditor from '../components/FieldEditor.jsx'
 import { defaultLanguage, languageChoices } from '../translate.js'
 import { applicable, removeFieldFromRules, renameFieldInRules, rulesAffectedBySectionChange, removeRules } from '../conditions.js'
 import { MAX_IDENTIFIER, fieldHidden, identifier } from '../fieldTypes.js'
-import { generateLayout, layoutIsStale, removeFromLayout, withFieldReplaced } from '../formLayout.js'
+import { addContainer, addLayoutSection, generateLayout, layoutIsStale, placeField, removeFromLayout, removeSection, retitleSection, setFieldWidth, withFieldReplaced } from '../formLayout.js'
 import * as recovery from '../draftRecovery.js'
 import { FORM_CHANNEL_NAMES, PUBLISHABLE, formChannel } from '../channelCapabilities.js'
 import { conversationOrder, configOf, removeFromWhatsApp, renameInWhatsApp } from '../whatsappConfig.js'
 import { removeFromIvr, renameInIvr, conversationOrder as ivrConversationOrder } from '../ivrConfig.js'
-import { activeProjectId } from '../../projects/active.js'
-import ConditionEditor from '../components/ConditionEditor.jsx'
+import { activeProjectId, useProjects } from '../../projects/active.js'
+import { useAuth } from '../../../core/auth.jsx'
 import ExportPanel from '../components/ExportPanel.jsx'
-import FormRelationship from '../components/FormRelationship.jsx'
-import LocationSettings from '../components/LocationSettings.jsx'
 import ChannelPicker from '../components/ChannelPicker.jsx'
 import WhatsAppBuilder, { ChatPreview } from '../components/WhatsAppBuilder.jsx'
 import IVRBuilder, { CallPreview } from '../components/IVRBuilder.jsx'
 import FormRenderer from '../components/FormRenderer.jsx'
-import LayoutDesigner from '../components/LayoutDesigner.jsx'
+import CanvasDesigner from '../components/CanvasDesigner.jsx'
+import SectionInspector from '../components/SectionInspector.jsx'
+import FormInspector from '../components/FormInspector.jsx'
+import BuilderLeftPanel from '../components/BuilderLeftPanel.jsx'
 import ContributeToLibrary from '../components/ContributeToLibrary.jsx'
 import Translations from '../components/Translations.jsx'
 import LibraryPicker from '../components/LibraryPicker.jsx'
 import StandardDrift from '../components/StandardDrift.jsx'
+import ScriptEditor from '../components/ScriptEditor.jsx'
 import VersionDiff from '../components/VersionDiff.jsx'
 import Responses from './Responses.jsx'
+
+/** The disk glyph on the primary save/publish button. */
+function SaveIcon() {
+  return (
+    <svg className="btn__icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
+         strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+      <path d="M17 21v-8H7v8M7 3v5h8" />
+    </svg>
+  )
+}
+
+/** A small glyph for a builder tab, by its id. Unknown ids render nothing. */
+function TabIcon({ id }) {
+  const p = {
+    viewBox: '0 0 24 24', width: 15, height: 15, fill: 'none', stroke: 'currentColor',
+    strokeWidth: 1.9, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true,
+    className: 'tab__icon',
+  }
+  switch (id) {
+    case 'questions':
+    case 'design':
+      return <svg {...p}><path d="M8 6h13M8 12h13M8 18h13" /><circle cx="3.5" cy="6" r="1" /><circle cx="3.5" cy="12" r="1" /><circle cx="3.5" cy="18" r="1" /></svg>
+    case 'preview':
+      return <svg {...p}><path d="M8 5v14l11-7z" /></svg>
+    case 'script':
+      return <svg {...p}><path d="M8 7l-4 5 4 5M16 7l4 5-4 5" /></svg>
+    case 'json':
+      return <svg {...p}><path d="M8 4H6a2 2 0 0 0-2 2v4a2 2 0 0 1-2 2 2 2 0 0 1 2 2v4a2 2 0 0 0 2 2h2M16 4h2a2 2 0 0 1 2 2v4a2 2 0 0 0 2 2 2 2 0 0 0-2 2v4a2 2 0 0 1-2 2h-2" /></svg>
+    default:
+      return null
+  }
+}
 
 const SEEDS = [
   [
@@ -54,6 +89,7 @@ const slug = identifier
 
 let seq = 0
 const uid = () => `u${++seq}`
+
 
 /**
  * Editing metadata carried on each field and stripped before it is sent:
@@ -178,10 +214,21 @@ export default function Builder() {
   // used when creating: an existing form already belongs where it belongs.
   const [params] = useSearchParams()
   const buildingIn = editing ? null : (params.get('project') || activeProjectId())
+  // For the builder header: the project the form sits in (breadcrumb) and
+  // whether this account may share a form publicly (the Share action).
+  const { active: activeProject } = useProjects()
+  const { can } = useAuth()
   // Which question the panel beside the list is configuring. Held by name, not
   // by index, so reordering or deleting cannot leave it pointing at a different
   // question than the one that is highlighted.
   const [chosen, setChosen] = useState(null)
+  // Which section the inspector is configuring, by its form section key. A field
+  // and a section are never both selected; choosing one clears the other.
+  const [chosenSection, setChosenSection] = useState(null)
+  // The left (Widget / Navigation) panel of the three-panel canvas, open by default.
+  const [leftOpen, setLeftOpen] = useState(true)
+  // The unified canvas is the only web authoring surface now — the classic
+  // question list and the separate Design tab have been retired.
   const [form, setForm] = useState(null)
   const [responses, setResponses] = useState(0)
   const [draftTab, setDraftTab] = useState('questions')  // only for an unsaved form
@@ -191,9 +238,11 @@ export default function Builder() {
   // Draft or Active, as the server last told us. Kept apart from `saved`,
   // which only exists for a moment after a save.
   const [status, setStatus] = useState(null)
+  const [versionDialog, setVersionDialog] = useState(null) // { label, description, resolve }
   const [check, setCheck] = useState(null)
   const [trial, setTrial] = useState({})
   const [trialResult, setTrialResult] = useState(null)
+  const [trialView, setTrialView] = useState('form')
   const [picker, setPicker] = useState(null)   // 'start' | 'borrow'
   const [contributing, setContributing] = useState(false)
   // The one channel a new form is being built for. Chosen on the draft, once
@@ -201,7 +250,7 @@ export default function Builder() {
   // comes from the form. Nothing is picked for them: `null` until they choose,
   // so a form is never saved on a channel nobody chose. A copy arrives with its
   // channel.
-  const [newChannel, setNewChannel] = useState(location.state?.channel || null)
+  const [newChannel, setNewChannel] = useState(location.state?.channel || 'web')
 
   /* How this form is reached on WhatsApp: the number and the keyword.
      Not part of the form — it is the `channel_form_route` row the project's
@@ -222,6 +271,7 @@ export default function Builder() {
   // autosave created it as a Draft. From then on this is the form being edited,
   // even though the URL still says /builder.
   const [autoSavedId, setAutoSavedId] = useState(null)
+  const autoSavedIdRef = useRef(null)
   // When the server last took a copy, and whether the last attempt got there.
   const [autoSaved, setAutoSaved] = useState(null)
   /* The payload the server last took, so a form nobody has touched since is not
@@ -244,6 +294,7 @@ export default function Builder() {
     setTrial({})
     setDraftTab('questions')
     setRecovered(null)
+    autoSavedIdRef.current = null
     setAutoSavedId(null)
     setAutoSaved(null)
     setWaRoute({ receiver_number: '', keyword: '' })
@@ -266,9 +317,11 @@ export default function Builder() {
             // Started from the library page, before any channel was picked: the
             // library's forms are Web / Mobile forms, and the picker says so
             // (it can still be changed while this is an unsaved draft).
-            const channel = location.state?.channel || 'web_mobile'
+            const channel = location.state?.channel || 'web'
             setNewChannel(channel)
-            setForm(prep({ ...res.form_json, channel }))
+            const fj = { ...res.form_json, channel }
+            fj.fields = (fj.fields || []).map((f) => ({ ...f, _orig: f.name }))
+            setForm(prep(fj))
           })
           .catch((e) => setError(e.message))
           .finally(() => setBusy(null))
@@ -349,7 +402,10 @@ export default function Builder() {
    *  the attempt says so and the next minute tries again. What it must never do
    *  is interrupt somebody mid-question with an error they did not ask for.
    */
+  const autoSavingRef = useRef(false)
   const autosave = async () => {
+    if (autoSavingRef.current) return
+    autoSavingRef.current = true
     const payload = untag(form)
 
     try {
@@ -372,6 +428,7 @@ export default function Builder() {
       } else {
         const made = await api.createForm(payload, undefined, 'Draft', buildingIn,
                                           whatsappRouting(), ivrRouting())
+        autoSavedIdRef.current = made.form_id
         setAutoSavedId(made.form_id)
         setStatus('Draft')
         formsChanged()
@@ -404,6 +461,8 @@ export default function Builder() {
         why: e?.fieldErrors?.length || e?.status === 422 ? explain(e) : '',
       }))
       return false
+    } finally {
+      autoSavingRef.current = false
     }
   }
 
@@ -437,7 +496,8 @@ export default function Builder() {
     // not send the same form every minute for an afternoon.
     if (JSON.stringify(untag(form)) === sentRef.current) return
 
-    autosave()
+    // autosave disabled temporarily — manual save/publish only
+    // autosave()
   }
 
   keepRef.current = () => {
@@ -488,7 +548,7 @@ export default function Builder() {
     }, false))
     // Whatever autosave had already created for these questions is the form
     // they belong to; without this the next save would make a second one.
-    if (recovered.serverId) setAutoSavedId(recovered.serverId)
+    if (recovered.serverId) { autoSavedIdRef.current = recovered.serverId; setAutoSavedId(recovered.serverId) }
     recovery.drop(editing ? formId : null)
     setRecovered(false)
   }
@@ -498,9 +558,15 @@ export default function Builder() {
     setRecovered(false)
   }
 
+  const [popup, setPopup] = useState(null)
+
   const run = async (kind, fn) => {
     setBusy(kind); setError(''); setSaved(null)
-    try { await fn() } catch (e) { setError(explain(e)) } finally { setBusy(null) }
+    try { await fn() } catch (e) {
+      const msg = explain(e)
+      if (kind === 'publish' || kind === 'save') setPopup(msg)
+      else setError(msg)
+    } finally { setBusy(null) }
   }
 
   /**
@@ -569,6 +635,7 @@ export default function Builder() {
        not inherit the last one's id or the browser copy kept for it. */
     recovery.drop(null)
     setRecovered(false)
+    autoSavedIdRef.current = null
     setAutoSavedId(null)
     setAutoSaved(null)
     sentRef.current = null
@@ -706,23 +773,35 @@ export default function Builder() {
     }
   }
 
+  const askVersionMeta = () => new Promise((resolve) => {
+    setVersionDialog({ tag: '', label: '', description: '', resolve })
+  })
+
   const save = (saveAs = 'Active') =>
     run('save', async () => {
+      while (autoSavingRef.current) await new Promise((r) => setTimeout(r, 100))
       if (!namedOnPurpose()) return
       const renames = {}
       for (const f of form.fields) if (f._orig && f._orig !== f.name) renames[f._orig] = f.name
 
       const payload = untag(form)
 
-      /* `draftId`, not `formId`: autosave may already have created this form,
-         and creating it again would leave two. Publishing one autosave made is
-         an update plus a status change, because the row already exists. */
-      const result = draftId
-        ? await api.updateForm(draftId, payload, undefined, renames, whatsappRouting(), ivrRouting())
+      // Ask for version info when saving a published form (not drafts, not new forms)
+      let versionMeta = null
+      if (editing && status === 'Active') {
+        versionMeta = await askVersionMeta()
+        if (versionMeta === null) return // cancelled
+      }
+
+      // Use the ref for the latest id — React state may not have re-rendered
+      // after autosave set it, so the closure's `draftId` can be stale.
+      const liveDraftId = editing ? formId : autoSavedIdRef.current
+      const result = liveDraftId
+        ? await api.updateForm(liveDraftId, payload, undefined, renames, whatsappRouting(), ivrRouting(), versionMeta)
         : await api.createForm(payload, undefined, saveAs, buildingIn, whatsappRouting(), ivrRouting())
 
-      if (draftId && !editing && saveAs !== 'Draft') {
-        await api.setStatus(draftId, saveAs)
+      if (liveDraftId && !editing && saveAs !== 'Draft') {
+        await api.setStatus(liveDraftId, saveAs)
       }
 
       formsChanged()
@@ -733,12 +812,12 @@ export default function Builder() {
       setRecovered(false)
 
       if (!editing) {
-        const newId = result.form_id || draftId
+        const newId = result.form_id || liveDraftId
         // A draft has nothing live to open, so stay in the builder on it. Only a
         // published form goes straight to the form people will fill in.
         // A form answered elsewhere (WhatsApp) has no page here to fill in, so
         // it reopens in its own builder rather than a fill page that refuses it.
-        const fillHere = formChannel(form) === 'web_mobile'
+        const fillHere = true
         navigate(
           saveAs === 'Draft' || !fillHere ? `/forms/${newId}/${saveAs === 'Draft' ? 'preview' : 'questions'}`
             : `/f/${newId}`,
@@ -800,8 +879,11 @@ export default function Builder() {
   useEffect(() => {
     const fields = form?.fields || []
     if (!fields.length) return
+    // A selected section owns the inspector; do not yank a question back in
+    // front of it. Otherwise the panel always keeps a question in view.
+    if (chosenSection) return
     if (!fields.some((f) => f.name === chosen)) setChosen(fields[0].name)
-  }, [form, chosen])
+  }, [form, chosen, chosenSection])
 
   const put = (i, next) => {
     // Editing the label of an unsaved question renames its key, so the panel
@@ -1008,30 +1090,442 @@ export default function Builder() {
     setForm({ ...form, fields, rules })
   }
 
+  // Selecting a question and selecting a section are exclusive: the inspector
+  // shows one thing at a time, and nothing selected means the form itself.
+  const pickField = (name) => { setChosen(name); setChosenSection(null) }
+  const pickSection = (key) => { setChosenSection(key); setChosen(null) }
+
+  // The canvas ⋮ menu deletes and duplicates whole questions, which is more than
+  // a layout edit — so it goes through the builder's own field handlers.
+  const removeFieldByName = (name) => {
+    const i = form.fields.findIndex((f) => f.name === name)
+    if (i >= 0) remove(i)
+  }
+  const duplicateFieldByName = (name) => {
+    const i = form.fields.findIndex((f) => f.name === name)
+    if (i < 0) return
+    const orig = form.fields[i]
+    // Past the highest question_N ever used — see `add`. A reused key would
+    // silently inherit a deleted question's rules.
+    const n = Math.max(
+      form.fields.length,
+      ...form.fields.map((f) => Number(/^question_(\d+)$/.exec(f.name || '')?.[1] || 0)),
+    ) + 1
+    const dup = { ...orig, _uid: uid(), name: `question_${n}`, _orig: undefined }
+    const fields = [...form.fields.slice(0, i + 1), dup, ...form.fields.slice(i + 1)]
+      .map((f, k) => ({ ...f, order: k + 1 }))
+
+    // Place the copy right after the original, at the same width, when the form
+    // has a layout; otherwise it joins the unplaced ones like any new question.
+    let layout = form.layout
+    if (layout?.sections) {
+      for (const s of layout.sections) {
+        const c = (s.containers || []).find((con) => (con.fields || []).some((cell) => cell.fieldId === name))
+        if (!c) continue
+        const at = c.fields.findIndex((cell) => cell.fieldId === name)
+        layout = setFieldWidth(placeField(layout, dup.name, c.id, at + 1), dup.name, c.fields[at].width)
+        break
+      }
+    }
+    setForm(layout === form.layout ? { ...form, fields } : { ...form, fields, layout })
+    setChosen(dup.name)
+  }
+
+  // The canvas "+ Add question" at a section's foot: create a new blank
+  // question in that section and place it there, then select it — the same
+  // field `add` makes, but sectioned and placed rather than loose.
+  const addFieldToSection = (key) => {
+    const sec = (form.sections || []).find((s) => s.key === key)
+    if (sec && !sec.title?.trim()) {
+      setPopup('Please set a section name before adding questions to it.')
+      return
+    }
+    const n = Math.max(
+      form.fields.length,
+      ...form.fields.map((f) => Number(/^question_(\d+)$/.exec(f.name || '')?.[1] || 0)),
+    ) + 1
+    const made = {
+      _uid: uid(),
+      name: `question_${n}`, label: '', type: 'text', required: false,
+      placeholder: '', help_text: '', options: [], validation: {},
+      section: key || null, config: { hide: false }, order: n,
+    }
+    const lastOrig = form.fields.reduce((at, f, i) => ((f.section || null) === key ? i : at), -1)
+    const fields = (lastOrig >= 0
+      ? [...form.fields.slice(0, lastOrig + 1), made, ...form.fields.slice(lastOrig + 1)]
+      : [...form.fields, made]).map((f, k) => ({ ...f, order: k + 1 }))
+
+    let layout = form.layout
+    if (layout?.sections) {
+      const ls = layout.sections.find((s) => s.id === key)
+      if (ls) {
+        const lastC = ls.containers[ls.containers.length - 1]
+        if (lastC) {
+          layout = placeField(layout, made.name, lastC.id)
+        } else {
+          const withRow = addContainer(layout, key)
+          const created = withRow.sections.find((s) => s.id === key)
+          layout = placeField(withRow, made.name, created.containers[created.containers.length - 1].id)
+        }
+      }
+    }
+    setForm(layout === form.layout ? { ...form, fields } : { ...form, fields, layout })
+    setChosen(made.name)
+    setChosenSection(null)
+  }
+
+  // Creating a question from the Widget palette: a new field of `type`, placed
+  // in the layout at the drop position, assigned to the section it landed in,
+  // and selected. `makeAndPlace` is shared by the drop (precise) and the click
+  // (append to the last section) paths.
+  const makeAndPlace = (type, containerId, index, baseLayout) => {
+    const n = Math.max(
+      form.fields.length,
+      ...form.fields.map((f) => Number(/^question_(\d+)$/.exec(f.name || '')?.[1] || 0)),
+    ) + 1
+    let sectionId = null
+    for (const s of baseLayout?.sections || []) {
+      if ((s.containers || []).some((c) => c.id === containerId)) { sectionId = s.id; break }
+    }
+    const sectionKey = (form.sections || []).some((s) => s.key === sectionId) ? sectionId : null
+    const made = {
+      _uid: uid(),
+      name: `question_${n}`, label: '', type, required: false,
+      placeholder: '', help_text: '', options: [], validation: {},
+      section: sectionKey, config: { hide: false }, order: n,
+    }
+    const fields = [...form.fields, made].map((f, k) => ({ ...f, order: k + 1 }))
+    const layout = { ...placeField(baseLayout, made.name, containerId, index), auto: false }
+    setForm({ ...form, fields, layout })
+    setChosen(made.name)
+    setChosenSection(null)
+  }
+
+  const addFieldAt = (type, containerId, index) => {
+    if (!form.layout?.sections) return
+    const ownerSec = form.layout.sections.find((s) => (s.containers || []).some((c) => c.id === containerId))
+    if (ownerSec) {
+      const fSec = (form.sections || []).find((s) => s.key === ownerSec.id)
+      if (fSec && !fSec.title?.trim()) {
+        setPopup('Please set a section name before adding questions to it.')
+        return
+      }
+    }
+    makeAndPlace(type, containerId, index, form.layout)
+  }
+
+  const addFieldType = (type) => {
+    let layout = form.layout?.sections?.length ? form.layout : addLayoutSection(form.layout || { sections: [] })
+    let sec = layout.sections[layout.sections.length - 1]
+    if (!sec.containers?.length) {
+      layout = addContainer(layout, sec.id)
+      sec = layout.sections.find((s) => s.id === sec.id)
+    }
+    makeAndPlace(type, sec.containers[sec.containers.length - 1].id, null, layout)
+  }
+
+  // A new section on the canvas creates BOTH a form section (so it can be
+  // configured and its questions point at it) and a matching layout section (so
+  // it is drawn and arranged). The layout section's id is the form key, which is
+  // the invariant the rest of the builder relies on.
+  const addSectionEverywhere = () => {
+    const taken = new Set((form.sections || []).map((s) => s.key))
+    let key = 'section'
+    for (let n = 2; taken.has(key); n += 1) key = `section_${n}`
+    const sections = [...(form.sections || []), { key, title: '', description: '' }]
+    const base = form.layout?.sections ? form.layout : { sections: [] }
+    const layout = {
+      ...base,
+      auto: false,
+      sections: [...base.sections, { id: key, title: '', containers: [{ id: `${key}-row-1`, fields: [] }] }],
+    }
+    setForm({ ...form, sections, layout })
+    pickSection(key)
+  }
+
+  // Clicking a section heading. A section the form knows selects straight away.
+  // A layout-only section — an older blank form, created before sections and
+  // layout sections were kept in step — is backed by a form section on the spot
+  // (reusing its id when that id is a valid key), so it can be configured.
+  const selectCanvasSection = (id) => {
+    if ((form.sections || []).some((s) => s.key === id)) { pickSection(id); return }
+    const ls = (form.layout?.sections || []).find((s) => s.id === id)
+    if (!ls) return
+    // Layout-only section with an invalid key (e.g. _all) — assign a valid key
+    let key = id
+    if (!/^[a-z][a-z0-9_]*$/.test(key)) {
+      const taken = new Set((form.sections || []).map((s) => s.key))
+      key = 'section'
+      for (let n = 2; taken.has(key); n += 1) key = `section_${n}`
+    }
+    const names = new Set((ls.containers || []).flatMap((c) => (c.fields || []).map((f) => f.fieldId)))
+    const sections = [...(form.sections || []), { key, title: ls.title || '', description: ls.description || '' }]
+    const fields = form.fields.map((f) => (names.has(f.name) ? { ...f, section: key } : f))
+    // Remap layout section id to the valid key
+    const layout = key !== id
+      ? { ...form.layout, sections: form.layout.sections.map((s) => s.id === id ? { ...s, id: key } : s) }
+      : form.layout
+    setForm({ ...form, sections, fields, layout })
+    pickSection(key)
+  }
+
+  const openLibrary = () => setPicker('borrow')
+
+  // The canvas section ⋮ menu: duplicate or delete a whole section. Both edit
+  // the same `form` state (sections, fields, layout) the rest of the builder
+  // uses. Deleting keeps the section's questions — they go back to Unplaced —
+  // rather than destroying answers; say so in the confirm on the canvas.
+  // Section deletion — a modal asks whether to move the questions or delete them too.
+  const [deletingSection, setDeletingSection] = useState(null) // { key, count }
+  const [moveTo, setMoveTo] = useState('')
+
+  const confirmDeleteSection = (moveQuestions) => {
+    const key = deletingSection.key
+    const sections = (form.sections || []).filter((s) => s.key !== key)
+    const rules = (form.rules || []).filter((r) => !(r.target?.type === 'section' && r.target?.key === key))
+
+    let fields
+    if (moveQuestions) {
+      const target = moveTo || null
+      fields = form.fields.map((f) => ((f.section || null) === key ? { ...f, section: target } : f))
+    } else {
+      const inSection = new Set(form.fields.filter((f) => (f.section || null) === key).map((f) => f.name))
+      fields = form.fields.filter((f) => !inSection.has(f.name))
+    }
+
+    const next = { ...form, sections, fields }
+    if (rules.length !== (form.rules || []).length) next.rules = rules
+    if (form.layout?.sections) {
+      const lSrc = form.layout.sections.find((s) => s.id === key)
+      const movedContainers = (moveQuestions && moveTo && lSrc) ? lSrc.containers || [] : []
+      let layoutSections = form.layout.sections.filter((s) => s.id !== key)
+      if (movedContainers.length) {
+        layoutSections = layoutSections.map((s) =>
+          s.id === moveTo ? { ...s, containers: [...(s.containers || []), ...movedContainers] } : s
+        )
+      }
+      next.layout = { ...form.layout, sections: layoutSections }
+    }
+    setForm(next)
+    if (chosenSection === key) setChosenSection(null)
+    setDeletingSection(null)
+    setMoveTo('')
+  }
+
+  const deleteSectionByKey = (key, count) => {
+    if (!count) {
+      // Empty section — just remove it, no modal needed.
+      const sections = (form.sections || []).filter((s) => s.key !== key)
+      const rules = (form.rules || []).filter((r) => !(r.target?.type === 'section' && r.target?.key === key))
+      const next = { ...form, sections }
+      if (rules.length !== (form.rules || []).length) next.rules = rules
+      if (form.layout?.sections) next.layout = removeSection(form.layout, key)
+      setForm(next)
+      if (chosenSection === key) setChosenSection(null)
+      return
+    }
+    setDeletingSection({ key, count })
+    setMoveTo('')
+  }
+
+  const duplicateSectionByKey = (key) => {
+    const si = (form.sections || []).findIndex((s) => s.key === key)
+    if (si < 0) return
+    const src = form.sections[si]
+
+    const taken = new Set((form.sections || []).map((s) => s.key))
+    let newKey = `${key}_copy`
+    for (let n = 2; taken.has(newKey); n += 1) newKey = `${key}_copy_${n}`
+
+    // Duplicate the section's questions, in form order, with fresh question_N
+    // keys — the same rule `add` and field-duplicate follow.
+    let nextN = Math.max(
+      form.fields.length,
+      ...form.fields.map((f) => Number(/^question_(\d+)$/.exec(f.name || '')?.[1] || 0)),
+    ) + 1
+    const nameMap = new Map()
+    const dup = []
+    for (const f of form.fields) {
+      if ((f.section || null) !== key) continue
+      const newName = `question_${nextN++}`
+      nameMap.set(f.name, newName)
+      dup.push({ ...f, _uid: uid(), name: newName, _orig: undefined, section: newKey })
+    }
+
+    const sections = [
+      ...form.sections.slice(0, si + 1),
+      { ...src, key: newKey, title: `${src.title || key} (copy)` },
+      ...form.sections.slice(si + 1),
+    ]
+    const lastOrig = form.fields.reduce((at, f, i) => ((f.section || null) === key ? i : at), -1)
+    const merged = lastOrig >= 0
+      ? [...form.fields.slice(0, lastOrig + 1), ...dup, ...form.fields.slice(lastOrig + 1)]
+      : [...form.fields, ...dup]
+    const fields = merged.map((f, k) => ({ ...f, order: k + 1 }))
+
+    let layout = form.layout
+    if (layout?.sections) {
+      const lsi = layout.sections.findIndex((s) => s.id === key)
+      if (lsi >= 0) {
+        const ls = layout.sections[lsi]
+        const copy = {
+          id: newKey,
+          title: `${ls.title || src.title || key} (copy)`,
+          ...(ls.description ? { description: ls.description } : {}),
+          containers: (ls.containers || []).map((c, ci) => ({
+            id: `${newKey}-row-${ci + 1}`,
+            fields: (c.fields || [])
+              .filter((cell) => nameMap.has(cell.fieldId))
+              .map((cell) => ({ fieldId: nameMap.get(cell.fieldId), width: cell.width })),
+          })),
+        }
+        layout = { ...layout, auto: false, sections: [...layout.sections.slice(0, lsi + 1), copy, ...layout.sections.slice(lsi + 1)] }
+      }
+    }
+
+    setForm(layout === form.layout ? { ...form, sections, fields } : { ...form, sections, fields, layout })
+    pickSection(newKey)
+  }
+
+  // The inspector's Section mode edits the form's own section metadata in place,
+  // through the same `form` state as everything else. When the heading changes,
+  // the layout section (whose id is the section key) is retitled too, so the
+  // canvas heading and the rendered form stay in step with the inspector.
+  const updateSectionMeta = (key, change) => {
+    const sections = (form.sections || []).map((s) => (s.key === key ? { ...s, ...change } : s))
+    const layout = 'title' in change && form.layout?.sections
+      ? retitleSection(form.layout, key, change.title)
+      : form.layout
+    setForm(layout === form.layout ? { ...form, sections } : { ...form, sections, layout })
+  }
+
+  /* Applying a layout edit from the Design view.
+   *
+   * Shared by the LayoutDesigner and the experimental CanvasDesigner so there is
+   * one place that: marks the layout arranged-by-hand (`auto:false`), keeps each
+   * field's `section` in step with the layout section it was dropped into, and
+   * asks before dropping a rule that a section move would break. Routing both
+   * designers through this is what keeps field.section sync and the
+   * rule-integrity prompts identical however the page was rearranged. */
+  const applyDesignLayout = (layout) => {
+    const next = { ...layout, auto: false }
+
+    // Sync field.section when a field moves between layout sections.
+    // Layout section ids are form section keys (generateLayout keeps them).
+    const sectionOf = new Map()
+    for (const sec of next.sections || []) {
+      for (const row of sec.containers || []) {
+        for (const cell of row.fields || []) {
+          sectionOf.set(cell.fieldId, sec.id)
+        }
+      }
+    }
+
+    const secs = form.sections || []
+    const knownKeys = new Set(secs.map((s) => s.key))
+    let fields = form.fields
+    let rules = form.rules
+    let synced = false
+
+    for (let i = 0; i < fields.length; i++) {
+      const f = fields[i]
+      const layoutSec = sectionOf.get(f.name)
+      if (!layoutSec) continue
+      // Map layout section id to form section key — they match when the
+      // section was created from a form section (which is the normal case).
+      const newSection = knownKeys.has(layoutSec) ? layoutSec : f.section
+      if ((newSection || null) === (f.section || null)) continue
+
+      // Check for affected rules before changing.
+      const oldSection = f.section || null
+      if (oldSection) {
+        const remaining = fields.filter((o, j) => j !== i && (o.section || null) === oldSection)
+        const secTitle = (key) => secs.find((s) => s.key === key)?.title || key
+        const affected = rulesAffectedBySectionChange(rules, f.name, oldSection, remaining)
+        if (affected.length) {
+          const desc = affected.map((r) => {
+            const t = r.target || {}
+            const conds = (r.conditions || []).map((c) => c.field).join(', ')
+            const tName = t.type === 'section' ? `Section: ${secTitle(t.key)}` : t.name
+            return `  • "${tName}" (depends on: ${conds})`
+          }).join('\n')
+          if (!window.confirm(
+            `Moving "${f.label || f.name}" from "${secTitle(oldSection)}" to "${newSection ? secTitle(newSection) : 'No section'}" will remove ${affected.length} rule(s):\n\n${desc}\n\nContinue?`
+          )) continue
+          rules = removeRules(rules, affected)
+        }
+      }
+
+      if (!synced) { fields = [...fields]; synced = true }
+      fields[i] = { ...f, section: newSection || null }
+    }
+
+    setForm({ ...form, layout: next, fields, rules })
+  }
+
   /* Opening Design is what gives a form a layout: made once from its own
      sections and question order, and kept in the form like any other edit, so
      Save stores it. A form that already has one keeps it untouched, and one
      that is never designed never gets one — Preview does not make one. */
   useEffect(() => {
     if (!form) return
-    // Layout belongs to Web / Mobile; another channel's form never gets one.
-    if (formChannel(form) !== 'web_mobile') return
+    // Layout belongs to web-based forms; WhatsApp/IVR never get one.
+    const ch = formChannel(form)
+    if (ch !== 'web_mobile' && ch !== 'web') return
 
     const has = Array.isArray(form.layout?.sections)
 
-    /* Opening Design is what gives a form its first layout; Preview still does
-       not make one, so a form nobody designs never gets one.
-
-       A layout it derived, though, follows the form wherever the form goes —
-       on any tab, so Preview is never drawn from a stale one. Adding a section
-       used to change nothing on screen, because the page was already coming
-       from a layout made before that section existed. One somebody arranged by
-       hand is left alone: it is theirs. */
-    if (!has ? view !== 'design' : !layoutIsStale(form.layout, form)) return
+    /* A web form gets a layout as soon as it opens — the canvas is the surface,
+       so it is always "designing". A derived layout follows the form on any tab;
+       one arranged by hand is left alone — it is theirs. */
+    if (!has ? false : !layoutIsStale(form.layout, form)) return
 
     const made = generateLayout({ ...form, layout: null })
     if (made) setForm({ ...form, layout: made })
   }, [view, form])
+
+  // Legacy forms may have layout sections but no form.sections entries.
+  // Sync them so the section dropdown and inspector work.
+  useEffect(() => {
+    if (!form?.layout?.sections) return
+    const existing = new Set((form.sections || []).map((s) => s.key))
+    const missing = form.layout.sections.filter(
+      (ls) => ls.id && !existing.has(ls.id),
+    )
+    if (!missing.length) return
+    // Remap internal ids (_all, _loose) to valid keys
+    const taken = new Set(existing)
+    const idMap = new Map()
+    for (const ls of missing) {
+      let key = ls.id
+      if (!/^[a-z][a-z0-9_]*$/.test(key)) {
+        key = 'section'
+        for (let n = 2; taken.has(key); n += 1) key = `section_${n}`
+      }
+      taken.add(key)
+      idMap.set(ls.id, key)
+    }
+    const sections = [...(form.sections || []), ...missing.map((ls) => ({
+      key: idMap.get(ls.id), title: ls.title || '', description: ls.description || '',
+    }))]
+    // Remap layout section ids to valid keys
+    const needsRemap = missing.some((ls) => idMap.get(ls.id) !== ls.id)
+    const layout = needsRemap
+      ? { ...form.layout, sections: form.layout.sections.map((ls) => idMap.has(ls.id) && idMap.get(ls.id) !== ls.id ? { ...ls, id: idMap.get(ls.id) } : ls) }
+      : form.layout
+    // Also set field.section for fields inside these layout sections
+    const sectionOf = new Map()
+    for (const ls of missing) {
+      const key = idMap.get(ls.id)
+      for (const row of ls.containers || []) {
+        for (const cell of row.fields || []) sectionOf.set(cell.fieldId, key)
+      }
+    }
+    const fields = sectionOf.size
+      ? form.fields.map((f) => sectionOf.has(f.name) ? { ...f, section: sectionOf.get(f.name) } : f)
+      : form.fields
+    setForm({ ...form, sections, fields, layout })
+  }, [form?.layout?.sections?.length, form?.sections?.length])
 
   // ── render ────────────────────────────────────────────────────────────────
   if (busy === 'load') {
@@ -1057,23 +1551,267 @@ export default function Builder() {
   // draft's is the one being picked; a saved form's is its own, fixed. A
   // legacy form never picked one and is Web / Mobile, exactly as it was.
   // An unsaved draft with no channel yet is shown in the general question list.
-  const channel = form ? (editing ? formChannel(form) : (form.channel || 'web_mobile')) : newChannel
+  const channel = form ? (editing ? formChannel(form) : (form.channel || 'web')) : newChannel
   const legacy = Boolean(editing && form && !form.channel)
-  // Layout is a Web / Mobile idea: any other channel's builder answers /design.
-  const pane = channel !== 'web_mobile' && view === 'design' ? 'questions' : view
+  // Web and web_mobile use the standard builder; whatsapp/ivr use their own.
+  const isWebBuilder = channel === 'web' || channel === 'web_mobile'
+  // The canvas merges Questions and Design into one "Questions" tab, so a legacy
+  // `/design` URL folds into "questions".
+  const pane = view === 'design' ? 'questions' : view
   const tabs = channel === 'whatsapp'
-    ? [['questions', 'WhatsApp'], ['preview', 'Chat preview'], ['json', 'JSON']]
+    ? [['questions', 'WhatsApp'], ['preview', 'Chat preview'], ['script', 'Script'], ['json', 'JSON']]
     : channel === 'ivr'
-      ? [['questions', 'IVR'], ['preview', 'Call preview'], ['json', 'JSON']]
-      : [['questions', 'Questions'], ['design', 'Design'], ['preview', 'Preview'], ['json', 'JSON']]
+      ? [['questions', 'IVR'], ['preview', 'Call preview'], ['script', 'Script'], ['json', 'JSON']]
+      : [
+          ['questions', 'Questions'],
+          ['preview', 'Preview'], ['script', 'Script'], ['json', 'JSON'],
+        ]
 
   const workspace = Boolean(form) && (pane === 'questions' || pane === 'design')
   const chosenIndex = form ? form.fields.findIndex((f) => f.name === chosen) : -1
   const chosenField = chosenIndex < 0 ? null : form.fields[chosenIndex]
+  // The left panel accompanies the canvas, which now lives in the Questions tab.
+  // `workspace` guarantees there is a form to read from.
+  const showLeftPanel = workspace && isWebBuilder && pane === 'questions'
+
+  // The header band and the action bar are full-width: they sit above and below
+  // the three scrolling columns rather than inside the middle one, so they span
+  // the whole workspace as in the prototype. Built here, placed in the layout
+  // below.
+  const topBar = form && (
+    <div className="bld-topbar">
+      <div className="bld-head">
+        <nav className="bld-crumbs" aria-label="Breadcrumb">
+          <Link to="/">Home</Link>
+          <span className="bld-crumbs__sep" aria-hidden="true">›</span>
+          {activeProject?.name && (
+            <>
+              <Link to="/forms">{activeProject.name}</Link>
+              <span className="bld-crumbs__sep" aria-hidden="true">›</span>
+            </>
+          )}
+          <span className="bld-crumbs__here">{form.title || 'Untitled form'}</span>
+        </nav>
+
+        <div className="bld-head__row">
+          <button type="button" className="bld-back" onClick={() => navigate(-1)}
+                  aria-label="Back" title="Back">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
+                 strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+          </button>
+
+          <div className="grow">
+            <input
+              ref={titleRef}
+              className="name-input"
+              value={form.title}
+              placeholder="Untitled form"
+              onChange={(e) =>
+                setForm({ ...form, title: e.target.value, ...(editing ? {} : { table_name: identifier(e.target.value, MAX_IDENTIFIER) }) })
+              }
+            />
+            <input
+              className="desc-input"
+              value={form.description || ''}
+              placeholder="Add a short description"
+              onChange={(e) => setForm({ ...form, description: e.target.value })}
+            />
+          </div>
+
+          {view !== 'responses' && (
+          <div className="bld-actions">
+            {editing && isWebBuilder && status === 'Active' && (
+              <Link className="btn btn--sm" to={`/f/${formId}`} title="Open the form people fill in">
+                <svg className="btn__icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M15 3h6v6M10 14L21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                </svg>
+                Open Live
+              </Link>
+            )}
+            {editing && can.export_forms && (
+              <Link className="btn btn--sm" to={`/forms/${formId}/share`} title="Share this form publicly">
+                <svg className="btn__icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4" />
+                </svg>
+                Share
+              </Link>
+            )}
+            <button
+              type="button"
+              className="btn btn--sm"
+              onClick={() => (editing ? navigate(`/forms/${formId}/preview`) : setDraftTab('preview'))}
+              title="See the form as it will appear"
+            >
+              <svg className="btn__icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" /><circle cx="12" cy="12" r="3" />
+              </svg>
+              Preview
+            </button>
+
+            {!editing && (
+              <button
+                type="button"
+                className="btn btn--sm"
+                onClick={() => save('Draft')}
+                disabled={busy === 'save' || !form.channel}
+                aria-describedby={form.channel ? undefined : 'save-why'}
+                title={form.channel ? 'Build it now, publish when it is ready' : 'Choose a channel first.'}
+              >
+                Save as draft
+              </button>
+            )}
+            {editing && status === 'Draft' && PUBLISHABLE.includes(channel) && (
+              <button
+                type="button"
+                className="btn btn--sm"
+                onClick={() => save('Active')}
+                disabled={busy === 'save'}
+                title="Save your edits without publishing yet"
+              >
+                {busy === 'save' && <span className="spin" />}
+                Save changes
+              </button>
+            )}
+            {editing && status === 'Active' && (
+              <button
+                type="button"
+                className="btn btn--sm"
+                onClick={() => setLive('Draft')}
+                disabled={busy === 'publish'}
+                title="Take it out of circulation. Answers already collected are kept"
+              >
+                {busy === 'publish' && <span className="spin" />}
+                Back to draft
+              </button>
+            )}
+
+            {editing && status === 'Draft' && PUBLISHABLE.includes(channel) ? (
+              <button
+                type="button"
+                className="btn btn--sm btn--primary"
+                onClick={() => setLive('Active')}
+                disabled={busy === 'publish'}
+                title="Make this form live so people can fill it in"
+              >
+                {busy === 'publish' ? <span className="spin" /> : <SaveIcon />}
+                Publish
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="btn btn--sm btn--primary"
+                onClick={() => save('Active')}
+                disabled={busy === 'save' || (!editing && !form.channel)}
+                aria-describedby={!editing && !form.channel ? 'save-why' : undefined}
+                title={!editing && !form.channel ? 'Choose a channel first.' : undefined}
+              >
+                {busy === 'save' ? <span className="spin" /> : <SaveIcon />}
+                {busy === 'save' ? 'Saving' : editing ? 'Save changes' : 'Publish'}
+              </button>
+            )}
+          </div>
+          )}
+        </div>
+      </div>
+
+      {(!editing || ['questions', 'design', 'preview', 'script', 'json'].includes(section)) && (
+        <div className="tabbar">
+          <div className="tabs">
+            {tabs.map(([id, name]) => (
+              <button
+                key={id}
+                className={pane === id ? 'on' : undefined}
+                onClick={() => (editing ? navigate(`/forms/${formId}/${id}`) : setDraftTab(id))}
+              >
+                <TabIcon id={id} />
+                {name}
+              </button>
+            ))}
+          </div>
+          {form && (
+            <button className="btn btn--sm btn--quiet tabs__aside"
+                    onClick={() => setShowTranslations(true)}>
+              Translations
+              {languageChoices(form).length > 1 &&
+                ` · ${languageChoices(form).length}`}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+
+  const saveBar = form && view !== 'responses' && (
+    <div className="savebar">
+      <span className="tiny muted">
+        {form.fields.length} question{form.fields.length === 1 ? '' : 's'}
+        {responses > 0 && <> <span className="sep">·</span> {responses} response{responses === 1 ? '' : 's'}</>}
+        {renameCount > 0 && <> <span className="sep">·</span> {renameCount} renamed</>}
+      </span>
+      <span className="spacer" />
+      {editing && responses > 0 && (
+        <button className="btn btn--quiet btn--sm" onClick={() => inspect(false)} disabled={busy === 'check'}>
+          {busy === 'check' && <span className="spin" />}
+          Check responses
+        </button>
+      )}
+      {editing && (
+        <button
+          className="btn btn--quiet btn--sm"
+          onClick={() => api.exportExcel(formId)}
+          title="Download the form definition as an Excel workbook"
+        >
+          Export Excel
+        </button>
+      )}
+      {editing && (
+        <button
+          className="btn btn--quiet btn--sm"
+          onClick={() => setContributing(true)}
+          title="Turn this form into a standard others can start from"
+        >
+          Add to Standard forms
+        </button>
+      )}
+    </div>
+  )
 
   return (
     <main className={`main${workspace ? ' main--builder' : ''}`}>
-     <div className={workspace ? 'workspace' : undefined}>
+     {topBar}
+     <div className={workspace ? `workspace${showLeftPanel && leftOpen ? ' workspace--3col' : ''}` : undefined}>
+      {showLeftPanel && (leftOpen ? (
+        <BuilderLeftPanel
+          layout={form.layout}
+          fields={form.fields}
+          rules={form.rules || []}
+          chosen={chosen}
+          chosenSection={chosenSection}
+          onPickField={pickField}
+          onPickSection={(id) => {
+            const key = (form.sections || []).some((s) => s.key === id) ? id : null
+            if (key) pickSection(key)
+          }}
+          onAddFieldType={addFieldType}
+          onAddSection={addSectionEverywhere}
+          onLibrary={openLibrary}
+          form={form}
+          formId={formId}
+          onFormChange={(change) => setForm({ ...form, ...change })}
+          ask={ask}
+          setAsk={setAsk}
+          onRevise={revise}
+          revising={busy === 'revise'}
+          refineUsage={refineUsage}
+          formatUsage={formatUsage}
+          onCollapse={() => setLeftOpen(false)}
+        />
+      ) : (
+        <button type="button" className="builderleft__rail" aria-label="Show the form structure panel"
+          title="Show structure" onClick={() => setLeftOpen(true)}>›</button>
+      ))}
       <div className={workspace ? 'workspace__main' : undefined}>
       {/* Work this browser kept when the page last closed. Offered rather than
           applied — see draftRecovery.js. */}
@@ -1101,7 +1839,8 @@ export default function Builder() {
       {/* Whether the server has this draft. Said plainly, because an autosave
           nobody can see is an autosave nobody trusts — and a failing one has to
           be visible without interrupting the question being typed. */}
-      {unsaved && autoSaved && (
+      {/* autosave disabled temporarily */}
+      {false && unsaved && autoSaved && (
         <p className={`tiny autosave${autoSaved.ok ? '' : ' autosave--stale'}`} role="status">
           {autoSaved.ok
             ? `Draft saved automatically at ${new Date(autoSaved.at).toLocaleTimeString()}`
@@ -1115,7 +1854,7 @@ export default function Builder() {
         </p>
       )}
 
-      {!editing && (
+      {!editing && !form && (
         <div className="card card--pad compose">
           <h1>What do you need to collect?</h1>
           <textarea
@@ -1168,7 +1907,7 @@ export default function Builder() {
               aria-describedby={blockers(true).length ? 'create-why' : undefined}
               title={blockers(true).join(' ') || undefined}>
               {busy === 'make' && <span className="spin" />}
-              {busy === 'make' ? 'Drafting' : form ? 'Start over' : 'Create form'}
+              {busy === 'make' ? 'Drafting' : 'Create form'}
             </button>
           </div>
         </div>
@@ -1221,57 +1960,25 @@ export default function Builder() {
         <>
           {!editing && (
             <div className="card card--pad draft-channel">
-              <ChannelPicker value={form.channel || null} onChange={pickChannel} required />
-              {!form.channel && (
-                <p id="save-why" className="tiny compose__why" role="status">
-                  Choose where this form will be answered before saving it.
-                  The channel cannot be changed after the form is saved.
-                </p>
-              )}
+              <ChannelPicker value={form.channel || 'web'} onChange={pickChannel} />
             </div>
           )}
           <div className="card">
-            <div className="editor__top">
-              <div className="grow">
-                <input
-                  ref={titleRef}
-                  className="name-input"
-                  value={form.title}
-                  placeholder="Untitled form"
-                  onChange={(e) =>
-                    setForm({ ...form, title: e.target.value, ...(editing ? {} : { table_name: identifier(e.target.value, MAX_IDENTIFIER) }) })
-                  }
-                />
-                <input
-                  className="desc-input"
-                  value={form.description || ''}
-                  placeholder="Add a short description"
-                  onChange={(e) => setForm({ ...form, description: e.target.value })}
-                />
-              </div>
-            </div>
 
-            {pane === 'questions' && (
+            {/* Relationship, location and channel live in the canvas Form
+                inspector for web forms; the WhatsApp / IVR builders have no
+                canvas, so their channel picker sits inline here. */}
+            {pane === 'questions' && !isWebBuilder && (
               <div className="editor__relationship">
-                {/* Parent records and device position are Web / Mobile ideas: a
-                    WhatsApp or IVR form has no picker and no GPS to offer. */}
-                {channel === 'web_mobile' && (
-                  <>
-                    <FormRelationship
-                      form={form}
-                      formId={formId}
-                      onChange={(change) => setForm({ ...form, ...change })}
-                    />
-                    <LocationSettings
-                      form={form}
-                      onChange={(change) => setForm({ ...form, ...change })}
-                    />
-                  </>
-                )}
-                {/* A saved form keeps its channel. Moving it is a copy. */}
+                {/* A saved form keeps its channel unless it is web-only. */}
                 {editing && (
                   <div className="rel">
-                    <ChannelPicker value={channel} readOnly legacy={legacy} />
+                    <ChannelPicker
+                      value={channel}
+                      readOnly={channel !== 'web'}
+                      legacy={legacy}
+                      onChange={(ch) => setForm({ ...form, channel: ch })}
+                    />
                     <div className="chanpick__copy">
                       {PUBLISHABLE.filter((c) => c !== channel).map((c) => (
                         <button
@@ -1285,37 +1992,6 @@ export default function Builder() {
                       ))}
                     </div>
                   </div>
-                )}
-              </div>
-            )}
-
-            {/* A saved form — published or not — can be previewed while it is
-                being edited, exactly as a new one can. For a saved form the tab
-                is the page's address, so the sidebar and the tab agree. */}
-            {(!editing || ['questions', 'design', 'preview', 'json'].includes(section)) && (
-              <div className="tabbar">
-                <div className="tabs">
-                  {tabs.map(([id, name]) => (
-                    <button
-                      key={id}
-                      className={pane === id ? 'on' : undefined}
-                      onClick={() => (editing ? navigate(`/forms/${formId}/${id}`) : setDraftTab(id))}
-                    >
-                      {name}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Beside the tabs and not one of them: translating is a pass
-                    over the whole form rather than a view of it, and it opens
-                    over whichever tab you were on so you come back to it. */}
-                {form && (
-                  <button className="btn btn--sm btn--quiet tabs__aside"
-                          onClick={() => setShowTranslations(true)}>
-                    Translations
-                    {languageChoices(form).length > 1 &&
-                      ` · ${languageChoices(form).length}`}
-                  </button>
                 )}
               </div>
             )}
@@ -1362,264 +2038,26 @@ export default function Builder() {
                 />
               )}
 
-              {pane === 'questions' && channel === 'web_mobile' && (
-                <>
-                  {(() => {
-                    const languages = languageChoices(form)
-                    if (languages.length < 2) return null
-                    return (
-                      <div className="formview__lang" style={{ marginTop: 0 }}>
-                        <label htmlFor="questions-language">Language</label>
-                        <select
-                          id="questions-language"
-                          className="control control--sm"
-                          value={language}
-                          onChange={(e) => setWording(e.target.value)}
-                        >
-                          {languages.map((l) => (
-                            <option key={l.code} value={l.code}>{l.name}</option>
-                          ))}
-                        </select>
-                        <span className="tiny muted">
-                          {!translating
-                            ? 'The wording the form was written in.'
-                            : 'Editing this language only — the original wording is untouched.'}
-                        </span>
-                      </div>
-                    )
-                  })()}
-
-                  <div className="tweak" style={{ margin: 0, padding: '0 0 20px', border: 'none' }}>
-                    <input
-                      className="control"
-                      placeholder="Ask for a change — add a photo field, make the phone number required…"
-                      value={ask}
-                      onChange={(e) => {
-                        setAsk(e.target.value)
-                        setRefineUsage(null)
-                      }}
-                      onKeyDown={(e) => e.key === 'Enter' && ask.trim().length > 2 && revise()}
-                    />
-                    <button className="btn" onClick={revise} disabled={busy === 'revise' || ask.trim().length < 3}>
-                      {busy === 'revise' && <span className="spin" />}
-                      {busy === 'revise' ? 'Revising' : 'Revise'}
-                    </button>
-                    <button className="btn" onClick={() => setPicker('borrow')} title="Add questions from the standard form library">
-                      Library
-                    </button>
-                  </div>
-                  {refineUsage && (
-                    <p className="tiny muted" style={{ margin: '-12px 0 16px' }}>
-                      {formatUsage(refineUsage)}
-                    </p>
-                  )}
-
-                    <div className="rows">
-                    {(() => {
-                      const secs = form.sections || []
-                      if (!secs.length) {
-                        // No sections — flat list, same as before.
-                        return form.fields.map((f, i) => (
-                          <FieldEditor
-                            key={f._uid}
-                            field={f}
-                            index={i}
-                            total={form.fields.length}
-                            sections={secs}
-                            onAddSection={addSection}
-                            onSectionChange={changeSection}
-                            allFields={form.fields}
-                            selected={f.name === chosen}
-                            onSelect={() => setChosen(f.name)}
-                            translating={translating}
-                            words={translating
-                              ? (((form.translations || {})[language] || {}).fields || {})[f.name] || {}
-                              : undefined}
-                            onWords={translating ? (changes) => translate(f.name, changes) : undefined}
-                            renamedFrom={f._orig && f._orig !== f.name ? f._orig : null}
-                            hasResponses={responses > 0}
-                            dragging={lifted === i}
-                            dropEdge={over === i && lifted !== null && lifted !== i
-                              ? (lifted < i ? 'below' : 'above')
-                              : null}
-                            onChange={put}
-                            onMove={move}
-                            onRemove={remove}
-                            onDragStart={setLifted}
-                            onDragOver={setOver}
-                            onDragEnd={() => { setLifted(null); setOver(null) }}
-                            onDrop={settle}
-                          />
-                        ))
-                      }
-
-                      // Group fields by section, preserving order within each group.
-                      const groups = []
-                      const byKey = new Map()
-                      for (let i = 0; i < form.fields.length; i++) {
-                        const f = form.fields[i]
-                        const key = f.section || '_none'
-                        let g = byKey.get(key)
-                        if (!g) {
-                          const sec = secs.find((s) => s.key === f.section)
-                          g = { key, title: sec?.title || null, items: [] }
-                          byKey.set(key, g)
-                          groups.push(g)
-                        }
-                        g.items.push({ field: f, index: i })
-                      }
-
-                      return groups.map((g) => (
-                        <div
-                          key={g.key}
-                          className={`section-group${lifted != null && (form.fields[lifted]?.section || null) !== (g.key === '_none' ? null : g.key) ? ' section-group--drop-target' : ''}`}
-                        >
-                          <div
-                            className="section-divider"
-                            onDragOver={(e) => e.preventDefault()}
-                            onDrop={(e) => {
-                              e.preventDefault()
-                              e.stopPropagation()
-                              if (lifted == null) return
-                              const lastInGroup = g.items[g.items.length - 1]
-                              settle(lastInGroup.index)
-                            }}
-                          >
-                            <span className="section-divider__label">
-                              {g.title || 'No section'}
-                            </span>
-                          </div>
-                          {g.items.map(({ field: f, index: i }) => (
-                            <FieldEditor
-                              key={f._uid}
-                              field={f}
-                              index={i}
-                              total={form.fields.length}
-                              sections={secs}
-                              onAddSection={addSection}
-                              onSectionChange={changeSection}
-                              allFields={form.fields}
-                              selected={f.name === chosen}
-                              onSelect={() => setChosen(f.name)}
-                              translating={translating}
-                              words={translating
-                                ? (((form.translations || {})[language] || {}).fields || {})[f.name] || {}
-                                : undefined}
-                              onWords={translating ? (changes) => translate(f.name, changes) : undefined}
-                              renamedFrom={f._orig && f._orig !== f.name ? f._orig : null}
-                              hasResponses={responses > 0}
-                              dragging={lifted === i}
-                              dropEdge={over === i && lifted !== null && lifted !== i
-                                ? (lifted < i ? 'below' : 'above')
-                                : null}
-                              onChange={put}
-                              onMove={move}
-                              onRemove={remove}
-                              onDragStart={setLifted}
-                              onDragOver={setOver}
-                              onDragEnd={() => { setLifted(null); setOver(null) }}
-                              onDrop={settle}
-                            />
-                          ))}
-                        </div>
-                      ))
-                    })()}
-                    </div>
-
-                    <button className="btn btn--quiet addfield" onClick={add}>Add a question</button>
-
-                  {/* The same engine, one level up: a whole section, or the
-                      questionnaire itself, can wait on an earlier answer. */}
-                  <details className="cond__wider">
-                    <summary>Conditional logic for sections and the whole form</summary>
-
-                    <ConditionEditor
-                      target={{ type: 'form' }}
-                      fields={form.fields}
-                      rules={form.rules || []}
-                      onChange={(rules) => setForm({ ...form, rules })}
-                    />
-
-                    {(form.sections || []).map((section) => (
-                      <div key={section.key} className="cond__section">
-                        <span className="tiny muted">Section — {section.title}</span>
-                        <ConditionEditor
-                          target={{ type: 'section', key: section.key }}
-                          fields={form.fields}
-                          rules={form.rules || []}
-                          onChange={(rules) => setForm({ ...form, rules })}
-                        />
-                      </div>
-                    ))}
-                  </details>
-                </>
-              )}
-
-              {pane === 'design' && (
-                <LayoutDesigner
+              {pane === 'questions' && isWebBuilder && (
+                <CanvasDesigner
                   layout={form.layout}
                   fields={form.fields}
                   chosen={chosen}
-                  onSelect={setChosen}
-                  onChange={(layout) => {
-                    const next = { ...layout, auto: false }
-
-                    // Sync field.section when a field moves between layout sections.
-                    // Layout section ids are form section keys (generateLayout keeps them).
-                    const sectionOf = new Map()
-                    for (const sec of next.sections || []) {
-                      for (const row of sec.containers || []) {
-                        for (const cell of row.fields || []) {
-                          sectionOf.set(cell.fieldId, sec.id)
-                        }
-                      }
-                    }
-
-                    const secs = form.sections || []
-                    const knownKeys = new Set(secs.map((s) => s.key))
-                    let fields = form.fields
-                    let rules = form.rules
-                    let synced = false
-
-                    for (let i = 0; i < fields.length; i++) {
-                      const f = fields[i]
-                      const layoutSec = sectionOf.get(f.name)
-                      if (!layoutSec) continue
-                      // Map layout section id to form section key — they match when the
-                      // section was created from a form section (which is the normal case).
-                      const newSection = knownKeys.has(layoutSec) ? layoutSec : f.section
-                      if ((newSection || null) === (f.section || null)) continue
-
-                      // Check for affected rules before changing.
-                      const oldSection = f.section || null
-                      if (oldSection) {
-                        const remaining = fields.filter((o, j) => j !== i && (o.section || null) === oldSection)
-                        const secTitle = (key) => secs.find((s) => s.key === key)?.title || key
-                        const affected = rulesAffectedBySectionChange(rules, f.name, oldSection, remaining)
-                        if (affected.length) {
-                          const desc = affected.map((r) => {
-                            const t = r.target || {}
-                            const conds = (r.conditions || []).map((c) => c.field).join(', ')
-                            const tName = t.type === 'section' ? `Section: ${secTitle(t.key)}` : t.name
-                            return `  • "${tName}" (depends on: ${conds})`
-                          }).join('\n')
-                          if (!window.confirm(
-                            `Moving "${f.label || f.name}" from "${secTitle(oldSection)}" to "${newSection ? secTitle(newSection) : 'No section'}" will remove ${affected.length} rule(s):\n\n${desc}\n\nContinue?`
-                          )) continue
-                          rules = removeRules(rules, affected)
-                        }
-                      }
-
-                      if (!synced) { fields = [...fields]; synced = true }
-                      fields[i] = { ...f, section: newSection || null }
-                    }
-
-                    setForm({ ...form, layout: next, fields, rules })
-                  }}
+                  chosenSection={chosenSection}
+                  onSelect={pickField}
+                  onSelectSection={selectCanvasSection}
+                  onDuplicate={duplicateFieldByName}
+                  onDelete={removeFieldByName}
+                  onDuplicateSection={duplicateSectionByKey}
+                  onDeleteSection={deleteSectionByKey}
+                  onAddQuestion={addFieldToSection}
+                  onAddFieldAt={addFieldAt}
+                  onAddSection={addSectionEverywhere}
+                  onChange={applyDesignLayout}
                 />
               )}
 
-              {pane === 'preview' && channel === 'web_mobile' && (
+              {pane === 'preview' && isWebBuilder && (
                 <>
                   <FormRenderer
                     formJson={form}
@@ -1662,7 +2100,27 @@ export default function Builder() {
                       <div className="alert alert--good">
                         Every answer passed. This is what would be stored:
                       </div>
-                      <pre className="json">{JSON.stringify(trialResult.form_data, null, 2)}</pre>
+                      <div className="trial__tabs">
+                        <button className={`btn btn--sm${trialView !== 'json' ? ' btn--primary' : ''}`}
+                          onClick={() => setTrialView('form')}>Form</button>
+                        <button className={`btn btn--sm${trialView === 'json' ? ' btn--primary' : ''}`}
+                          onClick={() => setTrialView('json')}>JSON</button>
+                      </div>
+                      {trialView === 'json' ? (
+                        <pre className="json">{JSON.stringify(trialResult.form_data, null, 2)}</pre>
+                      ) : (
+                        <table className="trial__table">
+                          <thead><tr><th>Field</th><th>Value</th></tr></thead>
+                          <tbody>
+                            {Object.entries(trialResult.form_data).map(([k, v]) => (
+                              <tr key={k}>
+                                <td className="trial__key">{k}</td>
+                                <td>{typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v ?? '')}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
                     </div>
                   )}
                 </>
@@ -1689,87 +2147,17 @@ export default function Builder() {
 
               {view === 'responses' && editing && <Responses formId={formId} />}
 
+              {view === 'script' && (
+                <ScriptEditor
+                  value={form.custom_script || ''}
+                  onChange={(code) => setForm({ ...form, custom_script: code })}
+                />
+              )}
+
               {view === 'json' && <pre className="json">{JSON.stringify(untag(form), null, 2)}</pre>}
             </div>
           </div>
 
-          {view !== 'responses' && (
-            <div className="savebar">
-              <span className="tiny muted">
-                {form.fields.length} question{form.fields.length === 1 ? '' : 's'}
-                {responses > 0 && <> <span className="sep">·</span> {responses} response{responses === 1 ? '' : 's'}</>}
-                {renameCount > 0 && <> <span className="sep">·</span> {renameCount} renamed</>}
-              </span>
-              <span className="spacer" />
-              {editing && (
-                <button
-                  className="btn btn--quiet btn--sm"
-                  onClick={() => setContributing(true)}
-                  title="Turn this form into a standard others can start from"
-                >
-                  Add to library
-                </button>
-              )}
-              {editing && responses > 0 && (
-                <button className="btn btn--quiet btn--sm" onClick={() => inspect(false)} disabled={busy === 'check'}>
-                  {busy === 'check' && <span className="spin" />}
-                  Check responses
-                </button>
-              )}
-              {editing && status === 'Draft' && PUBLISHABLE.includes(channel) && (
-                <button
-                  className="btn btn--primary"
-                  onClick={() => setLive('Active')}
-                  disabled={busy === 'publish'}
-                  title="Make this form live so people can fill it in"
-                >
-                  {busy === 'publish' && <span className="spin" />}
-                  Publish
-                </button>
-              )}
-              {editing && (
-                <button
-                  className="btn btn--quiet btn--sm"
-                  onClick={() => api.exportExcel(formId)}
-                  title="Download the form definition as an Excel workbook"
-                >
-                  Export Excel
-                </button>
-              )}
-              {editing && status === 'Active' && (
-                <button
-                  className="btn btn--quiet btn--sm"
-                  onClick={() => setLive('Draft')}
-                  disabled={busy === 'publish'}
-                  title="Take it out of circulation. Answers already collected are kept"
-                >
-                  {busy === 'publish' && <span className="spin" />}
-                  Back to draft
-                </button>
-              )}
-              {!editing && (
-                <button
-                  className="btn btn--quiet"
-                  onClick={() => save('Draft')}
-                  disabled={busy === 'save' || !form.channel}
-                  aria-describedby={form.channel ? undefined : 'save-why'}
-                  title={form.channel ? 'Build it now, publish when it is ready' : 'Choose a channel first.'}
-                >
-                  Save as draft
-                </button>
-              )}
-              <button
-                className="btn btn--primary"
-                onClick={() => save('Active')}
-                disabled={busy === 'save' || (!editing && !form.channel)}
-                aria-describedby={!editing && !form.channel ? 'save-why' : undefined}
-                title={!editing && !form.channel ? 'Choose a channel first.' : undefined}
-              >
-                {busy === 'save' && <span className="spin" />}
-                {busy === 'save' ? 'Saving' : editing ? 'Save changes' : 'Publish'}
-              </button>
-            </div>
-          )}
         </>
       )}
       {contributing && (
@@ -1789,7 +2177,10 @@ export default function Builder() {
           projectId={buildingIn || activeProjectId()}
           onClose={() => setPicker(null)}
           onPick={(formJson) => {
-            setForm(prep(form ? keepChannel(formJson) : { ...formJson, channel: newChannel }, editing))
+            const existing = new Set((form?.fields || []).map((f) => f.name))
+            const fj = form ? keepChannel(formJson) : { ...formJson, channel: newChannel }
+            fj.fields = (fj.fields || []).map((f) => existing.has(f.name) ? f : { ...f, _orig: f._orig || f.name })
+            setForm(prep(fj, editing))
             setPicker(null)
             setTrial({})
           }}
@@ -1797,60 +2188,96 @@ export default function Builder() {
       )}
       </div>
 
-      {workspace && (
-        <aside className="inspector" aria-label="Element configuration">
-          <div className="inspector__head">
-            <span className="inspector__title">Element configuration</span>
-            {chosenField ? (
-              <>
-                <b className="inspector__name">
-                  {chosenField.label || chosenField.name || 'Untitled question'}
-                </b>
-                <span className="tiny muted">
-                  Question {chosenIndex + 1} of {form.fields.length}
-                  {translating && ` · editing ${language}`}
-                </span>
-              </>
-            ) : (
-              <span className="tiny muted">Nothing selected</span>
-            )}
-          </div>
-
-          <div className="inspector__body">
-            {chosenField ? (
-              <FieldEditor
-              key={chosenField._uid}
-              mode="panel"
-              field={chosenField}
-              index={chosenIndex}
-              total={form.fields.length}
-              sections={form.sections || []}
-              onAddSection={addSection}
-              onSectionChange={changeSection}
-              allFields={form.fields}
-              formRules={form.rules || []}
-              onRules={(rules) => setForm({ ...form, rules })}
-              translating={translating}
-              words={translating
-              ? (((form.translations || {})[language] || {}).fields || {})[chosenField.name] || {}
+      {workspace && (() => {
+        // The question inspector, unchanged — the one editor for a selected field.
+        const questionInspector = (
+          <FieldEditor
+            key={chosenField?._uid}
+            mode="panel"
+            field={chosenField}
+            index={chosenIndex}
+            total={form.fields.length}
+            sections={form.sections || []}
+            onAddSection={addSection}
+            onSectionChange={changeSection}
+            allFields={form.fields}
+            formRules={form.rules || []}
+            onRules={(rules) => setForm({ ...form, rules })}
+            translating={translating}
+            words={translating
+              ? (((form.translations || {})[language] || {}).fields || {})[chosenField?.name] || {}
               : undefined}
-              onWords={translating ? (changes) => translate(chosenField.name, changes) : undefined}
-              renamedFrom={chosenField._orig && chosenField._orig !== chosenField.name
-                ? chosenField._orig : null}
-              hasResponses={responses > 0}
-              onChange={put}
-              onRemove={remove}
-              />
-            ) : (
-              <p className="tiny muted">
-                Choose a question on the left to set its wording, limits, choices,
-                standards and conditional logic.
-              </p>
-            )}
-          </div>
-        </aside>
-      )}
+            onWords={translating ? (changes) => translate(chosenField.name, changes) : undefined}
+            renamedFrom={chosenField?._orig && chosenField._orig !== chosenField.name
+              ? chosenField._orig : null}
+            hasResponses={responses > 0}
+            onChange={put}
+            onRemove={remove}
+          />
+        )
+
+        /* Three inspector states: a question → the FieldEditor panel; a section
+           → SectionInspector; nothing selected → FormInspector, the whole-form
+           inventory. */
+        const sectionObj = chosenSection
+            ? (form.sections || []).find((s) => s.key === chosenSection)
+            : null
+          const mode = chosenField ? 'field' : sectionObj ? 'section' : 'form'
+
+          return (
+            <aside className="inspector" aria-label="Element configuration">
+              <div className="inspector__head">
+                <span className="inspector__title">
+                  {mode === 'field' ? 'Question' : mode === 'section' ? 'Section' : 'Form'} configuration
+                </span>
+                {mode === 'field' && (
+                  <>
+                    <b className="inspector__name">
+                      {chosenField.label || chosenField.name || 'Untitled question'}
+                    </b>
+                    <span className="tiny muted">
+                      Question {chosenIndex + 1} of {form.fields.length}
+                      {translating && ` · editing ${language}`}
+                    </span>
+                  </>
+                )}
+                {mode === 'section' && (
+                  <b className="inspector__name">{sectionObj.title || sectionObj.key}</b>
+                )}
+                {mode === 'form' && (
+                  <span className="tiny muted">The form as a whole — select a question or section to configure it.</span>
+                )}
+              </div>
+
+              <div className="inspector__body">
+                {mode === 'field' && questionInspector}
+                {mode === 'section' && (
+                  <SectionInspector
+                    key={sectionObj.key}
+                    section={sectionObj}
+                    fields={form.fields}
+                    rules={form.rules || []}
+                    onChange={(change) => updateSectionMeta(sectionObj.key, change)}
+                    onRules={(rules) => setForm({ ...form, rules })}
+                  />
+                )}
+                {mode === 'form' && (
+                  <FormInspector
+                    form={form}
+                    channel={channel}
+                    legacy={legacy}
+                    editing={Boolean(editing)}
+                    onCopyChannel={(c) => navigate('/builder', { state: { copyOf: untag(form), channel: c } })}
+                    onChange={(change) => setForm({ ...form, ...change })}
+                  />
+                )}
+              </div>
+            </aside>
+          )
+      })()}
      </div>
+
+      {saveBar}
 
       {/* Every word on the form, one column per language. It edits the same
           `form` state the rest of the builder edits, so a translation is saved
@@ -1887,6 +2314,89 @@ export default function Builder() {
                       onClick={() => setShowTranslations(false)}>
                 Done
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {versionDialog && (
+        <div className="sheet" onMouseDown={() => { versionDialog.resolve(null); setVersionDialog(null) }}>
+          <div className="sheet__panel" role="dialog" aria-modal="true"
+               onMouseDown={e => e.stopPropagation()}>
+            <div className="sheet__head">
+              <h2>Version notes</h2>
+              <p className="muted">Describe what changed in this version.</p>
+            </div>
+            <div className="sheet__body" style={{display:'flex',flexDirection:'column',gap:12}}>
+              <label>
+                <span className="label-text">Version number</span>
+                <input className="control" maxLength={20} placeholder="e.g. 2.1"
+                  value={versionDialog.tag}
+                  onChange={e => setVersionDialog(d => ({...d, tag: e.target.value}))} />
+              </label>
+              <label>
+                <span className="label-text">Label</span>
+                <input className="control" maxLength={100} placeholder="e.g. Added GPS question"
+                  value={versionDialog.label}
+                  onChange={e => setVersionDialog(d => ({...d, label: e.target.value}))} />
+              </label>
+              <label>
+                <span className="label-text">Description</span>
+                <textarea className="control" rows={3} placeholder="Optional details…"
+                  value={versionDialog.description}
+                  onChange={e => setVersionDialog(d => ({...d, description: e.target.value}))} />
+              </label>
+            </div>
+            <div className="sheet__foot">
+              <button className="btn" onClick={() => { versionDialog.resolve(null); setVersionDialog(null) }}>Cancel</button>
+              <span className="spacer" />
+              <button className="btn" onClick={() => { versionDialog.resolve({}); setVersionDialog(null) }}>Skip</button>
+              <button className="btn btn--primary" onClick={() => {
+                versionDialog.resolve({ tag: versionDialog.tag, label: versionDialog.label, description: versionDialog.description })
+                setVersionDialog(null)
+              }}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {popup && (
+        <div className="sheet" onMouseDown={() => setPopup(null)}>
+          <div className="sheet__panel" role="alertdialog" aria-modal="true"
+               onMouseDown={(e) => e.stopPropagation()}
+               style={{ maxWidth: 420, textAlign: 'center', padding: 32 }}>
+            <div style={{ fontSize: 36, marginBottom: 12 }}>⚠️</div>
+            <p style={{ fontSize: 15, fontWeight: 500, marginBottom: 20 }}>{popup}</p>
+            <button className="btn btn--primary" onClick={() => setPopup(null)}>OK</button>
+          </div>
+        </div>
+      )}
+      {deletingSection && (
+        <div className="sheet" onMouseDown={() => { setDeletingSection(null); setMoveTo('') }}>
+          <div className="sheet__panel" role="alertdialog" aria-modal="true"
+               onMouseDown={(e) => e.stopPropagation()}
+               style={{ maxWidth: 440 }}>
+            <div className="sheet__head">
+              <h3>Delete section</h3>
+            </div>
+            <div className="sheet__body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <p style={{ margin: 0 }}>
+                This section has <strong>{deletingSection.count}</strong> question{deletingSection.count === 1 ? '' : 's'}.
+                Deleting it will also delete {deletingSection.count === 1 ? 'that question' : 'all its questions'} unless you move them first.
+              </p>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span className="minilabel">Move questions to</span>
+                <select className="control" value={moveTo} onChange={(e) => setMoveTo(e.target.value)}>
+                  <option value="">Unplaced questions</option>
+                  {(form.sections || [])
+                    .filter((s) => s.key !== deletingSection.key)
+                    .map((s) => <option key={s.key} value={s.key}>{s.title || s.key}</option>)}
+                </select>
+              </label>
+            </div>
+            <div className="sheet__foot">
+              <button className="btn" onClick={() => { setDeletingSection(null); setMoveTo('') }}>Cancel</button>
+              <button className="btn btn--primary" onClick={() => confirmDeleteSection(true)}>Move &amp; delete section</button>
+              <button className="btn btn--danger" onClick={() => confirmDeleteSection(false)}>Delete all</button>
             </div>
           </div>
         </div>

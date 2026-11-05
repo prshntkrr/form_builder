@@ -474,6 +474,7 @@ def create(req: CreateFormRequest, user: Dict[str, Any] = Depends(_could_build_s
     except form_service.FormServiceError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except IntegrityError as exc:
+        logger.warning("Form creation IntegrityError: %s", exc)
         raise HTTPException(status_code=409, detail=_constraint_message(exc))
     except Exception as exc:
         logger.exception("Form creation failed")
@@ -596,6 +597,9 @@ def update(form_id: str, req: UpdateFormRequest,
             renames=req.renames,
             whatsapp=req.whatsapp.model_dump() if req.whatsapp else None,
             ivr=req.ivr.model_dump() if req.ivr else None,
+            version_tag=getattr(req, 'version_tag', None),
+            version_label=getattr(req, 'version_label', None),
+            version_description=getattr(req, 'version_description', None),
         )
     except routing.RoutingError as exc:
         # The keyword is taken. The edit rolled back with it, so the form is
@@ -655,6 +659,21 @@ def soft_delete(form_id: str,
         raise HTTPException(status_code=404, detail=str(exc))
     except IntegrityError as exc:
         raise HTTPException(status_code=409, detail=_constraint_message(exc))
+
+
+@router.delete("/{form_id}/permanent")
+def hard_delete(form_id: str,
+                drop_data: bool = Query(False, description="Also drop the form's data table"),
+                user: Dict[str, Any] = Depends(needs("users.manage"))):
+    """Permanently delete the form, its versions, and optionally its data table. Admin only."""
+    try:
+        result = form_service.hard_delete(form_id, drop_data=drop_data)
+        return result
+    except form_service.FormNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        logger.exception("Hard delete failed for form %s", form_id)
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @router.post("/{form_id}/rollback")

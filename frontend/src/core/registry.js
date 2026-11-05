@@ -89,6 +89,7 @@ export const moduleLists = (live) =>
 export const NAV_GROUPS = [
   ['configuration', 'Configuration'],
   ['data', 'Data & Channels'],
+  ['administration', 'Administration'],
 ]
 
 /**
@@ -98,7 +99,11 @@ export const NAV_GROUPS = [
  * outside the structure it defines — and so `SystemNav` has one import rather
  * than an import cycle back into the component that renders it.
  */
-export const CORE_NAV_ITEMS = []
+export const CORE_NAV_ITEMS = [
+  { group: 'administration', label: 'Projects', labelKey: 'label.proyect', to: '/projects', icon: 'projects', order: 810 },
+  { group: 'administration', label: 'Roles', labelKey: 'label.roles', to: '/roles', requires: 'manage_roles', icon: 'roles', order: 820 },
+  { group: 'administration', label: 'Users', labelKey: 'label.users', to: '/users', requires: 'manage_users', icon: 'users', order: 830 },
+]
 
 /**
  * Every system link every enabled module contributes, gathered by group.
@@ -145,9 +150,5 @@ export const moduleNavItems = (live, can = {}, extraItems = []) => {
  * claims a landing page for this role wins.
  */
 export const homeFor = (can, live) => {
-  for (const m of on(live)) {
-    const to = typeof m.home === 'function' ? m.home(can) : null
-    if (to) return to
-  }
-  return '/account'
+  return '/dashboard'
 }

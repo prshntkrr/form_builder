@@ -1,12 +1,36 @@
 import MediaField from './MediaField.jsx'
-
 import { isUsableRing } from './PolygonMap.jsx'
-
 import PolygonSheet from './PolygonSheet.jsx'
-
 import React, { useState } from 'react'
 
+const CURRENCY_SYMBOLS = {
+  USD: '$', EUR: '€', GBP: '£', INR: '₹', JPY: '¥', CNY: '¥',
+  MXN: '$', BRL: 'R$', KES: 'KSh', NGN: '₦', ZAR: 'R', EGP: 'E£',
+  AUD: 'A$', CAD: 'C$', CHF: 'CHF', SEK: 'kr', NOK: 'kr', DKK: 'kr',
+  PLN: 'zł', TRY: '₺', RUB: '₽', KRW: '₩', THB: '฿', PHP: '₱',
+  IDR: 'Rp', MYR: 'RM', VND: '₫', BDT: '৳', PKR: '₨', LKR: 'Rs',
+  NPR: 'Rs', MMK: 'K', ETB: 'Br', TZS: 'TSh', UGX: 'USh', GHS: 'GH₵',
+  XOF: 'CFA', XAF: 'FCFA', COP: '$', PEN: 'S/', ARS: '$', CLP: '$',
+}
 
+export const CURRENCIES = [
+  ['USD', 'US Dollar ($)'], ['EUR', 'Euro (€)'], ['GBP', 'British Pound (£)'],
+  ['INR', 'Indian Rupee (₹)'], ['JPY', 'Japanese Yen (¥)'], ['CNY', 'Chinese Yuan (¥)'],
+  ['MXN', 'Mexican Peso ($)'], ['BRL', 'Brazilian Real (R$)'],
+  ['KES', 'Kenyan Shilling (KSh)'], ['NGN', 'Nigerian Naira (₦)'],
+  ['ZAR', 'South African Rand (R)'], ['EGP', 'Egyptian Pound (E£)'],
+  ['AUD', 'Australian Dollar (A$)'], ['CAD', 'Canadian Dollar (C$)'],
+  ['CHF', 'Swiss Franc (CHF)'], ['SEK', 'Swedish Krona (kr)'],
+  ['TRY', 'Turkish Lira (₺)'], ['RUB', 'Russian Ruble (₽)'],
+  ['KRW', 'South Korean Won (₩)'], ['THB', 'Thai Baht (฿)'],
+  ['PHP', 'Philippine Peso (₱)'], ['IDR', 'Indonesian Rupiah (Rp)'],
+  ['BDT', 'Bangladeshi Taka (৳)'], ['PKR', 'Pakistani Rupee (₨)'],
+  ['NPR', 'Nepalese Rupee (Rs)'], ['ETB', 'Ethiopian Birr (Br)'],
+  ['TZS', 'Tanzanian Shilling (TSh)'], ['UGX', 'Ugandan Shilling (USh)'],
+  ['GHS', 'Ghanaian Cedi (GH₵)'], ['XOF', 'CFA Franc (CFA)'],
+  ['COP', 'Colombian Peso ($)'], ['PEN', 'Peruvian Sol (S/)'],
+  ['ARS', 'Argentine Peso ($)'], ['CLP', 'Chilean Peso ($)'],
+]
 
 function TableFieldInput({ field, value, onChange, error, media }) {
   const columns = field.columns || []
@@ -1006,551 +1030,335 @@ function TableFieldInput({ field, value, onChange, error, media }) {
 
 /** One control for one field. Types match the backend registry. */
 
+/** One control for one field. Types match the backend registry. */
 export default function FieldInput({ field, value, onChange, error, media }) {
-
   const v = field.validation || {}
-
-  const set = (val) => onChange(field.name, val)
-
-
+  const ro = Boolean(field.read_only)
+  const set = (val) => { if (!ro) onChange(field.name, val) }
 
   /* Whether the full-screen map is open. Declared here, not in the polygon
-
      case: the switch below runs during render, and a hook cannot live inside
-
      a branch of it. */
-
   const [mapOpen, setMapOpen] = useState(false)
 
-
-
   const base = {
-
-    id: `f_${field.name}`,
-
+    id: field.name,
     name: field.name,
-
     placeholder: field.placeholder || '',
-
     'aria-invalid': error ? 'true' : undefined,
-
-    className: `control${error ? ' control--bad' : ''}`,
-
+    className: `control${error ? ' control--bad' : ''}${ro ? ' control--readonly' : ''}`,
+    readOnly: ro || undefined,
+    disabled: ro || undefined,
   }
-
-
 
   const toggleIn = (option) => {
-
     const list = Array.isArray(value) ? value : []
-
     set(list.includes(option) ? list.filter((x) => x !== option) : [...list, option])
-
   }
-
-
 
   /** A digit cap is about length, not magnitude, and maxLength does nothing on
-
    *  a number input — so refuse the keystroke that would overrun it. */
-
   const setCapped = (next) => {
-
     if (v.max_length && String(next).replace(/\D/g, '').length > Number(v.max_length)) return
-
     set(next)
-
   }
-
-
 
   let control
 
-
-
   switch (field.type) {
-
     case 'textarea':
-
       control = <textarea {...base} rows={4} value={value ?? ''} onChange={(e) => set(e.target.value)} />
-
       break
-
-
 
     case 'number':
-
-    case 'decimal':
-
+    case 'decimal': {
+      const dp = field.decimal_places
+      const decStep = field.type === 'decimal'
+        ? (dp != null ? (1 / Math.pow(10, dp)) : (v.step ?? 'any'))
+        : (v.step ?? 1)
       control = (
-
         <input
-
           {...base}
-
           type="number"
-
-          step={field.type === 'decimal' ? (v.step ?? 'any') : (v.step ?? 1)}
-
+          step={decStep}
           min={v.min ?? undefined}
-
           max={v.max ?? undefined}
-
           value={value ?? ''}
-
           onChange={(e) => setCapped(e.target.value)}
-
         />
-
       )
-
       break
-
-
-
-    case 'rating': {
-
-      const max = Number(v.max ?? 5)
-
-      control = (
-
-        <div className="stars">
-
-          {Array.from({ length: max }, (_, i) => i + 1).map((n) => (
-
-            <button
-
-              key={n}
-
-              type="button"
-
-              className={`star${Number(value) >= n ? ' on' : ''}`}
-
-              onClick={() => set(Number(value) === n ? '' : n)}
-
-              aria-label={`${n} of ${max}`}
-
-            >★</button>
-
-          ))}
-
-        </div>
-
-      )
-
-      break
-
     }
 
+    case 'currency': {
+      const sym = CURRENCY_SYMBOLS[field.currency] || field.currency || ''
+      const cdp = field.decimal_places
+      const cStep = cdp != null ? (1 / Math.pow(10, cdp)) : (v.step ?? 0.01)
+      control = (
+        <div className="currency-input">
+          {sym && <span className="currency-input__sym">{sym}</span>}
+          <input
+            {...base}
+            type="number"
+            step={cStep}
+            min={v.min ?? undefined}
+            max={v.max ?? undefined}
+            value={value ?? ''}
+            onChange={(e) => setCapped(e.target.value)}
+          />
+        </div>
+      )
+      break
+    }
 
+    case 'rating': {
+      const max = Number(v.max ?? 5)
+      control = (
+        <div className="stars">
+          {Array.from({ length: max }, (_, i) => i + 1).map((n) => (
+            <button
+              key={n}
+              type="button"
+              className={`star${Number(value) >= n ? ' on' : ''}`}
+              onClick={() => set(Number(value) === n ? '' : n)}
+              aria-label={`${n} of ${max}`}
+            >★</button>
+          ))}
+        </div>
+      )
+      break
+    }
 
     case 'date':
-
       control = <input {...base} type="date" value={value ?? ''} onChange={(e) => set(e.target.value)} />
-
       break
-
-
 
     case 'datetime':
-
       control = <input {...base} type="datetime-local" value={value ?? ''} onChange={(e) => set(e.target.value)} />
-
       break
-
-
 
     case 'time':
-
       control = <input {...base} type="time" value={value ?? ''} onChange={(e) => set(e.target.value)} />
-
       break
-
-
 
     case 'email':
-
       control = <input {...base} type="email" value={value ?? ''} onChange={(e) => set(e.target.value)} />
-
       break
-
-
 
     case 'phone':
-
       control = <input {...base} type="tel" value={value ?? ''} onChange={(e) => setCapped(e.target.value)} />
-
       break
-
-
 
     case 'url':
-
       control = <input {...base} type="url" value={value ?? ''} onChange={(e) => set(e.target.value)} />
-
       break
-
-
 
     case 'boolean':
-
       control = (
-
         <label className="toggle">
-
           <input
-
             type="checkbox"
-
             checked={value === true || value === 'true'}
-
             onChange={(e) => set(e.target.checked)}
-
           />
-
           <span className="toggle__track" />
-
           <span className="muted">{value === true || value === 'true' ? 'Yes' : 'No'}</span>
-
         </label>
-
       )
-
       break
-
-
 
     case 'select':
-
       control = (
-
         <select {...base} value={value ?? ''} onChange={(e) => set(e.target.value)}>
-
           <option value="">{field.placeholder || 'Choose'}</option>
-
           {(field.options || []).map((o) => (
-
             <option key={o.value} value={o.value}>{o.label}</option>
-
           ))}
-
         </select>
-
       )
-
       break
-
-
 
     case 'radio':
-
       control = (
-
         <div className="choices">
-
           {(field.options || []).map((o) => (
-
             <label key={o.value} className="choice">
-
               <input
-
                 type="radio"
-
                 name={field.name}
-
                 checked={String(value ?? '') === String(o.value)}
-
                 onChange={() => set(o.value)}
-
               />
-
               {o.label}
-
             </label>
-
           ))}
-
         </div>
-
       )
-
       break
-
-
 
     case 'multiselect':
-
       control = (
-
         <div className="choices">
-
           {(field.options || []).map((o) => (
-
             <label key={o.value} className="choice">
-
               <input
-
                 type="checkbox"
-
                 checked={Array.isArray(value) && value.includes(o.value)}
-
                 onChange={() => toggleIn(o.value)}
-
               />
-
               {o.label}
-
             </label>
-
           ))}
-
         </div>
-
       )
-
       break
 
-
-
     case 'polygon': {
-
       /* The same map the builder draws on. What differs is whether this person
-
          may touch it.
 
-
-
          A boundary the designer drew is the question: it is shown rather than
-
          asked, unless the field says otherwise. But a polygon question with
-
          *nothing* drawn is only a question if somebody can answer it — left
-
          read-only it rendered an empty map with zoom controls and no way to
-
          put a point on it, which is no question at all. So an unanswerable
-
          combination resolves the only way that makes sense.
 
-
-
          `isUsableRing` is the same three-valid-points rule the map draws by,
-
          so "has a boundary" means the same thing here as it does there. */
-
       const hasBoundary = isUsableRing(field.coordinates)
-
       const editable = Boolean(field.editable) || !hasBoundary
 
-
-
       const drawn = Array.isArray(value) && value.length
-
         ? value
-
         : (field.coordinates || [])
-
-
 
       /* No map on the form itself — only the way into one.
 
-
-
          A boundary is unreadable at the size a form field can spare, and
-
          placing points on a thumbnail is guesswork, so the inline map earned
-
          its space by being neither useful to look at nor usable to draw on.
-
          The question's label stays above this (it is rendered outside
-
          `control`), and everything the map can do lives in the sheet. */
-
       control = (
-
         <>
-
           <button
-
             type="button"
-
             className="linkbtn polymap__open"
-
             onClick={() => setMapOpen(true)}
-
           >
-
             Open Map
-
           </button>
 
-
-
           <PolygonSheet
-
             open={mapOpen}
-
             value={drawn}
-
             editable={editable}
-
             title={field.label || 'Map'}
-
+            showArea={field.show_area !== false}
             onSave={(ring) => { set(ring); setMapOpen(false) }}
-
             onClose={() => setMapOpen(false)}
-
           />
-
         </>
-
       )
-
       break
-
     }
-
-
 
     case 'location': {
-
       const at = value && typeof value === 'object' ? value : {}
-
       const part = (key, val) => set({ ...at, [key]: val === '' ? undefined : Number(val) })
-
       control = (
-
         <div className="row row--tight">
-
           <input className="control grow" type="number" step="any" placeholder="Latitude"
-
                  value={at.lat ?? ''} onChange={(e) => part('lat', e.target.value)} />
-
           <input className="control grow" type="number" step="any" placeholder="Longitude"
-
                  value={at.lng ?? ''} onChange={(e) => part('lng', e.target.value)} />
-
           <button
-
             type="button"
-
             className="btn btn--sm"
-
             disabled={!navigator.geolocation}
-
             onClick={() =>
-
               navigator.geolocation.getCurrentPosition((p) =>
-
                 set({ lat: Number(p.coords.latitude.toFixed(6)), lng: Number(p.coords.longitude.toFixed(6)) }),
-
               )
-
             }
-
           >Locate me</button>
-
         </div>
-
       )
-
       break
-
     }
 
-
-
     // A photo, a recording or a document. One control for all three — what
-
     // differs is what it accepts and whether it opens a camera.
-
     case 'image':
-
     case 'audio':
-
     case 'file':
-
       control = (
-
         <MediaField
-
           field={field}
-
           value={value}
-
           onChange={onChange}
-
           error={error}
-
           onPick={media?.onPick}
-
           uploading={media?.uploading}
-
         />
-
       )
-
       break
 
-
-
-    case 'signature':
-
-      control = (
-
-        <input {...base} type="text" placeholder={field.placeholder || 'Type your name to sign'}
-
-               value={value ?? ''} onChange={(e) => set(e.target.value)} />
-
+    case 'label':
+      return (
+        <div className="field field--label">
+          {field.label && <div className="field__label-title">{field.label}</div>}
+          {field.help_text && <div className="field__label-text">{field.help_text}</div>}
+        </div>
       )
 
-      break
-
-
+    case 'banner':
+      return (
+        <div className="field field--banner">
+          {field.banner_url ? (
+            <img className="field__banner-img" src={field.banner_url} alt={field.label || ''} />
+          ) : (
+            <div className="field__banner-empty">{field.label || 'No image set'}</div>
+          )}
+        </div>
+      )
 
     case 'table':
-
-      control = <TableFieldInput field={field} value={value} onChange={onChange} error={error} media={media} />
-
-      break
-
-
-
-    default:
-
-      control = (
-
-        <input {...base} type="text" maxLength={v.max_length ?? undefined}
-
-               value={value ?? ''} onChange={(e) => set(e.target.value)} />
-
+      return (
+        <TableFieldInput
+          field={field}
+          value={value}
+          onChange={onChange}
+          error={error}
+          media={media}
+        />
       )
 
+    case 'signature':
+      control = (
+        <input {...base} type="text" placeholder={field.placeholder || 'Type your name to sign'}
+               value={value ?? ''} onChange={(e) => set(e.target.value)} />
+      )
+      break
+
+    default:
+      control = (
+        <input {...base} type="text" maxLength={v.max_length ?? undefined}
+               value={value ?? ''} onChange={(e) => set(e.target.value)} />
+      )
   }
 
-
-
   return (
-
     <div className="field">
-
-      <label htmlFor={`f_${field.name}`}>
-
+      <label htmlFor={field.name}>
         {field.label}
-
         {field.required && <span className="star-req"> *</span>}
-
+        {ro && <span className="field__ro"> (read-only)</span>}
       </label>
-
       {control}
-
       {field.help_text && <span className="field__note">{field.help_text}</span>}
-
       {error && <span className="field__bad">{error}</span>}
-
     </div>
-
   )
-
 }
-

@@ -270,7 +270,8 @@ def _known_form_ids(cur) -> List[str]:
 def _raw_versions(cur, form_id: str) -> List[Dict[str, Any]]:
     cur.execute(
         """
-        SELECT version_id, form_id, version_no, form_json
+        SELECT version_id, form_id, version_no, form_json,
+               version_tag, version_label, version_description, saved_at
         FROM form_version WHERE form_id = %s ORDER BY version_no DESC
         """,
         (form_id,),
@@ -442,6 +443,10 @@ def get_versions(form_id: str, include_json: bool = False) -> List[Dict[str, Any
             "field_count": len(fj.get("fields") or []),
             "saved_by": fj.get("updated_by") or fj.get("created_by"),
             "renamed_from": fj.get("renamed_from") or None,
+            "version_tag": r.get("version_tag"),
+            "version_label": r.get("version_label"),
+            "version_description": r.get("version_description"),
+            "saved_at": r.get("saved_at").isoformat() if r.get("saved_at") else None,
         }
         if include_json:
             entry["form_json"] = fj
@@ -582,7 +587,7 @@ def create_form(
     with transaction() as cur:
         # Nothing invalid reaches the INSERT below.
         _validate_config(
-            cur, form_json, form_type=form_type, parent_id=parent_id, status=status
+            cur, definition, form_type=form_type, parent_id=parent_id, status=status
         )
         form_id = _next_form_id(cur)
         definition["table_name"] = resolve_table_name(cur, definition["table_name"])
@@ -612,7 +617,10 @@ def create_form(
         row = dict(cur.fetchone())
 
         cur.execute(
-            "INSERT INTO form_version (form_id, version_no, form_json) VALUES (%s, %s, %s)",
+            """INSERT INTO form_version (form_id, version_no, form_json)
+               VALUES (%s, %s, %s)
+               ON CONFLICT (form_id, version_no)
+               DO UPDATE SET form_json = EXCLUDED.form_json""",
             (form_id, 1, Json(definition)),
         )
 
@@ -694,6 +702,9 @@ def update_form(
     renames: Optional[Dict[str, str]] = None,
     whatsapp: Optional[Dict[str, Any]] = None,
     ivr: Optional[Dict[str, Any]] = None,
+    version_tag: Optional[str] = None,
+    version_label: Optional[str] = None,
+    version_description: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Save a new revision.
 
@@ -720,7 +731,7 @@ def update_form(
 
         _validate_config(
             cur,
-            form_json,
+            definition,
             form_id=form_id,
             form_type=form_type,
             parent_id=parent_id,
@@ -791,16 +802,26 @@ def update_form(
 
         if replacing:
             cur.execute(
-                "UPDATE form_version SET form_json = %s "
+                "UPDATE form_version SET form_json = %s, version_tag = %s,"
+                " version_label = %s, version_description = %s,"
+                " saved_at = CURRENT_TIMESTAMP"
                 " WHERE form_id = %s AND version_no = %s",
-                (Json(definition), form_id, version_no),
+                (Json(definition), version_tag, version_label,
+                 version_description, form_id, version_no),
             )
-        # An UPDATE that matched nothing still has to leave a version behind —
-        # a form whose row is missing for any reason gets one rather than none.
         if not replacing or cur.rowcount == 0:
             cur.execute(
-                "INSERT INTO form_version (form_id, version_no, form_json) VALUES (%s, %s, %s)",
-                (form_id, version_no, Json(definition)),
+                "INSERT INTO form_version (form_id, version_no, form_json,"
+                " version_tag, version_label, version_description, saved_at)"
+                " VALUES (%s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)"
+                " ON CONFLICT (form_id, version_no) DO UPDATE"
+                " SET form_json = EXCLUDED.form_json,"
+                "     version_tag = EXCLUDED.version_tag,"
+                "     version_label = EXCLUDED.version_label,"
+                "     version_description = EXCLUDED.version_description,"
+                "     saved_at = EXCLUDED.saved_at",
+                (form_id, version_no, Json(definition),
+                 version_tag, version_label, version_description),
             )
 
         # The keyword that reaches it, beside the questions it asks. The project
@@ -866,6 +887,18 @@ def set_status(form_id: str, status: str) -> Dict[str, Any]:
                 from app.modules.forms.config_validation import validate_publishable
                 validate_publishable(found["form_json"])
 
+                rel = found["form_json"].get("relationship")
+                if rel and rel.get("type") == "child" and rel.get("parent_form_id"):
+                    cur.execute(
+                        "SELECT form_status FROM forms WHERE form_id = %s",
+                        (rel["parent_form_id"],),
+                    )
+                    parent = cur.fetchone()
+                    if not parent or parent["form_status"] != "Active":
+                        raise FormServiceError(
+                            "Cannot publish: the parent form must be published first"
+                        )
+
         cur.execute(
             """
             UPDATE forms SET form_status = %s, updated_on = CURRENT_TIMESTAMP
@@ -920,3 +953,54 @@ def _follow_status_on_channels(form_id: str, status: str) -> None:
                 )
         except Exception:
             logger.exception("Could not sync IVR publication to Indev for %s", form_id)
+
+
+def hard_delete(form_id: str, *, drop_data: bool = False) -> Dict[str, Any]:
+    """Permanently delete a form, its versions, and optionally its data table."""
+    with transaction() as cur:
+        cur.execute("SELECT form_json FROM forms WHERE form_id = %s", (form_id,))
+        row = cur.fetchone()
+        if not row:
+            raise FormNotFound(f"Form {form_id} not found")
+
+        table_name = (row["form_json"] or {}).get("table_name")
+
+        cur.execute("""
+            SELECT tc.table_name, kcu.column_name
+            FROM information_schema.table_constraints tc
+            JOIN information_schema.key_column_usage kcu
+                 ON tc.constraint_name = kcu.constraint_name
+            JOIN information_schema.constraint_column_usage ccu
+                 ON tc.constraint_name = ccu.constraint_name
+            WHERE ccu.table_name = 'forms' AND ccu.column_name = 'form_id'
+              AND tc.constraint_type = 'FOREIGN KEY'
+              AND tc.table_name != 'forms'
+        """)
+        for dep in cur.fetchall():
+            cur.execute(sql.SQL("DELETE FROM {} WHERE {} = %s").format(
+                sql.Identifier(dep["table_name"]),
+                sql.Identifier(dep["column_name"]),
+            ), (form_id,))
+
+        cur.execute(
+            "UPDATE forms SET parent_id = NULL WHERE parent_id = %s", (form_id,))
+        cur.execute("DELETE FROM forms WHERE form_id = %s", (form_id,))
+
+        dropped = False
+        if drop_data and table_name:
+            from app.modules.forms.table_service import sequence_name
+            seq = sequence_name(table_name)
+            cur.execute(sql.SQL("DROP TABLE IF EXISTS {} CASCADE").format(
+                sql.Identifier(table_name)))
+            cur.execute(sql.SQL("DROP SEQUENCE IF EXISTS {}").format(
+                sql.Identifier(seq)))
+            dropped = True
+            logger.info("Dropped data table %s and sequence %s", table_name, seq)
+
+    logger.info("Hard-deleted form %s (data table dropped: %s)", form_id, dropped)
+    return {
+        "form_id": form_id,
+        "deleted": True,
+        "data_table_dropped": dropped,
+        "table_name": table_name,
+    }

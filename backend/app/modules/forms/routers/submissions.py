@@ -175,8 +175,8 @@ def fillable_forms(project: Optional[str], user: Dict[str, Any],
     if not allowed:
         return []
 
-    # Only forms answered on the web or the app. A form built for WhatsApp or
-    # IVR is filled in there, not here; every legacy form is Web / Mobile.
+    # Filter to forms enabled on the requested channel. All forms have web
+    # enabled, so an unfiltered list returns every active form.
     from app.modules.forms import channels
 
     def open_here(form_json):
@@ -234,6 +234,49 @@ def fillable_forms(project: Optional[str], user: Dict[str, Any],
     ]
 
 
+@router.get("/{form_id}/field-values")
+def field_values(
+    form_id: str,
+    field: str = Query(..., description="Field name whose distinct values to return"),
+    label: Optional[str] = Query(None, description="Field name to use as label"),
+    filter_field: Optional[str] = Query(None),
+    filter_value: Optional[str] = Query(None),
+    user: Dict[str, Any] = Depends(needs(RECORDS_VIEW)),
+):
+    """Distinct values from a form's submissions, for data-source dropdowns."""
+    from psycopg2 import sql as psql
+    from app.core.config import settings
+
+    _project_guard(form_id, user)
+    form = form_service.get_form(form_id)
+    table_name = (form.get("form_json") or {}).get("table_name")
+    if not table_name:
+        return []
+
+    label_field = label or field
+    with transaction() as cur:
+        from app.modules.forms.submission_service import table_exists
+        if not table_exists(cur, table_name):
+            return []
+
+        base = psql.SQL(
+            "SELECT DISTINCT form_data->>%s AS val, form_data->>%s AS lbl"
+            " FROM {}.{}"
+        ).format(psql.Identifier(settings.db_schema), psql.Identifier(table_name))
+        params = [field, label_field]
+
+        if filter_field and filter_value:
+            base += psql.SQL(" WHERE form_data->>%s = %s")
+            params += [filter_field, filter_value]
+
+        cur.execute(base + psql.SQL(" ORDER BY lbl"), params)
+        rows = cur.fetchall()
+    return [
+        {"value": r["val"], "label": r["lbl"] or r["val"]}
+        for r in rows if r["val"]
+    ]
+
+
 @router.get("/{form_id}/render")
 def render(
     form_id: str,
@@ -256,14 +299,13 @@ def render(
         )
     form_json = form["form_json"] or {}
 
-    # A form built for WhatsApp or IVR has no web page to fill: say where it is
-    # answered rather than drawing a form whose submission would be refused.
-    from app.modules.forms import channels
-    if not (channels.enabled(form_json, "web") or channels.enabled(form_json, "mobile")):
-        raise HTTPException(status_code=409, detail=(
-            f"This form is answered on "
-            f"{channels.FORM_CHANNEL_NAMES[channels.form_channel(form_json)]}, "
-            "not on the web."))
+    if not (form_json.get("fields") or []):
+        raise HTTPException(
+            status_code=409,
+            detail="This form has no questions and cannot be filled in.")
+
+    # All forms are web-fillable: web is always enabled regardless of the
+    # form's primary channel.
 
     languages = translations.form_languages(form_json)
     chosen = language if language in languages else translations.default_language(form_json)
@@ -425,7 +467,19 @@ def _store(form, user, *, data, language=None, location=None,
 
     # How it arrived was recorded by the submission service, in the same
     # transaction as the answers. Metadata: it changed nothing above.
-    return {**stored, "channel": channel}
+    result = {**stored, "channel": channel}
+
+    # For the cascading fill flow: if this form has children, tell the caller
+    # which child to show next.
+    try:
+        from app.modules.forms import relationships as rel
+        nxt = rel.next_child_for(user, form["form_id"], stored["survey_id"])
+        if nxt:
+            result["next_child"] = nxt
+    except Exception:
+        pass
+
+    return result
 
 
 def _answered(stored: Dict[str, Any], response: Response) -> Dict[str, Any]:
@@ -618,7 +672,7 @@ def records(
         # Whether this account may add to this form — the same answer
         # `POST /submissions` gives, so the button and the endpoint cannot
         # disagree. A reviewer reads a project's work without collecting it.
-        "may_fill": _may_fill(form_id, user),
+        "may_fill": bool(form_json.get("fields")) and _may_fill(form_id, user),
         "total": data["total"],
         "limit": data["limit"],
         "offset": data["offset"],
@@ -828,6 +882,17 @@ def parent_options(
         return rel.parents_for(user, form_id, search=q, limit=limit)
     except rel.RelationshipError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.get("/{form_id}/records/{survey_id}/next-child")
+def next_child(form_id: str, survey_id: str,
+               user: Dict[str, Any] = Depends(needs(RECORDS_CREATE))):
+    """The next child form that needs filling for this submission."""
+    from app.modules.forms import relationships as rel
+
+    _load(form_id, user)
+    return {"survey_id": survey_id,
+            "next_child": rel.next_child_for(user, form_id, survey_id)}
 
 
 @router.get("/{form_id}/records/{survey_id}/children")

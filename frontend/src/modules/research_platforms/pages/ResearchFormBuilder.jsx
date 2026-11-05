@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api.js'
 import { api as formsApi } from '../../forms/api.js'
 import FieldEditor from '../../forms/components/FieldEditor.jsx'
-import LayoutDesigner from '../../forms/components/LayoutDesigner.jsx'
+import CanvasDesigner from '../../forms/components/CanvasDesigner.jsx'
 import FormRenderer from '../../forms/components/FormRenderer.jsx'
 import ConditionEditor from '../../forms/components/ConditionEditor.jsx'
 import LocationSettings from '../../forms/components/LocationSettings.jsx'
@@ -785,7 +785,7 @@ export default function ResearchFormBuilder() {
             {/* Tab Content: Design */}
             {activeTab === 'design' && (
               <div style={{ padding: '18px 20px' }}>
-                <LayoutDesigner
+                <CanvasDesigner
                   layout={form.layout}
                   fields={form.fields}
                   chosen={chosen}

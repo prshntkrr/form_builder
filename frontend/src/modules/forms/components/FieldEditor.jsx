@@ -1,364 +1,323 @@
 import React, { useEffect, useRef, useState } from 'react'
-
-import { DIGITS, NUMERIC, STORAGE, TABLE_COLUMN_TYPES, TEXTUAL, TYPES, WITH_OPTIONS } from '../fieldTypes.js'
-
+import { DIGITS, NUMERIC, STORAGE, TEXTUAL, TYPES, WITH_OPTIONS } from '../fieldTypes.js'
 import PolygonPicker from './PolygonPicker.jsx'
-
 import StandardPicker from './StandardPicker.jsx'
-
+import FieldMasterSuggest from './FieldMasterSuggest.jsx'
 import ConditionEditor from './ConditionEditor.jsx'
-
 import { api } from '../api.js'
-
+import { request } from '../../../core/http.js'
 import CatalogueValues from './CatalogueValues.jsx'
-
 import { useAuth } from '../../../core/auth.jsx'
-
 import { MAX_FIELD_NAME, fieldConfig, fieldHidden, identifier } from '../fieldTypes.js'
-
-
+import { CURRENCIES as CURRENCIES_LIST } from './FieldInput.jsx'
 
 /* The backend's `slugify_identifier`, cap included — see fieldTypes.js. */
-
 const slug = identifier
 
-
+const RESERVED_DB_WORDS = new Set([
+  'survey_id', 'form_id', 'form_data', 'created_on', 'form_version', 'created_by',
+  'parent_survey_id',
+  'select', 'insert', 'update', 'delete', 'drop', 'alter', 'create', 'table',
+  'index', 'column', 'constraint', 'references', 'values', 'default', 'check',
+  'order', 'group', 'where', 'from', 'join', 'on', 'and', 'or', 'not', 'null',
+  'true', 'false', 'primary', 'key', 'foreign', 'unique', 'in', 'is', 'as',
+  'by', 'asc', 'desc', 'limit', 'offset', 'having', 'union', 'all', 'exists',
+  'between', 'like', 'case', 'when', 'then', 'else', 'end', 'cast', 'into',
+  'set', 'user', 'grant', 'revoke', 'trigger', 'view', 'function', 'schema',
+])
 
 /**
-
  * Where this question's choices come from.
-
  *
-
  * Three answers. **On the form** is the ordinary case: the choices are written
-
  * here and travel with the definition. **A CIMMYT Catalogue** and **the crop
-
  * ontologies** both mean the list lives in the database and is read when the
-
  * form is drawn — the form carries a reference, never a copy, so correcting the
-
  * list corrects every form that uses it at once.
-
  *
-
  * A catalogue that depends on another one (districts within a state) offers the
-
  * field it should follow, and the renderer refetches whenever that answer
-
  * changes.
-
  */
-
 function OptionSource({ field, fields, patch }) {
-
   const { can } = useAuth()
-
   const [catalogues, setCatalogues] = useState(null)
 
-
-
   const from = field.options_from
-
   const kind = !from ? 'form' : from.source
 
-
+  const [sourceProjects, setSourceProjects] = useState(null)
+  const [sourceProject, setSourceProject] = useState(from?.project_id || '')
+  const [sourceForms, setSourceForms] = useState(null)
+  const [sourceFields, setSourceFields] = useState([])
 
   // Only when a catalogue is actually in play — most forms never open this.
-
   useEffect(() => {
-
     if (kind !== 'client_catalog' || catalogues || !can.use_client_catalogs) return
-
     api.clientCatalogues().then((r) => setCatalogues(r.catalogs)).catch(() => setCatalogues([]))
-
   }, [kind, catalogues, can.use_client_catalogs])
 
+  useEffect(() => {
+    if (kind !== 'form_submissions' || sourceProjects) return
+    import('../../projects/api.js')
+      .then(({ api: pApi }) => pApi.projects())
+      .then((r) => setSourceProjects(r.projects || []))
+      .catch(() => setSourceProjects([]))
+  }, [kind, sourceProjects])
 
+  useEffect(() => {
+    if (kind !== 'form_submissions' || !sourceProject) { setSourceForms(null); return }
+    import('../../projects/api.js')
+      .then(({ api: pApi }) => pApi.projectForms(sourceProject))
+      .then((r) => setSourceForms(r.forms || []))
+      .catch(() => setSourceForms([]))
+  }, [kind, sourceProject])
+
+  useEffect(() => {
+    if (kind !== 'form_submissions' || !from?.form_id) return setSourceFields([])
+    api.getForm(from.form_id)
+      .then((r) => setSourceFields((r.form_json?.fields || []).filter((f) => f.name)))
+      .catch(() => setSourceFields([]))
+  }, [kind, from?.form_id])
 
   const choose = (next) => {
-
     if (next === 'form') return patch({ options_from: null })
-
     if (next === 'crop_ontology') {
-
       return patch({ options: [], options_from: { source: 'crop_ontology', kind: 'crop' } })
-
     }
-
     if (next === 'data_standard') {
-
       // A published standard's own values. Alpha-2 by default, because that is
-
       // what a country answer is normally stored as: choosing Mexico stores MX.
-
       return patch({
-
         options: [],
-
         options_from: { source: 'data_standard', standard: 'ISO_3166_1',
-
                         code_type: 'alpha_2' },
-
       })
-
     }
-
-    // The choices are the catalogue's, so anything written on the form goes.
-
+    if (next === 'form_submissions') {
+      return patch({ options: [], options_from: { source: 'form_submissions', form_id: '', value_field: '', label_field: '' } })
+    }
     patch({ options: [], options_from: { source: 'client_catalog', catalog: '' } })
-
   }
-
-
 
   const chosen = catalogues?.find((c) => c.catalog_id === from?.catalog)
 
-
-
   return (
-
     <div className="opts">
-
       <span className="minilabel">Choices come from</span>
 
-
-
       <select className="control" aria-label="Choices come from"
-
               value={kind} onChange={(e) => choose(e.target.value)}>
-
         <option value="form">This form</option>
-
         {can.use_client_catalogs && <option value="client_catalog">CIMMYT Catalogue</option>}
-
         {can.use_crop_ontology && <option value="crop_ontology">The crop ontologies</option>}
-
         <option value="data_standard">A published standard</option>
-
+        <option value="form_submissions">Another form's submissions</option>
       </select>
 
-
-
       {kind === 'data_standard' && (
-
         <>
-
           <select
-
             className="control"
-
             aria-label="Standard"
-
             value={from.standard || 'ISO_3166_1'}
-
             onChange={(e) => patch({ options_from: { ...from, standard: e.target.value } })}
-
           >
-
             <option value="ISO_3166_1">ISO 3166-1 (countries)</option>
-
           </select>
-
-
 
           <span className="minilabel">Answers are stored as</span>
-
           <select
-
             className="control"
-
             aria-label="Code type"
-
             value={from.code_type || 'alpha_2'}
-
             onChange={(e) => patch({ options_from: { ...from, code_type: e.target.value } })}
-
           >
-
             <option value="alpha_2">Alpha-2 — MX</option>
-
             <option value="alpha_3">Alpha-3 — MEX</option>
-
             <option value="numeric">Numeric-3 — 484</option>
-
           </select>
-
-
 
           <span className="tiny muted">
-
             The list comes from the Standards database, so it is the same
-
             everywhere and stays current. The answer stored is the code; the
-
             country's name is what people see.
-
           </span>
-
         </>
-
       )}
 
-
-
-      {kind === 'client_catalog' && (
-
+      {kind === 'form_submissions' && from && (
         <>
-
           <select
-
             className="control"
-
-            value={from.catalog || ''}
-
-            onChange={(e) => patch({ options_from: { ...from, catalog: e.target.value } })}
-
+            aria-label="Source project"
+            value={sourceProject}
+            onChange={(e) => {
+              setSourceProject(e.target.value)
+              setSourceForms(null)
+              patch({ options_from: { source: 'form_submissions', form_id: '', value_field: '', label_field: '', project_id: e.target.value } })
+            }}
           >
-
-            <option value="">Choose a CIMMYT Catalogue…</option>
-
-            {(catalogues || []).map((c) => (
-
-              <option key={c.catalog_id} value={c.catalog_id}>
-
-                {c.name} ({c.catalog_id}) — {c.active_count} value
-
-                {c.active_count === 1 ? '' : 's'}
-
-              </option>
-
+            <option value="">Choose a project…</option>
+            {(sourceProjects || []).map((p) => (
+              <option key={p.project_id} value={p.project_id}>{p.name}</option>
             ))}
-
           </select>
 
-
-
-          {/* A catalogue is often used whole and sometimes in part. Codes only
-
-              — see CatalogueValues. */}
-
-          {from.catalog && (
-
-            <CatalogueValues
-
-              catalog={from.catalog}
-
-              allowed={from.allowed_values}
-
-              onChange={(codes) => {
-
-                const { allowed_values, ...rest } = from
-
-                patch({
-
-                  options_from: codes.length ? { ...rest, allowed_values: codes } : rest,
-
-                })
-
-              }}
-
-            />
-
+          {sourceProject && sourceForms && (
+            <select
+              className="control"
+              aria-label="Source form"
+              value={from.form_id || ''}
+              onChange={(e) => patch({ options_from: { ...from, form_id: e.target.value, value_field: '', label_field: '' } })}
+            >
+              <option value="">Choose a form…</option>
+              {sourceForms.map((f) => (
+                <option key={f.form_id} value={f.form_id}>{f.form_title}</option>
+              ))}
+            </select>
           )}
 
-
-
-          {chosen?.parent_catalog_id && (
-
+          {from.form_id && sourceFields.length > 0 && (
             <>
-
-              <span className="minilabel">
-
-                Narrowed by the answer to
-
-              </span>
-
+              <span className="minilabel">Value field (what gets stored)</span>
               <select
-
                 className="control"
-
-                value={from.depends_on || ''}
-
-                onChange={(e) => {
-
-                  const { depends_on, ...rest } = from
-
-                  patch({
-
-                    options_from: e.target.value
-
-                      ? { ...rest, depends_on: e.target.value }
-
-                      : rest,
-
-                  })
-
-                }}
-
+                value={from.value_field || ''}
+                onChange={(e) => patch({ options_from: { ...from, value_field: e.target.value } })}
               >
-
-                <option value="">Nothing — offer the whole list</option>
-
-                {(fields || [])
-
-                  .filter((f) => f.name && f.name !== field.name)
-
-                  .map((f) => (
-
-                    <option key={f.name} value={f.name}>{f.label || f.name}</option>
-
-                  ))}
-
+                <option value="">Choose…</option>
+                {sourceFields.map((f) => (
+                  <option key={f.name} value={f.name}>{f.label || f.name}</option>
+                ))}
               </select>
 
-              <p className="tiny muted">
+              <span className="minilabel">Filter by (optional — cascading)</span>
+              <select
+                className="control"
+                value={from.filter_field || ''}
+                onChange={(e) => {
+                  const nxt = { ...from }
+                  delete nxt.filter_field
+                  delete nxt.depends_on
+                  if (e.target.value) nxt.filter_field = e.target.value
+                  patch({ options_from: nxt })
+                }}
+              >
+                <option value="">No filter</option>
+                {sourceFields.map((f) => (
+                  <option key={f.name} value={f.name}>{f.label || f.name}</option>
+                ))}
+              </select>
 
-                {chosen.name} hangs off {chosen.parent_catalog_id}. Pick the question
-
-                holding that answer and this list narrows to match it.
-
-              </p>
-
+              {from.filter_field && (
+                <>
+                  <span className="minilabel">Depends on (field on this form)</span>
+                  <select
+                    className="control"
+                    value={from.depends_on || ''}
+                    onChange={(e) => {
+                      const nxt = { ...from }
+                      delete nxt.depends_on
+                      if (e.target.value) nxt.depends_on = e.target.value
+                      patch({ options_from: nxt })
+                    }}
+                  >
+                    <option value="">Choose…</option>
+                    {(fields || []).filter((f) => f.name !== field.name).map((f) => (
+                      <option key={f.name} value={f.name}>{f.label || f.name}</option>
+                    ))}
+                  </select>
+                </>
+              )}
             </>
-
           )}
 
+          <span className="tiny muted">
+            Choices come from the submissions of another form — even from a
+            different project.
+          </span>
+        </>
+      )}
 
+      {kind === 'client_catalog' && (
+        <>
+          <select
+            className="control"
+            value={from.catalog || ''}
+            onChange={(e) => patch({ options_from: { ...from, catalog: e.target.value } })}
+          >
+            <option value="">Choose a CIMMYT Catalogue…</option>
+            {(catalogues || []).map((c) => (
+              <option key={c.catalog_id} value={c.catalog_id}>
+                {c.name} ({c.catalog_id}) — {c.active_count} value
+                {c.active_count === 1 ? '' : 's'}
+              </option>
+            ))}
+          </select>
+
+          {/* A catalogue is often used whole and sometimes in part. Codes only
+              — see CatalogueValues. */}
+          {from.catalog && (
+            <CatalogueValues
+              catalog={from.catalog}
+              allowed={from.allowed_values}
+              onChange={(codes) => {
+                const { allowed_values, ...rest } = from
+                patch({
+                  options_from: codes.length ? { ...rest, allowed_values: codes } : rest,
+                })
+              }}
+            />
+          )}
+
+          {chosen?.parent_catalog_id && (
+            <>
+              <span className="minilabel">
+                Narrowed by the answer to
+              </span>
+              <select
+                className="control"
+                value={from.depends_on || ''}
+                onChange={(e) => {
+                  const { depends_on, ...rest } = from
+                  patch({
+                    options_from: e.target.value
+                      ? { ...rest, depends_on: e.target.value }
+                      : rest,
+                  })
+                }}
+              >
+                <option value="">Nothing — offer the whole list</option>
+                {(fields || [])
+                  .filter((f) => f.name && f.name !== field.name)
+                  .map((f) => (
+                    <option key={f.name} value={f.name}>{f.label || f.name}</option>
+                  ))}
+              </select>
+              <p className="tiny muted">
+                {chosen.name} hangs off {chosen.parent_catalog_id}. Pick the question
+                holding that answer and this list narrows to match it.
+              </p>
+            </>
+          )}
 
           <p className="tiny muted">
-
             The CIMMYT Catalogue's values are read when the form is drawn.
-
             Nothing is copied here, so correcting the catalogue corrects this
-
             question too.
-
           </p>
-
         </>
-
       )}
-
-
 
       {kind === 'crop_ontology' && (
-
         <p className="tiny muted">
-
           The crops imported into this installation, read when the form is drawn.
-
         </p>
-
       )}
-
     </div>
-
   )
-
 }
-
-
 
 function TableColumnEditor({ field, patch }) {
   const columns = field.columns || []
@@ -722,1138 +681,691 @@ function TableColumnEditor({ field, patch }) {
 }
 
 export default function FieldEditor({
-
   field,
-
   index,
-
   total,
-
   sections = [],
-
   // Create a section from here and put this question in it: (title, index).
-
   onAddSection,
-
   onSectionChange,     // (index, newSectionKey) — handles rule warnings on section move
-
   allFields = [],      // every field on the form, for a dependent catalogue
-
   formRules = [],      // the form's conditional logic, and how to change it
-
   onRules,
-
   // The wording being edited, and where to write it. For a form in one
-
   // language these are the field itself; for a translation they are that
-
   // language's block, so editing English cannot touch the Spanish underneath.
-
   words,
-
   onWords,
-
   translating = false,
-
   // The settings live beside the list rather than under the row. A row says
-
   // whether it is the one being configured and asks to become it; the panel is
-
   // this same component in `panel` mode, so there is only ever one editor.
-
   selected = false,
-
   onSelect,
-
   mode = 'row',
-
   renamedFrom,        // the key this field had when the form was last saved, if changed
-
   hasResponses,
-
   dragging,
-
   dropEdge,           // 'above' | 'below' — where this row would take the dragged one
-
   onChange,
-
   onMove,
-
   onRemove,
-
   onDragStart,
-
   onDragOver,
-
   onDragEnd,
-
   onDrop,
-
 }) {
-
   // The name of a section being created from this question, or null when the
-
   // picker is just a picker.
-
   const [newSection, setNewSection] = useState(null)
-
-
+  const [suggestOpen, setSuggestOpen] = useState(false)
 
   const row = useRef(null)
-
   const [tab, setTab] = useState('field')
-
+  const [stdBusy, setStdBusy] = useState(false)
+  const [stdNote, setStdNote] = useState('')
   const patch = (changes) => onChange(index, { ...field, ...changes })
 
-
-
   const shown = words || field
-
   const setWords = onWords || patch
-
   const rules = field.validation || {}
 
-
-
   // A phone number is measured in digits, like a number is — so "10" on a mobile
-
   // field means ten digits, however the person spaced it out.
-
   const digits = DIGITS.has(field.type)
-
   const hasLength = digits || TEXTUAL.has(field.type)
 
-
-
   const setRule = (key, raw) => {
-
     const next = { ...rules }
-
     if (raw === '' || raw == null) delete next[key]
-
     else next[key] = key === 'pattern' ? raw : Number(raw)
-
     patch({ validation: next })
-
   }
-
-
 
   const setType = (type) => {
-
     const changes = { type }
-
-    if (WITH_OPTIONS.has(type) && !(field.options || []).length) {
-
-      changes.options = [
-
-        { label: 'First option', value: 'first_option' },
-
-        { label: 'Second option', value: 'second_option' },
-
-      ]
-
-    }
-
     if (type === 'table' && !(field.columns || []).length) {
-
       changes.columns = [
-
-        { key: 'name', label: 'Name', type: 'text', required: true },
-
-        { key: 'date', label: 'Date', type: 'date', required: false },
-
-        { key: 'age', label: 'Age', type: 'number', required: false },
-
-        { key: 'phone', label: 'Phone Number', type: 'phone', required: false },
-
-        { key: 'email', label: 'Email', type: 'email', required: false },
-
+        { key: 'item', label: 'Item Name', type: 'text', required: true },
+        { key: 'quantity', label: 'Quantity', type: 'number', validation: { min: 0 } },
+        { key: 'unit_price', label: 'Unit Price', type: 'decimal', validation: { min: 0 } },
       ]
-
     }
-
+    if (WITH_OPTIONS.has(type) && !(field.options || []).length) {
+      changes.options = [
+        { label: 'First option', value: 'first_option' },
+        { label: 'Second option', value: 'second_option' },
+      ]
+    }
     patch(changes)
-
   }
 
-
+  const pickStandard = (std) => {
+    const fj = std.field_json || {}
+    const fixedName = slug(std.name) || field.name
+    const changes = {
+      label: std.name,
+      name: fixedName,
+      field_id: std.field_id,
+      type: fj.type || std.data_type || 'text',
+      required: fj.required || false,
+      placeholder: fj.placeholder || '',
+      help_text: fj.hint || '',
+    }
+    if (fj.choices?.length) changes.options = fj.choices.map((c) => ({ label: c, value: slug(c) || c }))
+    if (std.ref_ontology) changes.ref_ontology = std.ref_ontology
+    patch(changes)
+    setSuggestOpen(false)
+  }
 
   const editOption = (i, label) => {
-
     const options = [...(field.options || [])]
-
     // Typing over a choice makes it yours: the ontology's URI no longer
-
     // describes it, so carrying that URI would be a lie about where it came from.
-
     options[i] = { label, value: slug(label) || `option_${i + 1}` }
-
     patch({ options, option_source: 'manual' })
-
   }
-
-
 
   const classes = [
-
     'frow',
-
     selected && 'frow--on',
-
     dragging && 'frow--lifted',
-
     dropEdge && `frow--drop-${dropEdge}`,
-
   ].filter(Boolean).join(' ')
 
-
-
   // `panel` is the settings alone, for the column beside the list; `row` is
-
   // the compact line in that list. One component either way, so the two can
-
   // never hold different state or drift apart.
-
   if (mode === 'panel') {
-
     return (
-
       <div className="insp">
-
         <div className="row tabs insp__tabs">
-
-          {[['field', 'Field'], ['variable', 'Variable'], ['standards', 'Standards']]
-
+          {[['field', 'Field'], ['standards', 'Standards']]
             .map(([key, name]) => (
-
               <button
-
                 key={key}
-
                 className={`tab${tab === key ? ' on' : ''}`}
-
                 onClick={() => setTab(key)}
-
               >
-
                 {name}
-
               </button>
-
             ))}
-
         </div>
-
-
 
         {tab === 'field' && (
-
         <div className="frow__more">
-
         <div className="frow__grid">
-
-          <label className="col">
-
+          <div className="col" style={{ position: 'relative' }}>
             <span className="minilabel">Label</span>
-
             <input
-
               className="control"
-
               value={shown.label || ''}
-
               placeholder={translating ? field.label : 'Question'}
-
+              onFocus={() => setSuggestOpen(true)}
+              onBlur={() => setTimeout(() => setSuggestOpen(false), 200)}
               onChange={(e) => {
-
                 const label = e.target.value
-
-                // A translation is wording and nothing else — the stored key is
-
-                // where answers live and must not move with the language.
-
                 if (translating) return setWords({ label })
-
-                patch(field._orig ? { label } : { label, name: slug(label) || field.name })
-
+                patch({ label })
               }}
-
             />
+          </div>
 
-          </label>
-
-
+          {(() => {
+            const isPlaceholder = /^question_\d+$/.test(field.name || '')
+            const displayName = isPlaceholder ? '' : (field.name || '')
+            const nameErrors = []
+            if (displayName && !/^[a-z]/.test(displayName)) nameErrors.push('Must start with a lowercase letter.')
+            if (displayName && /[^a-z0-9_]/.test(displayName)) nameErrors.push('Only lowercase a-z, 0-9 and underscores.')
+            if (displayName && /__/.test(displayName)) nameErrors.push('No consecutive underscores.')
+            if (displayName && /_$/.test(displayName)) nameErrors.push('Must not end with an underscore.')
+            if (RESERVED_DB_WORDS.has(displayName)) nameErrors.push(`"${displayName}" is a reserved database keyword.`)
+            const dup = displayName && allFields.some((f) => f.name === displayName && f !== field)
+            if (dup) nameErrors.push('Another question already uses this name.')
+            const nameOk = displayName.length > 0 && nameErrors.length === 0
+            return (
+              <div className="col" style={{ position: 'relative' }}>
+                <span className="minilabel">Variable name</span>
+                <input
+                  className={`control${nameErrors.length ? ' control--bad' : ''}`}
+                  value={displayName}
+                  maxLength={MAX_FIELD_NAME}
+                  readOnly={!!field._orig}
+                  style={field._orig ? { opacity: 0.7, cursor: 'not-allowed' } : undefined}
+                  placeholder="e.g. farmer_name"
+                  onFocus={() => setSuggestOpen(true)}
+                  onBlur={() => setTimeout(() => setSuggestOpen(false), 200)}
+                  onChange={(e) => {
+                    if (field._orig) return
+                    const raw = e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '').replace(/_{2,}/g, '_')
+                    patch({ name: raw })
+                  }}
+                />
+                {!translating && !field._orig && (
+                  <FieldMasterSuggest query={displayName} onPick={pickStandard} visible={suggestOpen} />
+                )}
+                {field._orig && (
+                  <span className="tiny muted">Locked after save.</span>
+                )}
+                {nameErrors.map((err, i) => (
+                  <span key={i} className="tiny" style={{ color: 'var(--danger, #c33)' }}>{err}</span>
+                ))}
+                {nameOk && (
+                  <span className="tiny" style={{ color: 'var(--success, #396)' }}>Valid</span>
+                )}
+              </div>
+            )
+          })()}
 
           <label className="col">
-
             <span className="minilabel">Type</span>
-
             <select className="control" value={field.type}
-
                     onChange={(e) => setType(e.target.value)}>
-
               {TYPES.map(([value, name]) => (
-
                 <option key={value} value={value}>{name}</option>
-
               ))}
-
             </select>
-
           </label>
 
-
-
           <label className="col">
-
             <span className="minilabel">Placeholder</span>
-
             <input className="control" value={shown.placeholder || ''}
-
                    placeholder={translating ? field.placeholder : ''}
-
                    onChange={(e) => setWords({ placeholder: e.target.value })} />
-
           </label>
-
-
 
           <label className="col">
-
             <span className="minilabel">Hint below the field</span>
-
             <input className="control" value={shown.help_text || ''}
-
                    placeholder={translating ? field.help_text : ''}
-
                    onChange={(e) => setWords({ help_text: e.target.value })} />
-
           </label>
-
-
 
           {(sections.length > 0 || onAddSection) && (
-
             <div className="col">
-
               <span className="minilabel">Section</span>
-
               {newSection === null ? (
-
                 <select
-
                   className="control"
-
                   aria-label="Section"
-
                   value={field.section || ''}
-
                   onChange={(e) => {
-
                     if (e.target.value === '__new__') return setNewSection('')
-
                     const next = e.target.value || null
-
                     if (onSectionChange) onSectionChange(index, next)
-
                     else patch({ section: next })
-
                   }}
-
                 >
-
                   <option value="">No section</option>
-
                   {sections.map((s) => (
-
                     <option key={s.key} value={s.key}>{s.title}</option>
-
                   ))}
-
                   {onAddSection && <option value="__new__">+ New section…</option>}
-
                 </select>
-
               ) : (
-
                 <div className="newsection">
-
                   <input
-
                     className="control"
-
                     aria-label="New section name"
-
                     placeholder="Section name, e.g. Farmer details"
-
                     autoFocus
-
                     value={newSection}
-
                     onChange={(e) => setNewSection(e.target.value)}
-
                     onKeyDown={(e) => {
-
                       if (e.key === 'Enter' && newSection.trim()) {
-
                         e.preventDefault()
-
                         onAddSection(newSection, index)
-
                         setNewSection(null)
-
                       }
-
                       if (e.key === 'Escape') setNewSection(null)
-
                     }}
-
                   />
-
                   <button
-
                     type="button"
-
                     className="btn btn--primary btn--sm"
-
                     disabled={!newSection.trim()}
-
                     onClick={() => { onAddSection(newSection, index); setNewSection(null) }}
-
                   >
-
                     Add
-
                   </button>
-
                   <button type="button" className="btn btn--quiet btn--sm"
-
                           onClick={() => setNewSection(null)}>
-
                     Cancel
-
                   </button>
-
                 </div>
-
               )}
-
             </div>
-
           )}
-
-
 
           {NUMERIC.has(field.type) && (
-
             <>
-
               <label className="col">
-
                 <span className="minilabel">Smallest allowed</span>
-
                 <input className="control" type="number" placeholder="any"
-
                        value={rules.min ?? ''} onChange={(e) => setRule('min', e.target.value)} />
-
               </label>
-
               <label className="col">
-
                 <span className="minilabel">Largest allowed</span>
-
                 <input className="control" type="number" placeholder="any"
-
                        value={rules.max ?? ''} onChange={(e) => setRule('max', e.target.value)} />
-
               </label>
-
             </>
-
           )}
 
+          {(field.type === 'decimal' || field.type === 'currency') && (
+            <label className="col">
+              <span className="minilabel">Max decimal places</span>
+              <input className="control" type="number" min="0" max="10" placeholder="any"
+                     value={field.decimal_places ?? ''} onChange={(e) => patch({ decimal_places: e.target.value ? Number(e.target.value) : null })} />
+            </label>
+          )}
 
+          {field.type === 'currency' && (
+            <label className="col">
+              <span className="minilabel">Currency</span>
+              <select className="control" value={field.currency || ''}
+                      onChange={(e) => patch({ currency: e.target.value || null })}>
+                <option value="">Choose currency</option>
+                {CURRENCIES_LIST.map(([code, name]) => (
+                  <option key={code} value={code}>{name}</option>
+                ))}
+              </select>
+            </label>
+          )}
 
           {hasLength && (
-
             <>
-
               <label className="col">
-
                 <span className="minilabel">{digits ? 'Fewest digits' : 'Shortest answer'}</span>
-
                 <input className="control" type="number" min="1" placeholder="any"
-
                        value={rules.min_length ?? ''} onChange={(e) => setRule('min_length', e.target.value)} />
-
               </label>
-
               <label className="col">
-
                 <span className="minilabel">{digits ? 'Most digits' : 'Longest answer'}</span>
-
                 <input className="control" type="number" min="1" placeholder="any"
-
                        value={rules.max_length ?? ''} onChange={(e) => setRule('max_length', e.target.value)} />
-
               </label>
-
             </>
-
           )}
-
-
 
           {TEXTUAL.has(field.type) && (
-
             <label className="col">
-
               <span className="minilabel">Must match pattern</span>
-
               <input className="control" placeholder="^[0-9]{10}$"
-
                      value={rules.pattern ?? ''} onChange={(e) => setRule('pattern', e.target.value)} />
-
             </label>
-
           )}
 
-
-
           <label className="col">
-
-            <span className="minilabel">Answer</span>
-
-            <label className="insp__check">
-
-              <input type="checkbox" checked={!!field.required}
-
-                     onChange={(e) => patch({ required: e.target.checked })} />
-
-              Required
-
-            </label>
-
+            <span className="minilabel">Default value</span>
+            <input className="control" value={field.default_value ?? ''}
+                   placeholder="Pre-filled when form opens"
+                   onChange={(e) => patch({ default_value: e.target.value || null })} />
           </label>
 
+          <label className="col">
+            <span className="minilabel">Answer</span>
+            <label className="insp__check">
+              <input type="checkbox" checked={!!field.required}
+                     onChange={(e) => patch({ required: e.target.checked })} />
+              Required
+            </label>
+            <label className="insp__check">
+              <input type="checkbox" checked={!!field.read_only}
+                     onChange={(e) => patch({ read_only: e.target.checked })} />
+              Read-only
+            </label>
+            {field.read_only && (
+              <span className="tiny muted">
+                Shown with its default value and cannot be changed by the respondent.
+              </span>
+            )}
+          </label>
 
+          {(field.type === 'file' || field.type === 'image' || field.type === 'audio') && (
+            <>
+              <label className="col">
+                <span className="minilabel">Max files</span>
+                <input className="control" type="number" min="1" max="20" placeholder="1"
+                       value={field.max_files ?? ''} onChange={(e) => patch({ max_files: e.target.value ? Number(e.target.value) : null })} />
+              </label>
+              <label className="col">
+                <span className="minilabel">Max file size (MB)</span>
+                <input className="control" type="number" min="1" placeholder="No limit"
+                       value={field.max_file_size_mb ?? ''} onChange={(e) => patch({ max_file_size_mb: e.target.value ? Number(e.target.value) : null })} />
+              </label>
+              <label className="col">
+                <span className="minilabel">Accepted file types</span>
+                <input className="control"
+                       placeholder={field.type === 'image'
+                         ? '.jpg, .jpeg, .png, .webp, .heic, .gif, .bmp, .svg'
+                         : field.type === 'audio'
+                           ? '.mp3, .wav, .ogg, .webm, .m4a, .aac, .flac'
+                           : '.pdf, .doc, .docx, .xls, .xlsx, .csv, .txt, .ppt, .pptx, .zip'}
+                       value={field.accept ?? ''}
+                       onChange={(e) => patch({ accept: e.target.value || null })} />
+                <span className="tiny muted">Comma-separated extensions. Leave empty to use all formats shown above.</span>
+              </label>
+            </>
+          )}
 
           {/* Out of the form, not out of the definition: the question keeps its
-
               place, its column and every answer already given. Nobody is asked
-
               it — so it is not required of them either, whatever Required says
-
               above; `conditions.hidden` treats it exactly as a rule-hidden
-
               question, on every channel. */}
-
           <label className="col">
-
             <span className="minilabel">Visibility</span>
-
             <label className="insp__check">
-
               <input type="checkbox" checked={fieldHidden(field)}
-
                      onChange={(e) => patch({ config: { ...fieldConfig(field), hide: e.target.checked } })} />
-
               Hide element
-
             </label>
-
             {fieldHidden(field) && (
-
               <span className="tiny muted">
-
                 Hidden: nobody filling the form in sees this question, and it is
-
                 not asked for even if it is marked required. Answers already
-
                 collected are kept.
-
               </span>
-
             )}
-
           </label>
-
         </div>
 
+        {field.type === 'label' && (
+          <div className="insp__note">
+            <p className="tiny muted">
+              A label is display-only — it shows a title and paragraph text between
+              questions. Use the <b>Label</b> field above for the heading and
+              <b>Hint</b> for the body text.
+            </p>
+          </div>
+        )}
 
+        {field.type === 'banner' && (
+          <div className="frow__grid" style={{ marginTop: 8 }}>
+            <label className="col">
+              <span className="minilabel">Image URL</span>
+              <input className="control" value={field.banner_url || ''}
+                     placeholder="https://example.com/image.jpg"
+                     onChange={(e) => patch({ banner_url: e.target.value || null })} />
+            </label>
+            <label className="col">
+              <span className="minilabel">Or upload an image</span>
+              <input type="file" accept="image/*" onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (!file) return
+                const reader = new FileReader()
+                reader.onload = () => patch({ banner_url: reader.result })
+                reader.readAsDataURL(file)
+                e.target.value = ''
+              }} />
+            </label>
+            {field.banner_url && (
+              <div className="col">
+                <img src={field.banner_url} alt="" style={{ maxWidth: '100%', maxHeight: 120, borderRadius: 4 }} />
+              </div>
+            )}
+          </div>
+        )}
 
         {/* A boundary drawn here is part of the question, and it is kept in
-
             the field's own `coordinates`. The backend preserves that key for
-
             polygon fields specifically, so it survives saving and comes back
-
             drawn when the form is opened again. */}
-
         {field.type === 'polygon' && (
-
           <div className="insp__polygon">
-
             {/* Previewed here, drawn full-screen. Nothing reaches the field
-
                 until Save Area, so opening the map and closing it again
-
                 leaves the saved boundary alone. */}
-
             <PolygonPicker
-
               value={field.coordinates || []}
-
               onChange={(coordinates) => patch({ coordinates })}
-
             />
 
-
+            <label className="insp__check">
+              <input
+                type="checkbox"
+                checked={!!field.editable}
+                onChange={(e) => patch({ editable: e.target.checked })}
+              />
+              Let the person filling the form draw their own boundary
+            </label>
 
             <label className="insp__check">
-
               <input
-
                 type="checkbox"
-
-                checked={!!field.editable}
-
-                onChange={(e) => patch({ editable: e.target.checked })}
-
+                checked={field.show_area !== false}
+                onChange={(e) => patch({ show_area: e.target.checked })}
               />
-
-              Let the person filling the form draw their own boundary
-
+              Show calculated area on the map
             </label>
 
-
-
             <p className="tiny muted">
-
               Left unticked, the boundary above is shown as part of the
-
               question and cannot be changed by whoever answers it.
-
             </p>
-
           </div>
-
         )}
-
-
-
-        {WITH_OPTIONS.has(field.type) && (
-
-          <OptionSource field={field} fields={allFields} patch={patch} />
-
-        )}
-
-
-
-        {WITH_OPTIONS.has(field.type) && !field.options_from && (
-
-          <div className="opts">
-
-            <span className="minilabel">Choices</span>
-
-            {(field.options || []).map((o, i) => (
-
-              <div key={i} className="row">
-
-                <input className="control grow" value={o.label} onChange={(e) => editOption(i, e.target.value)} />
-
-                <button
-
-                  className="iconbtn iconbtn--danger"
-
-                  onClick={() => patch({ options: field.options.filter((_, j) => j !== i) })}
-
-                  title="Remove choice"
-
-                >✕</button>
-
-              </div>
-
-            ))}
-
-            <button
-
-              className="btn btn--quiet btn--sm"
-
-              style={{ alignSelf: 'flex-start' }}
-
-              onClick={() => {
-
-                const n = (field.options || []).length + 1
-
-                patch({ options: [...(field.options || []), { label: `Option ${n}`, value: `option_${n}` }] })
-
-              }}
-
-            >Add choice</button>
-
-          </div>
-
-        )}
-
-
 
         {field.type === 'table' && (
-
           <TableColumnEditor field={field} patch={patch} />
-
         )}
 
+        {WITH_OPTIONS.has(field.type) && (
+          <OptionSource field={field} fields={allFields} patch={patch} />
+        )}
 
+        {WITH_OPTIONS.has(field.type) && !field.options_from && (
+          <div className="opts">
+            <span className="minilabel">Choices</span>
+            {(field.options || []).map((o, i) => (
+              <div key={i} className="row">
+                <input className="control grow" value={o.label} onChange={(e) => editOption(i, e.target.value)} />
+                <button
+                  className="iconbtn iconbtn--danger"
+                  onClick={() => patch({ options: field.options.filter((_, j) => j !== i) })}
+                  title="Remove choice"
+                >✕</button>
+              </div>
+            ))}
+            <button
+              className="btn btn--quiet btn--sm"
+              style={{ alignSelf: 'flex-start' }}
+              onClick={() => {
+                const n = (field.options || []).length + 1
+                patch({ options: [...(field.options || []), { label: `Option ${n}`, value: `option_${n}` }] })
+              }}
+            >Add choice</button>
+          </div>
+        )}
 
         {onRules && (
-
           <ConditionEditor
-
             target={{ type: 'field', name: field.name }}
-
             fields={allFields}
-
             rules={formRules}
-
             onChange={onRules}
-
           />
-
         )}
-
-        </div>
-
-        )}
-
-
-
-        {tab === 'variable' && (
-
-        <div className="frow__more">
-
-          <p className="tiny muted">
-
-            How this answer is named and stored. What somebody reads on the form
-
-            is the Field tab; this is what the data becomes.
-
-          </p>
-
-
-
-          <div className="frow__grid">
-
-            <label className="col">
-
-              <span className="minilabel">Variable name</span>
-
-              <input
-
-                className="control"
-
-                value={field.name}
-
-                maxLength={MAX_FIELD_NAME}
-
-                onChange={(e) => patch({ name: slug(e.target.value) })}
-
-              />
-
-              {/* Said while it is being typed, rather than after saving: the
-
-                  server refuses a longer key, and this is the one property a
-
-                  person can hit the limit on. */}
-
-              <span className={`tiny${(field.name || '').length > MAX_FIELD_NAME * 0.8 ? '' : ' muted'}`}>
-
-                {(field.name || '').length} / {MAX_FIELD_NAME} characters
-
-              </span>
-
-            </label>
-
-          </div>
-
-
-
-          <p className="tiny muted">
-
-            The key inside <code>form_data</code> and the column in the flat
-
-            mirror. It never changes with the language, so an answer given in one
-
-            language and one given in another land in the same place.
-
-          </p>
-
-
-
-          {renamedFrom && (
-
-            <p className="tiny muted">
-
-              Renaming from <code>{renamedFrom}</code>
-
-              {hasResponses ? ' — existing answers move across when you save.' : '.'}
-
-            </p>
-
-          )}
-
-
-
-          <div className="insp__facts">
-
-            <div><b>Stored as</b>{STORAGE[field.type]?.[0] || 'string'}</div>
-
-            <div><b>Mirror column</b>{STORAGE[field.type]?.[1] || 'TEXT'}</div>
-
-            <div><b>Answers land in</b>form_data.{field.name}</div>
-
-          </div>
-
-
-
-          {field.options_from && (
-
-            <div className="insp__facts">
-
-              <div><b>Answered from</b>{field.options_from.source === 'client_catalog'
-
-                ? `CIMMYT Catalogue ${field.options_from.catalog}`
-
-                  + (field.options_from.allowed_values?.length
-
-                      ? ` (${field.options_from.allowed_values.length} of its values)` : '')
-
-                : `the imported ${field.options_from.kind}s`}</div>
-
-              {field.options_from.depends_on && (
-
-                <div><b>Narrowed by</b>{field.options_from.depends_on}</div>
-
-              )}
-
-              <div><b>Stored value</b>the source's own code</div>
-
-            </div>
-
-          )}
-
-
-
-          {field.input_unit && (
-
-            <div className="insp__facts">
-
-              <div><b>Collected in</b>{field.input_unit}</div>
-
-            </div>
-
-          )}
-
-
-
-          {field.source && (
-
-            <>
-
-              <span className="minilabel">Where this question came from</span>
-
-              <div className="insp__facts">
-
-                {field.source.source_variable && (
-
-                  <div><b>Workbook variable</b>{field.source.source_variable}</div>
-
-                )}
-
-                {field.source.field_type && (
-
-                  <div><b>Workbook type</b>{field.source.field_type}</div>
-
-                )}
-
-                {field.source.catalog_id && (
-
-                  <div><b>CIMMYT Catalogue</b>{field.source.catalog_id}</div>
-
-                )}
-
-                {field.source.father_list && (
-
-                  <div><b>Parent list</b>{field.source.father_list}</div>
-
-                )}
-
-                {field.source.skip_logic && (
-
-                  <div><b>Condition as written</b>{field.source.skip_logic}</div>
-
-                )}
-
-              </div>
-
-              <p className="tiny muted">
-
-                Read from CIMMYT's workbook and kept as they wrote it.
-
-              </p>
-
-            </>
-
-          )}
-
-        </div>
-
-        )}
-
-
-
-        {tab === 'standards' && (
-
-        <div className="frow__more">
-
-          <StandardPicker
-
-            field={field}
-
-            canLoadOptions={WITH_OPTIONS.has(field.type)}
-
-            onChange={patch}
-
-          />
-
-        </div>
-
-        )}
-
-      </div>
-
-    )
-
-  }
-
-
-
-  return (
-
-    <div
-
-      ref={row}
-
-      className={classes}
-
-      // Anywhere on the row: clicking a question is how you inspect it, and
-
-      // hunting for a small button to do that is a tax on every edit. Selecting
-
-      // rather than toggling, so typing in the label cannot close the panel
-
-      // being typed into.
-
-      onClick={() => onSelect?.(index)}
-
-      onDragOver={(e) => { e.preventDefault(); onDragOver?.(index) }}
-
-      onDrop={(e) => { e.preventDefault(); onDrop?.(index) }}
-
-    >
-
-      <div className="frow__main">
 
         <button
+          type="button"
+          className="btn btn--quiet btn--sm insp__tostandard"
+          disabled={stdBusy}
+          onClick={async () => {
+            setStdBusy(true)
+            setStdNote('')
+            try {
+              const body = {
+                name: field.label || field.name,
+                data_type: field.type || 'text',
+                category: 'native',
+                ref_ontology: null,
+                field_json: {
+                  type: field.type,
+                  label: field.label,
+                  options: field.options || [],
+                  validations: field.validations || {},
+                },
+              }
+              await request('/field-master', { method: 'POST', body: JSON.stringify(body) })
+              setStdNote('Added to field standards.')
+            } catch (e) {
+              setStdNote(e.message || 'Could not add to field standards.')
+            } finally {
+              setStdBusy(false)
+            }
+          }}
+        >
+          {stdBusy && <span className="spin" />}
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+               strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M4 5h13M4 10h13M4 15h8" /><path d="M17 14l3 3 3-3" transform="translate(-4 0)" />
+          </svg>
+          Add to Field Standard
+        </button>
+        {stdNote && <p className="tiny muted">{stdNote}</p>}
+        </div>
+        )}
 
+        {tab === 'standards' && (
+        <div className="frow__more">
+          <StandardPicker
+            field={field}
+            canLoadOptions={WITH_OPTIONS.has(field.type)}
+            onChange={patch}
+          />
+        </div>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div
+      ref={row}
+      className={classes}
+      // Anywhere on the row: clicking a question is how you inspect it, and
+      // hunting for a small button to do that is a tax on every edit. Selecting
+      // rather than toggling, so typing in the label cannot close the panel
+      // being typed into.
+      onClick={() => onSelect?.(index)}
+      onDragOver={(e) => { e.preventDefault(); onDragOver?.(index) }}
+      onDrop={(e) => { e.preventDefault(); onDrop?.(index) }}
+    >
+      <div className="frow__main">
+        <button
           className="grip"
-
           draggable
-
           onDragStart={(e) => {
-
             e.dataTransfer.effectAllowed = 'move'
-
             e.dataTransfer.setData('text/plain', String(index))
-
             if (row.current) e.dataTransfer.setDragImage(row.current, 24, 18)
-
             onDragStart?.(index)
-
           }}
-
           onDragEnd={() => onDragEnd?.()}
-
           onKeyDown={(e) => {
-
             if (e.key === 'ArrowUp') { e.preventDefault(); onMove(index, -1) }
-
             if (e.key === 'ArrowDown') { e.preventDefault(); onMove(index, 1) }
-
           }}
-
           title="Drag to reorder — or use the arrow keys"
-
           aria-label={`Reorder ${field.label || 'question'}, position ${index + 1} of ${total}`}
-
         >⠿</button>
 
-
-
-        <input
-
-          className="frow__name"
-
-          value={shown.label || ''}
-
-          placeholder={translating ? field.label : 'Question'}
-
-          onChange={(e) => {
-
-            const label = e.target.value
-
-            // A translation is wording and nothing else. The key stays what the
-
-            // form was built with, because it is where answers are stored — a
-
-            // Spanish answer and an English one land in the same column.
-
-            if (translating) return setWords({ label })
-
-            // Before the form is saved the key just tracks the label; afterwards
-
-            // it is a real stored key and only changes if you edit it directly.
-
-            patch(field._orig ? { label } : { label, name: slug(label) || field.name })
-
-          }}
-
-        />
-
-
+        <div style={{ position: 'relative', flex: 1 }}>
+          <input
+            className="frow__name"
+            value={shown.label || ''}
+            placeholder={translating ? field.label : 'Question'}
+            onFocus={() => setSuggestOpen(true)}
+            onBlur={() => setTimeout(() => setSuggestOpen(false), 150)}
+            onChange={(e) => {
+              const label = e.target.value
+              if (translating) return setWords({ label })
+              patch({ label })
+            }}
+          />
+        </div>
 
         <select className="frow__type" value={field.type} onChange={(e) => setType(e.target.value)}>
-
           {TYPES.map(([value, name]) => (
-
             <option key={value} value={value}>{name}</option>
-
           ))}
-
         </select>
 
-
-
         <label className={`frow__req${field.required ? ' on' : ''}`}>
-
           <input type="checkbox" checked={!!field.required} onChange={(e) => patch({ required: e.target.checked })} />
-
           Required
-
         </label>
 
-
-
         {/* Said on the row, not only inside the question: a hidden question is
-
             still listed here — that is how it gets un-hidden — and without
-
             this it would look like every other one. */}
-
         {fieldHidden(field) && (
-
           <span className="pill frow__hidden" title="Hidden from the form. Open the question to show it again.">
-
             Hidden
-
           </span>
-
         )}
-
-
 
         {/* Which standards this question carries, without having to open it. */}
-
         {(field.semantic_concept || field.data_standard || field.crop_ontology) && (
-
           <span className="frow__std" title={[
-
             field.semantic_concept && `${field.semantic_concept.standard}: ${field.semantic_concept.label || field.semantic_concept.uri}`,
-
             field.data_standard && `${field.data_standard.standard}: ${field.data_standard.variable_name} (${field.data_standard.variable_code})`,
-
             field.crop_ontology && `${field.crop_ontology.crop || 'Crop'}: ${field.crop_ontology.trait_name || field.crop_ontology.variable_name} (${field.crop_ontology.variable_id})`,
-
           ].filter(Boolean).join('  ·  ')}>
-
             {field.semantic_concept && <span className="pill">{field.semantic_concept.standard}</span>}
-
             {field.data_standard && (
-
               <span className="pill pill--std">
-
                 {field.data_standard.variable_code || field.data_standard.standard}
-
               </span>
-
             )}
-
             {field.crop_ontology && (
-
               <span className="pill pill--crop">
-
                 {field.crop_ontology.crop || field.crop_ontology.ontology_id}
-
               </span>
-
             )}
-
           </span>
-
         )}
 
-
-
         <span className="frow__acts">
-
           {/* Not a chevron — the type dropdown next to it already has one. */}
-
           <button
-
             className={`iconbtn${selected ? ' iconbtn--on' : ''}`}
-
             title="Settings — placeholder, hint, limits, choices, standards, logic"
-
             aria-pressed={selected}
-
           >⋯</button>
-
           <button
-
             className="iconbtn iconbtn--danger"
-
             // Not through the row's select handler: choosing a question and
-
             // deleting it are different intents, and the click would otherwise
-
             // select the row on its way out of existence.
-
             onClick={(e) => { e.stopPropagation(); onRemove(index) }}
-
             title="Delete question"
-
           >✕</button>
-
         </span>
-
       </div>
 
-
-
     </div>
-
   )
-
 }
-

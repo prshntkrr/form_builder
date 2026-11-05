@@ -112,33 +112,30 @@ def create(req: CreateProjectRequest, user: Dict[str, Any] = Depends(needs(PROJE
 def project_roles(user: Dict[str, Any] = Depends(current_user)):
     """The roles a project membership can carry.
 
-    Derived, not listed: a role qualifies by holding at least one permission
-    from the projects catalogue. So an installation that invents "Field
-    supervisor" and gives it project permissions gets it here without anybody
-    editing this file, and nothing hard-codes the three seeded names.
-
-    Names and labels only — the same catalogue `/api/auth/me` already reports.
+    Every role that is not one of the two fixed system roles (Administrator,
+    Standard User) is a project role — regardless of which permissions it holds.
     """
     from app.core.database import transaction
-    from app.modules.projects import permissions as catalogue
+    from app.modules.projects.permissions import SYSTEM_ROLE_NAMES
 
     with transaction() as cur:
         cur.execute(
             """
             SELECT r.role_id, r.name, r.label, r.description,
-                   ARRAY_AGG(rp.permission ORDER BY rp.permission) AS permissions
+                   COALESCE(
+                       (SELECT array_agg(rp.permission ORDER BY rp.permission)
+                        FROM role_permission rp WHERE rp.role_id = r.role_id),
+                       ARRAY[]::varchar[]
+                   ) AS permissions
             FROM   app_role r
-            JOIN   role_permission rp ON rp.role_id = r.role_id
-            GROUP  BY r.role_id, r.name, r.label, r.description
+            WHERE  r.name NOT IN %s
             ORDER  BY r.label
-            """
+            """,
+            (tuple(SYSTEM_ROLE_NAMES),),
         )
         roles = [dict(row) for row in cur.fetchall()]
 
-    # Only roles that mean nothing outside a project. The administrator holds
-    # every permission there is, project ones included, and belongs on the
-    # Users page rather than in a membership dropdown.
-    return {"roles": [r for r in roles if catalogue.is_project_role(r["permissions"])]}
+    return {"roles": roles}
 
 
 @router.get("/{project_id}")
@@ -227,16 +224,20 @@ def candidates(
     with transaction() as cur:
         cur.execute(
             """
-            SELECT u.user_id, u.email, u.full_name
+            SELECT u.user_id, u.email, u.full_name, u.phone, u.username
             FROM   app_user u
             WHERE  u.is_active
               AND  NOT EXISTS (SELECT 1 FROM project_member m
                                WHERE m.project_id = %s AND m.user_id = u.user_id)
-              AND  (%s = '%%%%' OR lower(u.email) LIKE %s OR lower(u.full_name) LIKE %s)
+              AND  (%s = '%%%%'
+                    OR lower(u.email) LIKE %s
+                    OR lower(u.full_name) LIKE %s
+                    OR lower(u.phone) LIKE %s
+                    OR lower(u.username) LIKE %s)
             ORDER  BY u.full_name, u.email
             LIMIT  50
             """,
-            (project_id, wanted, wanted, wanted),
+            (project_id, wanted, wanted, wanted, wanted, wanted),
         )
         return {"candidates": [dict(row) for row in cur.fetchall()]}
 
@@ -312,11 +313,8 @@ def forms(project_id: str,
                f.updated_on,
                (SELECT COUNT(*) FROM form_assignment a
                 WHERE a.form_id = f.form_id) AS assignment_count,
-               -- Read from the definition where the relationship already lives.
-               -- Nothing here configures one; a screen listing forms just needs
-               -- to be able to say which are children of which.
+               f.form_json ->> 'version' AS version,
                f.form_json -> 'relationship' ->> 'parent_form_id' AS parent_form_id,
-               -- The two keys that say which channel the form is built for.
                f.form_json -> 'channel' AS channel_declared,
                f.form_json -> 'channels' AS channels_profile
         FROM   forms f
@@ -447,3 +445,17 @@ def rotate_api_key(project_id: str, key_id: str,
         return api_key_service.rotate_key(key_id, project_id, auth_service.display_name(user))
     except api_key_service.KeyError_:
         raise HTTPException(status_code=404, detail="Key not found")
+
+
+@router.delete("/{project_id}")
+def delete_project(project_id: str,
+                   user: Dict[str, Any] = Depends(needs("users.manage"))):
+    """Permanently delete a project. Admin only.
+
+    Members, groups, and API keys cascade. Forms become system forms
+    (project_id set to NULL by the FK constraint).
+    """
+    deleted = project_service.delete_project(project_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return {"project_id": project_id, "deleted": True}

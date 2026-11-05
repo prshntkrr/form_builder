@@ -148,6 +148,14 @@ Return ONLY a JSON object with exactly this shape:
       "validation": {{"min": null, "max": null, "min_length": null,
                      "max_length": null, "pattern": null, "step": null}}
     }}
+  ],
+  "rules": [
+    {{
+      "conditions": [{{"field": "field_name", "operator": "equals", "value": "some_value"}}],
+      "logic": "AND",
+      "action": "show",
+      "target": {{"type": "field", "name": "target_field_name"}}
+    }}
   ]
 }}
 
@@ -196,7 +204,7 @@ Rules:
     "target" is {{"type": "field", "name": "..."}} for one question,
              {{"type": "section", "key": "..."}} for a whole section,
              or {{"type": "form"}} for the rest of the questionnaire.
-    "action" is "show" or "hide".
+    "action" is "show", "hide", or "require" (makes a field required when conditions hold).
     "logic" is "AND" or "OR" across the conditions.
     "operator" is one of: {", ".join(SUPPORTED_OPERATORS)}.
   "is_empty" and "is_not_empty" take no "value"; every other operator needs one.

@@ -33,6 +33,37 @@
 .pill--archived { background: var(--paper); color: var(--ink-3); }
 .pill--suspended { background: #fdecec; color: #8a2d2d; border-color: transparent; }
 
+.review__bulk {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px; margin-bottom: 12px;
+  background: var(--bg-raised); border: 1px solid var(--line); border-radius: 6px;
+}
+.review__group { margin-bottom: 16px; }
+.review__group-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px; cursor: pointer; user-select: none;
+  background: var(--bg-raised); border: 1px solid var(--line); border-radius: 6px 6px 0 0;
+}
+.review__group-head + .tablebox { border-top: none; }
+.review__chev { font-size: 11px; color: var(--ink-3); width: 14px; }
+
+.review__form-list { display: flex; flex-direction: column; gap: 8px; }
+.review__form-card {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 18px; border: 1px solid var(--line); border-radius: 6px;
+  cursor: pointer; transition: background 0.1s;
+}
+.review__form-card:hover { background: var(--bg-raised); }
+.review__form-count {
+  font-size: 13px; font-weight: 600; color: var(--ink-2);
+  background: var(--bg-raised); padding: 3px 10px; border-radius: 12px;
+}
+.review__pager {
+  display: flex; align-items: center; justify-content: center;
+  gap: 12px; margin-top: 14px; padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
 /* Which context a page belongs to, said once at the top of it. */
 .context {
   font-size: 12.5px; color: var(--ink-3);

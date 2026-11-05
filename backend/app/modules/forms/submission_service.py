@@ -202,6 +202,10 @@ def _check_field(
     name = field_name(field)
     label = field.get("label") or name
     spec = get_type(field.get("type") or "text")
+
+    if spec.display_only:
+        return _NOT_STORED, None
+
     raw = normalize_submission_value(field.get("type") or "text", raw)
 
     if not_applicable:
@@ -365,13 +369,17 @@ def validate_payload(
     # arrival. Reading the payload, not `clean`: a condition is about what the
     # person answered, and every answer arrives together.
     not_applicable = set(conditions.hidden(form_json, normalized_payload)["fields"])
+    cond_required = conditions.conditionally_required(form_json, normalized_payload)
 
     for field in form_json.get("fields") or []:
         name = field_name(field)
         if not name:
             continue
+        check_field = field
+        if name in cond_required and not field.get("required"):
+            check_field = {**field, "required": True}
         stored, error = _check_field(
-            field, normalized_payload.get(name), normalized_payload, language,
+            check_field, normalized_payload.get(name), normalized_payload, language,
             name in not_applicable)
         if stored is not _NOT_STORED:
             if stored is None:

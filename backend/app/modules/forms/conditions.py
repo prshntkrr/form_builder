@@ -126,7 +126,7 @@ OPERATORS = {
 # the builder hides the box for it.
 UNARY = ("is_empty", "is_not_empty")
 
-ACTIONS = ("show", "hide")
+ACTIONS = ("show", "hide", "require")
 LOGIC = ("AND", "OR")
 TARGET_TYPES = ("field", "section", "form")
 
@@ -254,6 +254,27 @@ def hidden(form_json: Dict[str, Any], answers: Dict[str, Any]) -> Dict[str, Any]
         "sections": sorted(hidden_sections),
         "form": form_hidden,
     }
+
+
+def conditionally_required(form_json: Dict[str, Any], answers: Dict[str, Any]) -> Set[str]:
+    """Fields made required by a 'require' rule whose conditions hold."""
+    rules = [r for r in (form_json.get("rules") or []) if isinstance(r, dict)]
+    required: Set[str] = set()
+    for rule in rules:
+        action = _text(rule.get("action")).lower()
+        if action != "require":
+            continue
+        if not evaluate_rule(rule, answers):
+            continue
+        target = rule.get("target")
+        if not isinstance(target, dict):
+            continue
+        kind = _text(target.get("type")).lower()
+        if kind == "field":
+            name = _text(target.get("name"))
+            if name:
+                required.add(name)
+    return required
 
 
 def controlling_fields(rules: List[Dict[str, Any]]) -> Set[str]:

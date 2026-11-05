@@ -22,6 +22,9 @@ export const api = {
   updateProject: (projectId, changes) =>
     request(`/projects/${projectId}`, { method: 'PATCH', body: JSON.stringify(changes) }),
 
+  deleteProject: (projectId) =>
+    request(`/projects/${projectId}`, { method: 'DELETE' }),
+
   // The roles a membership can carry. Derived by the backend from which roles
   // hold project permissions, so nothing here names one.
   projectRoles: () => request('/projects/roles'),
@@ -78,8 +81,8 @@ export const api = {
   // may read. Sent as query parameters so the narrowing happens in SQL, before
   // the row limit — filtering a page of fifty in the browser would show ten of
   // sixty matching rows and call it the answer.
-  projectSubmissions: (projectId, { status, limit, formId, channel } = {}) =>
-    request(`/projects/${projectId}/submissions${q({ status, limit, form_id: formId, channel })}`),
+  projectSubmissions: (projectId, { status, limit, offset, formId, channel } = {}) =>
+    request(`/projects/${projectId}/submissions${q({ status, limit, offset, form_id: formId, channel })}`),
 
   submissionStatus: (formId, surveyId) => request(`/submissions/${formId}/${surveyId}`),
 

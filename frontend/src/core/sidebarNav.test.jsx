@@ -1,8 +1,9 @@
 /**
- * The sidebar's system navigation — a flat list of links.
+ * The sidebar's system navigation — collapsible groups.
  *
- * Administrative items (Projects, Roles, Users, Channel routing) are in the
- * topbar admin menu. The sidebar shows configuration and data links flat.
+ * Configuration, Data & Channels and Administration, each a heading with its
+ * links. A module declares which group its links join; core defines the groups.
+ * A link is gated by the same capability flag as the screen behind it.
  */
 import { describe, expect, test } from 'vitest'
 
@@ -18,18 +19,22 @@ const CAN = {
 const LIVE = ['forms', 'dashboards', 'external_db', 'projects']
 
 describe('sidebar system nav', () => {
-  test('the sidebar holds configuration and data items', () => {
+  test('groups are Configuration, Data & Channels, Administration', () => {
     const groups = moduleNavItems(LIVE, CAN, CORE_NAV_ITEMS)
-    const all = groups.flatMap((g) => g.items.map((i) => i.label))
-    expect(all).toEqual([
-      'CIMMYT standard', 'Catalogue', 'Standards',
-      'External database import',
-    ])
+    expect(groups.map((g) => g.label)).toEqual(['Configuration', 'Data & Channels', 'Administration'])
   })
 
-  test('links are gated by capability flags', () => {
+  test('each group holds its own links, in order', () => {
+    const groups = moduleNavItems(LIVE, CAN, CORE_NAV_ITEMS)
+    const by = (key) => groups.find((g) => g.key === key).items.map((i) => i.label)
+    expect(by('configuration')).toEqual(['Standard Forms', 'CIMMYT standard', 'Catalogue', 'Standards'])
+    expect(by('data')).toEqual(['External database import'])
+    expect(by('administration')).toEqual(['Channel routing', 'Projects', 'Roles', 'Users'])
+  })
+
+  test('links are gated by capability flags (Projects needs none and stays)', () => {
     const groups = moduleNavItems(LIVE, {}, CORE_NAV_ITEMS)
-    const all = groups.flatMap((g) => g.items)
-    expect(all).toEqual([])
+    const all = groups.flatMap((g) => g.items).map((i) => i.label)
+    expect(all).toEqual(['Projects'])
   })
 })

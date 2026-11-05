@@ -2,6 +2,9 @@ import React, { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
 import { api } from '../api.js'
+import { api as formApi } from '../../forms/api.js'
+import { useAuth } from '../../../core/auth.jsx'
+import { useTranslation } from '../../../core/language.jsx'
 import { FORM_CHANNEL_NAMES } from '../../forms/channelCapabilities.js'
 import { formTree, hasHierarchy } from '../../forms/formTree.js'
 
@@ -18,11 +21,16 @@ const MANAGE = 'project.forms.manage'
  */
 export default function ProjectForms({ projectId, projectName, can }) {
   const navigate = useNavigate()
+  const { t } = useTranslation()
+  const { can: accountCan } = useAuth()
+  const isAdmin = !!accountCan.manage_users
 
   const [forms, setForms] = useState(null)
   const [everything, setEverything] = useState(false)
   const [error, setError] = useState('')
   const [assigning, setAssigning] = useState(null)
+  const [deleting, setDeleting] = useState(null)
+  const [deleteBusy, setDeleteBusy] = useState(false)
 
   const load = () => {
     setError('')
@@ -31,13 +39,27 @@ export default function ProjectForms({ projectId, projectName, can }) {
       .catch((e) => { setForms([]); setError(e.message) })
   }
 
+  const confirmDelete = async (dropData) => {
+    setDeleteBusy(true)
+    try {
+      await formApi.hardDeleteForm(deleting.form_id, dropData)
+      setDeleting(null)
+      load()
+    } catch (e) {
+      setError(e.message)
+      setDeleting(null)
+    } finally {
+      setDeleteBusy(false)
+    }
+  }
+
   useEffect(load, [projectId])
 
   return (
     <section>
       <div className="page-head">
         <div>
-          <h2>Forms</h2>
+          <h2>{t('label.forms')}</h2>
           <p className="lede">
             {everything
               ? 'Every form in this project.'
@@ -48,7 +70,7 @@ export default function ProjectForms({ projectId, projectName, can }) {
           <div className="row">
             <button className="btn btn--primary"
                     onClick={() => navigate(`/builder?project=${projectId}`)}>
-              Create form
+              {t('label.create.form')}
             </button>
           </div>
         )}
@@ -82,7 +104,7 @@ export default function ProjectForms({ projectId, projectName, can }) {
         <div className="tablebox">
           <table className="data">
             <thead>
-              <tr><th>Form</th><th>Status</th><th>Channel</th><th /></tr>
+              <tr><th>{t('label.form')}</th><th>{t('label.status')}</th><th>{t('label.channel')}</th><th /></tr>
             </thead>
             <tbody>
               {/* Arranged by which form hangs off which, not flat: a child
@@ -127,22 +149,28 @@ export default function ProjectForms({ projectId, projectName, can }) {
                   <td className="tiny">{FORM_CHANNEL_NAMES[f.channel] || FORM_CHANNEL_NAMES.web_mobile}</td>
                   <td className="cat__actions">
                     <Link className="btn btn--quiet btn--sm"
-                          to={`/forms/${f.form_id}/preview`}>Open</Link>
+                          to={`/forms/${f.form_id}/preview`}>{t('button.open')}</Link>
 
                     {f.form_status === 'Active' && (
                       <Link className="btn btn--quiet btn--sm"
-                            to={`/f/${f.form_id}`}>Fill</Link>
+                            to={`/f/${f.form_id}`}>{t('label.fill')}</Link>
                     )}
 
                     {can(MANAGE) && (
                       <Link className="btn btn--quiet btn--sm"
-                            to={`/forms/${f.form_id}/questions`}>Edit</Link>
+                            to={`/forms/${f.form_id}/questions`}>{t('label.edit')}</Link>
                     )}
 
                     {can(ASSIGN) && (
                       <button className="btn btn--quiet btn--sm" onClick={() => setAssigning(f)}>
-                        Who can fill it
+                        {t('label.who.can.fill')}
                       </button>
+                    )}
+
+                    {isAdmin && (
+                      <button className="btn btn--quiet btn--sm"
+                              title="More actions"
+                              onClick={() => setDeleting(f)}>⋮</button>
                     )}
                   </td>
                 </tr>
@@ -158,6 +186,41 @@ export default function ProjectForms({ projectId, projectName, can }) {
           form={assigning}
           onClose={() => setAssigning(null)}
         />
+      )}
+
+      {deleting && (
+        <div className="sheet" onMouseDown={() => !deleteBusy && setDeleting(null)}>
+          <div className="sheet__panel" role="dialog" aria-modal="true"
+               onMouseDown={(e) => e.stopPropagation()}
+               style={{ maxWidth: 440 }}>
+            <div className="sheet__head">
+              <h2>Delete form</h2>
+              <p className="muted">{deleting.form_title}</p>
+            </div>
+            <div className="sheet__body">
+              <p>This will permanently delete the form definition and all its versions.
+                 This cannot be undone.</p>
+              <p className="tiny muted" style={{ marginTop: 8 }}>
+                You can also choose to drop the data table (all collected responses).
+              </p>
+              {error && <div className="note note--bad" style={{ marginTop: 8 }}>{error}</div>}
+            </div>
+            <div className="sheet__foot" style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn btn--quiet" disabled={deleteBusy}
+                      onClick={() => setDeleting(null)}>Cancel</button>
+              <button className="btn btn--danger" disabled={deleteBusy}
+                      onClick={() => confirmDelete(false)}>
+                {deleteBusy && <span className="spin" />}
+                Delete form
+              </button>
+              <button className="btn btn--danger" disabled={deleteBusy}
+                      onClick={() => confirmDelete(true)}>
+                {deleteBusy && <span className="spin" />}
+                Delete form + data
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </section>
   )

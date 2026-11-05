@@ -159,8 +159,11 @@ async function builder() {
 async function aQuestionIn(user) {
   await builder()
   await user.click(screen.getByRole('button', { name: 'Start blank' }))
-  await user.click(screen.getByRole('radio', { name: /Web \/ Mobile/ }))
-  await user.click(screen.getByRole('button', { name: 'Add a question' }))
+  // "Web / Mobile" is now Web (always on) + the "Mobile" additional channel.
+  await user.click(screen.getByRole('radio', { name: /^Mobile$/ }))
+  // Add a question from the Widget palette; the canvas selects it, so its
+  // configuration opens in the inspector.
+  await user.click(screen.getByRole('button', { name: 'Short text' }))
 }
 
 const stored = async (user) => {
@@ -180,9 +183,8 @@ describe('the builder', () => {
     const user = userEvent.setup()
     await aQuestionIn(user)
 
-    // The row in the list and the inspector both offer the question; either
-    // will do, and typing in one shows in the other.
-    await user.type(screen.getAllByPlaceholderText('Question')[0], LONG_QUESTION)
+    // The inspector's Label field carries the question's wording.
+    await user.type(screen.getByLabelText('Label'), LONG_QUESTION)
 
     const [field] = (await stored(user)).fields
     expect(field.label).toBe(LONG_QUESTION)

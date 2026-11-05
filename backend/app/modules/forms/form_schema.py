@@ -485,6 +485,7 @@ def _normalize_semantic_concept(raw: Dict[str, Any]) -> Optional[Dict[str, str]]
 CROP_ONTOLOGY_SOURCE = "crop_ontology"
 CLIENT_CATALOG_SOURCE = "client_catalog"
 DATA_STANDARD_SOURCE = "data_standard"
+FORM_SUBMISSIONS_SOURCE = "form_submissions"
 
 # What a `data_standard` source may name. One entry per standard whose values a
 # field can be drawn from — a name the caller sends is looked up here and never
@@ -495,7 +496,7 @@ STANDARD_SOURCES = {
                    "default_code_type": "alpha_2"},
 }
 
-OPTION_SOURCES = (CROP_ONTOLOGY_SOURCE, CLIENT_CATALOG_SOURCE, DATA_STANDARD_SOURCE)
+OPTION_SOURCES = (CROP_ONTOLOGY_SOURCE, CLIENT_CATALOG_SOURCE, DATA_STANDARD_SOURCE, FORM_SUBMISSIONS_SOURCE)
 
 
 def _normalize_options_from(raw: Any) -> Optional[Dict[str, str]]:
@@ -532,6 +533,28 @@ def _normalize_options_from(raw: Any) -> Optional[Dict[str, str]]:
         return None
 
     described: Dict[str, str] = {"source": source}
+
+    if source == FORM_SUBMISSIONS_SOURCE:
+        form_id = str(raw.get("form_id") or "").strip()
+        if not form_id:
+            return None
+        described["form_id"] = form_id
+        project_id = str(raw.get("project_id") or "").strip()
+        if project_id:
+            described["project_id"] = project_id
+        value_field = str(raw.get("value_field") or "").strip()
+        label_field = str(raw.get("label_field") or "").strip()
+        if value_field:
+            described["value_field"] = value_field
+        if label_field:
+            described["label_field"] = label_field
+        depends_on = slugify_identifier(raw.get("depends_on") or "", "")
+        if depends_on:
+            described["depends_on"] = depends_on
+            filter_field = str(raw.get("filter_field") or "").strip()
+            if filter_field:
+                described["filter_field"] = filter_field
+        return described
 
     if source == DATA_STANDARD_SOURCE:
         standard = str(raw.get("standard") or "").strip().upper()
@@ -749,8 +772,8 @@ def normalize_form(raw: Any, fallback_title: str = "Untitled Form") -> Dict[str,
             break
 
     raw_fields = raw.get("fields") or raw.get("questions") or raw.get("elements") or []
-    if not isinstance(raw_fields, list) or not raw_fields:
-        raise FormSchemaError("Form definition must contain at least one field")
+    if not isinstance(raw_fields, list):
+        raise FormSchemaError("Form definition fields must be a list")
 
     taken: set = set()
     fields: List[Dict[str, Any]] = []
@@ -759,9 +782,6 @@ def normalize_form(raw: Any, fallback_title: str = "Untitled Form") -> Dict[str,
         if normalized:
             normalized["order"] = len(fields) + 1
             fields.append(normalized)
-
-    if not fields:
-        raise FormSchemaError("No usable fields could be read from the form definition")
 
     title = str(raw.get("title") or raw.get("form_title") or fallback_title).strip()[:200]
     sections = _normalize_sections(raw.get("sections"), fields)
@@ -1157,7 +1177,11 @@ def _normalize_relationship(raw: Any) -> Optional[Dict[str, str]]:
         # mean the same thing: this form stands on its own.
         return None
 
-    return {"type": "child", "parent_form_id": parent}
+    result = {"type": "child", "parent_form_id": parent}
+    inherit = raw.get("inherit_fields")
+    if isinstance(inherit, list):
+        result["inherit_fields"] = [str(f).strip() for f in inherit if isinstance(f, str) and str(f).strip()]
+    return result
 
 
 def is_child(form_json: Any) -> bool:
