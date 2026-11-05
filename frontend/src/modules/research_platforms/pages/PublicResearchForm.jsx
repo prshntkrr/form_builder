@@ -571,10 +571,7 @@ export default function PublicResearchForm() {
         }}
       >
         <FormRenderer
-          formJson={{
-            ...form.form_json,
-            submit_label: form.form_json?.submit_label || 'Submit Evaluation',
-          }}
+          formJson={form.form_json}
           values={values}
           errors={errors}
           submitting={submitting}
@@ -583,7 +580,20 @@ export default function PublicResearchForm() {
           languageNames={form.languages}
           onChange={handleFieldChange}
           onSubmit={handleSubmit}
+          hideSubmit={true}
         />
+
+        <div style={{ marginTop: 28, paddingTop: 18, borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+          <button
+            type="button"
+            className="btn btn--primary"
+            style={{ minWidth: 160, padding: '10px 20px', fontSize: 15, fontWeight: 700 }}
+            disabled={submitting}
+            onClick={handleSubmit}
+          >
+            {submitting ? 'Recording Submission...' : 'Submit Evaluation'}
+          </button>
+        </div>
       </div>
     </main>
   )
