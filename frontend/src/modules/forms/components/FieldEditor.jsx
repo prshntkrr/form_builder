@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { DIGITS, NUMERIC, STORAGE, TEXTUAL, TYPES, WITH_OPTIONS } from '../fieldTypes.js'
+import { DIGITS, NUMERIC, STORAGE, TEXTUAL, TYPES, WITH_OPTIONS, TABLE_COLUMN_TYPES } from '../fieldTypes.js'
 import PolygonPicker from './PolygonPicker.jsx'
 import StandardPicker from './StandardPicker.jsx'
 import FieldMasterSuggest from './FieldMasterSuggest.jsx'
