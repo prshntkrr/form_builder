@@ -30,5 +30,6 @@ MODULE = Module(
         bootstrap.ensure_data_source_table,
         bootstrap.ensure_data_source_project_key,
         bootstrap.ensure_data_source_backfill,
+        bootstrap.backfill_created_by,
     ],
 )

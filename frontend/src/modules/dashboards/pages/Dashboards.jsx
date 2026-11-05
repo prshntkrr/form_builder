@@ -3860,6 +3860,7 @@ export default function Dashboards() {
       setShowVersionHistory(false);
       setShowDeleteModal(false);
       setWidgetData({});
+      setView("list");
 
       await loadSavedDashboards();
     } catch (e) {
@@ -4126,6 +4127,7 @@ export default function Dashboards() {
                 className="btn btn--primary"
                 type="button"
                 onClick={applyDashboardFilters}
+                disabled={!Object.values(filterSelections).some((v) => v.length > 0)}
               >
                 Search
               </button>
@@ -4134,6 +4136,7 @@ export default function Dashboards() {
                 className="btn"
                 type="button"
                 onClick={resetDashboardFilters}
+                disabled={!Object.values(filterSelections).some((v) => v.length > 0)}
               >
                 Reset
               </button>
@@ -4641,16 +4644,7 @@ export default function Dashboards() {
                           Open
                         </button>
 
-                        <button
-                          className="btn btn--sm"
-                          type="button"
-                          disabled={exportingId === item.dashboard_id}
-                          onClick={() => exportFromList(item.dashboard_id)}
-                        >
-                          {exportingId === item.dashboard_id
-                            ? "Opening…"
-                            : "Export PDF"}
-                        </button>
+
                       </td>
                     </tr>
                   ))}

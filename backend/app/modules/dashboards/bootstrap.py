@@ -368,3 +368,43 @@ def ensure_data_source_backfill() -> bool:
             )
 
     return True
+
+
+def backfill_created_by() -> bool:
+    """Fill empty ``created_by`` on dashboards from their earliest version row.
+
+    Dashboards created before the ``display_name`` fix stored NULL or an
+    empty string.  The version table often has the value because versions
+    were written by the same code path.  As a last resort, fall back to
+    ``'System'``.
+    """
+    with transaction() as cur:
+        if not table_exists(cur, "dashboard") or not table_exists(
+            cur, "dashboard_version"
+        ):
+            return False
+
+        cur.execute(
+            """
+            UPDATE dashboard d
+            SET    created_by = COALESCE(
+                       (SELECT dv.created_by
+                        FROM   dashboard_version dv
+                        WHERE  dv.dashboard_id = d.dashboard_id
+                          AND  dv.created_by IS NOT NULL
+                          AND  dv.created_by <> ''
+                        ORDER BY dv.version_no
+                        LIMIT 1),
+                       'System'
+                   )
+            WHERE  d.status = 'Active'
+              AND  (d.created_by IS NULL OR d.created_by = '')
+            """
+        )
+
+        if cur.rowcount:
+            logger.info(
+                "Backfilled created_by for %d dashboard(s)", cur.rowcount
+            )
+
+    return True
