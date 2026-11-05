@@ -83,6 +83,16 @@ function TableFieldInput({ field, value, onChange, error, media }) {
   // Visible columns with frozen columns grouped on the left
   const visibleColumns = [...frozenColsList, ...unfrozenColsList]
 
+  // Visible rows with pinned rows grouped on the top
+  const indexedRows = rows.map((row, origIdx) => ({
+    row: row || {},
+    origIdx,
+    isPinned: pinnedRowIndices.has(origIdx),
+  }))
+  const pinnedRows = indexedRows.filter(r => r.isPinned)
+  const unpinnedRows = indexedRows.filter(r => !r.isPinned)
+  const displayRows = [...pinnedRows, ...unpinnedRows]
+
   // Calculate cumulative left offsets for frozen columns
   const SERIAL_WIDTH = 44
   const frozenLeftOffsets = {}
@@ -143,6 +153,14 @@ function TableFieldInput({ field, value, onChange, error, media }) {
   }
 
   const removeRow = (rowIndex) => {
+    setPinnedRowIndices(prev => {
+      const next = new Set()
+      prev.forEach(idx => {
+        if (idx < rowIndex) next.add(idx)
+        else if (idx > rowIndex) next.add(idx - 1)
+      })
+      return next
+    })
     if (rows.length <= 1) {
       onChange(field.name, [{}])
     } else {
@@ -756,13 +774,16 @@ function TableFieldInput({ field, value, onChange, error, media }) {
             <span>{isExpanded ? '⛶ Collapse' : '⛶ Expand'}</span>
           </button>
 
-          {frozenCols.size > 0 && (
+          {(frozenCols.size > 0 || pinnedRowIndices.size > 0) && (
             <button
               type="button"
               className="btn btn--secondary btn--sm"
-              onClick={() => setFrozenCols(new Set())}
+              onClick={() => {
+                setFrozenCols(new Set())
+                setPinnedRowIndices(new Set())
+              }}
               style={{ fontSize: 11, padding: '3px 7px', color: '#64748b' }}
-              title="Unfreeze all columns"
+              title="Reset all frozen columns and pinned rows"
             >
               Reset Freeze
             </button>
@@ -772,7 +793,7 @@ function TableFieldInput({ field, value, onChange, error, media }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, color: '#64748b' }}>
           {pinnedRowIndices.size > 0 && (
             <span style={{ background: '#fef3c7', color: '#92400e', padding: '2px 6px', borderRadius: 4, fontSize: 11, fontWeight: 600 }}>
-              📌 {pinnedRowIndices.size} row pinned
+              📌 {pinnedRowIndices.size} row{pinnedRowIndices.size === 1 ? '' : 's'} pinned to top
             </span>
           )}
           <span>
@@ -916,20 +937,18 @@ function TableFieldInput({ field, value, onChange, error, media }) {
           </thead>
 
           <tbody>
-            {rows.map((row, rIdx) => {
-              const r = row || {}
-              const isPinnedRow = pinnedRowIndices.has(rIdx)
+            {displayRows.map(({ row: r, origIdx, isPinned: isPinnedRow }, displayIdx) => {
+              const pinnedIdx = isPinnedRow ? pinnedRows.findIndex(p => p.origIdx === origIdx) : -1
+              const pinnedTop = isPinnedRow ? 36 + (pinnedIdx * 42) : undefined
+              const isLastPinned = isPinnedRow && (pinnedIdx === pinnedRows.length - 1)
 
               return (
                 <tr
-                  key={rIdx}
+                  key={origIdx}
                   style={{
                     borderBottom: '1px solid #e2e8f0',
-                    background: isPinnedRow ? '#fffbeb' : (rIdx % 2 === 1 ? '#f8fafc' : '#ffffff'),
-                    position: isPinnedRow ? 'sticky' : undefined,
-                    top: isPinnedRow ? 40 : undefined,
-                    zIndex: isPinnedRow ? 18 : undefined,
-                    boxShadow: isPinnedRow ? '0 3px 6px -2px rgba(0,0,0,0.15)' : undefined,
+                    background: isPinnedRow ? '#fffbeb' : (displayIdx % 2 === 1 ? '#f8fafc' : '#ffffff'),
+                    boxShadow: isLastPinned ? '0 3px 6px -2px rgba(0,0,0,0.15)' : undefined,
                   }}
                 >
                   {/* Serial # Sticky Cell */}
@@ -941,13 +960,20 @@ function TableFieldInput({ field, value, onChange, error, media }) {
                       fontWeight: 600,
                       position: 'sticky',
                       left: 0,
+                      top: pinnedTop,
                       zIndex: isPinnedRow ? 19 : 5,
-                      background: isPinnedRow ? '#fef3c7' : (rIdx % 2 === 1 ? '#f8fafc' : '#ffffff'),
+                      background: isPinnedRow ? '#fef3c7' : (displayIdx % 2 === 1 ? '#f8fafc' : '#ffffff'),
                       borderBottom: '1px solid #e2e8f0',
                       borderRight: '1px solid #e2e8f0',
                     }}
                   >
-                    {rIdx + 1}
+                    {isPinnedRow ? (
+                      <span title="Pinned to top" style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+                        📌{origIdx + 1}
+                      </span>
+                    ) : (
+                      origIdx + 1
+                    )}
                   </td>
 
                   {/* Dynamic Column Data Cells */}
@@ -965,18 +991,19 @@ function TableFieldInput({ field, value, onChange, error, media }) {
                           padding: '6px 8px',
                           verticalAlign: 'top',
                           minWidth: colMinWidth,
-                          position: isFrozen ? 'sticky' : undefined,
+                          position: (isFrozen || isPinnedRow) ? 'sticky' : undefined,
                           left: isFrozen ? leftPos : undefined,
-                          zIndex: isFrozen ? (isPinnedRow ? 17 : 4) : undefined,
+                          top: pinnedTop,
+                          zIndex: isFrozen ? (isPinnedRow ? 18 : 4) : (isPinnedRow ? 16 : undefined),
                           background: isPinnedRow
                             ? (isFrozen ? '#fef3c7' : '#fffbeb')
-                            : (isFrozen ? (rIdx % 2 === 1 ? '#f1f5f9' : '#f8fafc') : (rIdx % 2 === 1 ? '#f8fafc' : '#ffffff')),
+                            : (isFrozen ? (displayIdx % 2 === 1 ? '#f1f5f9' : '#f8fafc') : (displayIdx % 2 === 1 ? '#f8fafc' : '#ffffff')),
                           borderBottom: '1px solid #e2e8f0',
                           borderRight: '1px solid #e2e8f0',
                           boxShadow: isLastFrozenCol ? '3px 0 5px -2px rgba(0,0,0,0.12)' : undefined,
                         }}
                       >
-                        {renderCell(col, r[colKey], rIdx, colKey, r)}
+                        {renderCell(col, r[colKey], origIdx, colKey, r)}
                       </td>
                     )
                   })}
@@ -987,14 +1014,18 @@ function TableFieldInput({ field, value, onChange, error, media }) {
                       padding: '6px 8px',
                       textAlign: 'center',
                       verticalAlign: 'top',
+                      position: isPinnedRow ? 'sticky' : undefined,
+                      top: pinnedTop,
+                      zIndex: isPinnedRow ? 16 : undefined,
+                      background: isPinnedRow ? '#fffbeb' : (displayIdx % 2 === 1 ? '#f8fafc' : '#ffffff'),
                       borderBottom: '1px solid #e2e8f0',
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
                       <button
                         type="button"
-                        onClick={() => togglePinRow(rIdx)}
-                        title={isPinnedRow ? "Unpin row" : "Pin row as reference header"}
+                        onClick={() => togglePinRow(origIdx)}
+                        title={isPinnedRow ? "Unpin row" : "Pin row to top"}
                         style={{
                           background: isPinnedRow ? '#fef08a' : 'transparent',
                           border: isPinnedRow ? '1px solid #facc15' : '1px solid transparent',
@@ -1010,7 +1041,7 @@ function TableFieldInput({ field, value, onChange, error, media }) {
                       <button
                         type="button"
                         className="iconbtn iconbtn--danger"
-                        onClick={() => removeRow(rIdx)}
+                        onClick={() => removeRow(origIdx)}
                         title="Delete row"
                         style={{ padding: '3px 6px', fontSize: 11 }}
                       >
