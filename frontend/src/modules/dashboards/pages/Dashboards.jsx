@@ -3607,7 +3607,7 @@ export default function Dashboards() {
 
       setDashboard(dashboardToUpdate);
 
-      /* Sync version state — update always creates a new draft. */
+      /* Sync version state — update reuses the existing draft or creates one. */
       if (result?.latest_version) {
         setCurrentVersionNo(result.latest_version);
         setLatestVersionNo(result.latest_version);

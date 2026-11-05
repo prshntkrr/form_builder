@@ -303,71 +303,110 @@ def update_dashboard(
     dashboard_json: Dict[str, Any],
     created_by: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
-    """Create a new draft version of an existing active dashboard.
+    """Save a draft version of an existing active dashboard.
 
-    Atomically increments the version counter to avoid races, then
-    inserts a new immutable version row.  ``dashboard.dashboard_json``
-    and ``dashboard.title`` are kept in sync for backward compatibility.
+    If the latest version is already a draft, it is updated in place so
+    that repeated saves do not pile up empty version rows.  Otherwise a
+    new draft version is created by atomically incrementing the version
+    counter.  ``dashboard.dashboard_json`` and ``dashboard.title`` are
+    kept in sync for backward compatibility.
     """
 
     with transaction() as cur:
-        # Atomically claim the next version number.
+        # Check whether the latest version is already a draft.
         cur.execute(
             """
-            UPDATE dashboard
-            SET
-                latest_version = latest_version + 1,
-                title          = %s,
-                dashboard_json = %s,
-                updated_on     = CURRENT_TIMESTAMP
-            WHERE dashboard_id = %s
-              AND status = 'Active'
-            RETURNING
-                dashboard_id,
-                title,
-                dashboard_json,
-                status,
-                created_on,
-                updated_on,
-                created_by,
-                latest_version,
-                publish_version
+            SELECT dv.status
+            FROM   dashboard d
+            JOIN   dashboard_version dv
+                   ON  dv.dashboard_id = d.dashboard_id
+                   AND dv.version_no   = d.latest_version
+            WHERE  d.dashboard_id = %s
+              AND  d.status = 'Active'
             """,
-            (
-                title,
-                Json(dashboard_json),
-                dashboard_id,
-            ),
+            (dashboard_id,),
         )
+        latest_row = cur.fetchone()
+        latest_is_draft = latest_row and latest_row["status"] == "draft"
 
-        row = cur.fetchone()
-
-        if row is None:
-            return None
-
-        new_version = row["latest_version"]
-
-        # Insert the new immutable version row.
-        cur.execute(
-            """
-            INSERT INTO dashboard_version (
-                dashboard_id,
-                version_no,
-                title,
-                dashboard_json,
-                status,
-                created_by
+        if latest_is_draft:
+            # Update the existing draft in place — no new version number.
+            cur.execute(
+                """
+                UPDATE dashboard
+                SET    title          = %s,
+                       dashboard_json = %s,
+                       updated_on     = CURRENT_TIMESTAMP
+                WHERE  dashboard_id = %s
+                  AND  status = 'Active'
+                RETURNING
+                    dashboard_id, title, dashboard_json, status,
+                    created_on, updated_on, created_by,
+                    latest_version, publish_version
+                """,
+                (title, Json(dashboard_json), dashboard_id),
             )
-            VALUES (%s, %s, %s, %s, 'draft', %s)
-            """,
-            (
-                dashboard_id,
-                new_version,
-                title,
-                Json(dashboard_json),
-                created_by,
-            ),
-        )
+            row = cur.fetchone()
+            if row is None:
+                return None
+
+            cur.execute(
+                """
+                UPDATE dashboard_version
+                SET    title          = %s,
+                       dashboard_json = %s,
+                       created_by     = COALESCE(%s, created_by),
+                       created_on     = CURRENT_TIMESTAMP
+                WHERE  dashboard_id = %s
+                  AND  version_no   = %s
+                """,
+                (
+                    title,
+                    Json(dashboard_json),
+                    created_by,
+                    dashboard_id,
+                    row["latest_version"],
+                ),
+            )
+        else:
+            # Atomically claim the next version number.
+            cur.execute(
+                """
+                UPDATE dashboard
+                SET
+                    latest_version = latest_version + 1,
+                    title          = %s,
+                    dashboard_json = %s,
+                    updated_on     = CURRENT_TIMESTAMP
+                WHERE dashboard_id = %s
+                  AND status = 'Active'
+                RETURNING
+                    dashboard_id, title, dashboard_json, status,
+                    created_on, updated_on, created_by,
+                    latest_version, publish_version
+                """,
+                (title, Json(dashboard_json), dashboard_id),
+            )
+            row = cur.fetchone()
+            if row is None:
+                return None
+
+            cur.execute(
+                """
+                INSERT INTO dashboard_version (
+                    dashboard_id, version_no, title,
+                    dashboard_json, status, created_by
+                )
+                VALUES (%s, %s, %s, %s, 'draft', %s)
+                """,
+                (
+                    dashboard_id,
+                    row["latest_version"],
+                    title,
+                    Json(dashboard_json),
+                    created_by,
+                ),
+            )
 
     return dict(row)
 
