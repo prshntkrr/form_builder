@@ -97,10 +97,10 @@ export default function FormsList() {
   }
 
   const [deletingForm, setDeletingForm] = useState(null)
-  const [deleteBusy, setDeleteBusy] = useState(false)
+  const [deleteBusy, setDeleteBusy] = useState(null)
 
   const confirmHardDelete = async (dropData) => {
-    setDeleteBusy(true)
+    setDeleteBusy(dropData ? 'data' : 'form')
     try {
       await api.hardDeleteForm(deletingForm.form_id, dropData)
       setDeletingForm(null)
@@ -109,7 +109,7 @@ export default function FormsList() {
       setError(e.message)
       setDeletingForm(null)
     } finally {
-      setDeleteBusy(false)
+      setDeleteBusy(null)
     }
   }
 
@@ -212,16 +212,16 @@ export default function FormsList() {
               </p>
             </div>
             <div className="sheet__foot" style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button className="btn btn--quiet" disabled={deleteBusy}
+              <button className="btn btn--quiet" disabled={!!deleteBusy}
                       onClick={() => setDeletingForm(null)}>Cancel</button>
-              <button className="btn btn--danger" disabled={deleteBusy}
+              <button className="btn btn--danger" disabled={!!deleteBusy}
                       onClick={() => confirmHardDelete(false)}>
-                {deleteBusy && <span className="spin" />}
+                {deleteBusy === 'form' && <span className="spin" />}
                 Delete form
               </button>
-              <button className="btn btn--danger" disabled={deleteBusy}
+              <button className="btn btn--danger" disabled={!!deleteBusy}
                       onClick={() => confirmHardDelete(true)}>
-                {deleteBusy && <span className="spin" />}
+                {deleteBusy === 'data' && <span className="spin" />}
                 Delete form + data
               </button>
             </div>

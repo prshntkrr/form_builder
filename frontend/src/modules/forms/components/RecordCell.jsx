@@ -1,51 +1,32 @@
 import React, { useRef, useState } from 'react'
 
-import { api } from '../api.js'
+import { fetchBlobUrl } from '../../../core/http.js'
 
 /**
  * One answer, in a records table, as a link where it is not a word.
  *
- * What decides is the question's type, taken from the form definition the
- * records endpoint already sends with the columns — never the shape of the
- * value. "MED..." is a media id when the question asks for a photo and an
- * ordinary word when it does not, and a form is free to have an answer that
- * looks like either.
- *
- *     image      View Image
- *     file       the filename, or View Document
- *     audio      the filename, or View Audio
- *     location   the coordinates, and View on Map
- *     anything   what it always was
- *
- * No URL is built here. A file is reached, on the click and not before, through
- * `GET .../media/{media_id}/url`, which authorizes the request and signs a link
- * good for a few minutes; this page never sees a bucket, a key or a credential.
+ * Media is streamed through the backend — no S3 URL ever reaches the browser.
+ * The backend auth-checks every request, so a URL opened in another browser
+ * or shared with someone else cannot work without a valid session.
  */
 
-// Signed links, kept for as long as the page is open. Resolving one costs a
-// round trip and they are good for minutes, so opening the same file twice must
-// not ask twice.
-const links = new Map()
+const blobCache = new Map()
 
 export function resolveMedia(formId, surveyId, mediaId) {
   const id = `${formId}|${surveyId}|${mediaId}`
-  if (!links.has(id)) {
-    links.set(id, api.mediaUrl(formId, surveyId, mediaId)
-      .then((answer) => {
-        // The endpoint answers { url, content_type, original_filename }.
-        if (!answer?.url) throw new Error('Media URL was not returned')
-        return answer.url
-      })
-      // A link that could not be signed is not remembered, so the next click
-      // asks again rather than failing for as long as the page is open.
-      .catch((e) => { links.delete(id); throw e }))
+  if (!blobCache.has(id)) {
+    const path = `/forms/${formId}/submissions/${encodeURIComponent(surveyId)}/media/${mediaId}/stream`
+    blobCache.set(id, fetchBlobUrl(path)
+      .catch((e) => { blobCache.delete(id); throw e }))
   }
-  return links.get(id)
+  return blobCache.get(id)
 }
 
-/** For tests, and for a page open long enough for its links to have expired. */
 export function forgetMediaLinks() {
-  links.clear()
+  for (const v of blobCache.values()) {
+    Promise.resolve(v).then((url) => URL.revokeObjectURL(url)).catch(() => {})
+  }
+  blobCache.clear()
 }
 
 const LABELS = { image: 'View Image', audio: 'View Audio', file: 'View Document' }

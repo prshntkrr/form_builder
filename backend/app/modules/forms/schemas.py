@@ -76,6 +76,7 @@ class UpdateFormRequest(BaseModel):
     version_tag: Optional[str] = None
     version_label: Optional[str] = None
     version_description: Optional[str] = None
+    draft_only: bool = False
 
 
 class RevalidateRequest(BaseModel):
@@ -110,6 +111,8 @@ class BorrowRequest(BaseModel):
     form_json: Dict[str, Any]
     # One section of the standard, or all of its fields when omitted.
     section: Optional[str] = None
+    # Specific field names to borrow. When set, only these fields are merged.
+    fields: Optional[List[str]] = None
 
 
 class StatusRequest(BaseModel):

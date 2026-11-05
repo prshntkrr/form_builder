@@ -35,14 +35,38 @@ def index(
     project_id: Optional[str] = Query(None, description="Scope to a project (plus globals)"),
     user: Dict[str, Any] = Depends(needs(LIBRARY_VIEW)),
 ):
-    """Look up standard forms by title, summary, category or tag."""
+    """Look up standard forms by title, summary, category or tag.
+
+    When a project has selected templates, only those are returned —
+    the project's template selection acts as a filter.
+    """
+    entries = standard_library.search(search, category, project_id=project_id)
+
+    selected = _project_template_ids(project_id) if project_id else None
+    if selected is not None:
+        entries = [e for e in entries if e.standard_id in selected]
+
     return {
-        "categories": standard_library.categories(project_id=project_id),
-        "forms": [
-            entry.summary_entry()
-            for entry in standard_library.search(search, category, project_id=project_id)
-        ],
+        "categories": sorted({e.category for e in entries}) if entries else [],
+        "forms": [e.summary_entry() for e in entries],
     }
+
+
+def _project_template_ids(project_id: str):
+    """Return the set of standard_ids this project selected, or None if none."""
+    from app.core.database import transaction as txn
+
+    try:
+        with txn() as cur:
+            cur.execute(
+                "SELECT standard_id FROM project_standard_template WHERE project_id = %s",
+                (project_id,),
+            )
+            rows = cur.fetchall()
+    except Exception:
+        return None
+
+    return {r["standard_id"] for r in rows} if rows else None
 
 
 @router.get("/{standard_id}")
@@ -117,7 +141,7 @@ def borrow(standard_id: str, req: BorrowRequest, user: Dict[str, Any] = Depends(
     can never produce a config that would be rejected on save.
     """
     try:
-        merged = standard_library.borrow(req.form_json, standard_id, req.section)
+        merged = standard_library.borrow(req.form_json, standard_id, req.section, req.fields)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
 

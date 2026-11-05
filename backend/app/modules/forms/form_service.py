@@ -214,6 +214,19 @@ def get_form(form_id: str) -> Dict[str, Any]:
             raise FormNotFound(f"Form {form_id} not found")
         form = _row_to_form(dict(row))
         form["submission_count"] = _count_submissions(cur, form)
+
+        # If there's an unpublished draft version ahead of the live one,
+        # include its form_json so the builder can load it.
+        if form["latest_version"] > form["version_no"]:
+            cur.execute(
+                "SELECT form_json FROM form_version WHERE form_id = %s AND version_no = %s",
+                (form_id, form["latest_version"]),
+            )
+            draft_row = cur.fetchone()
+            if draft_row and draft_row["form_json"]:
+                form["draft_version"] = form["latest_version"]
+                form["draft_json"] = draft_row["form_json"]
+
         return form
 
 
@@ -705,6 +718,7 @@ def update_form(
     version_tag: Optional[str] = None,
     version_label: Optional[str] = None,
     version_description: Optional[str] = None,
+    draft_only: bool = False,
 ) -> Dict[str, Any]:
     """Save a new revision.
 
@@ -778,38 +792,25 @@ def update_form(
                 renamed_from.setdefault(new, old)
         definition["renamed_from"] = renamed_from or None
 
-        cur.execute(
-            """
-            UPDATE forms
-               SET form_title = %s, form_description = %s, form_json = %s,
-                   form_status = COALESCE(%s, form_status),
-                   form_type = %s, parent_id = %s,
-                   updated_on = CURRENT_TIMESTAMP
-             WHERE form_id = %s
-            RETURNING *
-            """,
-            (
-                definition["title"],
-                definition["description"],
-                Json(definition),
-                status,
-                form_type,
-                parent_id,
-                form_id,
-            ),
+        # draft_only: save a version row without touching the live definition.
+        # The published version stays in `forms.form_json`; users filling the
+        # form keep seeing the old version. Table sync and renames are deferred
+        # until the draft is published.
+        is_draft_save = (
+            draft_only
+            and (existing.get("form_status") or "Active") == "Active"
+            and not replacing
         )
-        row = dict(cur.fetchone())
 
-        if replacing:
+        if is_draft_save:
+            # Only update the timestamp on the forms row, not form_json.
             cur.execute(
-                "UPDATE form_version SET form_json = %s, version_tag = %s,"
-                " version_label = %s, version_description = %s,"
-                " saved_at = CURRENT_TIMESTAMP"
-                " WHERE form_id = %s AND version_no = %s",
-                (Json(definition), version_tag, version_label,
-                 version_description, form_id, version_no),
+                "UPDATE forms SET updated_on = CURRENT_TIMESTAMP"
+                " WHERE form_id = %s RETURNING *",
+                (form_id,),
             )
-        if not replacing or cur.rowcount == 0:
+            row = dict(cur.fetchone())
+
             cur.execute(
                 "INSERT INTO form_version (form_id, version_no, form_json,"
                 " version_tag, version_label, version_description, saved_at)"
@@ -824,33 +825,85 @@ def update_form(
                  version_tag, version_label, version_description),
             )
 
-        # The keyword that reaches it, beside the questions it asks. The project
-        # is the form's own, read from the row rather than taken from a caller:
-        # a route may only be scoped where its form is, and only this side
-        # reliably knows where that is.
-        route = _route_in_transaction(
-            cur, form_id, row.get("project_id"),
-            status or row.get("form_status") or "Active",
-            whatsapp, definition["updated_by"])
-        ivr_route = _ivr_route_in_transaction(
-            cur, form_id, row.get("project_id"),
-            status or row.get("form_status") or "Active",
-            ivr, definition["updated_by"])
+            route = None
+            ivr_route = None
+            table_report = {}
+            moved = {}
+            tabular_report = {"created": False, "added": [], "retyped": []}
+        else:
+            cur.execute(
+                """
+                UPDATE forms
+                   SET form_title = %s, form_description = %s, form_json = %s,
+                       form_status = COALESCE(%s, form_status),
+                       form_type = %s, parent_id = %s,
+                       updated_on = CURRENT_TIMESTAMP
+                 WHERE form_id = %s
+                RETURNING *
+                """,
+                (
+                    definition["title"],
+                    definition["description"],
+                    Json(definition),
+                    status,
+                    form_type,
+                    parent_id,
+                    form_id,
+                ),
+            )
+            row = dict(cur.fetchone())
 
-        table_report = sync_table(cur, definition)
+            if replacing:
+                cur.execute(
+                    "UPDATE form_version SET form_json = %s, version_tag = %s,"
+                    " version_label = %s, version_description = %s,"
+                    " saved_at = CURRENT_TIMESTAMP"
+                    " WHERE form_id = %s AND version_no = %s",
+                    (Json(definition), version_tag, version_label,
+                     version_description, form_id, version_no),
+                )
+            if not replacing or cur.rowcount == 0:
+                cur.execute(
+                    "INSERT INTO form_version (form_id, version_no, form_json,"
+                    " version_tag, version_label, version_description, saved_at)"
+                    " VALUES (%s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)"
+                    " ON CONFLICT (form_id, version_no) DO UPDATE"
+                    " SET form_json = EXCLUDED.form_json,"
+                    "     version_tag = EXCLUDED.version_tag,"
+                    "     version_label = EXCLUDED.version_label,"
+                    "     version_description = EXCLUDED.version_description,"
+                    "     saved_at = EXCLUDED.saved_at",
+                    (form_id, version_no, Json(definition),
+                     version_tag, version_label, version_description),
+                )
 
-        # Move stored answers to their new keys, in the same transaction as the
-        # definition change, so the two can never disagree.
-        moved = apply_renames(cur, definition["table_name"], rename_map) if rename_map else {}
+            # The keyword that reaches it, beside the questions it asks. The project
+            # is the form's own, read from the row rather than taken from a caller:
+            # a route may only be scoped where its form is, and only this side
+            # reliably knows where that is.
+            route = _route_in_transaction(
+                cur, form_id, row.get("project_id"),
+                status or row.get("form_status") or "Active",
+                whatsapp, definition["updated_by"])
+            ivr_route = _ivr_route_in_transaction(
+                cur, form_id, row.get("project_id"),
+                status or row.get("form_status") or "Active",
+                ivr, definition["updated_by"])
 
-        # The flat mirror follows the definition: columns added, dropped,
-        # renamed or replaced to match the new set of questions.
-        tabular_report = tabular_service.sync(cur, definition, rename_map)
-        if tabular_report["created"] or tabular_report["added"] or tabular_report["retyped"]:
-            tabular_report.update(tabular_service.rebuild(cur, definition, form_id))
+            table_report = sync_table(cur, definition)
+
+            # Move stored answers to their new keys, in the same transaction as the
+            # definition change, so the two can never disagree.
+            moved = apply_renames(cur, definition["table_name"], rename_map) if rename_map else {}
+
+            # The flat mirror follows the definition: columns added, dropped,
+            # renamed or replaced to match the new set of questions.
+            tabular_report = tabular_service.sync(cur, definition, rename_map)
+            if tabular_report["created"] or tabular_report["added"] or tabular_report["retyped"]:
+                tabular_report.update(tabular_service.rebuild(cur, definition, form_id))
 
     effective_status = status or row.get("form_status") or "Active"
-    if ivr_route and effective_status == "Active":
+    if not is_draft_save and ivr_route and effective_status == "Active":
         did_clean = ivr_route.get("receiver_number")
         if did_clean:
             try:
@@ -859,8 +912,14 @@ def update_form(
             except Exception as exc:
                 logger.warning("Could not auto-publish IVR form %s to Indev: %s", form_id, exc)
 
-    logger.info("Updated form %s to version %s", form_id, version_no)
-    result = _row_to_form(row, version=version_no)
+    logger.info("Updated form %s to version %s%s", form_id, version_no,
+                " (draft)" if is_draft_save else "")
+    # For a draft save, report the published version as version_no (what's live)
+    # and include draft_version so the frontend knows about the unpublished draft.
+    published_ver = int((row.get("form_json") or {}).get("version") or 1)
+    result = _row_to_form(row, version=published_ver if is_draft_save else version_no)
+    if is_draft_save:
+        result["draft_version"] = version_no
     result["table"] = table_report
     result["tabular"] = tabular_report
     result["renamed"] = moved

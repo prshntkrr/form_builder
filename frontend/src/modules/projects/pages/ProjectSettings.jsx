@@ -5,12 +5,14 @@ import ApiKeys from '../components/ApiKeys.jsx'
 import Groups from '../components/Groups.jsx'
 import Members from '../components/Members.jsx'
 import ProjectForms from '../components/ProjectForms.jsx'
+import StandardTemplates from '../components/StandardTemplates.jsx'
 import { api } from '../api.js'
 import { useAuth } from '../../../core/auth.jsx'
 import { isSystem, useProject, useProjects } from '../active.js'
 
 const TABS = [
   ['overview', 'Overview'],
+  ['templates', 'Templates'],
   ['members', 'Members'],
   ['groups', 'Groups'],
   ['forms', 'Forms'],
@@ -104,6 +106,9 @@ export default function ProjectSettings() {
       {tab === 'overview' && (
         <Overview key={projectId} project={project} can={can} onSaved={reload}
                   isAdmin={!!accountCan.manage_users} />
+      )}
+      {tab === 'templates' && (
+        <StandardTemplates key={projectId} projectId={projectId} can={can} />
       )}
       {tab === 'members' && <Members key={projectId} projectId={projectId} can={can} />}
       {tab === 'groups' && <Groups key={projectId} projectId={projectId} can={can} />}

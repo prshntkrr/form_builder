@@ -117,4 +117,15 @@ export async function download(path, fallback = 'download') {
   setTimeout(() => URL.revokeObjectURL(url), 0)
 }
 
+/**
+ * Fetch an API path with auth and return a blob: URL.
+ * For media preview — the blob lives in browser memory, never a remote URL.
+ */
+export async function fetchBlobUrl(path) {
+  const headers = authToken ? { Authorization: `Bearer ${authToken}` } : {}
+  const res = await fetch(`${BASE}${path}`, { headers })
+  if (!res.ok) throw new Error(`Fetch failed: ${res.status}`)
+  return URL.createObjectURL(await res.blob())
+}
+
 export { BASE }

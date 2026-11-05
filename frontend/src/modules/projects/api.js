@@ -120,4 +120,12 @@ export const api = {
 
   rotateApiKey: (projectId, keyId) =>
     request(`/projects/${projectId}/api-keys/${keyId}/rotate`, { method: 'POST' }),
+
+  // --- standard templates ---
+  templates: (projectId) => request(`/projects/${projectId}/templates`),
+
+  setTemplates: (projectId, standardIds) =>
+    request(`/projects/${projectId}/templates`, {
+      method: 'PUT', body: JSON.stringify({ standard_ids: standardIds }),
+    }),
 }

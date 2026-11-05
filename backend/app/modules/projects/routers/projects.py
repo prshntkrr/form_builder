@@ -15,6 +15,7 @@ from app.modules.projects import access, project_service
 from app.modules.projects import api_key_service
 from app.modules.projects.permissions import (
     FORMS_ASSIGN,
+    FORMS_MANAGE,
     FORMS_VIEW_ALL,
     PROJECT_API_KEYS,
     PROJECT_GROUPS_MANAGE,
@@ -445,6 +446,55 @@ def rotate_api_key(project_id: str, key_id: str,
         return api_key_service.rotate_key(key_id, project_id, auth_service.display_name(user))
     except api_key_service.KeyError_:
         raise HTTPException(status_code=404, detail="Key not found")
+
+
+# --------------------------------------------------------------------------- #
+# Standard templates
+# --------------------------------------------------------------------------- #
+class SetTemplatesRequest(BaseModel):
+    standard_ids: List[str] = Field(default_factory=list)
+
+
+@router.get("/{project_id}/templates")
+def list_templates(project_id: str,
+                   user: Dict[str, Any] = Depends(access.needs_in_project(PROJECT_VIEW))):
+    """Standard templates selected for this project, plus the full catalogue."""
+    from app.core.database import transaction as txn
+    from app.modules.forms import standard_library
+
+    with txn() as cur:
+        cur.execute(
+            "SELECT standard_id FROM project_standard_template WHERE project_id = %s",
+            (project_id,),
+        )
+        selected = [r["standard_id"] for r in cur.fetchall()]
+
+    catalogue = standard_library.search(project_id=project_id)
+    return {
+        "selected": selected,
+        "catalogue": [e.summary_entry() for e in catalogue],
+    }
+
+
+@router.put("/{project_id}/templates")
+def set_templates(project_id: str, req: SetTemplatesRequest,
+                  user: Dict[str, Any] = Depends(access.needs_in_project(FORMS_MANAGE))):
+    """Replace the project's template selection wholesale."""
+    from app.core.database import transaction as txn
+
+    with txn() as cur:
+        cur.execute(
+            "DELETE FROM project_standard_template WHERE project_id = %s",
+            (project_id,),
+        )
+        for sid in req.standard_ids:
+            cur.execute(
+                "INSERT INTO project_standard_template (project_id, standard_id) "
+                "VALUES (%s, %s) ON CONFLICT DO NOTHING",
+                (project_id, sid),
+            )
+
+    return {"project_id": project_id, "selected": req.standard_ids}
 
 
 @router.delete("/{project_id}")

@@ -30,7 +30,7 @@ export default function ProjectForms({ projectId, projectName, can }) {
   const [error, setError] = useState('')
   const [assigning, setAssigning] = useState(null)
   const [deleting, setDeleting] = useState(null)
-  const [deleteBusy, setDeleteBusy] = useState(false)
+  const [deleteBusy, setDeleteBusy] = useState(null)
 
   const load = () => {
     setError('')
@@ -40,7 +40,7 @@ export default function ProjectForms({ projectId, projectName, can }) {
   }
 
   const confirmDelete = async (dropData) => {
-    setDeleteBusy(true)
+    setDeleteBusy(dropData ? 'data' : 'form')
     try {
       await formApi.hardDeleteForm(deleting.form_id, dropData)
       setDeleting(null)
@@ -49,7 +49,7 @@ export default function ProjectForms({ projectId, projectName, can }) {
       setError(e.message)
       setDeleting(null)
     } finally {
-      setDeleteBusy(false)
+      setDeleteBusy(null)
     }
   }
 
@@ -206,16 +206,16 @@ export default function ProjectForms({ projectId, projectName, can }) {
               {error && <div className="note note--bad" style={{ marginTop: 8 }}>{error}</div>}
             </div>
             <div className="sheet__foot" style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button className="btn btn--quiet" disabled={deleteBusy}
+              <button className="btn btn--quiet" disabled={!!deleteBusy}
                       onClick={() => setDeleting(null)}>Cancel</button>
-              <button className="btn btn--danger" disabled={deleteBusy}
+              <button className="btn btn--danger" disabled={!!deleteBusy}
                       onClick={() => confirmDelete(false)}>
-                {deleteBusy && <span className="spin" />}
+                {deleteBusy === 'form' && <span className="spin" />}
                 Delete form
               </button>
-              <button className="btn btn--danger" disabled={deleteBusy}
+              <button className="btn btn--danger" disabled={!!deleteBusy}
                       onClick={() => confirmDelete(true)}>
-                {deleteBusy && <span className="spin" />}
+                {deleteBusy === 'data' && <span className="spin" />}
                 Delete form + data
               </button>
             </div>

@@ -31,6 +31,7 @@ export default function Responses({ formId }) {
   const [range, setRange] = useState({ from: '', to: '' })
   const [exporting, setExporting] = useState(false)
   const [panel, setPanel] = useState(false)
+  const [visibleSet, setVisibleSet] = useState(null)
 
   useEffect(() => {
     setData(null)
@@ -62,10 +63,16 @@ export default function Responses({ formId }) {
 
   const pages = Math.max(1, Math.ceil(data.total / PAGE))
   const filtered = Boolean(range.from || range.to)
+  const shownColumns = visibleSet
+    ? data.columns.filter((c) => visibleSet.has(c.name))
+    : data.columns
 
   return (
     <div className="col" style={{ gap: 16 }}>
-      <ViewColumns formId={formId} />
+      <ViewColumns formId={formId} onChange={(cfg) => {
+        if (!cfg?.configured) { setVisibleSet(null); return }
+        setVisibleSet(new Set(cfg.fields.filter((f) => f.visible).map((f) => f.name)))
+      }} />
 
       {error && <div className="note note--bad">{error}</div>}
 
@@ -135,7 +142,7 @@ export default function Responses({ formId }) {
                   <th>When</th>
                   <th>By</th>
                   <th>Ver</th>
-                  {data.columns.map((c) => <th key={c.name}>{c.label}</th>)}
+                  {shownColumns.map((c) => <th key={c.name}>{c.label}</th>)}
                 </tr>
               </thead>
               <tbody>
@@ -144,7 +151,7 @@ export default function Responses({ formId }) {
                     <td className="muted">{when(row.created_on)}</td>
                     <td className="muted">{row.created_by || '—'}</td>
                     <td className="muted">{row.form_version}</td>
-                    {data.columns.map((c) => (
+                    {shownColumns.map((c) => (
                       <td key={c.name} title={String((row.form_data || {})[c.name] ?? '')}>
                         {cell((row.form_data || {})[c.name])}
                       </td>
@@ -165,31 +172,7 @@ export default function Responses({ formId }) {
         </>
       )}
 
-      <div className="row tiny muted">
-        <span>
-          In Postgres: <code>{data.table_name}</code> holds the full JSON,{' '}
-          <code>{data.tabular_name}</code> one column per question.
-        </span>
-        <button
-          className="btn btn--sm btn--quiet"
-          disabled={rebuilding}
-          onClick={async () => {
-            setRebuilding(true)
-            try {
-              const r = await api.rebuildTabular(formId)
-              setRebuilt(`rebuilt from ${r.rebuilt ?? 0} response${r.rebuilt === 1 ? '' : 's'}`)
-            } catch (e) {
-              setRebuilt(e.message)
-            } finally {
-              setRebuilding(false)
-            }
-          }}
-        >
-          {rebuilding && <span className="spin" />}
-          Rebuild
-        </button>
-        {rebuilt && <span>{rebuilt}</span>}
-      </div>
+      {/* Rebuild / tabular internals hidden from regular users */}
     </div>
   )
 }

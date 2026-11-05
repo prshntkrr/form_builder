@@ -4,7 +4,7 @@ import re
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 
 from app.core import auth_service
@@ -1065,3 +1065,41 @@ def media_download_url(form_id: str, survey_id: str, media_id: str,
 
     return {"url": url, "content_type": record["content_type"],
             "original_filename": record["original_filename"]}
+
+
+@router.get("/{form_id}/submissions/{survey_id}/media/{media_id}/stream")
+def media_stream(form_id: str, survey_id: str, media_id: str,
+                 user: Dict[str, Any] = Depends(needs(RECORDS_VIEW))):
+    """Stream the file bytes through the backend. No S3 URL leaves the server."""
+    from app.modules.forms import media_service
+
+    _load(form_id, user)
+    record = media_service.get(media_id)
+
+    if (record is None or record["form_id"] != form_id
+            or record["survey_id"] != survey_id or record["uploaded_on"] is None):
+        raise HTTPException(status_code=404, detail=f"No upload '{media_id}'.")
+
+    try:
+        s3 = media_service._client()
+        obj = s3.get_object(
+            Bucket=media_service.settings.aws_s3_bucket,
+            Key=record["s3_key"],
+        )
+    except media_service.StorageUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    except Exception:
+        logger.exception("Could not fetch %s from S3", media_id)
+        raise HTTPException(status_code=502, detail="Could not open that file.")
+
+    filename = media_service.safe_filename(record["original_filename"])
+    disposition = "inline" if record["content_type"].startswith(("image/", "audio/")) else "attachment"
+
+    return StreamingResponse(
+        obj["Body"].iter_chunks(chunk_size=64 * 1024),
+        media_type=record["content_type"],
+        headers={
+            "Content-Disposition": f'{disposition}; filename="{filename}"',
+            "Cache-Control": "private, no-store",
+        },
+    )

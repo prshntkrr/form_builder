@@ -32,26 +32,13 @@ export function FormStep({ formId, parentSurveyId, onDone }) {
     setSurvey(null)
     setUploaded({})
 
-    const loadForm = api.renderForm(formId)
-    const loadParent = parentSurveyId
-      ? api.formRelationship(formId).then((rel) =>
-          rel?.is_child
-            ? api.parentSubmission(formId, parentSurveyId).catch(() => null)
-            : null
-        ).catch(() => null)
-      : Promise.resolve(null)
-
-    Promise.all([loadForm, loadParent])
-      .then(([res, parentRes]) => {
+    api.renderForm(formId)
+      .then((res) => {
         setForm(res)
         setLanguage(res.language)
-        const parentData = parentRes?.parent?.form_data || {}
-        const inherit = new Set(res.form_json?.relationship?.inherit_fields || [])
         const start = {}
         for (const f of res.form_json.fields || []) {
-          if (inherit.has(f.name) && f.name in parentData) {
-            start[f.name] = parentData[f.name]
-          } else if (f.default != null) {
+          if (f.default != null) {
             start[f.name] = f.default
           } else if (f.type === 'multiselect') {
             start[f.name] = []
@@ -135,6 +122,76 @@ export function FormStep({ formId, parentSurveyId, onDone }) {
   )
 }
 
+
+function ParentPicker({ form, relationship, parents, onPick, formId }) {
+  const [search, setSearch] = useState('')
+  const [results, setResults] = useState(null)
+  const [searching, setSearching] = useState(false)
+
+  useEffect(() => {
+    if (!search.trim()) { setResults(null); return }
+    setSearching(true)
+    const t = setTimeout(() => {
+      api.parentOptions(formId, search.trim())
+        .then((r) => setResults(r.submissions))
+        .catch(() => setResults(null))
+        .finally(() => setSearching(false))
+    }, 300)
+    return () => clearTimeout(t)
+  }, [search, formId])
+
+  const list = results !== null ? results : []
+
+  return (
+    <div className="card">
+      <h2>{form.form_json.title}</h2>
+      <p className="muted">
+        Every answer to this form belongs to one submission of{' '}
+        <b>{relationship.parent_form?.form_title || 'its parent form'}</b>.
+        Choose which one.
+      </p>
+
+      {parents === null && <div className="skeleton" style={{ height: 80 }} />}
+
+      {parents?.submissions?.length === 0 && !search && (
+        <p className="muted">
+          There is nothing here to attach to yet — add a{' '}
+          {relationship.parent_form?.form_title || 'parent'} submission first.
+        </p>
+      )}
+
+      {(parents?.submissions?.length > 0 || search) && (
+        <div className="col" style={{ gap: 10 }}>
+          <input
+            className="control"
+            placeholder="Search parent records…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          {searching && <span className="tiny muted">Searching…</span>}
+
+          {list.length === 0 && search && !searching && (
+            <p className="tiny muted">No records match "{search}"</p>
+          )}
+
+          <div className="col" style={{ gap: 4, maxHeight: 300, overflowY: 'auto' }}>
+            {list.map((p) => (
+              <button
+                key={p.survey_id}
+                className="btn btn--quiet"
+                style={{ textAlign: 'left', justifyContent: 'flex-start', padding: '8px 12px' }}
+                onClick={() => onPick(p.survey_id)}
+              >
+                <span style={{ fontWeight: 500 }}>{p.summary || p.survey_id}</span>
+                <span className="tiny muted" style={{ marginLeft: 8 }}>{p.created_by}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function FormFill() {
   const { formId } = useParams()
@@ -227,38 +284,13 @@ export default function FormFill() {
   if (relationship?.is_child && !chosenParent) {
     return (
       <main className="main main--narrow">
-        <div className="card">
-          <h2>{form.form_json.title}</h2>
-          <p className="muted">
-            Every answer to this form belongs to one submission of{' '}
-            <b>{relationship.parent_form?.form_title || 'its parent form'}</b>.
-            Choose which one.
-          </p>
-
-          {parents === null && <div className="skeleton" style={{ height: 80 }} />}
-
-          {parents?.submissions?.length === 0 && (
-            <p className="muted">
-              There is nothing here to attach to yet — add a{' '}
-              {relationship.parent_form?.form_title || 'parent'} submission first.
-            </p>
-          )}
-
-          {parents?.submissions?.length > 0 && (
-            <label className="cat__field">
-              <span className="minilabel">{parents.parent_form_title}</span>
-              <select className="control" aria-label="Parent submission" defaultValue=""
-                      onChange={(e) => e.target.value && setChosenParent(e.target.value)}>
-                <option value="">Choose a submission…</option>
-                {parents.submissions.map((p) => (
-                  <option key={p.survey_id} value={p.survey_id}>
-                    {p.summary || p.survey_id}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-        </div>
+        <ParentPicker
+          form={form}
+          relationship={relationship}
+          parents={parents}
+          onPick={setChosenParent}
+          formId={formId}
+        />
       </main>
     )
   }

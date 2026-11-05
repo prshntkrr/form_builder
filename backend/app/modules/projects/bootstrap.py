@@ -157,6 +157,29 @@ def ensure_standard_library_project_key() -> bool:
     return True
 
 
+def ensure_project_standard_template() -> bool:
+    """Link projects to the standard forms they use as templates."""
+    with transaction() as cur:
+        if not table_exists(cur, "project") or not table_exists(cur, "standard_form_library"):
+            return False
+        if table_exists(cur, "project_standard_template"):
+            return True
+
+        cur.execute(
+            """
+            CREATE TABLE project_standard_template (
+                project_id   VARCHAR(20)  NOT NULL REFERENCES project (project_id) ON DELETE CASCADE,
+                standard_id  VARCHAR(55) NOT NULL REFERENCES standard_form_library (standard_id) ON DELETE CASCADE,
+                added_on     TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (project_id, standard_id)
+            )
+            """
+        )
+        logger.info("Created project_standard_template table")
+
+    return True
+
+
 def unsystem_project_roles() -> bool:
     """Mark the old seeded project roles as non-system so they are editable.
 

@@ -600,6 +600,7 @@ def update(form_id: str, req: UpdateFormRequest,
             version_tag=getattr(req, 'version_tag', None),
             version_label=getattr(req, 'version_label', None),
             version_description=getattr(req, 'version_description', None),
+            draft_only=req.draft_only,
         )
     except routing.RoutingError as exc:
         # The keyword is taken. The edit rolled back with it, so the form is
