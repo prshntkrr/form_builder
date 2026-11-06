@@ -143,10 +143,74 @@ function LocationCell({ value }) {
 }
 
 
+function TableCell({ value, column }) {
+  if (!Array.isArray(value) || !value.length) {
+    return <span className="faint">—</span>
+  }
+
+  const cols = (column.columns && column.columns.length > 0)
+    ? column.columns.map(c => ({ key: c.key, label: c.label || c.key }))
+    : Object.keys(value[0] || {}).map(k => ({ key: k, label: k }))
+
+  return (
+    <details className="record-table-cell" style={{ cursor: 'pointer' }}>
+      <summary style={{ fontWeight: 600, color: 'var(--accent, #0f766e)', fontSize: 12, outline: 'none' }}>
+        {value.length} row{value.length === 1 ? '' : 's'}
+      </summary>
+      <div
+        style={{
+          marginTop: 6,
+          maxHeight: 200,
+          overflowY: 'auto',
+          border: '1px solid var(--line, #cbd5e1)',
+          borderRadius: 6,
+          padding: 4,
+          background: '#f8fafc',
+          boxShadow: '0 4px 6px -1px rgba(0,0,0,0.06)',
+          minWidth: 220,
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+          <thead>
+            <tr style={{ background: '#f1f5f9' }}>
+              {cols.map((c) => (
+                <th key={c.key} style={{ borderBottom: '1px solid #cbd5e1', padding: '3px 6px', textAlign: 'left', fontWeight: 600, color: '#334155' }}>
+                  {c.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {value.map((row, rIdx) => (
+              <tr key={rIdx} style={{ borderBottom: '1px dotted #e2e8f0' }}>
+                {cols.map((c) => {
+                  const cellVal = row ? row[c.key] : null
+                  const displayVal = cellVal == null ? '—' : (typeof cellVal === 'object' ? JSON.stringify(cellVal) : String(cellVal))
+                  return (
+                    <td key={c.key} style={{ padding: '3px 6px', color: '#1e293b' }}>
+                      {displayVal}
+                    </td>
+                  )
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </details>
+  )
+}
+
 /** Every other kind of answer, exactly as it has always been shown. */
 export const plain = (value) => {
   if (value == null || value === '') return <span className="faint">—</span>
-  if (Array.isArray(value)) return value.join(', ')
+  if (Array.isArray(value)) {
+    if (value.length > 0 && typeof value[0] === 'object') {
+      return `${value.length} row${value.length === 1 ? '' : 's'}`
+    }
+    return value.join(', ')
+  }
   if (typeof value === 'boolean') return value ? 'Yes' : 'No'
   if (typeof value === 'object') {
     return Object.entries(value).map(([k, v]) => `${k} ${v}`).join(', ')
@@ -158,6 +222,9 @@ const MEDIA_TYPES = new Set(['image', 'audio', 'file'])
 
 export default function RecordCell({ column, value, media, formId, surveyId }) {
   if (column.type === 'location') return <LocationCell value={value} />
+  if (column.type === 'table' || (Array.isArray(value) && value.length > 0 && typeof value[0] === 'object')) {
+    return <TableCell value={value} column={column} />
+  }
   if (!MEDIA_TYPES.has(column.type)) return plain(value)
 
   // The ids stored as the answer, one or several, in the order they were

@@ -78,11 +78,13 @@ def _ascii_clean(value: str) -> str:
 
 
 def _ascii_clean_value(value):
-    """Apply ASCII cleaning to strings, recursively into lists."""
+    """Apply ASCII cleaning to strings, recursively into lists and dicts."""
     if isinstance(value, str) and value != "NA":
         return _ascii_clean(value)
     if isinstance(value, list):
         return [_ascii_clean_value(v) for v in value]
+    if isinstance(value, dict):
+        return {k: _ascii_clean_value(v) for k, v in value.items()}
     return value
 
 
@@ -1062,6 +1064,9 @@ def _cell(value: Any) -> str:
     if value is None:
         return ""
     if isinstance(value, list):
+        if any(isinstance(v, (dict, list)) for v in value):
+            import json
+            return json.dumps(value, ensure_ascii=False)
         return ", ".join(str(v) for v in value)
     if isinstance(value, dict):
         return "; ".join(f"{k}={v}" for k, v in value.items())

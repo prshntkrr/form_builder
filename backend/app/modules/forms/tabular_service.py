@@ -21,7 +21,7 @@ import logging
 from typing import Any, Dict, List, Optional, Tuple
 
 from psycopg2 import sql
-from psycopg2.extras import execute_batch
+from psycopg2.extras import Json, execute_batch
 
 from app.core.config import settings
 from app.modules.forms.field_types import coerce_value, flatten, pg_type_for
@@ -283,7 +283,12 @@ def _row_values(form_json: Dict[str, Any], form_data: Dict[str, Any]) -> Dict[st
         column = column_for(name)
         raw = (form_data or {}).get(name)
         try:
-            out[column] = flatten(coerce_value(field["type"], raw))
+            ftype = field.get("type") or "text"
+            coerced = coerce_value(ftype, raw)
+            if ftype == "table" or pg_type_for(ftype) == "JSONB":
+                out[column] = Json(coerced) if coerced is not None else None
+            else:
+                out[column] = flatten(coerced)
         except Exception:
             out[column] = None
         if field.get("type") == "polygon":
