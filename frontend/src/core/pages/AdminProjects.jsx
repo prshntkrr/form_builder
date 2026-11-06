@@ -358,7 +358,7 @@ export default function HomeDashboard() {
   const [error, setError] = useState('')
   const [deleteFormTarget, setDeleteFormTarget] = useState(null)
   const [deleteProjectTarget, setDeleteProjectTarget] = useState(null)
-  const [deleteBusy, setDeleteBusy] = useState(false)
+  const [deleteBusy, setDeleteBusy] = useState(null)
   const [sysStats, setSysStats] = useState(null)
   const [chartRange, setChartRange] = useState('Month')
   const [showSystem, setShowSystem] = useState(true)
@@ -435,13 +435,13 @@ export default function HomeDashboard() {
   const handleDeleteForm = (form) => setDeleteFormTarget(form)
 
   const confirmDeleteForm = async (dropData) => {
-    setDeleteBusy(true)
+    setDeleteBusy(dropData ? 'data' : 'form')
     try {
       await formApi.hardDeleteForm(deleteFormTarget.form_id, dropData)
       setDeleteFormTarget(null)
       reload()
     } catch (e) { setError(e.message); setDeleteFormTarget(null) }
-    finally { setDeleteBusy(false) }
+    finally { setDeleteBusy(null) }
   }
 
   const handleDeleteProject = (project) => {
@@ -453,13 +453,13 @@ export default function HomeDashboard() {
   }
 
   const confirmDeleteProject = async () => {
-    setDeleteBusy(true)
+    setDeleteBusy('project')
     try {
       await projectApi.deleteProject(deleteProjectTarget.project_id)
       setDeleteProjectTarget(null)
       reload()
     } catch (e) { setError(e.message); setDeleteProjectTarget(null) }
-    finally { setDeleteBusy(false) }
+    finally { setDeleteBusy(null) }
   }
 
   const filtered = useMemo(() => {
@@ -656,11 +656,11 @@ export default function HomeDashboard() {
               <p className="tiny muted" style={{ marginTop: 8 }}>You can also drop the data table (all collected responses).</p>
             </div>
             <div className="sheet__foot" style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button className="btn btn--quiet" disabled={deleteBusy} onClick={() => setDeleteFormTarget(null)}>Cancel</button>
-              <button className="btn btn--danger" disabled={deleteBusy} onClick={() => confirmDeleteForm(false)}>
-                {deleteBusy && <span className="spin" />} Delete form</button>
-              <button className="btn btn--danger" disabled={deleteBusy} onClick={() => confirmDeleteForm(true)}>
-                {deleteBusy && <span className="spin" />} Delete form + data</button>
+              <button className="btn btn--quiet" disabled={!!deleteBusy} onClick={() => setDeleteFormTarget(null)}>Cancel</button>
+              <button className="btn btn--danger" disabled={!!deleteBusy} onClick={() => confirmDeleteForm(false)}>
+                {deleteBusy === 'form' && <span className="spin" />} Delete form</button>
+              <button className="btn btn--danger" disabled={!!deleteBusy} onClick={() => confirmDeleteForm(true)}>
+                {deleteBusy === 'data' && <span className="spin" />} Delete form + data</button>
             </div>
           </div>
         </div>
@@ -678,9 +678,9 @@ export default function HomeDashboard() {
               <p>This will permanently delete this project. This cannot be undone.</p>
             </div>
             <div className="sheet__foot" style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button className="btn btn--quiet" disabled={deleteBusy} onClick={() => setDeleteProjectTarget(null)}>Cancel</button>
-              <button className="btn btn--danger" disabled={deleteBusy} onClick={confirmDeleteProject}>
-                {deleteBusy && <span className="spin" />} Delete project</button>
+              <button className="btn btn--quiet" disabled={!!deleteBusy} onClick={() => setDeleteProjectTarget(null)}>Cancel</button>
+              <button className="btn btn--danger" disabled={!!deleteBusy} onClick={confirmDeleteProject}>
+                {deleteBusy === 'project' && <span className="spin" />} Delete project</button>
             </div>
           </div>
         </div>

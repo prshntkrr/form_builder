@@ -1220,9 +1220,9 @@ def _normalize_relationship(raw: Any) -> Optional[Dict[str, str]]:
         return None
 
     result = {"type": "child", "parent_form_id": parent}
-    inherit = raw.get("inherit_fields")
-    if isinstance(inherit, list):
-        result["inherit_fields"] = [str(f).strip() for f in inherit if isinstance(f, str) and str(f).strip()]
+    search = raw.get("search_fields")
+    if isinstance(search, list):
+        result["search_fields"] = [str(f).strip() for f in search if isinstance(f, str) and str(f).strip()]
     return result
 
 

@@ -203,6 +203,8 @@ export default function Dashboards() {
 
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [dashboardName, setDashboardName] = useState("");
+  const [showManualNameModal, setShowManualNameModal] = useState(false);
+  const [manualDashboardName, setManualDashboardName] = useState("");
 
   const [savedDashboardId, setSavedDashboardId] = useState(null);
   const [loadingSavedDashboards, setLoadingSavedDashboards] = useState(false);
@@ -235,6 +237,7 @@ export default function Dashboards() {
 
   const [widgetData, setWidgetData] = useState({});
   const [dataLoading, setDataLoading] = useState(false);
+  const [openingDashboard, setOpeningDashboard] = useState(false);
   const [dataError, setDataError] = useState("");
   /* The filters that are actually applied — the shape the binding has
      always carried, which is what every widget's request already merges in.
@@ -327,6 +330,7 @@ export default function Dashboards() {
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [addMenuOpensUp, setAddMenuOpensUp] = useState(true);
   const addMenuRef = useRef(null);
+  const exportMenuRef = useRef(null);
 
   useEffect(() => {
     if (!addMenuOpen) {
@@ -355,6 +359,23 @@ export default function Dashboards() {
       document.removeEventListener("keydown", closeOnEscape);
     };
   }, [addMenuOpen]);
+
+  useEffect(() => {
+    const closeExportMenu = (event) => {
+      const el = exportMenuRef.current;
+      if (el && el.open && !el.contains(event.target)) {
+        el.removeAttribute("open");
+      }
+    };
+
+    document.addEventListener("mousedown", closeExportMenu);
+    document.addEventListener("touchstart", closeExportMenu);
+
+    return () => {
+      document.removeEventListener("mousedown", closeExportMenu);
+      document.removeEventListener("touchstart", closeExportMenu);
+    };
+  }, []);
 
   /* Which page of each table is on screen. Keyed by widget, because two
      tables on one dashboard page independently. */
@@ -1235,6 +1256,7 @@ export default function Dashboards() {
     setSelectedWidgetId(null);
     setAiCandidate(null);
     setCandidateData(EMPTY_PREVIEW);
+    setEditPrompt("");
     setFilterSelections({});
     setFilterOptions({});
     setFilterSearch({});
@@ -1732,6 +1754,8 @@ export default function Dashboards() {
 
   const openSavedDashboard = async (dashboardId) => {
     setView("builder");
+    setOpeningDashboard(true);
+    setDashboard(null);
     setDataError("");
     setGenerationError("");
     setEditError("");
@@ -1779,6 +1803,10 @@ export default function Dashboards() {
 
       setDashboard(openDashboard);
       setCurrentVersionNo(targetVersion);
+
+      const url = new URL(window.location);
+      url.searchParams.set("dashboard", dashboardId);
+      window.history.replaceState({}, "", url);
 
       const initialLayout = buildGridLayout(openDashboard?.widgets || []);
 
@@ -1843,6 +1871,8 @@ export default function Dashboards() {
       }
     } catch (e) {
       setGenerationError(e.message || "Failed to open dashboard.");
+    } finally {
+      setOpeningDashboard(false);
     }
   };
 
@@ -1877,6 +1907,10 @@ export default function Dashboards() {
     setIsEditMode(false);
     setLiveSource(null);
     loadSavedDashboards();
+
+    const url = new URL(window.location);
+    url.searchParams.delete("dashboard");
+    window.history.replaceState({}, "", url);
   };
 
   /* A dashboard's name, as a file name. */
@@ -2189,17 +2223,24 @@ export default function Dashboards() {
       return;
     }
 
+    setManualDashboardName("");
+    setShowManualNameModal(true);
+  };
+
+  const confirmManualDashboard = () => {
+    const name = manualDashboardName.trim() || "Untitled dashboard";
+
     const empty = {
       schema_version: 1,
 
       dashboard: {
-        name: "Untitled dashboard",
+        name,
         description: "",
       },
 
       data_sources: [
         {
-          id: selectedSource.name,
+          id: "source_1",
           type: liveSource ? "databricks" : "postgresql_tabular",
           name: selectedSource.name,
         },
@@ -2219,11 +2260,10 @@ export default function Dashboards() {
     setSavedGridLayout([]);
     setAllLayouts({ lg: [] });
 
-    setEditDashboardName(empty.dashboard.name);
+    setEditDashboardName(name);
     setEditError("");
     setIsEditMode(true);
-
-    startAddWidget();
+    setShowManualNameModal(false);
   };
 
   /* =========================================================
@@ -3580,7 +3620,7 @@ export default function Dashboards() {
 
       setDashboard(dashboardToUpdate);
 
-      /* Sync version state — update always creates a new draft. */
+      /* Sync version state — update reuses the existing draft or creates one. */
       if (result?.latest_version) {
         setCurrentVersionNo(result.latest_version);
         setLatestVersionNo(result.latest_version);
@@ -3833,6 +3873,11 @@ export default function Dashboards() {
       setShowVersionHistory(false);
       setShowDeleteModal(false);
       setWidgetData({});
+      setView("list");
+
+      const url = new URL(window.location);
+      url.searchParams.delete("dashboard");
+      window.history.replaceState({}, "", url);
 
       await loadSavedDashboards();
     } catch (e) {
@@ -4099,6 +4144,7 @@ export default function Dashboards() {
                 className="btn btn--primary"
                 type="button"
                 onClick={applyDashboardFilters}
+                disabled={!Object.values(filterSelections).some((v) => v.length > 0)}
               >
                 Search
               </button>
@@ -4107,6 +4153,7 @@ export default function Dashboards() {
                 className="btn"
                 type="button"
                 onClick={resetDashboardFilters}
+                disabled={!Object.values(filterSelections).some((v) => v.length > 0)}
               >
                 Reset
               </button>
@@ -4614,16 +4661,7 @@ export default function Dashboards() {
                           Open
                         </button>
 
-                        <button
-                          className="btn btn--sm"
-                          type="button"
-                          disabled={exportingId === item.dashboard_id}
-                          onClick={() => exportFromList(item.dashboard_id)}
-                        >
-                          {exportingId === item.dashboard_id
-                            ? "Opening…"
-                            : "Export PDF"}
-                        </button>
+
                       </td>
                     </tr>
                   ))}
@@ -4634,10 +4672,70 @@ export default function Dashboards() {
         </section>
       )}
 
+      {/* Shimmer skeleton while a saved dashboard is loading. */}
+      {projectId && view === "builder" && openingDashboard && (
+        <div style={{ padding: "0 4px" }}>
+          {/* Title bar skeleton */}
+          <div style={{ marginBottom: 16, display: "flex", alignItems: "center", gap: 12 }}>
+            <div className="skeleton" style={{ width: 200, height: 26, borderRadius: 6 }} />
+            <div className="skeleton" style={{ width: 100, height: 22, borderRadius: 12 }} />
+            <span className="spacer" />
+            <div className="skeleton" style={{ width: 130, height: 34, borderRadius: 6 }} />
+            <div className="skeleton" style={{ width: 140, height: 34, borderRadius: 6 }} />
+            <div className="skeleton" style={{ width: 120, height: 34, borderRadius: 6 }} />
+            <div className="skeleton" style={{ width: 60, height: 34, borderRadius: 6 }} />
+          </div>
+
+          {/* Filter section skeleton */}
+          <div className="card card--pad" style={{ marginBottom: 16 }}>
+            <div className="skeleton" style={{ width: 140, height: 18, borderRadius: 4, marginBottom: 6 }} />
+            <div className="skeleton" style={{ width: 300, height: 14, borderRadius: 4, marginBottom: 12 }} />
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <div className="skeleton" style={{ width: 130, height: 32, borderRadius: 6 }} />
+            </div>
+          </div>
+
+          {/* Stat tiles row */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+            <div className="card card--pad" style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px 20px" }}>
+              <div className="skeleton" style={{ width: 48, height: 48, borderRadius: "50%" }} />
+              <div>
+                <div className="skeleton" style={{ width: 120, height: 14, borderRadius: 4, marginBottom: 8 }} />
+                <div className="skeleton" style={{ width: 60, height: 22, borderRadius: 4 }} />
+              </div>
+            </div>
+            <div className="card card--pad" style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px 20px" }}>
+              <div className="skeleton" style={{ width: 48, height: 48, borderRadius: "50%" }} />
+              <div>
+                <div className="skeleton" style={{ width: 120, height: 14, borderRadius: 4, marginBottom: 8 }} />
+                <div className="skeleton" style={{ width: 80, height: 22, borderRadius: 4 }} />
+              </div>
+            </div>
+          </div>
+
+          {/* Charts row */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+            <div className="card card--pad skeleton" style={{ height: 280, borderRadius: 8 }} />
+            <div className="card card--pad skeleton" style={{ height: 280, borderRadius: 8 }} />
+          </div>
+
+          {/* Bottom row — chart + table */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div className="card card--pad skeleton" style={{ height: 260, borderRadius: 8 }} />
+            <div className="card card--pad" style={{ borderRadius: 8 }}>
+              <div className="skeleton" style={{ width: 160, height: 18, borderRadius: 4, marginBottom: 12 }} />
+              {[...Array(6)].map((_, i) => (
+                <div key={i} className="skeleton" style={{ height: 20, borderRadius: 4, marginBottom: 8 }} />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Data source selector. It used to stay on screen above an opened
           dashboard, which is what made opening one look like nothing had
           happened. */}
-      {projectId && view === "builder" && !dashboard && !loading && !error && (
+      {projectId && view === "builder" && !dashboard && !openingDashboard && !loading && !error && (
         <section className="card card--pad">
           {/* The heading carries the import action, so bringing data in and
               choosing data are the same decision in the same place. */}
@@ -5088,6 +5186,7 @@ export default function Dashboards() {
           section, so the section has to survive once one is open. What is
           hidden then is the prompt, not the dashboard. */}
       {view === "builder"
+        && !openingDashboard
         && (dashboard || (selectedSource && fields?.length > 0)) && (
         <section
           className="card card--pad"
@@ -5219,7 +5318,7 @@ export default function Dashboards() {
                     {/* One control instead of three. <details> is the
                         browser's own disclosure widget: it opens on click and
                         on Enter, and needs no state of ours to stay right. */}
-                    <details className="dash__menu">
+                    <details className="dash__menu" ref={exportMenuRef}>
                       <summary className="btn">Export and share</summary>
 
                       <div className="dash__menu-body" role="menu">
@@ -5621,6 +5720,17 @@ export default function Dashboards() {
                         }
 
                         // Normal edit flow: no stashed version exists.
+                        if (!savedDashboardId) {
+                          setDashboard(null);
+                          setIsEditMode(false);
+                          setEditError("");
+                          setWidgetData({});
+                          setGridLayout([]);
+                          setSavedGridLayout([]);
+                          setAllLayouts({ lg: [] });
+                          return;
+                        }
+
                         setGridLayout(savedGridLayout);
                         setAllLayouts({ lg: savedGridLayout });
                         setIsEditMode(false);
@@ -5933,6 +6043,68 @@ export default function Dashboards() {
                 onClick={saveCurrentDashboard}
               >
                 {saving ? "Saving..." : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =====================================================
+          MANUAL DASHBOARD NAME MODAL
+          ===================================================== */}
+
+      {showManualNameModal && (
+        <div className="modal-backdrop">
+          <div
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="manual-dashboard-title"
+          >
+            <h2 id="manual-dashboard-title">Name Your Dashboard</h2>
+
+            <p className="muted">Enter a name for your new dashboard.</p>
+
+            <input
+              type="text"
+              value={manualDashboardName}
+              onChange={(e) => setManualDashboardName(e.target.value)}
+              placeholder="Dashboard name"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && manualDashboardName.trim()) {
+                  confirmManualDashboard();
+                }
+
+                if (e.key === "Escape") {
+                  setShowManualNameModal(false);
+                }
+              }}
+            />
+
+            <div
+              className="row"
+              style={{
+                marginTop: 16,
+              }}
+            >
+              <span className="spacer" />
+
+              <button
+                className="btn"
+                type="button"
+                onClick={() => setShowManualNameModal(false)}
+              >
+                Cancel
+              </button>
+
+              <button
+                className="btn btn--primary"
+                type="button"
+                disabled={!manualDashboardName.trim()}
+                onClick={confirmManualDashboard}
+              >
+                Create
               </button>
             </div>
           </div>

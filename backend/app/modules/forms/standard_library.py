@@ -348,6 +348,7 @@ def borrow(
     definition: Dict[str, Any],
     standard_id: str,
     section: Optional[str] = None,
+    fields: Optional[Sequence[str]] = None,
 ) -> Dict[str, Any]:
     """Merge a standard's fields — or one of its sections — into a draft.
 
@@ -365,6 +366,9 @@ def borrow(
         incoming = [f for f in incoming if f.get("section") == section]
         if not incoming:
             raise LookupError(f"'{standard_id}' has no section '{section}'")
+    if fields:
+        wanted = set(fields)
+        incoming = [f for f in incoming if f.get("name") in wanted]
 
     merged = copy.deepcopy(definition)
     fields = list(merged.get("fields") or [])

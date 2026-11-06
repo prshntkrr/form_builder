@@ -222,10 +222,10 @@ export const api = {
     }),
 
   // Merge a standard's fields, or one of its sections, into the draft in hand.
-  borrowStandard: (standardId, formJson, section) =>
+  borrowStandard: (standardId, formJson, section, fields) =>
     request(`/standard-forms/${standardId}/borrow`, {
       method: 'POST',
-      body: JSON.stringify({ form_json: formJson, section }),
+      body: JSON.stringify({ form_json: formJson, section, fields }),
     }),
 
   // How far a saved form has drifted from the standard it started from.
@@ -287,7 +287,7 @@ export const api = {
   // `renames` is old field key -> new one. The server moves the stored answers
   // with them, so responses collected before the rename keep matching the
   // definition — which is why a rename cannot be sent twice.
-  updateForm: (formId, formJson, updatedBy, renames, whatsapp, ivr, versionMeta) =>
+  updateForm: (formId, formJson, updatedBy, renames, whatsapp, ivr, versionMeta, draftOnly) =>
     request(`/forms/${formId}`, {
       method: 'PUT',
       body: JSON.stringify({
@@ -299,6 +299,7 @@ export const api = {
         version_tag: versionMeta?.tag || null,
         version_label: versionMeta?.label || null,
         version_description: versionMeta?.description || null,
+        draft_only: !!draftOnly,
       }),
     }),
 
@@ -535,6 +536,9 @@ export const api = {
 
   mediaUrl: (formId, surveyId, mediaId) =>
     request(`/forms/${formId}/submissions/${encodeURIComponent(surveyId)}/media/${mediaId}/url`),
+
+  mediaStreamUrl: (formId, surveyId, mediaId) =>
+    `${BASE}/forms/${formId}/submissions/${encodeURIComponent(surveyId)}/media/${mediaId}/stream`,
 
   // `range` is `{ from, to }` as YYYY-MM-DD, either side optional. The export
   // below takes the same one, so what is on screen and what comes out of the

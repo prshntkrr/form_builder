@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useRef, useId } from "react";
+import React, { useLayoutEffect, useEffect, useRef, useId } from "react";
 
 import * as am5 from "@amcharts/amcharts5";
 
@@ -48,7 +48,15 @@ export default function AmChartBarRenderer({ widget, data, rows, dashboard }) {
     const compared = mode !== "single" ? prepareComparedData(widget, rows) : null;
     const comparing = Boolean(compared && compared.series.length);
 
-    const root = am5.Root.new(container);
+    // amCharts uses getBoundingClientRect() internally, which returns
+    // zoomed dimensions when the page has CSS zoom (e.g. body { zoom }).
+    // Override with clientWidth/clientHeight which are zoom-independent.
+    const root = am5.Root.new(container, {
+      calculateSize: () => ({
+        width: container.clientWidth,
+        height: container.clientHeight,
+      }),
+    });
     rootRef.current = root;
 
     // Suppress the AmCharts free-version watermark during dev.
@@ -262,6 +270,16 @@ export default function AmChartBarRenderer({ widget, data, rows, dashboard }) {
     return () => {
       root.dispose();
       rootRef.current = null;
+    };
+  }, [data, rows, widget, dashboard, chartId]);
+
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root || root.isDisposed()) return undefined;
+
+    root.resize();
+
+    return () => {
     };
   }, [data, rows, widget, dashboard, chartId]);
 

@@ -292,9 +292,12 @@ def parents_for(user: Dict[str, Any], child_form_id: str,
     from app.modules.forms import form_service, submission_service
 
     child = form_service.get_form(child_form_id)
-    parent_id = parent_form_id(child.get("form_json") or {})
+    child_json = child.get("form_json") or {}
+    parent_id = parent_form_id(child_json)
     if not parent_id:
         raise RelationshipError(f"'{child_form_id}' is not configured as a child form.")
+
+    search_fields = (child_json.get("relationship") or {}).get("search_fields") or []
 
     parent = form_service.get_form(parent_id)
     with transaction() as cur:
@@ -309,7 +312,8 @@ def parents_for(user: Dict[str, Any], child_form_id: str,
                                     record.get("created_by") or ""):
             continue
 
-        summary = _summarise(parent.get("form_json") or {}, record.get("form_data") or {})
+        summary = _summarise(parent.get("form_json") or {}, record.get("form_data") or {},
+                             search_fields=search_fields)
         if search and search.lower() not in f"{summary} {record['survey_id']}".lower():
             continue
 
@@ -325,16 +329,28 @@ def parents_for(user: Dict[str, Any], child_form_id: str,
     return {
         "parent_form_id": parent_id,
         "parent_form_title": parent["form_title"],
+        "search_fields": search_fields,
         "submissions": rows,
     }
 
 
-def _summarise(form_json: Dict[str, Any], form_data: Dict[str, Any]) -> str:
+def _summarise(form_json: Dict[str, Any], form_data: Dict[str, Any],
+               search_fields: Optional[List[str]] = None) -> str:
     """Enough of a submission to recognise it in a list.
 
-    The first couple of answered text-ish questions, in the order the form asks
-    them — which for a registration form is the name of the thing registered.
+    When *search_fields* is set the configured fields lead the summary so the
+    picker is immediately useful for search.  Falls back to the first couple
+    of answered text-ish questions.
     """
+    if search_fields:
+        parts = []
+        for sf in search_fields:
+            val = form_data.get(sf)
+            if val not in (None, "", []):
+                parts.append(str(val))
+        if parts:
+            return " · ".join(parts)
+
     parts = []
     for field in (form_json.get("fields") or [])[:6]:
         if not isinstance(field, dict):

@@ -40,6 +40,7 @@ MODULE = Module(
     tables=[
         "project", "project_member", "project_group", "project_group_member",
         "form_assignment", "submission_review", "project_api_key",
+        "project_standard_template",
     ],
     schema_file=Path(__file__).resolve().parent / "schema.sql",
     # Order matters: the column, then the tables (schema.sql), then the key that
@@ -51,5 +52,6 @@ MODULE = Module(
         bootstrap.ensure_standard_library_project,
         bootstrap.ensure_standard_library_project_key,
         bootstrap.unsystem_project_roles,
+        bootstrap.ensure_project_standard_template,
     ],
 )

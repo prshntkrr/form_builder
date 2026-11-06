@@ -67,16 +67,16 @@ export default function FormRelationship({ form, formId, onChange }) {
 
             {relationship?.parent_form_id && parentFields.length > 0 && (
               <>
-                <span className="tiny muted" style={{ whiteSpace: 'nowrap' }}>Auto-fill</span>
+                <span className="tiny muted" style={{ whiteSpace: 'nowrap' }}>Search by</span>
                 <select
                   className="control"
                   multiple
                   size={1}
                   style={{ flex: '1 1 140px', minWidth: 0, height: 28, fontSize: 12, padding: '2px 6px' }}
-                  value={relationship.inherit_fields || []}
+                  value={relationship.search_fields || []}
                   onChange={(e) => {
                     const selected = Array.from(e.target.selectedOptions, (o) => o.value)
-                    onChange({ relationship: { ...relationship, inherit_fields: selected } })
+                    onChange({ relationship: { ...relationship, search_fields: selected } })
                   }}
                 >
                   {parentFields.map((pf) => (
@@ -84,7 +84,7 @@ export default function FormRelationship({ form, formId, onChange }) {
                   ))}
                 </select>
                 <span className="tiny muted" style={{ whiteSpace: 'nowrap' }}>
-                  {(relationship.inherit_fields || []).length || 0} picked
+                  {(relationship.search_fields || []).length || 0} picked
                 </span>
               </>
             )}

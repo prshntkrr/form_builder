@@ -10,7 +10,7 @@ import { typeName } from '../fieldTypes.js'
  * because knowing what is exposed matters to them even though the decision is
  * not theirs.
  */
-export default function ViewColumns({ formId }) {
+export default function ViewColumns({ formId, onChange }) {
   const { can } = useAuth()
   const [config, setConfig] = useState(null)
   const [open, setOpen] = useState(false)
@@ -19,16 +19,18 @@ export default function ViewColumns({ formId }) {
 
   useEffect(() => {
     setConfig(null)
-    api.getViewConfig(formId).then(setConfig).catch((e) => setError(e.message))
+    api.getViewConfig(formId).then((c) => { setConfig(c); onChange?.(c) }).catch((e) => setError(e.message))
   }, [formId])
 
   const save = async (visible, showAll = false) => {
     setBusy(true)
     setError('')
     try {
-      setConfig(await api.setViewConfig(formId, {
+      const updated = await api.setViewConfig(formId, {
         visible_fields: visible, show_all: showAll,
-      }))
+      })
+      setConfig(updated)
+      onChange?.(updated)
     } catch (e) {
       setError(e.message)
     } finally {
@@ -61,20 +63,16 @@ export default function ViewColumns({ formId }) {
           )}
         </span>
         <span className="spacer" />
-        {can.manage_users ? (
-          <button className="btn btn--sm btn--quiet" onClick={() => setOpen(!open)}>
-            {open ? 'Done' : 'Choose columns'}
-          </button>
-        ) : (
-          <span className="tiny faint">An admin chooses what they see</span>
-        )}
+        <button className="btn btn--sm btn--quiet" onClick={() => setOpen(!open)}>
+          {open ? 'Done' : 'Choose columns'}
+        </button>
       </div>
 
-      {open && can.manage_users && (
+      {open && (
         <div className="viewcfg__panel">
           <p className="tiny muted">
-            Ticked questions appear in the table a field officer sees. The rest are
-            never sent to their browser at all.
+            Ticked questions appear in the data table — both here (so you can verify)
+            and for field officers. Unticked columns are hidden from everyone.
           </p>
 
           <div className="viewcfg__list">

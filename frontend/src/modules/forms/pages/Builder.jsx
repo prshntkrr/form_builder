@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api.js'
 import { formsChanged } from '../../../core/events.js'
@@ -278,6 +278,18 @@ export default function Builder() {
      sent again. Cleared on a failure, so the next tick retries. */
   const sentRef = useRef(null)
 
+  // Snapshot of the form as last saved/loaded — for dirty checking.
+  const snapshotRef = useRef(null)
+  // The published version number when editing an Active form with a draft on top.
+  const [publishedVersion, setPublishedVersion] = useState(null)
+  // The draft version number sitting on top of the published version.
+  const [draftVersion, setDraftVersion] = useState(null)
+
+  const isDirty = useMemo(() => {
+    if (!form || !snapshotRef.current) return false
+    return JSON.stringify(untag(form)) !== JSON.stringify(untag(snapshotRef.current))
+  }, [form])
+
   const view = editing ? section : draftTab
 
   useEffect(() => {
@@ -299,6 +311,9 @@ export default function Builder() {
     setAutoSaved(null)
     setWaRoute({ receiver_number: '', keyword: '' })
     setIvrRoute({ receiver_number: '', menu_option: '1' })
+    snapshotRef.current = null
+    setPublishedVersion(null)
+    setDraftVersion(null)
 
     if (!formId) {
       // A copy of a saved form, made for another channel ("Copy as …").
@@ -335,9 +350,21 @@ export default function Builder() {
     api
       .getForm(formId)
       .then((f) => {
-        setForm(prep(f.form_json, true))
+        // If there's an unpublished draft version, load that instead of the
+        // published form_json — but track both so the UI can offer Publish.
+        const hasDraft = f.draft_version && f.draft_json
+        const jsonToLoad = hasDraft ? f.draft_json : f.form_json
+        setForm(prep(jsonToLoad, true))
+        snapshotRef.current = prep(jsonToLoad, true)
         setResponses(f.submission_count || 0)
         setStatus(f.form_status)
+        if (hasDraft && f.form_status === 'Active') {
+          setPublishedVersion(f.version_no)
+          setDraftVersion(f.draft_version)
+        } else {
+          setPublishedVersion(null)
+          setDraftVersion(null)
+        }
         const cfgDid = f.form_json?.channel_config?.ivr?.did
         if (cfgDid) {
           setIvrRoute((curr) => ({
@@ -506,37 +533,32 @@ export default function Builder() {
        survives the reload. `_uid` is dropped on the way back in. The id the
        server gave this draft rides along, so a reload cannot end up creating a
        second form beside the one autosave already made. */
-    recovery.keep(editing ? formId : null, form, autoSavedId)
+    // recovery disabled temporarily
+    // recovery.keep(editing ? formId : null, form, autoSavedId)
   }
 
-  /* One timer for the life of the builder, ticking whatever is being typed. */
-  useEffect(() => {
-    const timer = setInterval(() => tickRef.current(), recovery.EVERY_MS)
-    // A reload is the case this exists for, and it does not wait for a timer.
-    // Only the local half: an unload is no time to start a request.
-    const onUnload = () => keepRef.current()
-    window.addEventListener('beforeunload', onUnload)
-
-    return () => {
-      clearInterval(timer)
-      window.removeEventListener('beforeunload', onUnload)
-    }
-  }, [])
+  /* Recovery timer disabled temporarily */
+  // useEffect(() => {
+  //   const timer = setInterval(() => tickRef.current(), recovery.EVERY_MS)
+  //   const onUnload = () => keepRef.current()
+  //   window.addEventListener('beforeunload', onUnload)
+  //   return () => {
+  //     clearInterval(timer)
+  //     window.removeEventListener('beforeunload', onUnload)
+  //   }
+  // }, [])
 
   /* What this browser held when the builder opened.
      Offered, never applied: replacing what the server has with an older copy
      from a tab somebody forgot about would be worse than the loss this
      prevents. */
-  useEffect(() => {
-    if (!form || recovered !== null) return
-    if (editing && status !== 'Draft') return
-
-    const snapshot = recovery.held(editing ? formId : null)
-    // `false` rather than `null`: checked, and there is nothing to offer. The
-    // guard above reads `null` as "not looked yet", so declining an offer has
-    // to leave something other than `null` behind or it comes straight back.
-    setRecovered(snapshot && recovery.differs(snapshot, form, untag) ? snapshot : false)
-  }, [form, status, editing, formId, recovered])
+  // Recovery check disabled temporarily
+  // useEffect(() => {
+  //   if (!form || recovered !== null) return
+  //   if (editing && status !== 'Draft') return
+  //   const snapshot = recovery.held(editing ? formId : null)
+  //   setRecovered(snapshot && recovery.differs(snapshot, form, untag) ? snapshot : false)
+  // }, [form, status, editing, formId, recovered])
 
   const restoreDraft = () => {
     // Fresh `_uid`s: they are React keys from a counter that restarted with the
@@ -777,18 +799,23 @@ export default function Builder() {
     setVersionDialog({ tag: '', label: '', description: '', resolve })
   })
 
-  const save = (saveAs = 'Active') =>
+  const save = (saveAs = 'Active', draftOnly = false) =>
     run('save', async () => {
       while (autoSavingRef.current) await new Promise((r) => setTimeout(r, 100))
       if (!namedOnPurpose()) return
+      const nameless = form.fields.filter((f) => !f.name || !f.name.trim())
+      if (nameless.length) {
+        setError(`Every question needs a variable name. ${nameless.length} question${nameless.length > 1 ? 's are' : ' is'} missing one.`)
+        return
+      }
       const renames = {}
       for (const f of form.fields) if (f._orig && f._orig !== f.name) renames[f._orig] = f.name
 
       const payload = untag(form)
 
-      // Ask for version info when saving a published form (not drafts, not new forms)
+      // Ask for version info when publishing (not for draft saves)
       let versionMeta = null
-      if (editing && status === 'Active') {
+      if (editing && status === 'Active' && !draftOnly) {
         versionMeta = await askVersionMeta()
         if (versionMeta === null) return // cancelled
       }
@@ -797,7 +824,7 @@ export default function Builder() {
       // after autosave set it, so the closure's `draftId` can be stale.
       const liveDraftId = editing ? formId : autoSavedIdRef.current
       const result = liveDraftId
-        ? await api.updateForm(liveDraftId, payload, undefined, renames, whatsappRouting(), ivrRouting(), versionMeta)
+        ? await api.updateForm(liveDraftId, payload, undefined, renames, whatsappRouting(), ivrRouting(), versionMeta, draftOnly)
         : await api.createForm(payload, undefined, saveAs, buildingIn, whatsappRouting(), ivrRouting())
 
       if (liveDraftId && !editing && saveAs !== 'Draft') {
@@ -828,11 +855,22 @@ export default function Builder() {
       setSaved(result)
       setStatus(result.form_status)
       setCheck(null)
-      setForm(prep(payload, true))
+      const prepped = prep(payload, true)
+      setForm(prepped)
+      snapshotRef.current = prepped
+
+      // Track draft/published versions
+      if (draftOnly && result.draft_version) {
+        setPublishedVersion(result.version_no)
+        setDraftVersion(result.draft_version)
+      } else {
+        setPublishedVersion(null)
+        setDraftVersion(null)
+      }
 
       // If an IVR form with an assigned DID is saved, auto-publish definition and completion text to Indev
       const currentDid = ivrRoute.receiver_number?.trim() || payload?.channel_config?.ivr?.did
-      if (formChannel(form) === 'ivr' && currentDid) {
+      if (!draftOnly && formChannel(form) === 'ivr' && currentDid) {
         api.publishToIndev(formId || draftId, currentDid)
           .catch((err) => console.warn('Could not auto-sync Indev on form save:', err))
       }
@@ -844,6 +882,8 @@ export default function Builder() {
       const result = await api.setStatus(formId, next)
       setSaved(result)
       setStatus(result.form_status)
+      setPublishedVersion(null)
+      setDraftVersion(null)
       formsChanged()
     })
 
@@ -864,9 +904,20 @@ export default function Builder() {
   /** Pull the definition back in after something else changed it — a rollback. */
   const reload = async () => {
     const f = await api.getForm(formId)
-    setForm(prep(f.form_json, true))
+    const hasDraft = f.draft_version && f.draft_json
+    const jsonToLoad = hasDraft ? f.draft_json : f.form_json
+    const prepped = prep(jsonToLoad, true)
+    setForm(prepped)
+    snapshotRef.current = prepped
     setResponses(f.submission_count || 0)
     setStatus(f.form_status)
+    if (hasDraft && f.form_status === 'Active') {
+      setPublishedVersion(f.version_no)
+      setDraftVersion(f.draft_version)
+    } else {
+      setPublishedVersion(null)
+      setDraftVersion(null)
+    }
     setSaved(null)
     setCheck(null)
     formsChanged()
@@ -1608,6 +1659,7 @@ export default function Builder() {
               className="name-input"
               value={form.title}
               placeholder="Untitled form"
+              readOnly={view === 'history' || view === 'responses'}
               onChange={(e) =>
                 setForm({ ...form, title: e.target.value, ...(editing ? {} : { table_name: identifier(e.target.value, MAX_IDENTIFIER) }) })
               }
@@ -1616,11 +1668,12 @@ export default function Builder() {
               className="desc-input"
               value={form.description || ''}
               placeholder="Add a short description"
+              readOnly={view === 'history' || view === 'responses'}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
             />
           </div>
 
-          {view !== 'responses' && (
+          {view !== 'responses' && view !== 'history' && (
           <div className="bld-actions">
             {editing && isWebBuilder && status === 'Active' && (
               <Link className="btn btn--sm" to={`/f/${formId}`} title="Open the form people fill in">
@@ -1667,24 +1720,46 @@ export default function Builder() {
                 type="button"
                 className="btn btn--sm"
                 onClick={() => save('Active')}
-                disabled={busy === 'save'}
-                title="Save your edits without publishing yet"
+                disabled={busy === 'save' || !isDirty}
+                title={isDirty ? 'Save your edits without publishing yet' : 'No changes to save'}
               >
                 {busy === 'save' && <span className="spin" />}
                 Save changes
               </button>
             )}
             {editing && status === 'Active' && (
-              <button
-                type="button"
-                className="btn btn--sm"
-                onClick={() => setLive('Draft')}
-                disabled={busy === 'publish'}
-                title="Take it out of circulation. Answers already collected are kept"
-              >
-                {busy === 'publish' && <span className="spin" />}
-                Back to draft
-              </button>
+              <>
+                <button
+                  type="button"
+                  className="btn btn--sm"
+                  onClick={() => setLive('Draft')}
+                  disabled={busy === 'publish'}
+                  title="Take it out of circulation. Answers already collected are kept"
+                >
+                  {busy === 'publish' && <span className="spin" />}
+                  Discard draft
+                </button>
+                <button
+                  type="button"
+                  className="btn btn--sm"
+                  onClick={() => save('Active', true)}
+                  disabled={busy === 'save' || !isDirty}
+                  title={isDirty ? 'Save changes without publishing them' : 'No changes to save'}
+                >
+                  {busy === 'save' && <span className="spin" />}
+                  Save
+                </button>
+                <button
+                  type="button"
+                  className="btn btn--sm btn--primary"
+                  onClick={() => save('Active', false)}
+                  disabled={busy === 'save' || (!isDirty && !draftVersion)}
+                  title={isDirty || draftVersion ? 'Save and publish changes live' : 'No changes to publish'}
+                >
+                  {busy === 'save' ? <span className="spin" /> : <SaveIcon />}
+                  Publish
+                </button>
+              </>
             )}
 
             {editing && status === 'Draft' && PUBLISHABLE.includes(channel) ? (
@@ -1692,25 +1767,25 @@ export default function Builder() {
                 type="button"
                 className="btn btn--sm btn--primary"
                 onClick={() => setLive('Active')}
-                disabled={busy === 'publish'}
-                title="Make this form live so people can fill it in"
+                disabled={busy === 'publish' || isDirty}
+                title={isDirty ? 'Save your changes first' : 'Make this form live so people can fill it in'}
               >
                 {busy === 'publish' ? <span className="spin" /> : <SaveIcon />}
                 Publish
               </button>
-            ) : (
+            ) : !editing ? (
               <button
                 type="button"
                 className="btn btn--sm btn--primary"
                 onClick={() => save('Active')}
-                disabled={busy === 'save' || (!editing && !form.channel)}
-                aria-describedby={!editing && !form.channel ? 'save-why' : undefined}
-                title={!editing && !form.channel ? 'Choose a channel first.' : undefined}
+                disabled={busy === 'save' || !form.channel}
+                aria-describedby={!form.channel ? 'save-why' : undefined}
+                title={!form.channel ? 'Choose a channel first.' : undefined}
               >
                 {busy === 'save' ? <span className="spin" /> : <SaveIcon />}
-                {busy === 'save' ? 'Saving' : editing ? 'Save changes' : 'Publish'}
+                {busy === 'save' ? 'Saving' : 'Publish'}
               </button>
-            )}
+            ) : null}
           </div>
           )}
         </div>
@@ -1743,21 +1818,30 @@ export default function Builder() {
     </div>
   )
 
+  const isBuilderView = !view || view === 'questions' || view === 'design' || view === 'preview' || view === 'script' || view === 'json'
   const saveBar = form && view !== 'responses' && (
     <div className="savebar">
       <span className="tiny muted">
         {form.fields.length} question{form.fields.length === 1 ? '' : 's'}
         {responses > 0 && <> <span className="sep">·</span> {responses} response{responses === 1 ? '' : 's'}</>}
         {renameCount > 0 && <> <span className="sep">·</span> {renameCount} renamed</>}
+        {draftVersion && publishedVersion && (
+          <> <span className="sep">·</span> <span style={{ color: 'var(--amber, #d97706)' }}>
+            Unpublished draft (v{draftVersion}), published v{publishedVersion}
+          </span></>
+        )}
+        {isDirty && !draftVersion && editing && (
+          <> <span className="sep">·</span> <span style={{ color: 'var(--amber, #d97706)' }}>Unsaved changes</span></>
+        )}
       </span>
       <span className="spacer" />
-      {editing && responses > 0 && (
+      {isBuilderView && editing && responses > 0 && (
         <button className="btn btn--quiet btn--sm" onClick={() => inspect(false)} disabled={busy === 'check'}>
           {busy === 'check' && <span className="spin" />}
           Check responses
         </button>
       )}
-      {editing && (
+      {isBuilderView && editing && (
         <button
           className="btn btn--quiet btn--sm"
           onClick={() => api.exportExcel(formId)}
@@ -1766,7 +1850,7 @@ export default function Builder() {
           Export Excel
         </button>
       )}
-      {editing && (
+      {isBuilderView && editing && (
         <button
           className="btn btn--quiet btn--sm"
           onClick={() => setContributing(true)}
@@ -2124,14 +2208,6 @@ export default function Builder() {
                     </div>
                   )}
                 </>
-              )}
-
-              {view === 'history' && editing && (
-                <ExportPanel
-                  formId={formId}
-                  version={saved?.version_no ?? form.version}
-                  isDraft={status === 'Draft'}
-                />
               )}
 
               {view === 'history' && editing && (
