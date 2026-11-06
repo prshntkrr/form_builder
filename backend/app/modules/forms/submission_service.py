@@ -887,6 +887,7 @@ def list_submissions(
             "name": field_name(f),
             "label": f.get("label") or field_name(f),
             "type": f.get("type") or "text",
+            **({"columns": f.get("columns") or []} if f.get("type") == "table" else {}),
         }
         for f in form_json.get("fields") or []
         if field_name(f)
@@ -1015,6 +1016,7 @@ def answers_for(form_json: Dict[str, Any], form_data: Dict[str, Any]) -> list:
             "section": section.get("title") or "",
             "value": data.get(name),
             "answered": name in data and not _is_empty(data.get(name)),
+            **({"columns": field.get("columns") or []} if field.get("type") == "table" else {}),
         })
 
     for name, value in data.items():
