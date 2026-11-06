@@ -215,6 +215,7 @@ class FieldConfig(_Config):
     section: Optional[str] = None
     options: List[OptionConfig] = Field(
         default_factory=list, validation_alias=AliasChoices("options", "choices", "values"))
+    columns: List[Dict[str, Any]] = Field(default_factory=list)
     validation: ValidationRules = Field(default_factory=ValidationRules)
     config: FieldSettings = Field(default_factory=FieldSettings)
     order: Optional[int] = None

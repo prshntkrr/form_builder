@@ -11,6 +11,46 @@ import HomeDashboard from './core/pages/AdminProjects.jsx'
 import { homeFor, moduleRoutes, publicModuleRoutes } from './core/registry.js'
 import { LanguageProvider } from './core/language.jsx'
 
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props)
+    this.state = { hasError: false, error: null }
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error }
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error('ErrorBoundary caught error:', error, errorInfo)
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <main className="main" style={{ padding: 32 }}>
+          <div className="card" style={{ maxWidth: 800, margin: '20px auto', border: '1px solid #f87171', background: '#fff', borderRadius: 8, padding: 24 }}>
+            <h3 style={{ color: '#dc2626', marginTop: 0 }}>An error occurred on this page</h3>
+            <p className="tiny muted">The component failed to render. You can try refreshing the page or reporting this error.</p>
+            <pre style={{ background: '#fef2f2', padding: 12, borderRadius: 6, color: '#991b1b', fontSize: 12, overflowX: 'auto', border: '1px solid #fecaca' }}>
+              {this.state.error?.message || String(this.state.error)}
+            </pre>
+            <div style={{ marginTop: 16 }}>
+              <button
+                className="btn btn--primary btn--sm"
+                onClick={() => window.location.reload()}
+              >
+                Reload Page
+              </button>
+            </div>
+          </div>
+        </main>
+      )
+    }
+    return this.props.children
+  }
+}
+
 function Loading() {
   return (
     <main className="gate">
@@ -97,7 +137,9 @@ function Shell() {
       )}
       <Sidebar onNavigate={() => setMobileMenu(false)} collapsed={collapsed} onToggleCollapse={toggleCollapse} />
       <div className="body" onClick={() => mobileMenu && setMobileMenu(false)}>
-        <Outlet />
+        <ErrorBoundary>
+          <Outlet />
+        </ErrorBoundary>
       </div>
     </div>
   )
@@ -125,8 +167,9 @@ export default function App() {
   }, {})
 
   return (
-    <LanguageProvider>
-    <Routes>
+    <ErrorBoundary>
+      <LanguageProvider>
+      <Routes>
       {/* Open to everyone — you cannot sign in from behind the gate. */}
       <Route path="/login" element={<Login />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
@@ -179,6 +222,7 @@ export default function App() {
 
       <Route path="*" element={<NotFound />} />
     </Routes>
-    </LanguageProvider>
+      </LanguageProvider>
+    </ErrorBoundary>
   )
 }

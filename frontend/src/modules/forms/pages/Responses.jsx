@@ -2,12 +2,18 @@ import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api.js'
 import ViewColumns from '../components/ViewColumns.jsx'
+import RecordCell from '../components/RecordCell.jsx'
 
 const PAGE = 25
 
 const cell = (value) => {
   if (value == null || value === '') return <span className="faint">—</span>
-  if (Array.isArray(value)) return value.join(', ')
+  if (Array.isArray(value)) {
+    if (value.length > 0 && typeof value[0] === 'object') {
+      return `${value.length} row${value.length === 1 ? '' : 's'}`
+    }
+    return value.join(', ')
+  }
   if (typeof value === 'boolean') return value ? 'Yes' : 'No'
   if (typeof value === 'object') return Object.entries(value).map(([k, v]) => `${k} ${v}`).join(', ')
   return String(value)
@@ -151,11 +157,21 @@ export default function Responses({ formId }) {
                     <td className="muted">{when(row.created_on)}</td>
                     <td className="muted">{row.created_by || '—'}</td>
                     <td className="muted">{row.form_version}</td>
-                    {shownColumns.map((c) => (
-                      <td key={c.name} title={String((row.form_data || {})[c.name] ?? '')}>
-                        {cell((row.form_data || {})[c.name])}
-                      </td>
-                    ))}
+                    {shownColumns.map((c) => {
+                      const val = (row.form_data || {})[c.name]
+                      const titleStr = typeof val === 'object' ? JSON.stringify(val) : String(val ?? '')
+                      return (
+                        <td key={c.name} title={titleStr}>
+                          <RecordCell
+                            column={c}
+                            value={val}
+                            media={(row.media || {})[c.name]}
+                            formId={formId}
+                            surveyId={row.survey_id}
+                          />
+                        </td>
+                      )
+                    })}
                   </tr>
                 ))}
               </tbody>

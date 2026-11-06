@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 
 import { api } from '../api.js'
 import { useProject, useProjects } from '../active.js'
+import { TableModal } from '../../forms/components/RecordCell.jsx'
 
 const REVIEW = 'project.submissions.review'
 
@@ -773,6 +774,95 @@ function sectioned(answers) {
 /**
  * One stored value, written the way it was asked.
  */
+function TableAnswer({ answer }) {
+  const [modalOpen, setModalOpen] = useState(false)
+  const { value, columns, label } = answer
+
+  if (!Array.isArray(value) || !value.length) {
+    return <span className="faint">—</span>
+  }
+
+  const cols = (columns && columns.length > 0)
+    ? columns.map(c => ({ key: c.key, label: c.label || c.key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) }))
+    : Object.keys(value[0] || {}).map(k => ({ key: k, label: k.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) }))
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            setModalOpen(true)
+          }}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '3px 10px',
+            background: '#ecfdf5',
+            color: '#047857',
+            border: '1px solid #a7f3d0',
+            borderRadius: 12,
+            fontSize: 12,
+            fontWeight: 600,
+            cursor: 'pointer',
+            lineHeight: '18px',
+            outline: 'none',
+          }}
+          title="Click to view full table data in modal"
+        >
+          <span>⊞</span>
+          <span>{value.length} row{value.length === 1 ? '' : 's'}</span>
+          <span style={{ fontSize: 11, color: '#059669', textDecoration: 'underline', marginLeft: 2 }}>View Details</span>
+        </button>
+      </div>
+
+      <details style={{ fontSize: 12, cursor: 'pointer', marginTop: 4 }}>
+        <summary style={{ color: 'var(--ink-3, #64748b)', fontSize: 11, outline: 'none', fontWeight: 500 }}>
+          Preview inline table
+        </summary>
+        <div style={{ marginTop: 6, maxHeight: 180, overflowX: 'auto', border: '1px solid var(--line, #cbd5e1)', borderRadius: 6, background: '#f8fafc' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+            <thead>
+              <tr style={{ background: '#f1f5f9' }}>
+                <th style={{ padding: '4px 6px', borderBottom: '1px solid #cbd5e1', textAlign: 'center', color: '#475569' }}>#</th>
+                {cols.map((c) => (
+                  <th key={c.key} style={{ whiteSpace: 'nowrap', padding: '4px 8px', borderBottom: '1px solid #cbd5e1', textAlign: 'left', fontWeight: 600, color: '#334155' }}>
+                    {c.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {value.map((row, rIdx) => (
+                <tr key={rIdx} style={{ borderBottom: '1px dotted #e2e8f0', background: rIdx % 2 === 1 ? '#f8fafc' : '#ffffff' }}>
+                  <td style={{ padding: '4px 6px', textAlign: 'center', color: '#94a3b8' }}>{rIdx + 1}</td>
+                  {cols.map((c) => {
+                    const cellVal = row ? row[c.key] : null
+                    const displayVal = cellVal == null || cellVal === '' ? '—' : (typeof cellVal === 'object' ? JSON.stringify(cellVal) : String(cellVal))
+                    return (
+                      <td key={c.key} style={{ whiteSpace: 'nowrap', padding: '4px 8px', color: '#1e293b' }}>{displayVal}</td>
+                    )
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </details>
+
+      {modalOpen && (
+        <TableModal
+          column={{ label: label || 'Table Details', columns: cols }}
+          value={value}
+          onClose={() => setModalOpen(false)}
+        />
+      )}
+    </div>
+  )
+}
+
 function Answer({ answer }) {
   const { type, value } = answer
 
@@ -787,7 +877,16 @@ function Answer({ answer }) {
     )
   }
 
-  if (Array.isArray(value)) return value.join(', ')
+  if (type === 'table' || (Array.isArray(value) && value.length > 0 && typeof value[0] === 'object')) {
+    return <TableAnswer answer={answer} />
+  }
+
+  if (Array.isArray(value)) {
+    if (value.length > 0 && typeof value[0] === 'object') {
+      return <TableAnswer answer={answer} />
+    }
+    return value.join(', ')
+  }
 
   if (type === 'location' && value && typeof value === 'object') {
     return `${value.lat ?? value.latitude}, ${value.lng ?? value.longitude}`

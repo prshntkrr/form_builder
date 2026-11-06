@@ -81,6 +81,7 @@ export default function FormRenderer({
   media,
   // Told the position, so the page that submits can send it.
   onLocation,
+  hideSubmit = false,
 }) {
   const [ownLanguage, setOwnLanguage] = useState(() => defaultLanguage(formJson))
   const chosen = language || ownLanguage
@@ -343,7 +344,7 @@ export default function FormRenderer({
         </p>
       )}
 
-      {onSubmit && !off.form && !place.blocked && (
+      {onSubmit && !hideSubmit && !off.form && !place.blocked && (
         <div className="formview__send">
           {/* Said as soon as the position is known, not after a rejected
               submission. The backend checks the same ring again on the way in;

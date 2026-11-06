@@ -22,6 +22,7 @@ export const TYPES = [
   ['signature', 'Signature'],
   ['location', 'Location'],
   ['polygon', 'Polygon'],
+  ['table', 'Table (Dynamic Rows)'],
   ['label', 'Label / Text'],
   ['banner', 'Banner image'],
 ]
@@ -31,6 +32,8 @@ const NAMES = Object.fromEntries(TYPES)
 export const typeName = (type) => NAMES[type] || type
 
 export const WITH_OPTIONS = new Set(['select', 'radio', 'multiselect'])
+
+export const TABLE_COLUMN_TYPES = TYPES.filter(([type]) => type !== 'table')
 
 /** Have a value worth bounding with a smallest / largest. */
 export const NUMERIC = new Set(['number', 'decimal', 'currency', 'rating'])
@@ -76,6 +79,7 @@ export const STORAGE = {
   // geofence rings use. Stored the way a location is: in form_data, mirrored
   // as TEXT. Mirrors backend/app/modules/forms/field_types.py.
   polygon: ['array [[lng, lat], …]', 'TEXT'],
+  table: ['array [object, …]', 'JSONB'],
   label: ['none (display only)', '—'],
   banner: ['none (display only)', '—'],
 }

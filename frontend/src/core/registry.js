@@ -87,9 +87,10 @@ export const moduleLists = (live) =>
  * group of that name at the end, rather than vanishing.
  */
 export const NAV_GROUPS = [
-  ['configuration', 'Configuration'],
-  ['data', 'Data & Channels'],
-  ['administration', 'Administration'],
+  ['research_platforms', 'Research Platforms', 'label.research.group'],
+  ['configuration', 'Configuration', 'label.configuration'],
+  ['data', 'Data & Channels', 'label.data.channels'],
+  ['administration', 'Administration', 'label.administration'],
 ]
 
 /**
@@ -137,9 +138,10 @@ export const moduleNavItems = (live, can = {}, extraItems = []) => {
   const extra = [...new Set(items.map((i) => i.group).filter((g) => !known.includes(g)))]
 
   return [...NAV_GROUPS, ...extra.map((g) => [g, g])]
-    .map(([key, label]) => ({
+    .map(([key, label, labelKey]) => ({
       key,
       label,
+      labelKey,
       items: items.filter((i) => i.group === key).sort((a, b) => a.order - b.order),
     }))
     .filter((group) => group.items.length)

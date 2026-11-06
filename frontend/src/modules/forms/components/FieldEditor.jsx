@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { DIGITS, NUMERIC, STORAGE, TEXTUAL, TYPES, WITH_OPTIONS } from '../fieldTypes.js'
+import { DIGITS, NUMERIC, STORAGE, TEXTUAL, TYPES, WITH_OPTIONS, TABLE_COLUMN_TYPES } from '../fieldTypes.js'
 import PolygonPicker from './PolygonPicker.jsx'
 import StandardPicker from './StandardPicker.jsx'
 import FieldMasterSuggest from './FieldMasterSuggest.jsx'
@@ -319,6 +319,367 @@ function OptionSource({ field, fields, patch }) {
   )
 }
 
+function TableColumnEditor({ field, patch }) {
+  const columns = field.columns || []
+  const [expanded, setExpanded] = useState(() => new Set([0]))
+
+  const toggleExpand = (idx) => {
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (next.has(idx)) next.delete(idx)
+      else next.add(idx)
+      return next
+    })
+  }
+
+  const updateCol = (idx, changes) => {
+    const next = columns.map((col, i) => (i === idx ? { ...col, ...changes } : col))
+    patch({ columns: next })
+  }
+
+  const updateValidation = (idx, key, val) => {
+    const col = columns[idx]
+    const currentVal = { ...(col.validation || {}) }
+    if (val === '' || val == null) {
+      delete currentVal[key]
+    } else {
+      currentVal[key] = ['pattern', 'min_date', 'max_date'].includes(key) ? val : Number(val)
+    }
+    updateCol(idx, { validation: currentVal })
+  }
+
+  const addCol = () => {
+    const n = columns.length + 1
+    const next = [
+      ...columns,
+      {
+        key: `col_${n}`,
+        label: `Column ${n}`,
+        type: 'text',
+        required: false,
+        placeholder: '',
+        validation: {},
+        options: [],
+      },
+    ]
+    patch({ columns: next })
+    setExpanded((prev) => new Set([...prev, columns.length]))
+  }
+
+  const removeCol = (idx) => {
+    patch({ columns: columns.filter((_, i) => i !== idx) })
+  }
+
+  return (
+    <div className="opts" style={{ marginTop: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <span className="minilabel" style={{ margin: 0, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+          Table Columns ({columns.length})
+        </span>
+        <button
+          type="button"
+          className="btn btn--secondary btn--sm"
+          onClick={addCol}
+          style={{ fontSize: 12, padding: '3px 8px' }}
+        >
+          + Add Column
+        </button>
+      </div>
+      <p className="tiny muted" style={{ marginTop: 0, marginBottom: 12 }}>
+        Define the columns of your dynamic table. Each column supports all input types and validation rules (min, max, length, regex pattern, and dropdown choices).
+      </p>
+
+      {columns.length === 0 ? (
+        <div style={{ padding: '14px', background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: 6, textAlign: 'center', fontSize: 13, color: '#64748b' }}>
+          No columns defined. Click <strong>+ Add Column</strong> to add your first column.
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {columns.map((col, idx) => {
+            const isExpanded = expanded.has(idx)
+            const valRules = col.validation || {}
+            return (
+              <div
+                key={idx}
+                style={{
+                  background: '#ffffff',
+                  border: isExpanded ? '1px solid #94a3b8' : '1px solid #cbd5e1',
+                  borderRadius: 8,
+                  padding: '12px 14px',
+                  boxShadow: isExpanded ? '0 2px 6px rgba(0,0,0,0.06)' : '0 1px 2px rgba(0,0,0,0.02)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 10,
+                }}
+              >
+                {/* Header row */}
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#0f766e', minWidth: 24, textAlign: 'center', background: '#f0fdfa', border: '1px solid #ccfbf1', padding: '2px 4px', borderRadius: 4 }}>
+                    #{idx + 1}
+                  </span>
+                  <input
+                    className="control"
+                    style={{ flex: 2, fontSize: 13, fontWeight: 600 }}
+                    placeholder="Column Label (e.g. Age, Grain Yield)"
+                    value={col.label || ''}
+                    onChange={(e) => {
+                      const label = e.target.value
+                      const key = col._customKey ? col.key : (label ? label.toLowerCase().replace(/[^a-z0-9_]/g, '_').slice(0, 30) : `col_${idx + 1}`)
+                      updateCol(idx, { label, key })
+                    }}
+                  />
+                  <select
+                    className="control"
+                    style={{ flex: 1.6, fontSize: 13, background: '#f8fafc', fontWeight: 500 }}
+                    value={col.type || 'text'}
+                    onChange={(e) => {
+                      const newType = e.target.value
+                      const changes = { type: newType }
+                      if (WITH_OPTIONS.has(newType) && !(col.options || []).length) {
+                        changes.options = ['Option 1', 'Option 2']
+                      }
+                      updateCol(idx, changes)
+                    }}
+                  >
+                    {TABLE_COLUMN_TYPES.map(([val, name]) => (
+                      <option key={val} value={val}>{name}</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    className={`btn btn--xs ${isExpanded ? 'btn--primary' : 'btn--quiet'}`}
+                    onClick={() => toggleExpand(idx)}
+                    title="Toggle validation and column settings"
+                    style={{ fontSize: 11, padding: '4px 8px', whiteSpace: 'nowrap' }}
+                  >
+                    ⚙ {isExpanded ? 'Hide' : 'Validations'}
+                  </button>
+                  <button
+                    type="button"
+                    className="iconbtn iconbtn--danger"
+                    onClick={() => removeCol(idx)}
+                    title="Remove column"
+                    style={{ padding: '4px 8px' }}
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {/* Expanded configuration and validation rules */}
+                {isExpanded && (
+                  <div style={{ padding: '10px 12px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {/* Placeholder */}
+                    <div>
+                      <span className="minilabel" style={{ display: 'block', marginBottom: 2 }}>Placeholder Text</span>
+                      <input
+                        className="control control--sm"
+                        placeholder="Placeholder text shown inside empty cell..."
+                        value={col.placeholder || ''}
+                        onChange={(e) => updateCol(idx, { placeholder: e.target.value })}
+                      />
+                    </div>
+
+                    {/* Numeric Validations */}
+                    {NUMERIC.has(col.type) && (
+                      <div>
+                        <span className="minilabel" style={{ fontWeight: 700, color: '#334155', display: 'block', marginBottom: 4 }}>
+                          Value Range (Validation)
+                        </span>
+                        <div style={{ display: 'grid', gridTemplateColumns: col.type === 'decimal' ? '1fr 1fr 1fr' : '1fr 1fr', gap: 8 }}>
+                          <label className="col" style={{ margin: 0 }}>
+                            <span className="minilabel">Smallest allowed (Min)</span>
+                            <input
+                              className="control control--sm"
+                              type="number"
+                              placeholder="e.g. 18"
+                              value={valRules.min ?? ''}
+                              onChange={(e) => updateValidation(idx, 'min', e.target.value)}
+                            />
+                          </label>
+                          <label className="col" style={{ margin: 0 }}>
+                            <span className="minilabel">Largest allowed (Max)</span>
+                            <input
+                              className="control control--sm"
+                              type="number"
+                              placeholder="e.g. 50"
+                              value={valRules.max ?? ''}
+                              onChange={(e) => updateValidation(idx, 'max', e.target.value)}
+                            />
+                          </label>
+                          {col.type === 'decimal' && (
+                            <label className="col" style={{ margin: 0 }}>
+                              <span className="minilabel">Step decimal</span>
+                              <input
+                                className="control control--sm"
+                                type="number"
+                                step="any"
+                                placeholder="0.01"
+                                value={valRules.step ?? ''}
+                                onChange={(e) => updateValidation(idx, 'step', e.target.value)}
+                              />
+                            </label>
+                          )}
+                        </div>
+                        {col.type === 'rating' && (
+                          <p className="tiny muted" style={{ margin: '4px 0 0' }}>
+                            Rating stars will scale up to the largest allowed value (default 5 stars).
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Textual Validations */}
+                    {(TEXTUAL.has(col.type) || col.type === 'phone') && (
+                      <div>
+                        <span className="minilabel" style={{ fontWeight: 700, color: '#334155', display: 'block', marginBottom: 4 }}>
+                          Length & Format (Validation)
+                        </span>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+                          <label className="col" style={{ margin: 0 }}>
+                            <span className="minilabel">{DIGITS.has(col.type) ? 'Fewest digits' : 'Shortest answer (Min length)'}</span>
+                            <input
+                              className="control control--sm"
+                              type="number"
+                              min="1"
+                              placeholder="any"
+                              value={valRules.min_length ?? ''}
+                              onChange={(e) => updateValidation(idx, 'min_length', e.target.value)}
+                            />
+                          </label>
+                          <label className="col" style={{ margin: 0 }}>
+                            <span className="minilabel">{DIGITS.has(col.type) ? 'Most digits' : 'Longest answer (Max length)'}</span>
+                            <input
+                              className="control control--sm"
+                              type="number"
+                              min="1"
+                              placeholder="any"
+                              value={valRules.max_length ?? ''}
+                              onChange={(e) => updateValidation(idx, 'max_length', e.target.value)}
+                            />
+                          </label>
+                        </div>
+                        <label className="col" style={{ margin: 0 }}>
+                          <span className="minilabel">Must match pattern (Regex)</span>
+                          <input
+                            className="control control--sm"
+                            placeholder="e.g. ^[0-9]{10}$"
+                            value={valRules.pattern ?? ''}
+                            onChange={(e) => updateValidation(idx, 'pattern', e.target.value)}
+                          />
+                        </label>
+                      </div>
+                    )}
+
+                    {/* Date / Datetime Validations */}
+                    {['date', 'datetime'].includes(col.type) && (
+                      <div>
+                        <span className="minilabel" style={{ fontWeight: 700, color: '#334155', display: 'block', marginBottom: 4 }}>
+                          Date Bounds
+                        </span>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                          <label className="col" style={{ margin: 0 }}>
+                            <span className="minilabel">Earliest date (Min)</span>
+                            <input
+                              className="control control--sm"
+                              type={col.type === 'datetime' ? 'datetime-local' : 'date'}
+                              value={valRules.min_date ?? ''}
+                              onChange={(e) => updateValidation(idx, 'min_date', e.target.value)}
+                            />
+                          </label>
+                          <label className="col" style={{ margin: 0 }}>
+                            <span className="minilabel">Latest date (Max)</span>
+                            <input
+                              className="control control--sm"
+                              type={col.type === 'datetime' ? 'datetime-local' : 'date'}
+                              value={valRules.max_date ?? ''}
+                              onChange={(e) => updateValidation(idx, 'max_date', e.target.value)}
+                            />
+                          </label>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Choices Options for select, radio, multiselect */}
+                    {WITH_OPTIONS.has(col.type) && (
+                      <div>
+                        <span className="minilabel" style={{ fontWeight: 700, color: '#334155', display: 'block', marginBottom: 4 }}>
+                          Choices (comma-separated)
+                        </span>
+                        <input
+                          className="control control--sm"
+                          placeholder="Option 1, Option 2, Option 3"
+                          value={Array.isArray(col.options) ? col.options.join(', ') : (col.options || '')}
+                          onChange={(e) => updateCol(idx, {
+                            options: e.target.value.split(',').map((s) => s.trim()).filter(Boolean)
+                          })}
+                        />
+                        <span className="tiny muted">Enter choices separated by commas (e.g. Mild, Moderate, Severe)</span>
+                      </div>
+                    )}
+
+                    {/* Context info for special types */}
+                    {['image', 'audio', 'file'].includes(col.type) && (
+                      <p className="tiny muted" style={{ margin: 0, color: '#0369a1' }}>
+                        Allows users to attach a {col.type === 'image' ? 'photo' : col.type === 'audio' ? 'voice note' : 'document'} inside each row.
+                      </p>
+                    )}
+                    {col.type === 'location' && (
+                      <p className="tiny muted" style={{ margin: 0, color: '#0369a1' }}>
+                        Provides an automated GPS button inside each row to record latitude & longitude.
+                      </p>
+                    )}
+                    {col.type === 'polygon' && (
+                      <p className="tiny muted" style={{ margin: 0, color: '#0369a1' }}>
+                        Allows capturing polygon geographic boundaries for this row.
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Footer row with settings & toggles */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 4, flexWrap: 'wrap', gap: 10, borderTop: '1px solid #f1f5f9' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer', margin: 0, color: '#334155', fontWeight: 600 }}>
+                      <input
+                        type="checkbox"
+                        checked={!!col.required}
+                        onChange={(e) => updateCol(idx, { required: e.target.checked })}
+                      />
+                      <span>Required</span>
+                    </label>
+
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer', margin: 0, color: '#334155' }} title="Pin this column to the left of the table while scrolling">
+                      <input
+                        type="checkbox"
+                        checked={!!col.is_frozen}
+                        onChange={(e) => updateCol(idx, { is_frozen: e.target.checked })}
+                      />
+                      <span>📌 Freeze on left</span>
+                    </label>
+
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer', margin: 0, color: '#334155' }} title="Hide this column by default during field data collection">
+                      <input
+                        type="checkbox"
+                        checked={!!col.is_hidden}
+                        onChange={(e) => updateCol(idx, { is_hidden: e.target.checked })}
+                      />
+                      <span>👁 Hidden by default</span>
+                    </label>
+                  </div>
+
+                  <span className="tiny muted" style={{ fontFamily: 'monospace', fontSize: 11 }}>
+                    key: {col.key || `col_${idx + 1}`}
+                  </span>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function FieldEditor({
   field,
   index,
@@ -383,6 +744,13 @@ export default function FieldEditor({
 
   const setType = (type) => {
     const changes = { type }
+    if (type === 'table' && !(field.columns || []).length) {
+      changes.columns = [
+        { key: 'item', label: 'Item Name', type: 'text', required: true },
+        { key: 'quantity', label: 'Quantity', type: 'number', validation: { min: 0 } },
+        { key: 'unit_price', label: 'Unit Price', type: 'decimal', validation: { min: 0 } },
+      ]
+    }
     if (WITH_OPTIONS.has(type) && !(field.options || []).length) {
       changes.options = [
         { label: 'First option', value: 'first_option' },
@@ -797,6 +1165,10 @@ export default function FieldEditor({
               question and cannot be changed by whoever answers it.
             </p>
           </div>
+        )}
+
+        {field.type === 'table' && (
+          <TableColumnEditor field={field} patch={patch} />
         )}
 
         {WITH_OPTIONS.has(field.type) && (

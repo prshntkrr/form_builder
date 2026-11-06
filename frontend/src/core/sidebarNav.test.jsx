@@ -37,4 +37,12 @@ describe('sidebar system nav', () => {
     const all = groups.flatMap((g) => g.items).map((i) => i.label)
     expect(all).toEqual(['Projects'])
   })
+  test('includes Research Platforms when module is active and permitted', () => {
+    const liveWithRP = [...LIVE, 'research_platforms']
+    const canWithRP = { ...CAN, use_research_platforms: true }
+    const groups = moduleNavItems(liveWithRP, canWithRP, CORE_NAV_ITEMS)
+    expect(groups.map((g) => g.label)).toEqual(['Research Platforms', 'Configuration', 'Data & Channels', 'Administration'])
+    const rpItems = groups.find((g) => g.key === 'research_platforms').items.map((i) => i.label)
+    expect(rpItems).toEqual(['Platforms & Stations', 'Experimental Trials', 'Research Form Studio'])
+  })
 })

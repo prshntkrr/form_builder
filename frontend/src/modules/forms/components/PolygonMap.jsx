@@ -104,7 +104,12 @@ export default function PolygonMap({
   const acting = useRef({})
   acting.current = {
     editable,
-    add: (point) => (onAdd ? onAdd(point) : onChange?.([...ring, point])),
+    add: (point) => {
+      const last = ring[ring.length - 1]
+      if (last && last[0] === point[0] && last[1] === point[1]) return
+      if (onAdd) onAdd(point)
+      else onChange?.([...ring, point])
+    },
     move: (index, point) =>
       onChange?.(ring.map((held, i) => (i === index ? point : held))),
   }
@@ -148,6 +153,8 @@ export default function PolygonMap({
           streetViewControl: false,
           fullscreenControl: false,
           mapTypeControl: true,
+          draggableCursor: editable ? 'crosshair' : null,
+          draggingCursor: 'grabbing',
         }))
       })
       .catch((e) => { if (!gone) setProblem(e.message) })
@@ -156,6 +163,36 @@ export default function PolygonMap({
     // The ring and `me` only decide where it opens, so they are not dependencies.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [box])
+
+  // Keep canvas synchronized with parent layout and scroll changes
+  useEffect(() => {
+    if (!box || !gmap) return undefined
+
+    const handleResize = () => {
+      if (window.google?.maps && gmap) {
+        window.google.maps.event.trigger(gmap, 'resize')
+      }
+    }
+
+    const ro = new ResizeObserver(handleResize)
+    ro.observe(box)
+    window.addEventListener('resize', handleResize)
+
+    return () => {
+      ro.disconnect()
+      window.removeEventListener('resize', handleResize)
+    }
+  }, [box, gmap])
+
+  // Update cursor dynamically when editability toggles
+  useEffect(() => {
+    if (!gmap) return
+    gmap.setOptions({
+      draggableCursor: editable ? 'crosshair' : null,
+      draggingCursor: 'grabbing',
+    })
+  }, [gmap, editable])
+
 
   /* Clicks add a point — attached only while the map may be drawn on, so a
      read-only map takes none at all rather than taking them and ignoring them. */
@@ -199,10 +236,30 @@ export default function PolygonMap({
       })
     }
 
+    // Precision classic location pin icon with exact needle tip anchor
+    const locationPinIcon = {
+      url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
+        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="40" viewBox="0 0 28 40">
+          <filter id="shadow" x="-20%" y="-10%" width="140%" height="130%">
+            <feDropShadow dx="0" dy="1.5" stdDeviation="1.5" flood-color="#000000" flood-opacity="0.35"/>
+          </filter>
+          <path d="M14 0C6.27 0 0 6.27 0 14c0 10.5 14 26 14 26s14-15.5 14-26c0-7.73 6.27-14 14-14z" fill="#EA4335" stroke="#B31412" stroke-width="1" filter="url(#shadow)"/>
+          <circle cx="14" cy="14" r="5" fill="#FFFFFF"/>
+          <circle cx="14" cy="14" r="2.5" fill="#7A0000"/>
+        </svg>
+      `),
+      scaledSize: new maps.Size(28, 40),
+      anchor: new maps.Point(14, 40),
+    }
+
     pins.current = path.map((point, index) => {
       const pin = new maps.Marker({
-        position: point, map: gmap, draggable: editable,
+        position: point,
+        map: gmap,
+        draggable: editable,
         title: `Point ${index + 1}`,
+        cursor: editable ? 'grab' : 'default',
+        icon: locationPinIcon,
       })
       if (editable) {
         pin.addListener('dragend', (event) =>

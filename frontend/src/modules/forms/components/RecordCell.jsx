@@ -124,10 +124,178 @@ function LocationCell({ value }) {
 }
 
 
+export function TableModal({ column, value, onClose }) {
+  if (!Array.isArray(value) || !value.length) return null
+
+  const cols = (column && column.columns && column.columns.length > 0)
+    ? column.columns.map(c => ({ key: c.key, label: c.label || c.key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) }))
+    : Object.keys(value[0] || {}).map(k => ({ key: k, label: k.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) }))
+
+  return (
+    <div
+      className="modal-overlay"
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 9999,
+        backgroundColor: 'rgba(15, 23, 42, 0.5)',
+        backdropFilter: 'blur(2px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 24,
+      }}
+    >
+      <div
+        className="modal"
+        style={{
+          width: 'min(950px, 92vw)',
+          maxHeight: '85vh',
+          background: '#ffffff',
+          borderRadius: 12,
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div
+          className="modal__head"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '16px 20px',
+            borderBottom: '1px solid #e2e8f0',
+            background: '#f8fafc',
+          }}
+        >
+          <div>
+            <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0f172a' }}>
+              {column?.label || 'Table Details'}
+            </h2>
+            <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+              {value.length} row{value.length === 1 ? '' : 's'} recorded
+            </div>
+          </div>
+          <button
+            type="button"
+            className="modal__close"
+            onClick={onClose}
+            title="Close"
+            style={{
+              background: 'none',
+              border: 'none',
+              fontSize: 24,
+              lineHeight: 1,
+              cursor: 'pointer',
+              color: '#64748b',
+              padding: '4px 8px',
+              borderRadius: 6,
+            }}
+          >
+            ×
+          </button>
+        </div>
+        <div className="modal__body" style={{ padding: 16, overflowY: 'auto' }}>
+          <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: 8 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+              <thead>
+                <tr style={{ background: '#f1f5f9' }}>
+                  <th style={{ width: 44, textAlign: 'center', padding: '10px 8px', borderBottom: '1px solid #cbd5e1', fontWeight: 600, color: '#475569' }}>#</th>
+                  {cols.map((c) => (
+                    <th key={c.key} style={{ whiteSpace: 'nowrap', textAlign: 'left', padding: '10px 14px', borderBottom: '1px solid #cbd5e1', fontWeight: 600, color: '#334155' }}>
+                      {c.label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {value.map((row, rIdx) => (
+                  <tr key={rIdx} style={{ background: rIdx % 2 === 1 ? '#f8fafc' : '#ffffff' }}>
+                    <td style={{ textAlign: 'center', color: '#94a3b8', fontSize: 11, padding: '8px 8px', borderBottom: '1px solid #e2e8f0' }}>{rIdx + 1}</td>
+                    {cols.map((c) => {
+                      const cellVal = row ? row[c.key] : null
+                      const displayVal = cellVal == null || cellVal === '' ? '—' : (typeof cellVal === 'object' ? JSON.stringify(cellVal) : String(cellVal))
+                      return (
+                        <td key={c.key} style={{ whiteSpace: 'nowrap', padding: '8px 14px', borderBottom: '1px solid #e2e8f0', color: '#1e293b' }}>
+                          {displayVal}
+                        </td>
+                      )
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function TableCell({ value, column }) {
+  const [modalOpen, setModalOpen] = useState(false)
+
+  if (!Array.isArray(value) || !value.length) {
+    return <span className="faint">—</span>
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation()
+          setModalOpen(true)
+        }}
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 5,
+          padding: '2px 8px',
+          background: '#ecfdf5',
+          color: '#047857',
+          border: '1px solid #a7f3d0',
+          borderRadius: 12,
+          fontSize: 12,
+          fontWeight: 600,
+          cursor: 'pointer',
+          outline: 'none',
+          lineHeight: '18px',
+          whiteSpace: 'nowrap',
+          transition: 'all 0.15s ease',
+        }}
+        onMouseOver={(e) => { e.currentTarget.style.background = '#d1fae5' }}
+        onMouseOut={(e) => { e.currentTarget.style.background = '#ecfdf5' }}
+        title="Click to view full table data"
+      >
+        <span style={{ fontSize: 11 }}>⊞</span>
+        <span>{value.length} row{value.length === 1 ? '' : 's'}</span>
+      </button>
+
+      {modalOpen && (
+        <TableModal
+          column={column}
+          value={value}
+          onClose={() => setModalOpen(false)}
+        />
+      )}
+    </>
+  )
+}
+
 /** Every other kind of answer, exactly as it has always been shown. */
 export const plain = (value) => {
   if (value == null || value === '') return <span className="faint">—</span>
-  if (Array.isArray(value)) return value.join(', ')
+  if (Array.isArray(value)) {
+    if (value.length > 0 && typeof value[0] === 'object') {
+      return `${value.length} row${value.length === 1 ? '' : 's'}`
+    }
+    return value.join(', ')
+  }
   if (typeof value === 'boolean') return value ? 'Yes' : 'No'
   if (typeof value === 'object') {
     return Object.entries(value).map(([k, v]) => `${k} ${v}`).join(', ')
@@ -139,6 +307,9 @@ const MEDIA_TYPES = new Set(['image', 'audio', 'file'])
 
 export default function RecordCell({ column, value, media, formId, surveyId }) {
   if (column.type === 'location') return <LocationCell value={value} />
+  if (column.type === 'table' || (Array.isArray(value) && value.length > 0 && typeof value[0] === 'object')) {
+    return <TableCell value={value} column={column} />
+  }
   if (!MEDIA_TYPES.has(column.type)) return plain(value)
 
   // The ids stored as the answer, one or several, in the order they were

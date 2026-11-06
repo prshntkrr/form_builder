@@ -78,11 +78,13 @@ def _ascii_clean(value: str) -> str:
 
 
 def _ascii_clean_value(value):
-    """Apply ASCII cleaning to strings, recursively into lists."""
+    """Apply ASCII cleaning to strings, recursively into lists and dicts."""
     if isinstance(value, str) and value != "NA":
         return _ascii_clean(value)
     if isinstance(value, list):
         return [_ascii_clean_value(v) for v in value]
+    if isinstance(value, dict):
+        return {k: _ascii_clean_value(v) for k, v in value.items()}
     return value
 
 
@@ -885,6 +887,7 @@ def list_submissions(
             "name": field_name(f),
             "label": f.get("label") or field_name(f),
             "type": f.get("type") or "text",
+            **({"columns": f.get("columns") or []} if f.get("type") == "table" else {}),
         }
         for f in form_json.get("fields") or []
         if field_name(f)
@@ -1013,6 +1016,7 @@ def answers_for(form_json: Dict[str, Any], form_data: Dict[str, Any]) -> list:
             "section": section.get("title") or "",
             "value": data.get(name),
             "answered": name in data and not _is_empty(data.get(name)),
+            **({"columns": field.get("columns") or []} if field.get("type") == "table" else {}),
         })
 
     for name, value in data.items():
@@ -1062,6 +1066,9 @@ def _cell(value: Any) -> str:
     if value is None:
         return ""
     if isinstance(value, list):
+        if any(isinstance(v, (dict, list)) for v in value):
+            import json
+            return json.dumps(value, ensure_ascii=False)
         return ", ".join(str(v) for v in value)
     if isinstance(value, dict):
         return "; ".join(f"{k}={v}" for k, v in value.items())

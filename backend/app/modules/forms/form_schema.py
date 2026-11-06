@@ -294,6 +294,45 @@ def field_name(field: Any) -> str:
     return slugify_identifier(str(label), "field") if label else ""
 
 
+def _normalize_table_columns(raw: Any) -> List[Dict[str, Any]]:
+    """Normalize and preserve columns of a dynamic table field.
+
+    Each column defines an input field inside table rows: key, label, type,
+    required, placeholder, validation rules, choices/options, freeze/hide flags.
+    """
+    if not isinstance(raw, list):
+        return []
+
+    cols: List[Dict[str, Any]] = []
+    seen = set()
+
+    for i, col in enumerate(raw):
+        if not isinstance(col, dict):
+            continue
+        raw_key = col.get("key") or col.get("name") or f"col_{i + 1}"
+        key = slugify_identifier(str(raw_key), f"col_{i + 1}")
+        if key in seen:
+            key = f"{key}_{i + 1}"
+        seen.add(key)
+
+        raw_type = str(col.get("type") or "text").strip().lower()
+        col_type = normalize_type(raw_type)
+
+        cols.append({
+            "key": key,
+            "label": str(col.get("label") or key.replace("_", " ").title()).strip()[:MAX_LABEL],
+            "type": col_type,
+            "required": bool(col.get("required")),
+            "placeholder": str(col.get("placeholder") or "").strip()[:MAX_PLACEHOLDER],
+            "validation": _normalize_validation(col.get("validation"), col_type),
+            "options": _normalize_options(col.get("options") or col.get("choices")),
+            "is_frozen": bool(col.get("is_frozen")),
+            "is_hidden": bool(col.get("is_hidden")),
+        })
+
+    return cols
+
+
 def _normalize_field(raw: Any, index: int, taken: set) -> Optional[Dict[str, Any]]:
     if not isinstance(raw, dict):
         return None
@@ -410,6 +449,9 @@ def _normalize_field(raw: Any, index: int, taken: set) -> Optional[Dict[str, Any
         # and read-only is the default: a boundary somebody drew is usually the
         # question, not the answer.
         field["editable"] = bool(raw.get("editable"))
+
+    if ftype == "table":
+        field["columns"] = _normalize_table_columns(raw.get("columns"))
 
     return field
 
