@@ -104,7 +104,12 @@ export default function PolygonMap({
   const acting = useRef({})
   acting.current = {
     editable,
-    add: (point) => (onAdd ? onAdd(point) : onChange?.([...ring, point])),
+    add: (point) => {
+      const last = ring[ring.length - 1]
+      if (last && last[0] === point[0] && last[1] === point[1]) return
+      if (onAdd) onAdd(point)
+      else onChange?.([...ring, point])
+    },
     move: (index, point) =>
       onChange?.(ring.map((held, i) => (i === index ? point : held))),
   }
@@ -148,6 +153,8 @@ export default function PolygonMap({
           streetViewControl: false,
           fullscreenControl: false,
           mapTypeControl: true,
+          draggableCursor: editable ? 'crosshair' : null,
+          draggingCursor: 'grabbing',
         }))
       })
       .catch((e) => { if (!gone) setProblem(e.message) })
@@ -156,6 +163,30 @@ export default function PolygonMap({
     // The ring and `me` only decide where it opens, so they are not dependencies.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [box])
+
+  // Keep canvas synchronized with parent layout and scroll changes
+  useEffect(() => {
+    if (!box || !gmap) return undefined
+
+    const ro = new ResizeObserver(() => {
+      if (window.google?.maps && gmap) {
+        window.google.maps.event.trigger(gmap, 'resize')
+      }
+    })
+    ro.observe(box)
+
+    return () => ro.disconnect()
+  }, [box, gmap])
+
+  // Update cursor dynamically when editability toggles
+  useEffect(() => {
+    if (!gmap) return
+    gmap.setOptions({
+      draggableCursor: editable ? 'crosshair' : null,
+      draggingCursor: 'grabbing',
+    })
+  }, [gmap, editable])
+
 
   /* Clicks add a point — attached only while the map may be drawn on, so a
      read-only map takes none at all rather than taking them and ignoring them. */
@@ -201,8 +232,20 @@ export default function PolygonMap({
 
     pins.current = path.map((point, index) => {
       const pin = new maps.Marker({
-        position: point, map: gmap, draggable: editable,
+        position: point,
+        map: gmap,
+        draggable: editable,
         title: `Point ${index + 1}`,
+        cursor: editable ? 'grab' : 'default',
+        icon: {
+          path: maps.SymbolPath.CIRCLE,
+          scale: 7,
+          fillColor: '#ef4444',
+          fillOpacity: 1,
+          strokeColor: '#ffffff',
+          strokeWeight: 2,
+          anchor: new maps.Point(0, 0),
+        },
       })
       if (editable) {
         pin.addListener('dragend', (event) =>
