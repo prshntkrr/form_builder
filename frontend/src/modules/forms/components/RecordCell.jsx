@@ -143,7 +143,7 @@ function LocationCell({ value }) {
 }
 
 
-function TableModal({ column, value, onClose }) {
+export function TableModal({ column, value, onClose }) {
   if (!Array.isArray(value) || !value.length) return null
 
   const cols = (column && column.columns && column.columns.length > 0)
