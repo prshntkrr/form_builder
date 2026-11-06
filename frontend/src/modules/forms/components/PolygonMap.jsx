@@ -168,14 +168,20 @@ export default function PolygonMap({
   useEffect(() => {
     if (!box || !gmap) return undefined
 
-    const ro = new ResizeObserver(() => {
+    const handleResize = () => {
       if (window.google?.maps && gmap) {
         window.google.maps.event.trigger(gmap, 'resize')
       }
-    })
-    ro.observe(box)
+    }
 
-    return () => ro.disconnect()
+    const ro = new ResizeObserver(handleResize)
+    ro.observe(box)
+    window.addEventListener('resize', handleResize)
+
+    return () => {
+      ro.disconnect()
+      window.removeEventListener('resize', handleResize)
+    }
   }, [box, gmap])
 
   // Update cursor dynamically when editability toggles
@@ -230,6 +236,22 @@ export default function PolygonMap({
       })
     }
 
+    // Precision classic location pin icon with exact needle tip anchor
+    const locationPinIcon = {
+      url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
+        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="40" viewBox="0 0 28 40">
+          <filter id="shadow" x="-20%" y="-10%" width="140%" height="130%">
+            <feDropShadow dx="0" dy="1.5" stdDeviation="1.5" flood-color="#000000" flood-opacity="0.35"/>
+          </filter>
+          <path d="M14 0C6.27 0 0 6.27 0 14c0 10.5 14 26 14 26s14-15.5 14-26c0-7.73 6.27-14 14-14z" fill="#EA4335" stroke="#B31412" stroke-width="1" filter="url(#shadow)"/>
+          <circle cx="14" cy="14" r="5" fill="#FFFFFF"/>
+          <circle cx="14" cy="14" r="2.5" fill="#7A0000"/>
+        </svg>
+      `),
+      scaledSize: new maps.Size(28, 40),
+      anchor: new maps.Point(14, 40),
+    }
+
     pins.current = path.map((point, index) => {
       const pin = new maps.Marker({
         position: point,
@@ -237,15 +259,7 @@ export default function PolygonMap({
         draggable: editable,
         title: `Point ${index + 1}`,
         cursor: editable ? 'grab' : 'default',
-        icon: {
-          path: maps.SymbolPath.CIRCLE,
-          scale: 7,
-          fillColor: '#ef4444',
-          fillOpacity: 1,
-          strokeColor: '#ffffff',
-          strokeWeight: 2,
-          anchor: new maps.Point(0, 0),
-        },
+        icon: locationPinIcon,
       })
       if (editable) {
         pin.addListener('dragend', (event) =>
