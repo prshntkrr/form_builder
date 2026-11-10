@@ -107,6 +107,13 @@ class AddToLibraryRequest(BaseModel):
     project_id: Optional[str] = Field(default=None, max_length=20)
 
 
+class UpdateStandardRequest(BaseModel):
+    form_json: Dict[str, Any]
+    category: Optional[str] = Field(default=None, max_length=50)
+    tags: Optional[List[str]] = None
+    summary: Optional[str] = None
+
+
 class BorrowRequest(BaseModel):
     form_json: Dict[str, Any]
     # One section of the standard, or all of its fields when omitted.
@@ -411,6 +418,8 @@ class PublicShareRequest(BaseModel):
     """
 
     regenerate: bool = False
+    # When the link starts working. Enforced by the server on every request.
+    starts_on: Optional[_datetime] = None
     # When the link stops working. Enforced by the server on every request.
     expires_on: Optional[_datetime] = None
     # Whether one person may answer more than once. Advisory: somebody with no

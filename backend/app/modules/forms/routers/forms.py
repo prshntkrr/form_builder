@@ -887,6 +887,7 @@ def share_form_publicly(
             form_id,
             auth_service.display_name(user),
             regenerate=req.regenerate,
+            starts_on=req.starts_on,
             expires_on=req.expires_on,
             allow_multiple=req.allow_multiple,
         )

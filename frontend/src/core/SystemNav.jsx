@@ -92,12 +92,16 @@ export function NavIcon({ name }) {
       return <svg {...common}><ellipse cx="12" cy="5" rx="8" ry="3" /><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5" /><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6" /></svg>
     case 'routing':
       return <svg {...common}><circle cx="12" cy="12" r="2" /><path d="M7.8 7.8a6 6 0 0 0 0 8.5M16.2 16.2a6 6 0 0 0 0-8.5M4.9 4.9a10 10 0 0 0 0 14.1M19.1 19.1a10 10 0 0 0 0-14.1" /></svg>
+    case 'units':
+      return <svg {...common}><path d="M4 4v16M4 4h4M4 8h3M4 12h4M4 16h3M4 20h4M14 4l6 16M17.5 12h-4" /></svg>
     case 'projects':
       return <svg {...common}><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
     case 'roles':
       return <svg {...common}><path d="M12 3l7 3v5c0 5-3.5 8-7 10-3.5-2-7-5-7-10V6z" /></svg>
     case 'users':
       return <svg {...common}><circle cx="9" cy="8" r="3" /><path d="M3 20a6 6 0 0 1 12 0" /><path d="M16 5a3 3 0 0 1 0 6M21 20a6 6 0 0 0-5-5.9" /></svg>
+    case 'beneficiaries':
+      return <svg {...common}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" /></svg>
     default:
       return <span className="side__icon side__icon--dot" aria-hidden="true" />
   }

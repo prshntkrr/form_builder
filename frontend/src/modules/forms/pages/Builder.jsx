@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api.js'
+import { request } from '../../../core/http.js'
 import { formsChanged } from '../../../core/events.js'
 import FieldEditor from '../components/FieldEditor.jsx'
 import { defaultLanguage, languageChoices } from '../translate.js'
@@ -245,6 +246,7 @@ export default function Builder() {
   const [trialView, setTrialView] = useState('form')
   const [picker, setPicker] = useState(null)   // 'start' | 'borrow'
   const [contributing, setContributing] = useState(false)
+  const [stdMsg, setStdMsg] = useState(null)
   // The one channel a new form is being built for. Chosen on the draft, once
   // there is something to look at; see ChannelPicker. A saved form's channel
   // comes from the form. Nothing is picked for them: `null` until they choose,
@@ -257,6 +259,9 @@ export default function Builder() {
      Channel routing screen lists — so it is held beside the form here and saved
      alongside it. Editing it in either place changes the same row. */
   const [waRoute, setWaRoute] = useState({ receiver_number: '', keyword: '' })
+
+  // Fields locked by a beneficiary type — cannot be removed.
+  const [protectedFields, setProtectedFields] = useState(new Set())
 
   /* How this form is reached on IVR: the DID / phone number and menu option key.
      Saved alongside the form in channel_form_route and synced to Indev. */
@@ -406,6 +411,19 @@ export default function Builder() {
       })
       .catch(() => {})
   }, [buildingIn])
+
+  // When a form derives from a standard form linked to a beneficiary type,
+  // lock the standard form's fields so the master data table stays intact.
+  const stdId = form?.standard_id
+  useEffect(() => {
+    if (!stdId) { setProtectedFields(new Set()); return }
+    request('/beneficiaries/types')
+      .then(r => {
+        const match = (r.types || []).find(t => t.form_id === stdId)
+        setProtectedFields(match ? new Set(match.master_fields || []) : new Set())
+      })
+      .catch(() => setProtectedFields(new Set()))
+  }, [stdId])
 
   /* Write the draft down every minute, and again on the way out.
      Only while it is a draft: a live form's questions are already on the
@@ -1004,6 +1022,11 @@ export default function Builder() {
     setForm({ ...form, fields: fields.map((f, n) => ({ ...f, order: n + 1 })) })
   }
   const remove = (i) => {
+    const target = form.fields[i]
+    if (target && protectedFields.has(target.name)) {
+      alert(`"${target.label || target.name}" is locked by a beneficiary type and cannot be removed.`)
+      return
+    }
     const fields = form.fields.filter((_, n) => n !== i).map((f, n) => ({ ...f, order: n + 1 }))
     // A deleted question leaves no reference behind in the layout.
     const layout = removeFromLayout(form.layout, form.fields[i]?.name)
@@ -1859,12 +1882,41 @@ export default function Builder() {
           Add to Standard forms
         </button>
       )}
+      {isBuilderView && form?.standard_id && (
+        <button
+          className="btn btn--quiet btn--sm"
+          disabled={busy}
+          onClick={async () => {
+            setBusy('update-std')
+            try {
+              const result = await api.updateStandard(form.standard_id, untag(form))
+              setStdMsg({ ok: true, text: `Standard "${form.standard_id}" updated to v${result.standard_version}` })
+            } catch (e) {
+              setStdMsg({ ok: false, text: e.message })
+            } finally {
+              setBusy(false)
+            }
+          }}
+          title="Save changes back to the standard form library"
+        >
+          {busy === 'update-std' && <span className="spin" />}
+          Update Standard Form
+        </button>
+      )}
     </div>
   )
 
   return (
     <main className={`main${workspace ? ' main--builder' : ''}`}>
      {topBar}
+     {stdMsg && (
+       <div className={`note ${stdMsg.ok ? 'note--good' : 'note--bad'}`}
+            style={{ margin: '8px 16px 0' }}>
+         {stdMsg.text}
+         <button className="iconbtn" style={{ marginLeft: 8 }}
+                 onClick={() => setStdMsg(null)} aria-label="Dismiss">✕</button>
+       </div>
+     )}
      <div className={workspace ? `workspace${showLeftPanel && leftOpen ? ' workspace--3col' : ''}` : undefined}>
       {showLeftPanel && (leftOpen ? (
         <BuilderLeftPanel
@@ -2132,6 +2184,7 @@ export default function Builder() {
                   onSelectSection={selectCanvasSection}
                   onDuplicate={duplicateFieldByName}
                   onDelete={removeFieldByName}
+                  protectedFields={protectedFields}
                   onDuplicateSection={duplicateSectionByKey}
                   onDeleteSection={deleteSectionByKey}
                   onAddQuestion={addFieldToSection}
@@ -2289,6 +2342,7 @@ export default function Builder() {
             hasResponses={responses > 0}
             onChange={put}
             onRemove={remove}
+            protectedFields={protectedFields}
           />
         )
 

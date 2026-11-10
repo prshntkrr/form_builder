@@ -18,6 +18,7 @@ export const TYPES = [
   ['multiselect', 'Multiple choice'],
   ['image', 'Photo'],
   ['audio', 'Audio recording'],
+  ['voice', 'Voice enrollment'],
   ['file', 'File'],
   ['signature', 'Signature'],
   ['location', 'Location'],
@@ -72,6 +73,7 @@ export const STORAGE = {
   // object's row. The object itself is in S3, never in form_data.
   image: ['string (media id)', 'TEXT'],
   audio: ['string (media id)', 'TEXT'],
+  voice: ['string (base64 PCM16)', 'TEXT'],
   file: ['string (media id)', 'TEXT'],
   signature: ['string', 'TEXT'],
   location: ['object {lat, lng}', 'TEXT'],

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { DIGITS, NUMERIC, STORAGE, TEXTUAL, TYPES, WITH_OPTIONS, TABLE_COLUMN_TYPES } from '../fieldTypes.js'
 import PolygonPicker from './PolygonPicker.jsx'
 import StandardPicker from './StandardPicker.jsx'
@@ -13,6 +13,126 @@ import { CURRENCIES as CURRENCIES_LIST } from './FieldInput.jsx'
 
 /* The backend's `slugify_identifier`, cap included — see fieldTypes.js. */
 const slug = identifier
+
+function applyFormula(formula, value) {
+  if (!formula || isNaN(value)) return null
+  const v = Number(value)
+  const parts = formula.trim().split(/\s+/)
+  if (parts.length === 2) {
+    const op = parts[0]
+    const num = Number(parts[1])
+    if (isNaN(num)) return null
+    if (op === '*') return v * num
+    if (op === '/') return v / num
+    if (op === '+') return v + num
+    if (op === '-') return v - num
+  }
+  if (parts.length === 4) {
+    const op1 = parts[0], n1 = Number(parts[1]), op2 = parts[2], n2 = Number(parts[3])
+    if (isNaN(n1) || isNaN(n2)) return null
+    let r = v
+    if (op1 === '*') r *= n1; else if (op1 === '/') r /= n1;
+    else if (op1 === '+') r += n1; else if (op1 === '-') r -= n1; else return null
+    if (op2 === '+') r += n2; else if (op2 === '-') r -= n2;
+    else if (op2 === '*') r *= n2; else if (op2 === '/') r /= n2; else return null
+    return r
+  }
+  return null
+}
+
+function UnitConfig({ field, patch }) {
+  const [units, setUnits] = useState(null)
+  const [open, setOpen] = useState(!!field.standard_unit)
+  const [testVal, setTestVal] = useState('')
+
+  useEffect(() => {
+    request('/units').then(r => setUnits(r.units || [])).catch(() => setUnits([]))
+  }, [])
+
+  const byDim = useMemo(() => {
+    if (!units) return {}
+    const m = {}
+    for (const u of units) (m[u.dimension] = m[u.dimension] || []).push(u)
+    return m
+  }, [units])
+
+  const standardUnit = field.standard_unit || ''
+  const formula = field.conversion_formula || ''
+  const selectedUnit = units?.find(u => u.code === standardUnit)
+
+  const testResult = testVal ? applyFormula(formula, testVal) : null
+
+  const toggle = (on) => {
+    setOpen(on)
+    if (!on) { patch({ standard_unit: null, conversion_formula: null }); setTestVal('') }
+  }
+
+  return (
+    <div style={{ borderTop: '1px solid var(--line, #e3e6eb)', paddingTop: 10, marginTop: 6 }}>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+        <input type="checkbox" checked={open} onChange={e => toggle(e.target.checked)} />
+        <span className="minilabel" style={{ margin: 0 }}>Unit conversion</span>
+      </label>
+      {open && (
+        <div style={{ marginTop: 10 }}>
+          {!units ? (
+            <p className="muted tiny">Loading units…</p>
+          ) : units.length === 0 ? (
+            <p className="muted tiny">No units configured. Add units in Administration → Units first.</p>
+          ) : (
+            <>
+              <label className="col" style={{ marginBottom: 8 }}>
+                <span className="tiny muted">Standard unit (convert to)</span>
+                <select className="control" value={standardUnit}
+                        onChange={e => patch({ standard_unit: e.target.value || null })}>
+                  <option value="">Select unit</option>
+                  {Object.entries(byDim).map(([dim, list]) => (
+                    <optgroup key={dim} label={dim}>
+                      {list.map(u => <option key={u.code} value={u.code}>{u.name} ({u.code})</option>)}
+                    </optgroup>
+                  ))}
+                </select>
+              </label>
+              {standardUnit && (
+                <>
+                  <label className="col" style={{ marginBottom: 8 }}>
+                    <span className="tiny muted">Conversion formula</span>
+                    <input className="control" value={formula}
+                           placeholder="e.g.  * 2.471  or  / 0.4047  or  * 1.8 + 32"
+                           onChange={e => patch({ conversion_formula: e.target.value || null })} />
+                    <span className="muted tiny" style={{ marginTop: 2, display: 'block' }}>
+                      Enter the operation to apply on entered value.
+                      Examples: <code>* 2.471</code> (multiply) · <code>/ 0.4047</code> (divide) · <code>* 1.8 + 32</code> (two-step)
+                    </span>
+                  </label>
+                  {formula && (
+                    <div style={{ padding: '8px 12px', borderRadius: 6,
+                      background: 'var(--bg-alt, #f4f5f7)', fontSize: '0.84rem' }}>
+                      <strong>Test conversion</strong>
+                      <div className="row" style={{ gap: 8, marginTop: 6, alignItems: 'center' }}>
+                        <input className="control" type="number" step="any" value={testVal}
+                               placeholder="Enter value" style={{ width: 120 }}
+                               onChange={e => setTestVal(e.target.value)} />
+                        <span style={{ color: 'var(--muted)' }}>→</span>
+                        <span style={{ fontWeight: 600 }}>
+                          {testResult !== null ? (Math.round(testResult * 10000) / 10000) : '—'}
+                        </span>
+                        <span className="muted">{selectedUnit?.name || standardUnit}</span>
+                      </div>
+                      <span className="muted tiny" style={{ display: 'block', marginTop: 4 }}>
+                        Both original and converted values are stored in the database
+                      </span>
+                    </div>
+                  )}
+                </>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
 
 const RESERVED_DB_WORDS = new Set([
   'survey_id', 'form_id', 'form_data', 'created_on', 'form_version', 'created_by',
@@ -714,7 +834,9 @@ export default function FieldEditor({
   onDragOver,
   onDragEnd,
   onDrop,
+  protectedFields,
 }) {
+  const isProtected = protectedFields instanceof Set && protectedFields.has(field.name)
   // The name of a section being created from this question, or null when the
   // picker is just a picker.
   const [newSection, setNewSection] = useState(null)
@@ -991,6 +1113,10 @@ export default function FieldEditor({
                 ))}
               </select>
             </label>
+          )}
+
+          {NUMERIC.has(field.type) && field.type !== 'rating' && (
+            <UnitConfig field={field} patch={patch} />
           )}
 
           {hasLength && (
@@ -1357,12 +1483,11 @@ export default function FieldEditor({
           >⋯</button>
           <button
             className="iconbtn iconbtn--danger"
-            // Not through the row's select handler: choosing a question and
-            // deleting it are different intents, and the click would otherwise
-            // select the row on its way out of existence.
-            onClick={(e) => { e.stopPropagation(); onRemove(index) }}
-            title="Delete question"
-          >✕</button>
+            disabled={isProtected}
+            onClick={(e) => { e.stopPropagation(); if (!isProtected) onRemove(index) }}
+            title={isProtected ? 'Locked — linked to a beneficiary type' : 'Delete question'}
+            style={isProtected ? { opacity: 0.3, cursor: 'not-allowed' } : undefined}
+          >{isProtected ? '🔒' : '✕'}</button>
         </span>
       </div>
 

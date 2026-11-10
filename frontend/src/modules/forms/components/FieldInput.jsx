@@ -1,4 +1,5 @@
 import MediaField from './MediaField.jsx'
+import VoiceRecorder from './VoiceRecorder.jsx'
 import { isUsableRing } from './PolygonMap.jsx'
 import PolygonSheet from './PolygonSheet.jsx'
 import React, { useState } from 'react'
@@ -1336,6 +1337,12 @@ export default function FieldInput({ field, value, onChange, error, media }) {
       )
       break
 
+    case 'voice':
+      control = (
+        <VoiceRecorder field={field} value={value} onChange={set} />
+      )
+      break
+
     case 'label':
       return (
         <div className="field field--label">
@@ -1368,8 +1375,14 @@ export default function FieldInput({ field, value, onChange, error, media }) {
 
     case 'signature':
       control = (
-        <input {...base} type="text" placeholder={field.placeholder || 'Type your name to sign'}
-               value={value ?? ''} onChange={(e) => set(e.target.value)} />
+        <MediaField
+          field={field}
+          value={value}
+          onChange={onChange}
+          error={error}
+          onPick={media?.onPick}
+          uploading={media?.uploading}
+        />
       )
       break
 

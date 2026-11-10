@@ -84,6 +84,8 @@ def _field_columns(form_json: Dict[str, Any]) -> List[Tuple[str, str]]:
             cols.append((column_for(f["name"]), pg_type_for(f["type"])))
             if f.get("type") == "polygon":
                 cols.append((column_for(f"{f['name']}_area"), "DOUBLE PRECISION"))
+            if f.get("standard_unit") and (f.get("input_unit") or f.get("conversion_formula")):
+                cols.append((column_for(f"{f['name']}_std"), "DOUBLE PRECISION"))
     return cols
 
 
@@ -293,6 +295,10 @@ def _row_values(form_json: Dict[str, Any], form_data: Dict[str, Any]) -> Dict[st
             out[column] = None
         if field.get("type") == "polygon":
             out[column_for(f"{name}_area")] = (form_data or {}).get(f"{name}_area")
+        if field.get("standard_unit") and (field.get("input_unit") or field.get("conversion_formula")):
+            std_val = (form_data or {}).get(f"{name}_std")
+            if std_val is not None:
+                out[column_for(f"{name}_std")] = std_val
     return out
 
 

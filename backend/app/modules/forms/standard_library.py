@@ -296,6 +296,19 @@ def add_form(
     row = dict(cur.fetchone())
     logger.info("Library: '%s' (%d questions)", resolved,
                 len(entry["form"].get("fields") or []))
+
+    try:
+        from app.modules.beneficiaries.service import sync_master_fields_from_standard
+        all_fields = [
+            f["name"] for f in (entry["form"].get("fields") or [])
+            if f.get("name") and f.get("type") not in ("label", "banner")
+        ]
+        sync_master_fields_from_standard(resolved, all_fields)
+    except ImportError:
+        pass
+    except Exception:
+        logger.exception("Could not sync beneficiary master_fields for '%s'", resolved)
+
     return {**row, "field_count": len(entry["form"].get("fields") or [])}
 
 

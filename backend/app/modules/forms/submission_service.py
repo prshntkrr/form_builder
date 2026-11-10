@@ -713,6 +713,18 @@ def submit(
     except Exception:
         logger.exception("Could not record the review state for %s", survey_id)
 
+    # If this form is linked to a beneficiary type, auto-register in the
+    # master registry. Defensive: the module can be switched off.
+    try:
+        from app.modules.beneficiaries import service as ben_service
+        _auto_register_beneficiary(
+            ben_service, form["form_id"], form.get("form_json") or {},
+            clean, survey_id, created_by or settings.default_user)
+    except ImportError:
+        pass
+    except Exception:
+        logger.exception("Beneficiary auto-register failed for %s", survey_id)
+
     logger.info("Stored submission %s in %s", survey_id, table_name)
     stored = {
         "survey_id": row["survey_id"],
@@ -835,6 +847,70 @@ def _write(cur, form, form_json, table_name, clean, version, created_by,
     ingestion.record_channel(form["form_id"], survey_id, channel, cur=cur)
 
     return row
+
+
+# --------------------------------------------------------------------------- #
+# beneficiary auto-registration
+# --------------------------------------------------------------------------- #
+def _auto_register_beneficiary(ben_service, form_id, form_json, clean, survey_id, created_by):
+    """If this form is linked to a beneficiary type, register the submission."""
+    types = ben_service.list_types(active_only=True)
+    matched = [t for t in types if t.get("form_id") == form_id]
+    if not matched:
+        std_id = form_json.get("standard_id") if form_json else None
+        logger.info("Auto-register: form_id=%s, standard_id=%s, type_form_ids=%s",
+                    form_id, std_id, [t.get("form_id") for t in types])
+        if std_id:
+            matched = [t for t in types if t.get("form_id") == std_id]
+    if not matched:
+        logger.info("Auto-register: no matching beneficiary type for form %s", form_id)
+        return
+    btype = matched[0]
+    master_fields = btype.get("master_fields") or []
+    data = {k: clean.get(k) for k in master_fields if k in clean} if master_fields else dict(clean)
+
+    voice_bytes = None
+    voice_key = None
+    # Find the voice field by its type in the form definition, not by name
+    if form_json:
+        for f in (form_json if isinstance(form_json, dict) else {}).get("fields", []):
+            if f.get("type") in ("voice", "voice_enrollment", "voiceprint"):
+                fname = f.get("name")
+                if fname and fname in clean and clean[fname]:
+                    voice_key = fname
+                    break
+    if not voice_key:
+        for k in ("voice", "voice_recording", "farmer_voice", "audio"):
+            if k in clean and clean[k]:
+                voice_key = k
+                break
+    if voice_key:
+        raw = clean[voice_key]
+        if isinstance(raw, str):
+            import base64
+            try:
+                voice_bytes = base64.b64decode(raw)
+            except Exception:
+                pass
+        elif isinstance(raw, bytes):
+            voice_bytes = raw
+
+    project_id = None
+    try:
+        from app.modules.projects.project_service import project_of_form
+        project_id = project_of_form(form_id)
+    except Exception:
+        pass
+
+    ben_service.register_beneficiary(
+        type_id=btype["type_id"],
+        data=data,
+        voice_bytes=voice_bytes,
+        project_id=project_id,
+        source_survey_id=survey_id,
+        created_by=created_by,
+    )
+    logger.info("Auto-registered beneficiary from %s survey %s", form_id, survey_id)
 
 
 # --------------------------------------------------------------------------- #

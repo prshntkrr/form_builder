@@ -12,9 +12,9 @@ export default function LibraryPicker({ mode = 'start', draft, projectId, onPick
   const [catalogue, setCatalogue] = useState(null)
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('')
-  const [chosen, setChosen] = useState(null)
-  const [detail, setDetail] = useState(null)
-  const [pickedFields, setPickedFields] = useState(new Set())
+  const [openIds, setOpenIds] = useState(new Set())
+  const [details, setDetails] = useState({})
+  const [pickedByStd, setPickedByStd] = useState({})
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
@@ -44,30 +44,32 @@ export default function LibraryPicker({ mode = 'start', draft, projectId, onPick
   }, [catalogue, search, category])
 
   const expand = async (standardId) => {
-    if (chosen === standardId) {
-      setChosen(null)
-      setDetail(null)
-      setPickedFields(new Set())
-      return
-    }
-    setChosen(standardId)
-    setPickedFields(new Set())
-    try {
-      const d = await api.getStandard(standardId)
-      setDetail(d)
-    } catch (e) {
-      setError(e.message)
+    setOpenIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(standardId)) { next.delete(standardId); return next }
+      next.add(standardId)
+      return next
+    })
+    if (!details[standardId]) {
+      try {
+        const d = await api.getStandard(standardId)
+        setDetails((prev) => ({ ...prev, [standardId]: d }))
+      } catch (e) {
+        setError(e.message)
+      }
     }
   }
 
-  const toggleField = (name) => {
-    setPickedFields((prev) => {
-      const next = new Set(prev)
-      if (next.has(name)) next.delete(name)
-      else next.add(name)
-      return next
+  const toggleField = (standardId, name) => {
+    setPickedByStd((prev) => {
+      const set = new Set(prev[standardId] || [])
+      if (set.has(name)) set.delete(name)
+      else set.add(name)
+      return { ...prev, [standardId]: set }
     })
   }
+
+  const totalPicked = Object.values(pickedByStd).reduce((n, s) => n + s.size, 0)
 
   const use = async (standard, section, fields) => {
     setBusy(true)
@@ -84,21 +86,41 @@ export default function LibraryPicker({ mode = 'start', draft, projectId, onPick
     }
   }
 
-  const detailFields = detail?.form_json?.fields || []
-  const detailSections = detail?.form_json?.sections || []
+  const useAllPicked = async () => {
+    setBusy(true)
+    setError('')
+    try {
+      let currentDraft = draft
+      for (const [stdId, fieldSet] of Object.entries(pickedByStd)) {
+        if (!fieldSet.size) continue
+        const std = details[stdId]
+        if (!std) continue
+        const result = await api.borrowStandard(std.standard_id, currentDraft, undefined, [...fieldSet])
+        currentDraft = result.form_json
+      }
+      const anyStd = Object.keys(pickedByStd).find((id) => pickedByStd[id]?.size)
+      onPick(currentDraft, anyStd ? details[anyStd] : null)
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setBusy(false)
+    }
+  }
 
-  const fieldsBySection = useMemo(() => {
-    if (!detailFields.length) return []
+  const fieldsBySectionFor = (detail) => {
+    const fields = detail?.form_json?.fields || []
+    const sections = detail?.form_json?.sections || []
+    if (!fields.length) return []
     const sectionMap = new Map()
-    for (const s of detailSections) sectionMap.set(s.key, s.title)
+    for (const s of sections) sectionMap.set(s.key, s.title)
     const groups = new Map()
-    for (const f of detailFields) {
+    for (const f of fields) {
       const sKey = f.section || '__none__'
       if (!groups.has(sKey)) groups.set(sKey, { key: sKey, title: sectionMap.get(sKey) || 'Other', fields: [] })
       groups.get(sKey).fields.push(f)
     }
     return [...groups.values()]
-  }, [detailFields, detailSections])
+  }
 
   return (
     <div className="sheet" onMouseDown={onClose}>
@@ -140,7 +162,10 @@ export default function LibraryPicker({ mode = 'start', draft, projectId, onPick
           )}
 
           {forms.map((f) => {
-            const open = chosen === f.standard_id
+            const open = openIds.has(f.standard_id)
+            const detail = details[f.standard_id]
+            const pickedFields = pickedByStd[f.standard_id] || new Set()
+            const fieldsBySection = detail ? fieldsBySectionFor(detail) : []
             return (
               <div className={`std${open ? ' std--open' : ''}`} key={f.standard_id}>
                 <div className="std__main">
@@ -148,6 +173,17 @@ export default function LibraryPicker({ mode = 'start', draft, projectId, onPick
                     <div className="std__title">
                       {f.title}
                       <span className="tag">{f.category}</span>
+                      {f.beneficiary_type && (
+                        <span className="tag" style={{ background: '#198038', color: '#fff' }}
+                              title={`Master fields: ${(f.beneficiary_type.master_fields || []).join(', ') || 'none'}`}>
+                          🔗 {f.beneficiary_type.name}
+                        </span>
+                      )}
+                      {pickedFields.size > 0 && (
+                        <span className="tag" style={{ background: 'var(--accent, #0f62fe)', color: '#fff' }}>
+                          {pickedFields.size} selected
+                        </span>
+                      )}
                     </div>
                     <div className="item__sub">{f.summary}</div>
                     <div className="item__meta">
@@ -177,6 +213,18 @@ export default function LibraryPicker({ mode = 'start', draft, projectId, onPick
                   <div className="std__detail">
                     {!detail && <div className="skeleton" style={{ height: 80 }} />}
 
+                    {detail?.beneficiary_type && (
+                      <div style={{ padding: '8px 12px', background: 'var(--surface-alt, #f0f4f0)', borderRadius: 6, marginBottom: 8, fontSize: 13 }}>
+                        <strong>Beneficiary Type:</strong> {detail.beneficiary_type.name}
+                        {detail.beneficiary_type.master_fields?.length > 0 && (
+                          <span style={{ marginLeft: 12 }}>
+                            <strong>Master fields (🔒):</strong>{' '}
+                            {detail.beneficiary_type.master_fields.join(', ')}
+                          </span>
+                        )}
+                      </div>
+                    )}
+
                     {detail && fieldsBySection.map((group) => (
                       <div key={group.key} className="std__section-group">
                         <div className="std__section-head">
@@ -191,7 +239,7 @@ export default function LibraryPicker({ mode = 'start', draft, projectId, onPick
                             <label key={field.name} className="std__field-row">
                               <input type="checkbox"
                                      checked={pickedFields.has(field.name)}
-                                     onChange={() => toggleField(field.name)} />
+                                     onChange={() => toggleField(f.standard_id, field.name)} />
                               <span className="std__field-name">{field.label || field.name}</span>
                               <span className="tiny muted">{field.type}</span>
                             </label>
@@ -199,20 +247,31 @@ export default function LibraryPicker({ mode = 'start', draft, projectId, onPick
                         </div>
                       </div>
                     ))}
-
-                    {detail && pickedFields.size > 0 && (
-                      <button className="btn btn--primary btn--sm" disabled={busy}
-                              style={{ marginTop: 8 }}
-                              onClick={() => use(f, undefined, [...pickedFields])}>
-                        Add {pickedFields.size} selected question{pickedFields.size > 1 ? 's' : ''}
-                      </button>
-                    )}
                   </div>
                 )}
               </div>
             )
           })}
         </div>
+
+        {mode === 'borrow' && totalPicked > 0 && (
+          <div className="sheet__foot">
+            <span style={{ fontSize: '0.84rem' }}>
+              {totalPicked} question{totalPicked > 1 ? 's' : ''} selected
+              {' from '}
+              {Object.values(pickedByStd).filter((s) => s.size > 0).length} form{Object.values(pickedByStd).filter((s) => s.size > 0).length > 1 ? 's' : ''}
+            </span>
+            <span className="spacer" />
+            <button className="btn btn--sm btn--quiet"
+                    onClick={() => setPickedByStd({})}>
+              Clear all
+            </button>
+            <button className="btn btn--primary" disabled={busy}
+                    onClick={useAllPicked}>
+              Add {totalPicked} question{totalPicked > 1 ? 's' : ''}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )

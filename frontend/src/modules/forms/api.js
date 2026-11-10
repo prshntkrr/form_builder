@@ -235,6 +235,13 @@ export const api = {
   addToLibrary: (body) =>
     request('/standard-forms', { method: 'POST', body: JSON.stringify(body) }),
 
+  // Update a standard form's definition directly (no saved form needed).
+  updateStandard: (standardId, formJson, opts = {}) =>
+    request(`/standard-forms/${encodeURIComponent(standardId)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ form_json: formJson, ...opts }),
+    }),
+
   // Take one back out. The form it was taken from is untouched.
   removeFromLibrary: (standardId) =>
     request(`/standard-forms/${standardId}`, { method: 'DELETE' }),
@@ -370,6 +377,7 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({
         regenerate: Boolean(options.regenerate),
+        starts_on: options.startsOn || null,
         expires_on: options.expiresOn || null,
         allow_multiple: options.allowMultiple !== false,
       }),

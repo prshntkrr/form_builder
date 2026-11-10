@@ -41,6 +41,7 @@ export default function CanvasDesigner({
   layout, fields, chosen, chosenSection,
   onSelect, onSelectSection, onDuplicate, onDelete,
   onDuplicateSection, onDeleteSection, onAddQuestion, onAddFieldAt, onAddSection, onChange,
+  protectedFields,
 }) {
   const { sections, unplaced } = resolveLayout(layout, fields)
   const known = new Set((fields || []).map((f) => f.name))
@@ -213,7 +214,10 @@ export default function CanvasDesigner({
                   onClick={() => { onDuplicate?.(name); setMenu(null) }}>Duplicate</button>
                 <button type="button" role="menuitem" className="cv__menuitem cv__menuitem--danger"
                   aria-label={`Delete ${label}`}
-                  onClick={() => { onDelete?.(name); setMenu(null) }}>Delete</button>
+                  disabled={protectedFields instanceof Set && protectedFields.has(name)}
+                  style={protectedFields instanceof Set && protectedFields.has(name) ? { opacity: 0.4, cursor: 'not-allowed' } : undefined}
+                  onClick={() => { if (protectedFields instanceof Set && protectedFields.has(name)) return; onDelete?.(name); setMenu(null) }}>
+                  {protectedFields instanceof Set && protectedFields.has(name) ? '🔒 Locked' : 'Delete'}</button>
               </div>
             )}
           </div>
