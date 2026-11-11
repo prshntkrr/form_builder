@@ -34,6 +34,15 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-4o-mini"
     openai_timeout: int = 90
 
+    # Google Cloud Translation API (v2). An alternative to the OpenAI model for
+    # translating a form's wording: cheaper per character and wider on language
+    # coverage, at the cost of context — identifiers are protected in code, not
+    # by the translator. Empty means the feature is simply not offered, and the
+    # endpoint says so. The key is used server-side only and never sent to a
+    # browser.
+    google_translate_api_key: str = ""
+    google_translate_timeout: int = 30
+
     # Modules. Comma-separated names to switch off — a module named here is not
     # imported at all: no routes, no permissions, no tables. Use it to keep work
     # in progress out of a client's hands without maintaining a branch.

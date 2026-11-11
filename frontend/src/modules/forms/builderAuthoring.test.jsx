@@ -49,6 +49,16 @@ function Where() {
   return <output data-testid="where">{location.pathname}</output>
 }
 
+// A new form now opens on a name/description popup. Pass through it with a
+// default name so the tests reach the describe / blank UI they exercise.
+async function passNamePopup(name = 'Test form') {
+  const field = screen.queryByPlaceholderText('e.g. Farmer Registration')
+  if (!field) return
+  const user = userEvent.setup()
+  await user.type(field, name)
+  await user.click(screen.getByRole('button', { name: 'Continue' }))
+}
+
 async function open(path) {
   const { default: Builder } = await import('./pages/Builder.jsx')
   render(
@@ -60,6 +70,7 @@ async function open(path) {
       <Where />
     </MemoryRouter>,
   )
+  await passNamePopup()
 }
 
 beforeEach(() => {
@@ -77,9 +88,27 @@ describe('starting a form without a prompt', () => {
     // The channel is chosen on the draft, not before it.
     await user.click(screen.getByRole('button', { name: 'Start blank' }))
 
-    expect(screen.getByDisplayValue('Untitled form')).toBeTruthy()
+    // The name came from the popup, so a blank form opens titled, not "Untitled".
+    expect(screen.getByDisplayValue('Test form')).toBeTruthy()
     // No prompt was typed and no model was asked.
     expect(calls).not.toContain('generate')
+  })
+
+  test('a brand-new form asks for a name before anything else', async () => {
+    // open() here deliberately does NOT pass the popup — we assert it shows.
+    const { default: Builder } = await import('./pages/Builder.jsx')
+    render(
+      <MemoryRouter initialEntries={['/builder']}>
+        <Routes>
+          <Route path="/builder" element={<Builder />} />
+          <Route path="/forms/:formId/:section" element={<Builder />} />
+        </Routes>
+        <Where />
+      </MemoryRouter>,
+    )
+    // The name popup is up, and the describe UI is not reachable yet.
+    expect(screen.getByPlaceholderText('e.g. Farmer Registration')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Create form' })).toBeNull()
   })
 
   test('the prompt is still there for anybody who wants it', async () => {

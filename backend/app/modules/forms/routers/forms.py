@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from psycopg2 import IntegrityError
 
 from app.core import auth_service
+from app.core.config import settings
 from app.modules.forms import form_service
 from app.modules.forms import llm
 from app.modules.forms import connectors
@@ -23,6 +24,7 @@ from app.modules.forms.form_schema import FormSchemaError, normalize_form
 from app.modules.forms.migration_service import MigrationError
 from app.modules.forms import translations
 from app.modules.forms.schemas import (
+    ApplyStandardFieldsRequest,
     CreateFormRequest,
     ExportRequest,
     GenerateRequest,
@@ -415,17 +417,28 @@ def translate(req: TranslateRequest, user: Dict[str, Any] = Depends(_could_build
             detail="That is the language the form is already written in.",
         )
 
-    language_name = translations.SUPPORTED_LANGUAGES[req.language]
-    try:
-        raw = llm.translate_form(req.form_json, language_name)
-    except llm.LLMError as exc:
-        raise HTTPException(status_code=502, detail=str(exc))
+    provider = (req.provider or "openai").lower()
+    if provider == "google":
+        from app.modules.forms import google_translate
+        try:
+            raw = google_translate.translate_form(req.form_json, req.language)
+        except google_translate.TranslateError as exc:
+            # 503, not 502: a missing key is "not set up here", not an upstream
+            # failure, and the message says which.
+            status = 503 if not settings.google_translate_api_key else 502
+            raise HTTPException(status_code=status, detail=str(exc))
+    else:
+        language_name = translations.SUPPORTED_LANGUAGES[req.language]
+        try:
+            raw = llm.translate_form(req.form_json, language_name)
+        except llm.LLMError as exc:
+            raise HTTPException(status_code=502, detail=str(exc))
 
     cleaned = translations.normalize_translations({req.language: raw})
     if not cleaned:
         raise HTTPException(
             status_code=502,
-            detail="The model did not return anything usable. Try again.",
+            detail="The translator did not return anything usable. Try again.",
         )
 
     return {"language": req.language, "translations": cleaned[req.language]}
@@ -718,6 +731,67 @@ def standard_diff(form_id: str,
             status_code=404, detail="This form did not start from a standard form"
         )
     return result
+
+
+@router.post("/{form_id}/apply-standard-fields")
+def apply_standard_fields(
+    form_id: str,
+    req: ApplyStandardFieldsRequest,
+    user: Dict[str, Any] = Depends(needs_on_form(FORMS_EDIT, "project.forms.manage")),
+):
+    """Pull chosen fields from this form's standard into the form.
+
+    Additive only — the chosen fields are added as a new revision, nothing is
+    removed, renamed or overwritten (`standard_library.pull_standard_fields`).
+    Saving through `update_form` is what grows the beneficiary type's master
+    fields and the tabular mirror to match, so this is how an already-assigned
+    form catches up after its standard gains a field.
+    """
+    try:
+        form = form_service.get_form(form_id)
+    except form_service.FormNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+    definition = form["form_json"] or {}
+    standard_id = definition.get("standard_id")
+    if not standard_id:
+        raise HTTPException(
+            status_code=404, detail="This form did not start from a standard form"
+        )
+
+    entry = standard_library.get(standard_id)
+    if entry is None:
+        raise HTTPException(
+            status_code=409,
+            detail=f"The standard '{standard_id}' is no longer in the library",
+        )
+
+    new_def, added = standard_library.pull_standard_fields(
+        definition, req.field_names, entry.definition()
+    )
+    if not added:
+        raise HTTPException(
+            status_code=400,
+            detail="None of those fields can be added — each is already on the "
+            "form, or not on the standard.",
+        )
+
+    # If the form now matches the standard in full, it has caught up to this
+    # version, so record that and the "behind" badge clears. A field the
+    # standard merely *changed* (not added) still counts as a difference, so the
+    # badge stays until that is dealt with — which is deliberate.
+    caught_up = standard_library.diff_against_standard(new_def)
+    if caught_up and caught_up["summary"]["identical"]:
+        new_def["standard_version"] = entry.standard_version
+
+    try:
+        saved = form_service.update_form(
+            form_id, new_def, updated_by=auth_service.display_name(user)
+        )
+    except form_service.FormServiceError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    return {"form": saved, "added": added}
 
 
 @router.post("/{form_id}/rebuild-tabular")

@@ -45,7 +45,7 @@ vi.mock('../../core/events.js', () => ({ formsChanged: () => {} }))
 
 async function open(path) {
   const { default: Builder } = await import('./pages/Builder.jsx')
-  return render(
+  const result = render(
     <MemoryRouter initialEntries={[path]}>
       <Routes>
         <Route path="/builder" element={<Builder />} />
@@ -53,6 +53,14 @@ async function open(path) {
       </Routes>
     </MemoryRouter>,
   )
+  // A new form opens on a name popup; pass through it to reach the canvas.
+  const field = screen.queryByPlaceholderText('e.g. Farmer Registration')
+  if (field) {
+    const user = userEvent.setup()
+    await user.type(field, 'Test form')
+    await user.click(screen.getByRole('button', { name: 'Continue' }))
+  }
+  return result
 }
 
 describe('the builder in canvas mode', () => {

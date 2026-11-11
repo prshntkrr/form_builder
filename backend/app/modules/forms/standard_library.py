@@ -442,3 +442,106 @@ def diff_against_standard(definition: Dict[str, Any]) -> Optional[Dict[str, Any]
         ),
     })
     return result
+
+
+def pull_standard_fields(
+    form_json: Dict[str, Any],
+    field_names: Sequence[str],
+    standard_def: Dict[str, Any],
+) -> Tuple[Dict[str, Any], List[str]]:
+    """Add the named fields from the standard into a form that came from it.
+
+    Additive and one-directional on purpose. A name is pulled only when the
+    standard defines it *and* the form does not already have it, so this can
+    never remove, rename or overwrite a question — the cases that would strand
+    answers already collected, or undo a project's own local change. Everything
+    else about the form, including fields the project added itself, is left
+    exactly as it was.
+
+    Pure: the standard's definition is passed in rather than read here, so this
+    is tested without a database. The caller saves the result through
+    `form_service.update_form`, which is where validation, the master-field
+    expansion and the new version happen.
+
+    Returns the new definition (a copy — the input is not touched) and the names
+    actually added, which may be fewer than asked for.
+    """
+    std_fields = {
+        f["name"]: f
+        for f in (standard_def.get("fields") or [])
+        if isinstance(f, dict) and f.get("name")
+    }
+    have = {
+        f.get("name")
+        for f in (form_json.get("fields") or [])
+        if isinstance(f, dict)
+    }
+
+    added = [n for n in field_names if n in std_fields and n not in have]
+
+    new_def = dict(form_json)
+    new_def["fields"] = list(form_json.get("fields") or []) + [
+        copy.deepcopy(std_fields[n]) for n in added
+    ]
+
+    # Place each pulled field in the section it occupies on the standard, so it
+    # appears there rather than in the designer's "Unplaced questions" pool. A
+    # field the standard did not place, or whose section has no match on this
+    # form, is left unplaced — which is honest, and the form still shows it.
+    layout = form_json.get("layout")
+    for name in added:
+        layout = _place_in_layout(layout, standard_def.get("layout"), name)
+    if layout is not None:
+        new_def["layout"] = layout
+
+    return new_def, added
+
+
+def _layout_section_of(layout: Optional[Dict[str, Any]], name: str) -> Optional[Dict[str, Any]]:
+    """The section a field sits in, in this layout, or None."""
+    for section in (layout or {}).get("sections") or []:
+        for container in section.get("containers") or []:
+            if any((c or {}).get("fieldId") == name for c in container.get("fields") or []):
+                return section
+    return None
+
+
+def _place_in_layout(form_layout: Optional[Dict[str, Any]],
+                     standard_layout: Optional[Dict[str, Any]],
+                     name: str) -> Optional[Dict[str, Any]]:
+    """Add `name` to `form_layout` in the section it holds on the standard.
+
+    Returns the layout unchanged when there is nowhere sensible to put it: the
+    form has no layout, the standard never placed the field, or the form has no
+    section matching the standard's (by id, then by title). In those cases the
+    field stays out of the layout and the renderer shows it after the placed
+    ones — never dropped. `update_form` re-normalizes the result, so the row id
+    coined here is provisional.
+    """
+    if not isinstance(form_layout, dict) or not form_layout.get("sections"):
+        return form_layout
+
+    std_section = _layout_section_of(standard_layout, name)
+    if not std_section:
+        return form_layout
+
+    std_id = std_section.get("id")
+    std_title = (std_section.get("title") or "").strip().lower()
+
+    def _matches(section: Dict[str, Any]) -> bool:
+        if std_id and section.get("id") == std_id:
+            return True
+        return bool(std_title) and (section.get("title") or "").strip().lower() == std_title
+
+    if not any(_matches(s) for s in form_layout["sections"]):
+        return form_layout
+
+    new_layout = copy.deepcopy(form_layout)
+    for section in new_layout["sections"]:
+        if _matches(section):
+            section.setdefault("containers", []).append(
+                {"id": f"{section.get('id') or 'section'}-row-{name}",
+                 "fields": [{"fieldId": name, "width": 12}]}
+            )
+            break
+    return new_layout

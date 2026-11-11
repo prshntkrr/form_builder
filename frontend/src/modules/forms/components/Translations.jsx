@@ -109,11 +109,11 @@ export default function Translations({ form, onChange }) {
     })
   }
 
-  const translateWithAi = async (code) => {
+  const translateWith = async (code, provider) => {
     setBusy(code)
     setError('')
     try {
-      const result = await api.translateForm(form, code)
+      const result = await api.translateForm(form, code, provider)
       onChange({
         ...form,
         languages,
@@ -181,9 +181,16 @@ export default function Translations({ form, onChange }) {
                           <>
                             <button className="btn btn--sm btn--quiet"
                                     disabled={busy === code}
-                                    onClick={() => translateWithAi(code)}>
+                                    title="Translate with the AI model — context-aware"
+                                    onClick={() => translateWith(code, 'openai')}>
                               {busy === code && <span className="spin" />}
                               {busy === code ? 'Translating' : 'AI'}
+                            </button>
+                            <button className="btn btn--sm btn--quiet"
+                                    disabled={busy === code}
+                                    title="Translate with Google Translate"
+                                    onClick={() => translateWith(code, 'google')}>
+                              Google
                             </button>
                             <button className="btn btn--sm btn--quiet"
                                     onClick={() => removeLanguage(code)}

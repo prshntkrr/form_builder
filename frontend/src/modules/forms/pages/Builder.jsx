@@ -64,6 +64,9 @@ function TabIcon({ id }) {
   }
 }
 
+// How often a draft is written to the server while it is being built.
+const AUTOSAVE_MS = 2 * 60 * 1000
+
 const SEEDS = [
   [
     'Farmer registration',
@@ -233,6 +236,12 @@ export default function Builder() {
   const [form, setForm] = useState(null)
   const [responses, setResponses] = useState(0)
   const [draftTab, setDraftTab] = useState('questions')  // only for an unsaved form
+  // A new form is named before it is built: the popup captures its name and
+  // description so the first autosave can create a real, titled draft rather
+  // than an "Untitled form". Null until the popup is answered. Only the blank
+  // and AI paths use it — "copy as…" and "start from a standard" arrive named.
+  const [newMeta, setNewMeta] = useState(null)
+  const [metaDraft, setMetaDraft] = useState({ name: '', description: '' })
   const [busy, setBusy] = useState(editing ? 'load' : null)
   const [error, setError] = useState('')
   const [saved, setSaved] = useState(null)
@@ -453,12 +462,20 @@ export default function Builder() {
     autoSavingRef.current = true
     const payload = untag(form)
 
+    /* The draft id from the ref, never the `autoSavedId` state. The state only
+       catches up on the next render, so a second tick firing in the gap after
+       the first created the draft would still read null and create the form a
+       *second* time — two drafts, two tables. The ref is set the instant the
+       first create returns (below), so it is always current. This is the same
+       fix the manual save uses; autosave was disabled until it had it too. */
+    const liveDraftId = editing ? formId : autoSavedIdRef.current
+
     try {
-      if (draftId) {
+      if (liveDraftId) {
         const renames = {}
         for (const f of form.fields) if (f._orig && f._orig !== f.name) renames[f._orig] = f.name
 
-        await api.updateForm(draftId, payload, undefined, renames, whatsappRouting(), ivrRouting())
+        await api.updateForm(liveDraftId, payload, undefined, renames, whatsappRouting(), ivrRouting())
 
         /* The renames have happened, so the next autosave must not send them
            again — `_orig` would then name a column that no longer exists.
@@ -526,23 +543,24 @@ export default function Builder() {
 
     keepRef.current()
 
-    /* A form nobody has chosen a channel for cannot be created — the server
-       refuses it, and rightly. It is still kept in the browser.
+    /* Two things must be settled before the first create, because both are
+       fixed for the form's life the moment it is saved:
 
-       Nor one nobody has named yet. The server would take it happily, and that
-       is the problem: creating it fixes its table name as `untitled_form` for
-       good, silently, a minute after somebody started typing. The browser keeps
-       it safe meanwhile; the first manual save asks about the name. */
+         channel — the server refuses a form without one.
+         name    — creating it fixes the table name, so a nameless draft would
+                   be stuck with `untitled_form` for good.
+
+       The name is now guaranteed up front by the create popup, so the only
+       real wait here is the channel the builder picks. */
     if (!editing && (!form.channel || unnamed())) return
     // Never while a manual save, publish or AI call is in flight: two writes
     // to one form racing each other is nobody's idea of a safety net.
     if (busy) return
     // Nothing has changed since the server last took it. An idle builder should
-    // not send the same form every minute for an afternoon.
+    // not send the same form every two minutes for an afternoon.
     if (JSON.stringify(untag(form)) === sentRef.current) return
 
-    // autosave disabled temporarily — manual save/publish only
-    // autosave()
+    autosave()
   }
 
   keepRef.current = () => {
@@ -555,16 +573,14 @@ export default function Builder() {
     // recovery.keep(editing ? formId : null, form, autoSavedId)
   }
 
-  /* Recovery timer disabled temporarily */
-  // useEffect(() => {
-  //   const timer = setInterval(() => tickRef.current(), recovery.EVERY_MS)
-  //   const onUnload = () => keepRef.current()
-  //   window.addEventListener('beforeunload', onUnload)
-  //   return () => {
-  //     clearInterval(timer)
-  //     window.removeEventListener('beforeunload', onUnload)
-  //   }
-  // }, [])
+  /* Server-side autosave: write the draft down every two minutes. Browser-side
+     recovery (keepRef) stays off, so `onUnload` is deliberately omitted — a
+     beforeunload cannot reliably await a server call anyway, and the timer is
+     the mechanism. */
+  useEffect(() => {
+    const timer = setInterval(() => tickRef.current(), AUTOSAVE_MS)
+    return () => clearInterval(timer)
+  }, [])
 
   /* What this browser held when the builder opened.
      Offered, never applied: replacing what the server has with an older copy
@@ -688,7 +704,13 @@ export default function Builder() {
       const res = await api.generate(prompt)
       setGenerationUsage(res.usage || null)
       clearDraft()
-      setForm(prep({ ...res.form_json, channel: newChannel }))
+      // The name from the popup wins over whatever title the model chose, and
+      // the table name follows it — see the decision to name the form up front.
+      const named = newMeta
+        ? { ...res.form_json, title: newMeta.name, description: newMeta.description,
+            table_name: identifier(newMeta.name, MAX_IDENTIFIER) }
+        : res.form_json
+      setForm(prep({ ...named, channel: newChannel }))
     })
 
   const MAX_PROMPT_CHARS = 30000
@@ -697,8 +719,10 @@ export default function Builder() {
   const startBlank = () => {
     if (form?.fields?.length && !window.confirm('Replace the current draft with a blank form?')) return
     clearDraft()
+    const name = newMeta?.name || 'Untitled form'
     setForm(prep({
-      title: 'Untitled form', description: '', table_name: 'untitled_form',
+      title: name, description: newMeta?.description || '',
+      table_name: identifier(name, MAX_IDENTIFIER),
       fields: [], sections: [], rules: [], channel: newChannel,
     }))
   }
@@ -1975,8 +1999,7 @@ export default function Builder() {
       {/* Whether the server has this draft. Said plainly, because an autosave
           nobody can see is an autosave nobody trusts — and a failing one has to
           be visible without interrupting the question being typed. */}
-      {/* autosave disabled temporarily */}
-      {false && unsaved && autoSaved && (
+      {unsaved && autoSaved && (
         <p className={`tiny autosave${autoSaved.ok ? '' : ' autosave--stale'}`} role="status">
           {autoSaved.ok
             ? `Draft saved automatically at ${new Date(autoSaved.at).toLocaleTimeString()}`
@@ -1990,7 +2013,61 @@ export default function Builder() {
         </p>
       )}
 
-      {!editing && !form && (
+      {/* A new form is named before it is built — the name fixes the table name
+          and lets autosave create a titled draft. Only the blank and AI paths
+          reach here; "copy as…" and "start from a standard" arrive named. */}
+      {!editing && !form && !newMeta && !location.state?.copyOf
+        && !location.state?.standardId && !busy && (
+        <div className="sheet">
+          <div className="sheet__panel" role="dialog" aria-modal="true">
+            <div className="sheet__head">
+              <h2>Name your form</h2>
+              <p className="muted">Give it a name and a short description. You can change both later.</p>
+            </div>
+            <div className="sheet__body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <label>
+                <span className="label-text">Form name</span>
+                <input
+                  className="control"
+                  autoFocus
+                  maxLength={200}
+                  placeholder="e.g. Farmer Registration"
+                  value={metaDraft.name}
+                  onChange={(e) => setMetaDraft((d) => ({ ...d, name: e.target.value }))}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && metaDraft.name.trim()) {
+                      setNewMeta({ name: metaDraft.name.trim(), description: metaDraft.description.trim() })
+                    }
+                  }}
+                />
+              </label>
+              <label>
+                <span className="label-text">Description</span>
+                <textarea
+                  className="control"
+                  rows={3}
+                  placeholder="Optional — what this form is for…"
+                  value={metaDraft.description}
+                  onChange={(e) => setMetaDraft((d) => ({ ...d, description: e.target.value }))}
+                />
+              </label>
+            </div>
+            <div className="sheet__foot">
+              <button className="btn" onClick={() => navigate(-1)}>Cancel</button>
+              <span className="spacer" />
+              <button
+                className="btn btn--primary"
+                disabled={!metaDraft.name.trim()}
+                onClick={() => setNewMeta({ name: metaDraft.name.trim(), description: metaDraft.description.trim() })}
+              >
+                Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!editing && !form && newMeta && (
         <div className="card card--pad compose">
           <h1>What do you need to collect?</h1>
           <textarea
@@ -2089,7 +2166,7 @@ export default function Builder() {
       )}
 
       {form?.standard_id && (
-        <StandardDrift formId={editing ? formId : null} definition={form} />
+        <StandardDrift formId={editing ? formId : null} definition={form} onApplied={reload} />
       )}
 
       {form && (

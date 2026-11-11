@@ -114,6 +114,11 @@ class UpdateStandardRequest(BaseModel):
     summary: Optional[str] = None
 
 
+class ApplyStandardFieldsRequest(BaseModel):
+    # The field names, as they read in the standard, to pull into this form.
+    field_names: List[str]
+
+
 class BorrowRequest(BaseModel):
     form_json: Dict[str, Any]
     # One section of the standard, or all of its fields when omitted.
@@ -358,6 +363,9 @@ class TranslateRequest(BaseModel):
     """Translate a form's wording into one language."""
     form_json: Dict[str, Any]
     language: str
+    # Which translator to use: "openai" (the default, context-aware) or
+    # "google" (cheaper, wider coverage). An unknown value falls back to openai.
+    provider: Optional[str] = None
 
 
 class TestSubmissionRequest(BaseModel):
