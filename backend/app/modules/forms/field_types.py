@@ -271,6 +271,13 @@ _TYPES: List[FieldType] = [
               multi=True, aliases=["grid", "subtable", "matrix", "table_input"]),
     FieldType("label", lambda v: None, "none", "—", display_only=True),
     FieldType("banner", lambda v: None, "none", "—", display_only=True),
+    # Display-only, like label/banner: they show content or a button and store
+    # nothing. `html` renders author-written markup; `button` fires a named
+    # function in the form's custom_script when clicked.
+    FieldType("html", lambda v: None, "none", "—", display_only=True,
+              aliases=["richtext", "rich_text"]),
+    FieldType("button", lambda v: None, "none", "—", display_only=True,
+              aliases=["action", "action_button"]),
 ]
 
 FIELD_TYPES: Dict[str, FieldType] = {t.name: t for t in _TYPES}

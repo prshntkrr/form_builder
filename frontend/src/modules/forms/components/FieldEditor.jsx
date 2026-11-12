@@ -1128,7 +1128,8 @@ export default function FieldEditor({
               </label>
               <label className="col">
                 <span className="minilabel">{digits ? 'Most digits' : 'Longest answer'}</span>
-                <input className="control" type="number" min="1" placeholder="any"
+                <input className="control" type="number" min="1"
+                       placeholder={field.type === 'text' ? '250 (default)' : 'any'}
                        value={rules.max_length ?? ''} onChange={(e) => setRule('max_length', e.target.value)} />
               </label>
             </>
@@ -1144,9 +1145,26 @@ export default function FieldEditor({
 
           <label className="col">
             <span className="minilabel">Default value</span>
-            <input className="control" value={field.default_value ?? ''}
+            <input className="control" value={field.default ?? ''}
                    placeholder="Pre-filled when form opens"
-                   onChange={(e) => patch({ default_value: e.target.value || null })} />
+                   onChange={(e) => patch({ default: e.target.value || null })} />
+          </label>
+
+          <label className="col">
+            <span className="minilabel">Ontology code</span>
+            <input className="control" value={field.semantic_concept?.uri || ''}
+                   placeholder="e.g. CO_322:0000007"
+                   onChange={(e) => {
+                     const code = e.target.value.trim()
+                     patch({ semantic_concept: code
+                       ? { standard: field.semantic_concept?.standard || 'SEOnt',
+                           uri: code, label: field.semantic_concept?.label || '' }
+                       : null })
+                   }} />
+            <span className="tiny muted">
+              The standard/ontology concept this question maps to. The Standards
+              tab offers a full picker.
+            </span>
           </label>
 
           <label className="col">
@@ -1164,6 +1182,11 @@ export default function FieldEditor({
             {field.read_only && (
               <span className="tiny muted">
                 Shown with its default value and cannot be changed by the respondent.
+              </span>
+            )}
+            {field.read_only && field.required && (field.default == null || field.default === '') && (
+              <span className="tiny" style={{ color: '#b45309' }}>
+                Read-only and required needs a default value — otherwise it can never be filled.
               </span>
             )}
           </label>
@@ -1214,6 +1237,12 @@ export default function FieldEditor({
                 collected are kept.
               </span>
             )}
+            {fieldHidden(field) && field.required && (field.default == null || field.default === '') && (
+              <span className="tiny" style={{ color: '#b45309' }}>
+                Hidden and required needs a default value — that default is what
+                gets stored, since nobody is asked the question.
+              </span>
+            )}
           </label>
         </div>
 
@@ -1251,6 +1280,42 @@ export default function FieldEditor({
                 <img src={field.banner_url} alt="" style={{ maxWidth: '100%', maxHeight: 120, borderRadius: 4 }} />
               </div>
             )}
+          </div>
+        )}
+
+        {field.type === 'html' && (
+          <div className="frow__grid" style={{ marginTop: 8 }}>
+            <label className="col">
+              <span className="minilabel">HTML content</span>
+              <textarea className="control" rows={6} style={{ fontFamily: 'monospace', fontSize: 12 }}
+                        value={field.html || ''}
+                        placeholder="<p>Formatted <b>instructions</b> shown on the form…</p>"
+                        onChange={(e) => patch({ html: e.target.value })} />
+              <span className="tiny muted">
+                Display only — nothing is collected. Scripts and event handlers
+                are stripped when shown.
+              </span>
+            </label>
+          </div>
+        )}
+
+        {field.type === 'button' && (
+          <div className="frow__grid" style={{ marginTop: 8 }}>
+            <label className="col">
+              <span className="minilabel">Button text</span>
+              <input className="control" value={field.button_label || ''}
+                     placeholder="e.g. Download PDF"
+                     onChange={(e) => patch({ button_label: e.target.value || null })} />
+            </label>
+            <label className="col">
+              <span className="minilabel">Runs action (custom-script function)</span>
+              <input className="control" value={field.button_action || ''}
+                     placeholder="e.g. download_pdf"
+                     onChange={(e) => patch({ button_action: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '') || null })} />
+              <span className="tiny muted">
+                Register it in the form's code: <code>onAction('{field.button_action || 'name'}', (fields, api) =&gt; {'{…}'})</code>
+              </span>
+            </label>
           </div>
         )}
 

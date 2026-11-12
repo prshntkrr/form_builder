@@ -367,7 +367,13 @@ def _normalize_field(raw: Any, index: int, taken: set) -> Optional[Dict[str, Any
         if not declares_controlled_list(raw):
             ftype, spec = "text", get_type("text")
 
-    default = raw.get("default") if raw.get("default") not in ("", None) else None
+    # The builder writes `default_value`; older/imported definitions use
+    # `default`. Store one canonical `default` so a pre-filled value survives a
+    # save — without it, a read-only field came back blank and editable.
+    default = raw.get("default")
+    if default in ("", None):
+        default = raw.get("default_value")
+    default = default if default not in ("", None) else None
     if default is not None and options:
         # A default the field would reject on submission is worse than none.
         allowed = {o["value"] for o in options}
@@ -385,6 +391,9 @@ def _normalize_field(raw: Any, index: int, taken: set) -> Optional[Dict[str, Any
         "help_text": _cut(
             raw.get("help_text") or raw.get("helpText") or raw.get("hint"), MAX_HELP_TEXT),
         "default": default,
+        # Shown with its default and not editable by the respondent. Rebuilt
+        # here like every other key, so it must be named or it is dropped.
+        "read_only": bool(raw.get("read_only")),
         "section": slugify_identifier(raw.get("section") or "", "") or None,
         "options": options,
         "validation": _normalize_validation(raw.get("validation"), ftype),
@@ -452,6 +461,18 @@ def _normalize_field(raw: Any, index: int, taken: set) -> Optional[Dict[str, Any
 
     if ftype == "table":
         field["columns"] = _normalize_table_columns(raw.get("columns"))
+
+    # Display-only content, kept like a polygon's ring: rebuilt from a fixed
+    # list, so a key not named here is dropped on save.
+    if ftype == "banner":
+        field["banner_url"] = str(raw.get("banner_url") or "").strip() or None
+    if ftype == "html":
+        field["html"] = str(raw.get("html") or "")
+    if ftype == "button":
+        field["button_label"] = _cut(raw.get("button_label") or label, MAX_LABEL)
+        # The name of a custom_script function to call on click. An identifier,
+        # not free text — it is looked up by name in the script at run time.
+        field["button_action"] = slugify_identifier(raw.get("button_action") or "", "") or None
 
     return field
 
