@@ -302,6 +302,40 @@ export function resolveLayout(layout, fields) {
 }
 
 
+/**
+ * A layout with every question the form has but the layout lacks placed into
+ * it — each into the layout section whose id matches its `section` key, or a
+ * fresh section at the end when the layout has none to match.
+ *
+ * For bringing borrowed or standard-pulled questions onto a page somebody has
+ * already arranged by hand: the stale-rebuild leaves an arranged layout alone
+ * (it is theirs), so new fields merged into the form would otherwise sit in the
+ * unplaced band. This is called once, at the moment the questions are added,
+ * not on every load — a question a designer deliberately took out of the layout
+ * must stay out.
+ *
+ * Returns the same layout when there is nothing to add, or no layout to add to
+ * (a form without one renders every field already).
+ */
+export function placeUnplacedFields(layout, form) {
+  if (!layout?.sections) return layout
+  const { unplaced } = resolveLayout(layout, form?.fields)
+  if (!unplaced.length) return layout
+
+  const addition = generateLayout({ fields: unplaced, sections: form?.sections || [], layout: null })
+  if (!addition) return layout
+
+  const sections = layout.sections.map((s) => ({ ...s }))
+  const byId = new Map(sections.map((s) => [s.id, s]))
+  for (const addSec of addition.sections) {
+    const match = byId.get(addSec.id)
+    if (match) match.containers = [...(match.containers || []), ...addSec.containers]
+    else { sections.push(addSec); byId.set(addSec.id, addSec) }
+  }
+  return { ...layout, sections }
+}
+
+
 // ── editing a layout ─────────────────────────────────────────────────────────
 // Every change below returns a new layout and leaves the one it was given
 // alone, so the builder's form state is only ever replaced, never mutated.

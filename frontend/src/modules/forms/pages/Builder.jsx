@@ -7,7 +7,7 @@ import FieldEditor from '../components/FieldEditor.jsx'
 import { defaultLanguage, languageChoices } from '../translate.js'
 import { applicable, removeFieldFromRules, renameFieldInRules, rulesAffectedBySectionChange, removeRules } from '../conditions.js'
 import { MAX_IDENTIFIER, fieldHidden, identifier } from '../fieldTypes.js'
-import { addContainer, addLayoutSection, generateLayout, layoutIsStale, placeField, removeFromLayout, removeSection, retitleSection, setFieldWidth, withFieldReplaced } from '../formLayout.js'
+import { addContainer, addLayoutSection, generateLayout, layoutIsStale, placeField, placeUnplacedFields, removeFromLayout, removeSection, retitleSection, setFieldWidth, withFieldReplaced } from '../formLayout.js'
 import * as recovery from '../draftRecovery.js'
 import { FORM_CHANNEL_NAMES, PUBLISHABLE, formChannel } from '../channelCapabilities.js'
 import { conversationOrder, configOf, removeFromWhatsApp, renameInWhatsApp } from '../whatsappConfig.js'
@@ -2386,7 +2386,10 @@ export default function Builder() {
             const existing = new Set((form?.fields || []).map((f) => f.name))
             const fj = form ? keepChannel(formJson) : { ...formJson, channel: newChannel }
             fj.fields = (fj.fields || []).map((f) => existing.has(f.name) ? f : { ...f, _orig: f._orig || f.name })
-            setForm(prep(fj, editing))
+            const prepped = prep(fj, editing)
+            // Place the just-added questions on an already-arranged page, so
+            // borrowed/standard fields don't all land in the unplaced band.
+            setForm({ ...prepped, layout: placeUnplacedFields(prepped.layout, prepped) })
             setPicker(null)
             setTrial({})
           }}
