@@ -237,6 +237,7 @@ def ensure_public_share_columns() -> List[str]:
     wanted = [
         ("public_token", "VARCHAR(64)"),
         ("public_enabled", "BOOLEAN NOT NULL DEFAULT FALSE"),
+        ("public_starts_on", "TIMESTAMP"),
         ("public_expires_on", "TIMESTAMP"),
         ("public_allow_multiple", "BOOLEAN NOT NULL DEFAULT TRUE"),
         ("public_shared_by", "VARCHAR(50)"),

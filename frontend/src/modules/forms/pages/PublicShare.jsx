@@ -23,6 +23,7 @@ export default function PublicShare() {
   const [error, setError] = useState('')
   const [copied, setCopied] = useState(false)
 
+  const [startsOn, setStartsOn] = useState('')
   const [expiresOn, setExpiresOn] = useState('')
   const [allowMultiple, setAllowMultiple] = useState(true)
 
@@ -32,6 +33,7 @@ export default function PublicShare() {
       .then((found) => {
         setState(found)
         setAllowMultiple(found.allow_multiple !== false)
+        setStartsOn(found.starts_on ? String(found.starts_on).slice(0, 10) : '')
         setExpiresOn(found.expires_on ? String(found.expires_on).slice(0, 10) : '')
       })
       .catch((e) => setError(e.message))
@@ -64,6 +66,7 @@ export default function PublicShare() {
     run(regenerate ? 'regenerate' : 'share', () =>
       api.sharePublicly(formId, {
         regenerate,
+        startsOn: startsOn || null,
         expiresOn: expiresOn || null,
         allowMultiple,
       }),
@@ -165,16 +168,32 @@ export default function PublicShare() {
 
         <hr style={{ margin: '24px 0', border: 0, borderTop: '1px solid var(--line)' }} />
 
-        <label className="minilabel">Stops working on</label>
-
-        <input
-          className="control"
-          type="date"
-          aria-label="Expiry date"
-          value={expiresOn}
-          onChange={(e) => setExpiresOn(e.target.value)}
-          style={{ maxWidth: 220 }}
-        />
+        <div className="row" style={{ gap: 24, flexWrap: 'wrap' }}>
+          <div>
+            <label className="minilabel">Starts working on</label>
+            <input
+              className="control"
+              type="date"
+              aria-label="Start date"
+              value={startsOn}
+              max={expiresOn || undefined}
+              onChange={(e) => setStartsOn(e.target.value)}
+              style={{ maxWidth: 220 }}
+            />
+          </div>
+          <div>
+            <label className="minilabel">Stops working on</label>
+            <input
+              className="control"
+              type="date"
+              aria-label="Expiry date"
+              value={expiresOn}
+              min={startsOn || undefined}
+              onChange={(e) => setExpiresOn(e.target.value)}
+              style={{ maxWidth: 220 }}
+            />
+          </div>
+        </div>
 
         <label className="row row--tight" style={{ marginTop: 16 }}>
           <input
@@ -189,8 +208,8 @@ export default function PublicShare() {
         <p className="tiny muted" style={{ marginTop: 8 }}>
           Nobody filling in a public form has an account, so there is no one to
           recognise: unticking this asks the browser that answered to remember,
-          which is a courtesy rather than a restriction. The expiry date is
-          enforced by the server.
+          which is a courtesy rather than a restriction. The start and expiry
+          dates are enforced by the server.
         </p>
 
         {live && (

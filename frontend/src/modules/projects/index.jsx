@@ -161,6 +161,49 @@ function ProjectsNav({ onNavigate }) {
   )
 }
 
+/**
+ * The selected project's tree, as its own pane beside the left sidebar.
+ *
+ * The same rows the old sidebar folder showed — Dashboards, Review and the
+ * forms — but for the one project the dropdown has chosen, so the left pane can
+ * be just the selector and the system nav. System context shows its own forms;
+ * it has no dashboards or review of its own.
+ */
+export function ProjectTreePane({ onNavigate, onCollapse }) {
+  const { modules } = useAuth()
+  const { active, activeId, system } = useProjects()
+  const { can } = useProject(system ? null : activeId)
+  const { t } = useTranslation()
+  const hasForms = (modules || []).includes('forms')
+
+  const sub = (to, label) => (
+    <NavLink to={to} onClick={onNavigate}
+             className={({ isActive }) => `proj__sub${isActive ? ' on' : ''}`}>
+      <span className="grow">{label}</span>
+    </NavLink>
+  )
+
+  return (
+    <aside className="side-tree" aria-label="Project">
+      <div className="side-tree__scroll">
+        <div className="side__label side__label--rule proj-tree__head">
+          <span className="grow">{system ? t('label.system.forms') : (active?.name || t('label.proyect'))}</span>
+          {onCollapse && (
+            <button type="button" className="side-tree__collapse" onClick={onCollapse}
+                    title="Hide the project forms" aria-label="Hide the project forms">
+              «
+            </button>
+          )}
+        </div>
+        {!system && sub('/dashboards', t('label.dashboards'))}
+        {!system && sub('/review',
+          can('project.submissions.review') ? t('label.review') : t('label.my.submissions'))}
+        {hasForms && <FormsPanel onNavigate={onNavigate} embedded />}
+      </div>
+    </aside>
+  )
+}
+
 export default {
   name: 'projects',
   label: 'Projects',

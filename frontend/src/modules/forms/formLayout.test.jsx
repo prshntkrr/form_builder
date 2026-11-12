@@ -18,6 +18,7 @@ import {
   clampWidth,
   generateLayout,
   layoutIsStale,
+  placeUnplacedFields,
   renameInLayout,
   resolveLayout,
   withFieldReplaced,
@@ -72,6 +73,31 @@ const LAYOUT = {
 
 const names = (layout) =>
   layout.sections.flatMap((s) => s.containers.flatMap((c) => c.fields.map((f) => f.fieldId)))
+
+describe('placeUnplacedFields — borrowed questions onto an arranged page', () => {
+  test('places a new field into the layout section matching its key', () => {
+    const fields = [...FIELDS, { name: 'variety', label: 'Variety', type: 'text', section: 'farm' }]
+    const next = placeUnplacedFields(LAYOUT, { fields, sections: SECTIONS })
+    expect(resolveLayout(next, fields).unplaced).toEqual([])
+    expect(names(next)).toContain('variety')
+  })
+
+  test('adds a section when the layout has none to match', () => {
+    const fields = [...FIELDS, { name: 'gps', label: 'GPS', type: 'text', section: 'location' }]
+    const sections = [...SECTIONS, { key: 'location', title: 'Location', description: '' }]
+    const next = placeUnplacedFields(LAYOUT, { fields, sections })
+    expect(resolveLayout(next, fields).unplaced).toEqual([])
+    expect(next.sections.some((s) => s.id === 'location')).toBe(true)
+  })
+
+  test('leaves the layout untouched when nothing is unplaced', () => {
+    expect(placeUnplacedFields(LAYOUT, { fields: FIELDS, sections: SECTIONS })).toBe(LAYOUT)
+  })
+
+  test('a form without a layout is left without one', () => {
+    expect(placeUnplacedFields(null, { fields: FIELDS, sections: SECTIONS })).toBe(null)
+  })
+})
 
 
 describe('a first layout, from what the form already says', () => {

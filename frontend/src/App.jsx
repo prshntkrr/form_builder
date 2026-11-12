@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom'
 import Sidebar from './core/Sidebar.jsx'
+import { ProjectTreePane } from './modules/projects/index.jsx'
 import { useAuth } from './core/auth.jsx'
 import ForgotPassword from './core/pages/ForgotPassword.jsx'
 import Login from './core/pages/Login.jsx'
@@ -112,10 +113,26 @@ function NotFound() {
 }
 
 /** The shell: navigation plus whatever is being worked on. */
+// The routes that belong to a project — where the project tree pane makes
+// sense. On anything else (system admin, standards, users, beneficiaries…)
+// the pane would just show a project you are not currently looking at, so it
+// is hidden. The all-projects home ('/dashboard', singular) is not here; the
+// project dashboards page ('/dashboards', plural) is.
+const PROJECT_ROUTES = ['/projects', '/dashboards', '/review', '/forms', '/builder', '/f/']
+
 function Shell() {
+  const location = useLocation()
+  const inProject = PROJECT_ROUTES.some(
+    (p) => location.pathname === p || location.pathname.startsWith(p.endsWith('/') ? p : `${p}/`),
+  )
   const [mobileMenu, setMobileMenu] = useState(false)
   const [collapsed, setCollapsed] = useState(() => {
     try { return localStorage.getItem('sidebar_collapsed') === '1' } catch { return false }
+  })
+  // The form-tree pane, collapsed on its own so you can reclaim the width while
+  // editing a form and bring it back when you need to jump to another.
+  const [treeCollapsed, setTreeCollapsed] = useState(() => {
+    try { return localStorage.getItem('tree_collapsed') === '1' } catch { return false }
   })
 
   const toggleCollapse = () => {
@@ -123,6 +140,14 @@ function Shell() {
     setCollapsed(next)
     try { localStorage.setItem('sidebar_collapsed', next ? '1' : '0') } catch {}
   }
+
+  const toggleTree = () => {
+    const next = !treeCollapsed
+    setTreeCollapsed(next)
+    try { localStorage.setItem('tree_collapsed', next ? '1' : '0') } catch {}
+  }
+
+  const treeShowing = !collapsed && inProject
 
   return (
     <div className={`app${mobileMenu ? ' app--menu' : ''}${collapsed ? ' app--collapsed' : ''}`}>
@@ -136,6 +161,15 @@ function Shell() {
         </button>
       )}
       <Sidebar onNavigate={() => setMobileMenu(false)} collapsed={collapsed} onToggleCollapse={toggleCollapse} />
+      {treeShowing && !treeCollapsed && (
+        <ProjectTreePane onNavigate={() => setMobileMenu(false)} onCollapse={toggleTree} />
+      )}
+      {treeShowing && treeCollapsed && (
+        <button className="tree-expand" onClick={toggleTree}
+                title="Show the project forms" aria-label="Show the project forms">
+          »
+        </button>
+      )}
       <div className="body" onClick={() => mobileMenu && setMobileMenu(false)}>
         <ErrorBoundary>
           <Outlet />

@@ -16,7 +16,9 @@ const cell = (value) => {
   }
   if (typeof value === 'boolean') return value ? 'Yes' : 'No'
   if (typeof value === 'object') return Object.entries(value).map(([k, v]) => `${k} ${v}`).join(', ')
-  return String(value)
+  const s = String(value)
+  if (s.length > 80) return s.slice(0, 40) + '…'
+  return s
 }
 
 const when = (value) =>

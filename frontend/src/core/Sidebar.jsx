@@ -6,6 +6,7 @@ import { useTranslation } from './language.jsx'
 import LanguageSwitcher from './LanguageSwitcher.jsx'
 import { homeFor, moduleNavs } from './registry.js'
 import SystemNav from './SystemNav.jsx'
+import ProjectDropdown from '../modules/projects/components/ProjectDropdown.jsx'
 
 function Trouble() {
   const [problem, setProblem] = useState(null)
@@ -113,11 +114,15 @@ export default function Sidebar({ onNavigate, collapsed, onToggleCollapse }) {
         </Link>
       </div>
 
-      {/* Only the projects tree scrolls — it is the long, growing list. The
-          system groups below it stay put, so Configuration / Data & Channels /
-          Administration are always in reach. */}
+      {/* The project selector and the system groups. The project tree (its
+          folder, Dashboards, Review and forms) used to be here too; it now
+          lives in its own pane beside this one (ProjectTreePane), filled by
+          whichever project is chosen above. */}
       <div className="side__scroll">
-        {moduleNavs(modules).map(({ name, Nav }) => <Nav key={name} onNavigate={onNavigate} />)}
+        <ProjectDropdown onNavigate={onNavigate} />
+        {moduleNavs(modules)
+          .filter(({ name }) => name !== 'projects')
+          .map(({ name, Nav }) => <Nav key={name} onNavigate={onNavigate} />)}
       </div>
 
       <div className="side__sys">

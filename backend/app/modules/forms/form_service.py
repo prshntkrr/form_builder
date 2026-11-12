@@ -19,6 +19,46 @@ from app.modules.forms import tabular_service
 
 logger = logging.getLogger(__name__)
 
+
+def _check_beneficiary_fields(cur, definition: Dict[str, Any]) -> None:
+    """Reject saves that drop or rename master fields; auto-expand when fields are added."""
+    std_id = definition.get("standard_id")
+    if not std_id:
+        return
+    try:
+        cur.execute(
+            "SELECT type_id, master_fields FROM beneficiary_types WHERE form_id = %s AND is_active = TRUE",
+            (std_id,),
+        )
+    except Exception:
+        return
+    row = cur.fetchone()
+    if not row:
+        return
+    master = row.get("master_fields") or []
+    if not master:
+        return
+    form_field_names = [
+        f.get("name") for f in definition.get("fields", [])
+        if f.get("name") and f.get("type") not in ("label", "banner")
+    ]
+    form_field_set = set(form_field_names)
+    missing = [f for f in master if f not in form_field_set]
+    if missing:
+        raise FormServiceError(
+            f"Cannot remove fields required by beneficiary type: {', '.join(missing)}. "
+            f"These fields are locked because they feed the master registry."
+        )
+    new_fields = [f for f in form_field_names if f not in master]
+    if new_fields:
+        import json as _json
+        updated = master + new_fields
+        cur.execute(
+            "UPDATE beneficiary_types SET master_fields = %s::jsonb WHERE type_id = %s",
+            (_json.dumps(updated), row["type_id"]),
+        )
+        logger.info("Auto-expanded master_fields for %s: +%s", row["type_id"], new_fields)
+
 FORM_ID_PREFIX = "FRM"
 
 
@@ -602,6 +642,7 @@ def create_form(
         _validate_config(
             cur, definition, form_type=form_type, parent_id=parent_id, status=status
         )
+        _check_beneficiary_fields(cur, definition)
         form_id = _next_form_id(cur)
         definition["table_name"] = resolve_table_name(cur, definition["table_name"])
         definition["form_id"] = form_id
@@ -752,6 +793,7 @@ def update_form(
             status=status or existing.get("form_status") or "Active",
             stored=existing["form_json"] or {},
         )
+        _check_beneficiary_fields(cur, definition)
 
         existing_json = existing["form_json"] or {}
         # The table is never renamed — its name is fixed at creation so live data

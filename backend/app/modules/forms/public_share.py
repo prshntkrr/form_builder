@@ -61,6 +61,7 @@ def _state(row: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     return {
         "enabled": bool(row.get("public_enabled")),
         "token": row.get("public_token"),
+        "starts_on": row.get("public_starts_on"),
         "expires_on": row.get("public_expires_on"),
         "allow_multiple": bool(row.get("public_allow_multiple", True)),
         "shared_by": row.get("public_shared_by"),
@@ -72,8 +73,9 @@ def get_state(form_id: str) -> Dict[str, Any]:
     with transaction() as cur:
         cur.execute(
             """
-            SELECT public_token, public_enabled, public_expires_on,
-                   public_allow_multiple, public_shared_by, public_shared_on
+            SELECT public_token, public_enabled, public_starts_on,
+                   public_expires_on, public_allow_multiple,
+                   public_shared_by, public_shared_on
             FROM forms WHERE form_id = %s
             """,
             (form_id,),
@@ -82,6 +84,7 @@ def get_state(form_id: str) -> Dict[str, Any]:
 
 
 def share(form_id: str, shared_by: Optional[str], *, regenerate: bool = False,
+          starts_on: Optional[datetime] = None,
           expires_on: Optional[datetime] = None,
           allow_multiple: bool = True) -> Dict[str, Any]:
     """Issue the link for a form, or replace the one it has.
@@ -125,13 +128,14 @@ def share(form_id: str, shared_by: Optional[str], *, regenerate: bool = False,
             UPDATE forms
             SET    public_token = %s,
                    public_enabled = TRUE,
+                   public_starts_on = %s,
                    public_expires_on = %s,
                    public_allow_multiple = %s,
                    public_shared_by = %s,
                    public_shared_on = CURRENT_TIMESTAMP
             WHERE  form_id = %s
             """,
-            (token, expires_on, allow_multiple, shared_by, form_id),
+            (token, starts_on, expires_on, allow_multiple, shared_by, form_id),
         )
 
     return get_state(form_id)
@@ -167,7 +171,8 @@ def resolve(token: str) -> Optional[Dict[str, Any]]:
     with transaction() as cur:
         cur.execute(
             """
-            SELECT form_id, public_expires_on, public_allow_multiple
+            SELECT form_id, public_starts_on, public_expires_on,
+                   public_allow_multiple
             FROM forms
             WHERE public_token = %s
               AND public_enabled = TRUE
@@ -180,8 +185,11 @@ def resolve(token: str) -> Optional[Dict[str, Any]]:
     if row is None:
         return None
 
-    expires_on = row.get("public_expires_on")
+    starts_on = row.get("public_starts_on")
+    if starts_on is not None and datetime.now() < starts_on:
+        return None
 
+    expires_on = row.get("public_expires_on")
     if expires_on is not None and expires_on < datetime.now():
         return None
 

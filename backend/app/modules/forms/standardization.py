@@ -63,7 +63,14 @@ def input_unit_for(field: Dict[str, Any]) -> str:
 
 
 def standard_unit_for(field: Dict[str, Any]) -> str:
-    """The unit the field's data standard records this variable in."""
+    """The unit the field's data standard records this variable in.
+
+    An explicit `standard_unit` on the field (set in the builder) wins over the
+    data standard's unit, the same way `input_unit` wins for the input side.
+    """
+    explicit = str(field.get("standard_unit") or "").strip()
+    if explicit:
+        return explicit
     return str((field.get("data_standard") or {}).get("unit") or "").strip()
 
 
@@ -115,6 +122,18 @@ def standardize(
         if not _is_number(value):
             continue
 
+        # Builder-configured formula conversion (standard_unit + conversion_formula)
+        formula = str(field.get("conversion_formula") or "").strip()
+        if field.get("standard_unit") and formula:
+            try:
+                std_value = _apply_formula(formula, float(value))
+                if std_value is not None:
+                    converted[f"{name}_std"] = std_value
+            except Exception:
+                logger.exception("Formula conversion failed for %s", name)
+            continue
+
+        # Legacy data_standard conversion
         from_unit = input_unit_for(field)
         to_unit = standard_unit_for(field)
 
@@ -123,7 +142,6 @@ def standardize(
 
         try:
             if units.find_unit(from_unit) is None:
-                # A scale, not a unit. Nothing to say about it.
                 continue
 
             result = units.convert(value, from_unit, to_unit)
@@ -140,10 +158,41 @@ def standardize(
             continue
 
         except Exception:
-            # Never let a conversion take a submission down with it.
             logger.exception("Could not standardize %s", name)
             continue
 
         converted[name] = result["output_value"]
 
     return converted, errors
+
+
+def _apply_formula(formula: str, value: float) -> Any:
+    """Apply a simple arithmetic formula like '* 2.471' or '* 1.8 + 32'.
+
+    Only supports: * / + - with numeric operands. No eval, no arbitrary code.
+    """
+    import re
+    tokens = re.findall(r'[*/+\-]|\d+(?:\.\d+)?', formula)
+    if not tokens:
+        return None
+    result = value
+    i = 0
+    while i < len(tokens):
+        op = tokens[i]
+        if i + 1 >= len(tokens):
+            return None
+        num = float(tokens[i + 1])
+        if op == '*':
+            result *= num
+        elif op == '/':
+            if num == 0:
+                return None
+            result /= num
+        elif op == '+':
+            result += num
+        elif op == '-':
+            result -= num
+        else:
+            return None
+        i += 2
+    return round(result, 6)

@@ -38,10 +38,10 @@ export const api = {
   // endpoint to save them — they go with the next save of the form.
   languages: () => request('/forms/languages'),
 
-  translateForm: (formJson, language) =>
+  translateForm: (formJson, language, provider) =>
     request('/forms/translate', {
       method: 'POST',
-      body: JSON.stringify({ form_json: formJson, language }),
+      body: JSON.stringify({ form_json: formJson, language, provider }),
     }),
 
   validate: (formJson) =>
@@ -231,9 +231,23 @@ export const api = {
   // How far a saved form has drifted from the standard it started from.
   standardDiff: (formId) => request(`/forms/${formId}/standard-diff`),
 
+  // Pull chosen fields from a form's standard into the form. Additive only.
+  applyStandardFields: (formId, fieldNames) =>
+    request(`/forms/${formId}/apply-standard-fields`, {
+      method: 'POST',
+      body: JSON.stringify({ field_names: fieldNames }),
+    }),
+
   // Offer a saved form as a standard others can start from.
   addToLibrary: (body) =>
     request('/standard-forms', { method: 'POST', body: JSON.stringify(body) }),
+
+  // Update a standard form's definition directly (no saved form needed).
+  updateStandard: (standardId, formJson, opts = {}) =>
+    request(`/standard-forms/${encodeURIComponent(standardId)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ form_json: formJson, ...opts }),
+    }),
 
   // Take one back out. The form it was taken from is untouched.
   removeFromLibrary: (standardId) =>
@@ -370,6 +384,7 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({
         regenerate: Boolean(options.regenerate),
+        starts_on: options.startsOn || null,
         expires_on: options.expiresOn || null,
         allow_multiple: options.allowMultiple !== false,
       }),

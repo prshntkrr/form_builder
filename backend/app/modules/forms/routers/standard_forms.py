@@ -22,6 +22,7 @@ from app.modules.forms.schemas import (
     BorrowRequest,
     SaveImportedFormRequest,
     StartFromStandardRequest,
+    UpdateStandardRequest,
 )
 
 logger = logging.getLogger(__name__)
@@ -46,9 +47,27 @@ def index(
     if selected is not None:
         entries = [e for e in entries if e.standard_id in selected]
 
+    linked = {}
+    try:
+        from app.modules.beneficiaries import service as ben_service
+        for t in ben_service.list_types(active_only=True):
+            fid = t.get("form_id")
+            if fid:
+                linked[fid] = {"type_id": t["type_id"], "name": t["name"],
+                                "master_fields": t.get("master_fields") or []}
+    except Exception:
+        pass
+
+    forms = []
+    for e in entries:
+        row = e.summary_entry()
+        if e.standard_id in linked:
+            row["beneficiary_type"] = linked[e.standard_id]
+        forms.append(row)
+
     return {
         "categories": sorted({e.category for e in entries}) if entries else [],
-        "forms": [e.summary_entry() for e in entries],
+        "forms": forms,
     }
 
 
@@ -75,7 +94,20 @@ def detail(standard_id: str, user: Dict[str, Any] = Depends(needs(LIBRARY_VIEW))
     entry = standard_library.get(standard_id)
     if entry is None:
         raise HTTPException(status_code=404, detail=f"No standard form '{standard_id}'")
-    return entry.full_entry()
+    result = entry.full_entry()
+    try:
+        from app.modules.beneficiaries import service as ben_service
+        for t in ben_service.list_types(active_only=True):
+            if t.get("form_id") == standard_id:
+                result["beneficiary_type"] = {
+                    "type_id": t["type_id"],
+                    "name": t["name"],
+                    "master_fields": t.get("master_fields") or [],
+                }
+                break
+    except Exception:
+        pass
+    return result
 
 
 @router.post("", status_code=201)
@@ -104,6 +136,39 @@ def add(req: AddToLibraryRequest, user: Dict[str, Any] = Depends(needs(LIBRARY_M
         raise HTTPException(status_code=400, detail=str(exc))
     except ConfigValidationError as exc:
         raise HTTPException(status_code=422, detail=exc.as_payload())
+
+
+@router.put("/{standard_id}")
+def update_standard(
+    standard_id: str,
+    req: UpdateStandardRequest,
+    user: Dict[str, Any] = Depends(needs(LIBRARY_MANAGE)),
+):
+    """Update a standard form's definition directly from a draft."""
+    from app.core.database import transaction
+
+    existing = standard_library.get(standard_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail=f"No standard form '{standard_id}'")
+
+    try:
+        definition = normalize_form(req.form_json)
+        validate_config(definition)
+    except ConfigValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.as_payload())
+    except FormSchemaError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+    with transaction() as cur:
+        return standard_library.add_form(
+            cur, definition,
+            standard_id=standard_id,
+            title=definition.get("title") or existing.title,
+            category=req.category or existing.category,
+            tags=req.tags if req.tags is not None else list(existing.tags),
+            summary=req.summary or existing.summary,
+            added_by=auth_service.display_name(user),
+        )
 
 
 @router.delete("/{standard_id}")

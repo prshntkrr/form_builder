@@ -132,12 +132,119 @@ def list_units() -> List[Dict[str, Any]]:
     with transaction() as cur:
         cur.execute(
             """
-            SELECT code, name, dimension, is_base
+            SELECT code, name, dimension, factor, "offset", aliases, is_base
             FROM   unit
             ORDER BY dimension, is_base DESC, code
             """
         )
-        return [dict(row) for row in cur.fetchall()]
+        rows = []
+        for r in cur.fetchall():
+            d = dict(r)
+            d["factor"] = float(d["factor"])
+            d["offset"] = float(d["offset"])
+            rows.append(d)
+        return rows
+
+
+def list_dimensions() -> List[str]:
+    """Every dimension that has at least one unit."""
+    with transaction() as cur:
+        cur.execute("SELECT DISTINCT dimension FROM unit ORDER BY dimension")
+        return [r["dimension"] for r in cur.fetchall()]
+
+
+class DuplicateUnit(ValueError):
+    """A unit with that code already exists."""
+
+
+def create_unit(
+    code: str, name: str, dimension: str,
+    factor: str = "1", offset: str = "0",
+    aliases: Optional[List[str]] = None, is_base: bool = False,
+) -> Dict[str, Any]:
+    """Add a new unit."""
+    from psycopg2.extras import Json
+
+    with transaction() as cur:
+        cur.execute("SELECT 1 FROM unit WHERE lower(code) = lower(%s)", (code,))
+        if cur.fetchone():
+            raise DuplicateUnit(f"Unit '{code}' already exists")
+        cur.execute(
+            """
+            INSERT INTO unit (code, name, dimension, factor, "offset", aliases, is_base)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            RETURNING code, name, dimension, factor, "offset", aliases, is_base
+            """,
+            (code.strip(), name.strip(), dimension.strip().lower(),
+             Decimal(factor), Decimal(offset), Json(aliases or []), is_base),
+        )
+        row = dict(cur.fetchone())
+        row["factor"] = float(row["factor"])
+        row["offset"] = float(row["offset"])
+        return row
+
+
+def update_unit(
+    code: str, *, name: Optional[str] = None, dimension: Optional[str] = None,
+    factor: Optional[str] = None, offset: Optional[str] = None,
+    aliases: Optional[List[str]] = None, is_base: Optional[bool] = None,
+) -> Dict[str, Any]:
+    """Update an existing unit. Only provided fields are changed."""
+    from psycopg2.extras import Json
+
+    sets, params = [], []
+    if name is not None:
+        sets.append("name = %s"); params.append(name.strip())
+    if dimension is not None:
+        sets.append("dimension = %s"); params.append(dimension.strip().lower())
+    if factor is not None:
+        sets.append("factor = %s"); params.append(Decimal(factor))
+    if offset is not None:
+        sets.append('"offset" = %s'); params.append(Decimal(offset))
+    if aliases is not None:
+        sets.append("aliases = %s"); params.append(Json(aliases))
+    if is_base is not None:
+        sets.append("is_base = %s"); params.append(is_base)
+    if not sets:
+        return get_unit(code)
+
+    params.append(code)
+    with transaction() as cur:
+        cur.execute(
+            f"UPDATE unit SET {', '.join(sets)} WHERE code = %s "
+            'RETURNING code, name, dimension, factor, "offset", aliases, is_base',
+            params,
+        )
+        row = cur.fetchone()
+        if not row:
+            raise UnknownUnit(f"Unit '{code}' not found")
+        d = dict(row)
+        d["factor"] = float(d["factor"])
+        d["offset"] = float(d["offset"])
+        return d
+
+
+def get_unit(code: str) -> Dict[str, Any]:
+    """One unit by exact code."""
+    with transaction() as cur:
+        cur.execute(
+            'SELECT code, name, dimension, factor, "offset", aliases, is_base '
+            "FROM unit WHERE code = %s", (code,))
+        row = cur.fetchone()
+        if not row:
+            raise UnknownUnit(f"Unit '{code}' not found")
+        d = dict(row)
+        d["factor"] = float(d["factor"])
+        d["offset"] = float(d["offset"])
+        return d
+
+
+def delete_unit(code: str) -> None:
+    """Remove a unit. Raises UnknownUnit if it does not exist."""
+    with transaction() as cur:
+        cur.execute("DELETE FROM unit WHERE code = %s RETURNING code", (code,))
+        if not cur.fetchone():
+            raise UnknownUnit(f"Unit '{code}' not found")
 
 
 def _number(value: Any) -> Decimal:
