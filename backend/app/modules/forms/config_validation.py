@@ -811,7 +811,15 @@ def channels_can_complete_the_form(config: FormConfig, ctx: BusinessContext) -> 
     return issues
 
 
+def form_must_have_fields(config: FormConfig, ctx: BusinessContext) -> List[ValidationIssue]:
+    """A published form must have at least one question. Drafts may be empty."""
+    if ctx.form_status == "Active" and not config.fields:
+        return [_issue("fields", "A form must have at least one question before it can be published.")]
+    return []
+
+
 BUSINESS_RULES: List[Rule] = [
+    form_must_have_fields,
     unique_field_names,
     field_names_are_not_reserved,
     choice_fields_have_options,
@@ -834,7 +842,7 @@ BUSINESS_RULES: List[Rule] = [
 #: What going live asks of a form that was already saved as a draft. Only the
 #: channel rules: everything else was checked when the draft was saved, and an
 #: older draft must not become unpublishable because an unrelated rule changed.
-PUBLISH_RULES: List[Rule] = [channel_is_publishable, channels_can_complete_the_form]
+PUBLISH_RULES: List[Rule] = [form_must_have_fields, channel_is_publishable, channels_can_complete_the_form]
 
 
 def validate_publishable(raw: Any) -> FormConfig:

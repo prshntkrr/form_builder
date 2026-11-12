@@ -86,8 +86,12 @@ export default function FormsList() {
   }, [load])
 
   const flip = async (form) => {
-    await api.setStatus(form.form_id, form.form_status === 'Active' ? 'Inactive' : 'Active')
-    load(); formsChanged()
+    try {
+      await api.setStatus(form.form_id, form.form_status === 'Active' ? 'Inactive' : 'Active')
+      load(); formsChanged()
+    } catch (e) {
+      setError(e.message)
+    }
   }
 
   const remove = async (form) => {

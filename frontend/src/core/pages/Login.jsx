@@ -103,7 +103,7 @@ export default function Login() {
           <p className="lede tiny gate__sub">{t('msg.have.access')}</p>
 
           {location.state?.signedOut && (
-            <div className="note note--good">You have been signed out.</div>
+            <div className="note note--good">You have successfully logged out.</div>
           )}
           {expired && !location.state?.signedOut && (
             <div className="note note--warn">
