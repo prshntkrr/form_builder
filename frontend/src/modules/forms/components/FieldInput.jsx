@@ -1,7 +1,7 @@
 import MediaField from './MediaField.jsx'
 import VoiceRecorder from './VoiceRecorder.jsx'
 import { isUsableRing } from './PolygonMap.jsx'
-import PolygonSheet from './PolygonSheet.jsx'
+import PolygonSheet, { formatArea, openRing, ringAreaM2 } from './PolygonSheet.jsx'
 import React, { useState } from 'react'
 
 /**
@@ -1336,6 +1336,27 @@ export default function FieldInput({ field, value, onChange, error, media, onAct
             onSave={(ring) => { set(ring); setMapOpen(false) }}
             onClose={() => setMapOpen(false)}
           />
+
+          {/* The numbers, on the form itself — not only inside the map. Without
+              this a drawn boundary was a button that said nothing back: the
+              coordinates and the size were captured but never shown. */}
+          {isUsableRing(drawn) && (() => {
+            // The distinct corners — the stored ring repeats its first corner to
+            // close, which should not be counted or listed as an extra point.
+            const corners = openRing(drawn)
+            return (
+              <div className="polymap__readout tiny">
+                <span><strong>{corners.length}</strong> boundary points</span>
+                {field.show_area !== false && (
+                  <span> · Area: <strong>{formatArea(ringAreaM2(drawn))}</strong></span>
+                )}
+                <details className="polymap__coords">
+                  <summary>Coordinates</summary>
+                  <code>{corners.map(([lng, lat]) => `${lat.toFixed(6)}, ${lng.toFixed(6)}`).join('\n')}</code>
+                </details>
+              </div>
+            )
+          })()}
         </>
       )
       break

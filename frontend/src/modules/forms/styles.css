@@ -778,6 +778,26 @@
   font-size: 13px;
 }
 
+.polymap__readout {
+  margin-top: 6px;
+  color: var(--muted, #667085);
+}
+.polymap__coords {
+  margin-top: 4px;
+}
+.polymap__coords summary {
+  cursor: pointer;
+}
+.polymap__coords code {
+  display: block;
+  margin-top: 4px;
+  max-height: 140px;
+  overflow: auto;
+  white-space: pre;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
 /* Above Leaflet.
    Core puts `.sheet` at z-index 50, which is plenty over ordinary page
    content — but Leaflet gives its own panes 400–800 (markers 600, popups 700,
@@ -791,6 +811,11 @@
    order — the sheet stayed at 50 in the browser. */
 .sheet.sheet--map {
   z-index: 1200;
+  /* No backdrop blur here: a `filter`/`backdrop-filter` on an ancestor shifts
+     the coordinate context Google Maps uses to project a click, which showed up
+     as the pin landing far from where you clicked. The dim overlay stays. */
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 

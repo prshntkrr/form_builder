@@ -4,7 +4,7 @@ import PolygonMap from './PolygonMap.jsx'
 
 /** Geodesic area of a ring of [lng, lat] points, in square metres.
  *  Uses the spherical excess formula — accurate enough for farm plots. */
-function ringAreaM2(ring) {
+export function ringAreaM2(ring) {
   if (!ring || ring.length < 3) return 0
   const RAD = Math.PI / 180
   const R = 6371000
@@ -17,7 +17,7 @@ function ringAreaM2(ring) {
   return Math.abs(total * R * R / 2)
 }
 
-function formatArea(m2) {
+export function formatArea(m2) {
   const ha = m2 / 10000
   const acres = ha * 2.47105
   if (ha < 0.01) return `${Math.round(m2)} m²`
@@ -64,6 +64,22 @@ export function closeRing(ring) {
   return [...points, [first[0], first[1]]]
 }
 
+/** The distinct corners — the closing point a saved ring repeats, dropped.
+ *  A stored boundary ends with a copy of its first corner (see `closeRing`);
+ *  showing and counting that copy made a four-corner plot read as "5 points".
+ *  The editor works with the open ring and `closeRing` puts the copy back on
+ *  save. */
+export function openRing(ring) {
+  const points = (ring || []).filter(
+    (p) => Array.isArray(p) && p.length === 2,
+  )
+  if (points.length < 2) return points
+  const [first] = points
+  const last = points[points.length - 1]
+  if (first[0] === last[0] && first[1] === last[1]) return points.slice(0, -1)
+  return points
+}
+
 export default function PolygonSheet({
   open,
   value,
@@ -73,7 +89,10 @@ export default function PolygonSheet({
   title = 'Select map area',
   showArea = true,
 }) {
-  const saved = Array.isArray(value) ? value : []
+  // The open ring — the stored boundary without its repeated closing corner —
+  // so a four-corner plot shows four points, not five. `closeRing` restores the
+  // closing corner on save.
+  const saved = openRing(Array.isArray(value) ? value : [])
 
   const [draft, setDraft] = useState(saved)
   const area = useMemo(() => ringAreaM2(draft), [draft])
