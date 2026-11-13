@@ -1184,16 +1184,12 @@ export default function FieldEditor({
                 Shown with its default value and cannot be changed by the respondent.
               </span>
             )}
-<<<<<<< HEAD
-          </div>
-=======
             {field.read_only && field.required && (field.default == null || field.default === '') && (
               <span className="tiny" style={{ color: '#b45309' }}>
                 Read-only and required needs a default value — otherwise it can never be filled.
               </span>
             )}
-          </label>
->>>>>>> origin/master
+          </div>
 
           {(field.type === 'file' || field.type === 'image' || field.type === 'audio') && (
             <>
@@ -1241,17 +1237,13 @@ export default function FieldEditor({
                 collected are kept.
               </span>
             )}
-<<<<<<< HEAD
-          </div>
-=======
             {fieldHidden(field) && field.required && (field.default == null || field.default === '') && (
               <span className="tiny" style={{ color: '#b45309' }}>
                 Hidden and required needs a default value — that default is what
                 gets stored, since nobody is asked the question.
               </span>
             )}
-          </label>
->>>>>>> origin/master
+          </div>
         </div>
 
         {field.type === 'label' && (
