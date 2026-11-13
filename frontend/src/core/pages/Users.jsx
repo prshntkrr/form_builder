@@ -29,8 +29,13 @@ function AddPerson({ roles, onAdded, onClose }) {
 
   const submit = async (e) => {
     e.preventDefault()
-    if (!form.full_name.trim()) {
+    const name = form.full_name.trim()
+    if (!name) {
       setError('Full name is required.')
+      return
+    }
+    if (!/^[A-Za-z]+(?: [A-Za-z]+)*$/.test(name)) {
+      setError('Name can contain alphabets only')
       return
     }
     if (!named) {
@@ -41,7 +46,7 @@ function AddPerson({ roles, onAdded, onClose }) {
     setBusy(true)
     setError('')
     try {
-      onAdded(await api.createUser(form), withVoice)
+      onAdded(await api.createUser({ ...form, full_name: name }), withVoice)
     } catch (err) {
       setError(err.message)
       setBusy(false)

@@ -165,6 +165,17 @@ _USERNAME = re.compile(r"^[a-z0-9][a-z0-9._-]{2,49}$")
 
 #: Longest an international number gets, counting the country code.
 _MAX_PHONE = 15
+_FULL_NAME = re.compile(r"^[A-Za-z]+(?: [A-Za-z]+)*$")
+
+
+def clean_full_name(full_name: Optional[str]) -> str:
+    """Alphabets only, with a single space between words."""
+    value = str(full_name or "").strip()
+    if not value:
+        raise AuthError("Full name is required.")
+    if not _FULL_NAME.match(value):
+        raise AuthError("Name can contain alphabets only")
+    return value[:120]
 
 
 def clean_username(username: str) -> str:
@@ -286,6 +297,7 @@ def create_user(
     email = _clean_email(email) if str(email or "").strip() else None
     username = clean_username(username) if str(username or "").strip() else None
     phone = clean_phone(phone) if str(phone or "").strip() else None
+    full_name = clean_full_name(full_name)
 
     if not (email or username or phone):
         raise AuthError(
@@ -462,6 +474,7 @@ def update_user(
             raise UserNotFound("No user %s" % user_id)
 
         role_id = _resolve_role(cur, role) if role is not None else None
+        cleaned_full_name = clean_full_name(full_name) if full_name is not None else None
         held = set(existing.get("permissions") or [])
 
         losing = permissions.ROLES_MANAGE in held and (
@@ -485,7 +498,7 @@ def update_user(
                    updated_on    = CURRENT_TIMESTAMP
              WHERE user_id = %s
             """,
-            (role_id, (full_name or "").strip()[:120] or None, is_active,
+            (role_id, cleaned_full_name, is_active,
              unlock, unlock, user_id),
         )
         updated = _read_user(cur, user_id=user_id)

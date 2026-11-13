@@ -1167,17 +1167,17 @@ export default function FieldEditor({
             </span>
           </label>
 
-          <label className="col">
+          <div className="col">
             <span className="minilabel">Answer</span>
-            <label className="insp__check">
+            <label className="insp__check" style={{ width: 'fit-content', alignSelf: 'flex-start' }}>
               <input type="checkbox" checked={!!field.required}
                      onChange={(e) => patch({ required: e.target.checked })} />
-              Required
+              <span>Required</span>
             </label>
-            <label className="insp__check">
+            <label className="insp__check" style={{ width: 'fit-content', alignSelf: 'flex-start' }}>
               <input type="checkbox" checked={!!field.read_only}
                      onChange={(e) => patch({ read_only: e.target.checked })} />
-              Read-only
+              <span>Read-only</span>
             </label>
             {field.read_only && (
               <span className="tiny muted">
@@ -1189,7 +1189,7 @@ export default function FieldEditor({
                 Read-only and required needs a default value — otherwise it can never be filled.
               </span>
             )}
-          </label>
+          </div>
 
           {(field.type === 'file' || field.type === 'image' || field.type === 'audio') && (
             <>
@@ -1223,12 +1223,12 @@ export default function FieldEditor({
               it — so it is not required of them either, whatever Required says
               above; `conditions.hidden` treats it exactly as a rule-hidden
               question, on every channel. */}
-          <label className="col">
+          <div className="col">
             <span className="minilabel">Visibility</span>
-            <label className="insp__check">
+            <label className="insp__check" style={{ width: 'fit-content', alignSelf: 'flex-start' }}>
               <input type="checkbox" checked={fieldHidden(field)}
                      onChange={(e) => patch({ config: { ...fieldConfig(field), hide: e.target.checked } })} />
-              Hide element
+              <span>Hide element</span>
             </label>
             {fieldHidden(field) && (
               <span className="tiny muted">
@@ -1243,7 +1243,7 @@ export default function FieldEditor({
                 gets stored, since nobody is asked the question.
               </span>
             )}
-          </label>
+          </div>
         </div>
 
         {field.type === 'label' && (
@@ -1333,22 +1333,22 @@ export default function FieldEditor({
               onChange={(coordinates) => patch({ coordinates })}
             />
 
-            <label className="insp__check">
+            <label className="insp__check" style={{ width: 'fit-content', alignSelf: 'flex-start' }}>
               <input
                 type="checkbox"
                 checked={!!field.editable}
                 onChange={(e) => patch({ editable: e.target.checked })}
               />
-              Let the person filling the form draw their own boundary
+              <span>Let the person filling the form draw their own boundary</span>
             </label>
 
-            <label className="insp__check">
+            <label className="insp__check" style={{ width: 'fit-content', alignSelf: 'flex-start' }}>
               <input
                 type="checkbox"
                 checked={field.show_area !== false}
                 onChange={(e) => patch({ show_area: e.target.checked })}
               />
-              Show calculated area on the map
+              <span>Show calculated area on the map</span>
             </label>
 
             <p className="tiny muted">

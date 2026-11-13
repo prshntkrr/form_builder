@@ -965,6 +965,8 @@ def update_form(
     result["table"] = table_report
     result["tabular"] = tabular_report
     result["renamed"] = moved
+    if version_tag:
+        result["version_tag"] = version_tag
     if route:
         result["whatsapp_route"] = route
     if ivr_route:

@@ -198,6 +198,39 @@ function TabularNote({ report }) {
   )
 }
 
+function parseVersion(v) {
+  if (!v || typeof v !== 'string') return null
+  const cleaned = v.trim().replace(/^v/i, '')
+  if (!cleaned) return null
+  const parts = cleaned.split('.')
+  const nums = []
+  for (const part of parts) {
+    const trimmed = part.trim()
+    if (!/^\d+$/.test(trimmed)) return null
+    nums.push(parseInt(trimmed, 10))
+  }
+  return nums.length > 0 ? nums : null
+}
+
+function compareVersions(v1, v2) {
+  const p1 = parseVersion(v1)
+  const p2 = parseVersion(v2) || parseVersion('1')
+  if (!p1) return null
+  const maxLen = Math.max(p1.length, p2.length)
+  for (let i = 0; i < maxLen; i++) {
+    const n1 = p1[i] ?? 0
+    const n2 = p2[i] ?? 0
+    if (n1 > n2) return 1
+    if (n1 < n2) return -1
+  }
+  return 0
+}
+
+function nextMajorVersion(v) {
+  const p = parseVersion(v) || [1]
+  return String(p[0] + 1)
+}
+
 export default function Builder() {
   const { formId, section = 'questions' } = useParams()
   const navigate = useNavigate()
@@ -837,15 +870,49 @@ export default function Builder() {
     }
   }
 
-  const askVersionMeta = () => new Promise((resolve) => {
-    setVersionDialog({ tag: '', label: '', description: '', resolve })
-  })
+  const askVersionMeta = async () => {
+    let prevVer = String(publishedVersion || form?.version || 1)
+    try {
+      if (editing && formId) {
+        const list = await api.getVersions(formId)
+        if (list && list.length > 0) {
+          const latest = list[0]
+          if (latest.version_tag && latest.version_tag.trim()) {
+            prevVer = latest.version_tag.trim()
+          } else if (latest.version_no) {
+            prevVer = String(latest.version_no)
+          }
+        }
+      }
+    } catch {
+      // fallback
+    }
+
+    return new Promise((resolve) => {
+      setVersionDialog({
+        tag: '',
+        label: '',
+        description: '',
+        prevVersion: prevVer,
+        error: '',
+        resolve,
+      })
+    })
+  }
 
   const save = (saveAs = 'Active', draftOnly = false) =>
     run('save', async () => {
       while (autoSavingRef.current) await new Promise((r) => setTimeout(r, 100))
       if (!namedOnPurpose()) return
-      const nameless = form.fields.filter((f) => !f.name || !f.name.trim())
+      const hasFields = (form.fields || []).length > 0
+      const isPublishing = (!editing && saveAs === 'Active') || (editing && status === 'Active' && !draftOnly)
+      if (isPublishing && !hasFields) {
+        const msg = 'A form must have at least one question before it can be published.'
+        setError(msg)
+        setPopup(msg)
+        return
+      }
+      const nameless = (form.fields || []).filter((f) => !f.name || !f.name.trim())
       if (nameless.length) {
         setError(`Every question needs a variable name. ${nameless.length} question${nameless.length > 1 ? 's are' : ' is'} missing one.`)
         return
@@ -868,6 +935,10 @@ export default function Builder() {
       const result = liveDraftId
         ? await api.updateForm(liveDraftId, payload, undefined, renames, whatsappRouting(), ivrRouting(), versionMeta, draftOnly)
         : await api.createForm(payload, undefined, saveAs, buildingIn, whatsappRouting(), ivrRouting())
+
+      if (result && versionMeta?.tag) {
+        result.version_tag = versionMeta.tag
+      }
 
       if (liveDraftId && !editing && saveAs !== 'Draft') {
         await api.setStatus(liveDraftId, saveAs)
@@ -921,6 +992,12 @@ export default function Builder() {
   /** Publish a draft, or put a live form back into draft. */
   const setLive = (next) =>
     run('publish', async () => {
+      if (next === 'Active' && (!form?.fields || form.fields.length === 0)) {
+        const msg = 'A form must have at least one question before it can be published.'
+        setError(msg)
+        setPopup(msg)
+        return
+      }
       const result = await api.setStatus(formId, next)
       setSaved(result)
       setStatus(result.form_status)
@@ -1800,8 +1877,14 @@ export default function Builder() {
                   type="button"
                   className="btn btn--sm btn--primary"
                   onClick={() => save('Active', false)}
-                  disabled={busy === 'save' || (!isDirty && !draftVersion)}
-                  title={isDirty || draftVersion ? 'Save and publish changes live' : 'No changes to publish'}
+                  disabled={busy === 'save' || (!isDirty && !draftVersion) || !(form?.fields?.length > 0)}
+                  title={
+                    !(form?.fields?.length > 0)
+                      ? 'Add at least one question before publishing'
+                      : isDirty || draftVersion
+                      ? 'Save and publish changes live'
+                      : 'No changes to publish'
+                  }
                 >
                   {busy === 'save' ? <span className="spin" /> : <SaveIcon />}
                   Publish
@@ -1814,8 +1897,14 @@ export default function Builder() {
                 type="button"
                 className="btn btn--sm btn--primary"
                 onClick={() => setLive('Active')}
-                disabled={busy === 'publish' || isDirty}
-                title={isDirty ? 'Save your changes first' : 'Make this form live so people can fill it in'}
+                disabled={busy === 'publish' || isDirty || !(form?.fields?.length > 0)}
+                title={
+                  isDirty
+                    ? 'Save your changes first'
+                    : !(form?.fields?.length > 0)
+                    ? 'Add at least one question before publishing'
+                    : 'Make this form live so people can fill it in'
+                }
               >
                 {busy === 'publish' ? <span className="spin" /> : <SaveIcon />}
                 Publish
@@ -1825,9 +1914,15 @@ export default function Builder() {
                 type="button"
                 className="btn btn--sm btn--primary"
                 onClick={() => save('Active')}
-                disabled={busy === 'save' || !form.channel}
+                disabled={busy === 'save' || !form.channel || !(form?.fields?.length > 0)}
                 aria-describedby={!form.channel ? 'save-why' : undefined}
-                title={!form.channel ? 'Choose a channel first.' : undefined}
+                title={
+                  !form.channel
+                    ? 'Choose a channel first.'
+                    : !(form?.fields?.length > 0)
+                    ? 'Add at least one question before publishing'
+                    : undefined
+                }
               >
                 {busy === 'save' ? <span className="spin" /> : <SaveIcon />}
                 {busy === 'save' ? 'Saving' : 'Publish'}
@@ -2130,7 +2225,7 @@ export default function Builder() {
 
       {saved && (
         <div className="note note--good" style={{ marginBottom: 16 }}>
-          <strong>Changes saved as version {saved.version_no}.</strong>
+          <strong>Changes saved as version {saved.version_tag || saved.version_no}.</strong>
           <span>
             {Object.keys(saved.renamed || {}).length > 0 &&
               `${Object.values(saved.renamed).reduce((a, b) => a + b, 0)} existing answers moved to their new names. `}
@@ -2535,14 +2630,27 @@ export default function Builder() {
                onMouseDown={e => e.stopPropagation()}>
             <div className="sheet__head">
               <h2>Version notes</h2>
-              <p className="muted">Describe what changed in this version.</p>
+              <p className="muted">
+                Describe what changed in this version.
+                {versionDialog.prevVersion && (
+                  <> Current version: <strong>v{versionDialog.prevVersion}</strong></>
+                )}
+              </p>
             </div>
+            {versionDialog.error && (
+              <div className="note note--bad" style={{ margin: '0 24px 12px 24px' }}>
+                {versionDialog.error}
+              </div>
+            )}
             <div className="sheet__body" style={{display:'flex',flexDirection:'column',gap:12}}>
               <label>
-                <span className="label-text">Version number</span>
-                <input className="control" maxLength={20} placeholder="e.g. 2.1"
+                <span className="label-text">
+                  Version number <span style={{ color: 'var(--danger, #ef4444)' }}>*</span>
+                </span>
+                <input className="control" maxLength={20}
+                  placeholder={`e.g. greater than ${versionDialog.prevVersion || '1.0'}`}
                   value={versionDialog.tag}
-                  onChange={e => setVersionDialog(d => ({...d, tag: e.target.value}))} />
+                  onChange={e => setVersionDialog(d => ({...d, tag: e.target.value, error: ''}))} />
               </label>
               <label>
                 <span className="label-text">Label</span>
@@ -2560,9 +2668,35 @@ export default function Builder() {
             <div className="sheet__foot">
               <button className="btn" onClick={() => { versionDialog.resolve(null); setVersionDialog(null) }}>Cancel</button>
               <span className="spacer" />
-              <button className="btn" onClick={() => { versionDialog.resolve({}); setVersionDialog(null) }}>Skip</button>
+              <button className="btn" onClick={() => {
+                const autoVer = nextMajorVersion(versionDialog.prevVersion || '1')
+                versionDialog.resolve({ tag: autoVer, label: '', description: '' })
+                setVersionDialog(null)
+              }}>Skip</button>
               <button className="btn btn--primary" onClick={() => {
-                versionDialog.resolve({ tag: versionDialog.tag, label: versionDialog.label, description: versionDialog.description })
+                const tag = (versionDialog.tag || '').trim()
+                if (!tag) {
+                  setVersionDialog(d => ({ ...d, error: 'Version number is required when saving version notes.' }))
+                  return
+                }
+                const parsed = parseVersion(tag)
+                if (!parsed) {
+                  setVersionDialog(d => ({ ...d, error: 'Please enter a valid version number (e.g. 2.0 or 2.1).' }))
+                  return
+                }
+                const cmp = compareVersions(tag, versionDialog.prevVersion || '1.0')
+                if (cmp === null || cmp <= 0) {
+                  setVersionDialog(d => ({
+                    ...d,
+                    error: `Version number must be greater than previous version (v${versionDialog.prevVersion || '1.0'}).`,
+                  }))
+                  return
+                }
+                versionDialog.resolve({
+                  tag: tag,
+                  label: (versionDialog.label || '').trim(),
+                  description: (versionDialog.description || '').trim(),
+                })
                 setVersionDialog(null)
               }}>Save</button>
             </div>
