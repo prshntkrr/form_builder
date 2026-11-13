@@ -26,6 +26,8 @@ export const TYPES = [
   ['table', 'Table (Dynamic Rows)'],
   ['label', 'Label / Text'],
   ['banner', 'Banner image'],
+  ['html', 'HTML content'],
+  ['button', 'Action button'],
 ]
 
 const NAMES = Object.fromEntries(TYPES)
@@ -84,6 +86,8 @@ export const STORAGE = {
   table: ['array [object, …]', 'JSONB'],
   label: ['none (display only)', '—'],
   banner: ['none (display only)', '—'],
+  html: ['none (display only)', '—'],
+  button: ['none (display only)', '—'],
 }
 
 /**

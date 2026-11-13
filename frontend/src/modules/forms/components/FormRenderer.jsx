@@ -95,8 +95,8 @@ export default function FormRenderer({
     if (defaultsApplied.current || !formJson.fields) return
     defaultsApplied.current = true
     for (const f of formJson.fields) {
-      if (f.default_value != null && (values?.[f.name] == null || values?.[f.name] === '')) {
-        onChange?.(f.name, f.default_value)
+      if (f.default != null && (values?.[f.name] == null || values?.[f.name] === '')) {
+        onChange?.(f.name, f.default)
       }
     }
   }, [formJson.fields])
@@ -164,6 +164,7 @@ export default function FormRenderer({
       error={errors[field.name]}
       onChange={change}
       media={media}
+      onAction={scriptCtx.fireAction}
     />
   )
 

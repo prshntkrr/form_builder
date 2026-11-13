@@ -1,8 +1,53 @@
 import MediaField from './MediaField.jsx'
 import VoiceRecorder from './VoiceRecorder.jsx'
 import { isUsableRing } from './PolygonMap.jsx'
-import PolygonSheet from './PolygonSheet.jsx'
+import PolygonSheet, { formatArea, openRing, ringAreaM2 } from './PolygonSheet.jsx'
 import React, { useState } from 'react'
+
+/**
+ * Author-written HTML, cleaned to a safe subset before it is rendered.
+ *
+ * Parses with the browser's own DOMParser (no dependency) and keeps only an
+ * allowlist of tags and attributes, dropping `<script>`, event handlers and
+ * `javascript:`/`data:` URLs. The author already has the custom-script console,
+ * so this is not a new trust boundary — it is defence in depth against an
+ * accidental paste.
+ *
+ * ponytail: allowlist DOMParser sanitizer, not DOMPurify. Swap in DOMPurify if
+ * HTML fields are ever opened to untrusted (non-builder) authors.
+ */
+const HTML_TAGS = new Set([
+  'p', 'br', 'hr', 'span', 'div', 'b', 'strong', 'i', 'em', 'u', 's', 'small',
+  'sub', 'sup', 'mark', 'blockquote', 'code', 'pre', 'a', 'ul', 'ol', 'li',
+  'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'table', 'thead', 'tbody', 'tr', 'th',
+  'td', 'img', 'figure', 'figcaption',
+])
+const HTML_ATTRS = new Set(['href', 'title', 'alt', 'src', 'colspan', 'rowspan', 'target', 'rel'])
+
+export function sanitizeHtml(raw) {
+  if (!raw) return ''
+  let doc
+  try {
+    doc = new DOMParser().parseFromString(String(raw), 'text/html')
+  } catch {
+    return ''
+  }
+  const safeUrl = (val) => /^\s*(https?:|mailto:|tel:|#|\/)/i.test(val || '')
+  const walk = (node) => {
+    for (const el of [...node.children]) {
+      if (!HTML_TAGS.has(el.tagName.toLowerCase())) { el.remove(); continue }
+      for (const attr of [...el.attributes]) {
+        const name = attr.name.toLowerCase()
+        if (!HTML_ATTRS.has(name) || name.startsWith('on')) { el.removeAttribute(attr.name); continue }
+        if ((name === 'href' || name === 'src') && !safeUrl(attr.value)) el.removeAttribute(attr.name)
+      }
+      if (el.tagName.toLowerCase() === 'a') el.setAttribute('rel', 'noopener noreferrer')
+      walk(el)
+    }
+  }
+  walk(doc.body)
+  return doc.body.innerHTML
+}
 
 const CURRENCY_SYMBOLS = {
   USD: '$', EUR: '€', GBP: '£', INR: '₹', JPY: '¥', CNY: '¥',
@@ -1063,7 +1108,7 @@ function TableFieldInput({ field, value, onChange, error, media }) {
 /** One control for one field. Types match the backend registry. */
 
 /** One control for one field. Types match the backend registry. */
-export default function FieldInput({ field, value, onChange, error, media }) {
+export default function FieldInput({ field, value, onChange, error, media, onAction }) {
   const v = field.validation || {}
   const ro = Boolean(field.read_only)
   const set = (val) => { if (!ro) onChange(field.name, val) }
@@ -1291,6 +1336,27 @@ export default function FieldInput({ field, value, onChange, error, media }) {
             onSave={(ring) => { set(ring); setMapOpen(false) }}
             onClose={() => setMapOpen(false)}
           />
+
+          {/* The numbers, on the form itself — not only inside the map. Without
+              this a drawn boundary was a button that said nothing back: the
+              coordinates and the size were captured but never shown. */}
+          {isUsableRing(drawn) && (() => {
+            // The distinct corners — the stored ring repeats its first corner to
+            // close, which should not be counted or listed as an extra point.
+            const corners = openRing(drawn)
+            return (
+              <div className="polymap__readout tiny">
+                <span><strong>{corners.length}</strong> boundary points</span>
+                {field.show_area !== false && (
+                  <span> · Area: <strong>{formatArea(ringAreaM2(drawn))}</strong></span>
+                )}
+                <details className="polymap__coords">
+                  <summary>Coordinates</summary>
+                  <code>{corners.map(([lng, lat]) => `${lat.toFixed(6)}, ${lng.toFixed(6)}`).join('\n')}</code>
+                </details>
+              </div>
+            )
+          })()}
         </>
       )
       break
@@ -1362,6 +1428,29 @@ export default function FieldInput({ field, value, onChange, error, media }) {
         </div>
       )
 
+    case 'html':
+      return (
+        <div
+          className="field field--html"
+          dangerouslySetInnerHTML={{ __html: sanitizeHtml(field.html) }}
+        />
+      )
+
+    case 'button':
+      return (
+        <div className="field field--button">
+          <button
+            type="button"
+            id={field.name}
+            className="btn btn--secondary"
+            onClick={() => onAction?.(field.button_action, field.name)}
+          >
+            {field.button_label || field.label || 'Button'}
+          </button>
+          {field.help_text && <div className="field__label-text">{field.help_text}</div>}
+        </div>
+      )
+
     case 'table':
       return (
         <TableFieldInput
@@ -1388,7 +1477,8 @@ export default function FieldInput({ field, value, onChange, error, media }) {
 
     default:
       control = (
-        <input {...base} type="text" maxLength={v.max_length ?? undefined}
+        <input {...base} type="text"
+               maxLength={v.max_length ?? (field.type === 'text' ? 250 : undefined)}
                value={value ?? ''} onChange={(e) => set(e.target.value)} />
       )
   }

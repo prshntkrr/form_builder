@@ -243,7 +243,7 @@ export default function PolygonMap({
           <filter id="shadow" x="-20%" y="-10%" width="140%" height="130%">
             <feDropShadow dx="0" dy="1.5" stdDeviation="1.5" flood-color="#000000" flood-opacity="0.35"/>
           </filter>
-          <path d="M14 0C6.27 0 0 6.27 0 14c0 10.5 14 26 14 26s14-15.5 14-26c0-7.73 6.27-14 14-14z" fill="#EA4335" stroke="#B31412" stroke-width="1" filter="url(#shadow)"/>
+          <path d="M14 0C6.27 0 0 6.27 0 14C0 24.5 14 40 14 40C14 40 28 24.5 28 14C28 6.27 21.73 0 14 0Z" fill="#EA4335" stroke="#B31412" stroke-width="1" filter="url(#shadow)"/>
           <circle cx="14" cy="14" r="5" fill="#FFFFFF"/>
           <circle cx="14" cy="14" r="2.5" fill="#7A0000"/>
         </svg>

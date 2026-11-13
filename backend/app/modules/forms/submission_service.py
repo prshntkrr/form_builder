@@ -23,7 +23,7 @@ from app.modules.forms.field_types import (
     normalize_submission_value,
 )
 from app.modules.forms.form_schema import (
-    LOCATION_COLUMN, PARENT_COLUMN, field_name,
+    LOCATION_COLUMN, PARENT_COLUMN, field_hidden, field_name,
 )
 from app.modules.forms import conditions
 from app.modules.forms import standardization
@@ -266,10 +266,16 @@ def _check_field(
             error = translations.message(
                 language, "min_length", label=label,
                 limit=rules["min_length"], unit=translations.word(language, unit))
-        if rules.get("max_length") and len(measured) > int(rules["max_length"]):
+        # Short text mirrors to VARCHAR(255); default its cap to 250 when the
+        # author set none, so a long answer is caught here rather than silently
+        # truncated in the flat table.
+        max_len = rules.get("max_length")
+        if not max_len and spec.name == "text":
+            max_len = 250
+        if max_len and len(measured) > int(max_len):
             error = translations.message(
                 language, "max_length", label=label,
-                limit=rules["max_length"], unit=translations.word(language, unit))
+                limit=max_len, unit=translations.word(language, unit))
 
     if rules.get("pattern") and isinstance(raw, str):
         try:
@@ -377,6 +383,17 @@ def validate_payload(
         name = field_name(field)
         if not name:
             continue
+        # An always-hidden field the author gave a default to stores that
+        # default: the respondent never sees it, so its value is the author's
+        # constant, not a missing answer — and it satisfies "required" without
+        # anybody being asked. Rule-hidden fields fall through and store nothing,
+        # exactly as before.
+        if (name in not_applicable and field_hidden(field)
+                and field.get("default") not in (None, "")):
+            clean[name] = normalize_submission_value(
+                field.get("type") or "text", field["default"])
+            continue
+
         check_field = field
         if name in cond_required and not field.get("required"):
             check_field = {**field, "required": True}
